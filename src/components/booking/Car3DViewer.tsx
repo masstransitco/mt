@@ -1,6 +1,6 @@
 'use client';
-import React, { Suspense, useEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, useEffect, useRef } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { 
   OrbitControls, 
   useGLTF, 
@@ -13,6 +13,44 @@ import {
 } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
+
+// Camera adjustment component
+function CameraSetup({ modelUrl }: { modelUrl: string }) {
+  const { scene, camera } = useThree();
+  const controlsRef = useRef<any>();
+
+  useEffect(() => {
+    // Allow time for the model to load
+    const timeoutId = setTimeout(() => {
+      const box = new THREE.Box3().setFromObject(scene);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      
+      box.getSize(size);
+      box.getCenter(center);
+
+      // Calculate the bounding sphere
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      const cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5;
+
+      // Update camera position
+      camera.position.set(center.x, center.y + maxDim * 0.5, center.z + cameraZ);
+      camera.lookAt(center);
+      camera.updateProjectionMatrix();
+
+      // Update controls target
+      if (controlsRef.current) {
+        controlsRef.current.target.copy(center);
+        controlsRef.current.update();
+      }
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [scene, camera, modelUrl]);
+
+  return <OrbitControls ref={controlsRef} />;
+}
 
 function CarModel({ url }: { url: string }) {
   const { scene } = useGLTF(url, '/draco/');
@@ -37,14 +75,14 @@ interface Car3DViewerProps {
   modelUrl: string;
   width?: string;
   height?: string;
-  selected?: boolean; // Changed from isSelected to selected to match existing prop name
+  selected?: boolean;
 }
 
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
   height = '300px',
-  selected = false // Using the same prop name as CarCard
+  selected = false
 }: Car3DViewerProps) {
   return (
     <div style={{ width, height, pointerEvents: selected ? 'auto' : 'none' }}>
@@ -101,15 +139,7 @@ export default function Car3DViewer({
             </Html>
           }
         >
-          <OrbitControls 
-            enablePan={selected}
-            enableZoom={selected}
-            enableRotate={selected}
-            autoRotate={!selected}
-            autoRotateSpeed={0.5}
-            maxPolarAngle={Math.PI / 2}
-            minPolarAngle={0}
-          />
+          <CameraSetup modelUrl={modelUrl} />
           <CarModel url={modelUrl} />
         </Suspense>
       </Canvas>
