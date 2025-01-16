@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { selectStation, selectSelectedCarId } from '@/store/userSlice';
+import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Clock, Battery } from 'lucide-react';
 
@@ -34,13 +34,13 @@ const mapOptions = {
 
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useDispatch();
-  const selectedCarId = useSelector(selectSelectedCarId);
+  const viewState = useSelector(selectViewState);
   const [stations, setStations] = useState<StationFeature[]>([]);
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
 
-  // Bottom sheet should only show in map view (when no car is selected)
-  const showBottomSheet = !selectedCarId;
+  // Bottom sheet should only show when viewing the map
+  const showBottomSheet = viewState === 'showMap';
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
