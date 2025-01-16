@@ -52,7 +52,7 @@ export default function Car3DViewer({
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.0,
-          preserveDrawingBuffer: true // Added for SSAO compatibility
+          preserveDrawingBuffer: true
         }}
         camera={{ position: [0, 2, 5], fov: 45 }}
       >
@@ -74,11 +74,11 @@ export default function Car3DViewer({
         />
         <EffectComposer multisampling={8}>
           <SSAO 
-            samples={31} // increased samples for better quality
-            radius={5} // increased radius
-            intensity={30} // increased intensity
+            samples={31}
+            radius={5}
+            intensity={30}
             luminanceInfluence={0.5}
-            color="black"
+            color={new THREE.Color(0x000000)}
           />
         </EffectComposer>
         <Environment preset="studio" background={false} />
