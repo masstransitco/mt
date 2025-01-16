@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useDispatch } from 'react-redux';
-import { selectStation } from '@/store/userSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { selectStation, selectSelectedCarId } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Clock, Battery } from 'lucide-react';
 
@@ -34,10 +34,13 @@ const mapOptions = {
 
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useDispatch();
+  const selectedCarId = useSelector(selectSelectedCarId);
   const [stations, setStations] = useState<StationFeature[]>([]);
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+
+  // Bottom sheet should only show in map view (when no car is selected)
+  const showBottomSheet = !selectedCarId;
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -114,7 +117,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleMarkerClick = useCallback((station: StationFeature) => {
     console.log('Station clicked:', station.properties.Place);
     dispatch(selectStation(station.id));
-    setIsBottomSheetOpen(true);
   }, [dispatch]);
 
   const defaultCenter = useMemo(() => userLocation || { lat: 22.3, lng: 114.0 }, [userLocation]);
@@ -160,57 +162,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
         })}
       </GoogleMap>
 
-      <div 
-        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transform transition-transform duration-300 ease-in-out ${
-          isBottomSheetOpen ? 'translate-y-0' : 'translate-y-full'
-        }`}
-        style={{ height: '70vh' }}
-      >
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Nearby Chargers</h2>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                Sort By
-              </button>
-              <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                72-325 kW
-              </button>
-              <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                0-72 kW
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="overflow-y-auto h-[calc(70vh-64px)]">
-          {stations.map((station) => (
-            <div
-              key={station.id}
-              className="p-4 border-b hover:bg-gray-50 cursor-pointer"
-              onClick={() => handleMarkerClick(station)}
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  {station.properties.waitTime && station.properties.waitTime < 5 && (
-                    <div className="flex items-center text-sm text-gray-500 mb-1">
-                      <Clock className="w-4 h-4 mr-1" />
-                      &lt;5 minute wait time
-                    </div>
-                  )}
-                  <h3 className="font-medium">{station.properties.Place}</h3>
-                  <div className="text-sm text-gray-500">
-                    {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
-                  </div>
-                </div>
-                <div className="bg-gray-100 rounded px-2 py-1 text-sm">
-                  {station.distance?.toFixed(1)} km
-                </div>
+      {showBottomSheet && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transform transition-transform duration-300 ease-in-out"
+          style={{ height: '70vh' }}
+        >
+          <div className="p-4 border-b">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Nearby Chargers</h2>
+              <div className="flex gap-2">
+                <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                  Sort By
+                </button>
+                <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                  72-325 kW
+                </button>
+                <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                  0-72 kW
+                </button>
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="overflow-y-auto h-[calc(70vh-64px)]">
+            {stations.map((station) => (
+              <div
+                key={station.id}
+                className="p-4 border-b hover:bg-gray-50 cursor-pointer"
+                onClick={() => handleMarkerClick(station)}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    {station.properties.waitTime && station.properties.waitTime < 5 && (
+                      <div className="flex items-center text-sm text-gray-500 mb-1">
+                        <Clock className="w-4 h-4 mr-1" />
+                        &lt;5 minute wait time
+                      </div>
+                    )}
+                    <h3 className="font-medium">{station.properties.Place}</h3>
+                    <div className="text-sm text-gray-500">
+                      {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                    </div>
+                  </div>
+                  <div className="bg-gray-100 rounded px-2 py-1 text-sm">
+                    {station.distance?.toFixed(1)} km
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
