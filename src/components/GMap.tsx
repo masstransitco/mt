@@ -133,40 +133,48 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }
 
   return (
-    <div className="relative h-screen">
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={defaultCenter}
-        zoom={11}
-        options={mapOptions}
-      >
-        {userLocation && (
-          <Marker
-            position={userLocation}
-            icon={{
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 7,
-              fillColor: "#4285F4",
-              fillOpacity: 1,
-              strokeWeight: 2,
-              strokeColor: "#FFFFFF",
-            }}
-          />
-        )}
-        {stations.map((st) => {
-          const [lng, lat] = st.geometry.coordinates;
-          return (
+    <div className="relative w-full h-[calc(100vh-64px)]">
+      <div className="absolute inset-0">
+        <GoogleMap
+          mapContainerStyle={containerStyle}
+          center={defaultCenter}
+          zoom={11}
+          options={mapOptions}
+        >
+          {userLocation && (
             <Marker
-              key={st.id}
-              position={{ lat, lng }}
-              onClick={() => handleMarkerClick(st)}
+              position={userLocation}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 7,
+                fillColor: "#4285F4",
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: "#FFFFFF",
+              }}
             />
-          );
-        })}
-      </GoogleMap>
+          )}
+          {stations.map((st) => {
+            const [lng, lat] = st.geometry.coordinates;
+            return (
+              <Marker
+                key={st.id}
+                position={{ lat, lng }}
+                onClick={() => handleMarkerClick(st)}
+              />
+            );
+          })}
+        </GoogleMap>
+      </div>
 
       {viewState === 'showMap' && (
-        <div className={`bottom-sheet ${isSheetMinimized ? 'h-20' : 'h-[70vh]'}`}>
+        <div 
+          className={`bottom-sheet ${
+            isSheetMinimized 
+              ? 'h-20' 
+              : 'h-[70vh] max-h-[calc(100vh-64px)]'
+          }`}
+        >
           <div className="bottom-sheet-header" onClick={toggleSheet}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -195,7 +203,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </div>
 
           {!isSheetMinimized && (
-            <div className="bottom-sheet-list h-[calc(70vh-5rem)]">
+            <div className="bottom-sheet-list h-[calc(100%-4rem)] max-h-[calc(70vh-4rem)]">
               {stations.map((station) => (
                 <div
                   key={station.id}
