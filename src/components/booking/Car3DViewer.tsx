@@ -82,6 +82,10 @@ export default function Car3DViewer({
             color={new THREE.Color(0x000000)}
             distanceScaling={true}
             depthAwareUpsampling={true}
+            worldDistanceThreshold={1}
+            worldDistanceFalloff={1}
+            worldProximityThreshold={1}
+            worldProximityFalloff={1}
           />
         </EffectComposer>
         <Environment preset="studio" background={false} />
