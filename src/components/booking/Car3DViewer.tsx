@@ -4,18 +4,15 @@ import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 
-// We declare a small "model loader" sub-component 
-// that uses the useGLTF hook to load and display the model.
-
 function CarModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
+  // Pass the Draco folder path as the second argument:
+  const { scene } = useGLTF(url, '/draco/'); 
   return <primitive object={scene} />;
 }
 
-// The outer Car3DViewer sets up the Canvas, camera, lights, controls, etc.
 interface Car3DViewerProps {
   modelUrl: string;
-  width?: string;  // optional style props
+  width?: string;
   height?: string;
 }
 
@@ -27,8 +24,9 @@ export default function Car3DViewer({
   return (
     <div style={{ width, height }}>
       <Canvas>
-        <ambientLight />
-        <Suspense fallback={null}>
+        <ambientLight intensity={0.5} />
+        <directionalLight position={[0, 5, 5]} />
+        <Suspense fallback={<div>Loading 3D model...</div>}>
           <OrbitControls enablePan enableZoom autoRotate />
           <CarModel url={modelUrl} />
         </Suspense>
