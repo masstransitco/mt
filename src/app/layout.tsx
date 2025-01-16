@@ -6,8 +6,8 @@ import ChatWidget from '@/components/ChatWidget';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Car Rental App',
-  description: 'A Next.js + Redux + Claude example'
+  title: 'MTC | APP',
+  description: 'A Next.js + Redux + LLM EV Transit Web Application'
 };
 
 export default function RootLayout({
