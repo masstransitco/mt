@@ -10,6 +10,7 @@ import {
 import { 
   EffectComposer,
   SSAO,
+  BlendFunction,
 } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
@@ -73,10 +74,24 @@ export default function Car3DViewer({
 
         <EffectComposer>
           <SSAO
+            blendFunction={BlendFunction.MULTIPLY}
+            samples={30}
             radius={0.037}
             intensity={0.911}
             bias={0.0012}
             color={new THREE.Color(0x000000)}
+            worldDistanceThreshold={1}
+            worldDistanceFalloff={1}
+            worldProximityThreshold={1}
+            worldProximityFalloff={1}
+            distanceThreshold={1}
+            distanceFalloff={0.1}
+            proximityThreshold={1}
+            proximityFalloff={0.1}
+            minRadiusScale={0.1}
+            maxRadiusScale={1}
+            depthAwareUpsampling={true}
+            rings={7}
           />
         </EffectComposer>
 
