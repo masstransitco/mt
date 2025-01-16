@@ -6,10 +6,11 @@ import {
   useGLTF, 
   Html, 
   Environment,
-  Effects,
-  SSAO,
-  ToneMapping,
 } from '@react-three/drei';
+import { 
+  EffectComposer,
+  SSAOEffect,
+} from '@react-three/postprocessing';
 import * as THREE from 'three';
 
 function CarModel({ url }: { url: string }) {
@@ -20,16 +21,21 @@ function CarModel({ url }: { url: string }) {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
         child.geometry.computeBoundingSphere();
-        // Add screen space reflections to materials
         if (child.material) {
-          child.material.roughness = 0.4; // Adjust for reflectivity
-          child.material.metalness = 0.8; // Good for car paint
+          child.material.roughness = 0.4;
+          child.material.metalness = 0.8;
         }
       }
     });
   }, [scene]);
   
   return <primitive object={scene} />;
+}
+
+interface Car3DViewerProps {
+  modelUrl: string;
+  width?: string;
+  height?: string;
 }
 
 export default function Car3DViewer({
@@ -48,7 +54,6 @@ export default function Car3DViewer({
         }}
         camera={{ position: [0, 2, 5], fov: 45 }}
       >
-        {/* Lighting setup matching Sketchfab */}
         <ambientLight intensity={0.5} />
         <directionalLight 
           position={[5, 5, 5]} 
@@ -66,17 +71,15 @@ export default function Car3DViewer({
           color="#4169E1"
         />
 
-        {/* Post processing effects */}
-        <Effects>
-          <SSAO 
+        <EffectComposer>
+          <SSAOEffect
             radius={0.037}
             intensity={0.911}
             luminanceInfluence={0.0012}
             color="black"
           />
-        </Effects>
+        </EffectComposer>
 
-        {/* Environment and background */}
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
 
