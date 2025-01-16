@@ -1,10 +1,9 @@
 'use client';
-
 import React from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectCar } from '@/store/userSlice';
-import { motion } from 'framer-motion';
-import { Filter } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Filter, X } from 'lucide-react';
 import CarCard from './CarCard';
 import { Car as CarType } from '@/types/booking';
 
@@ -40,7 +39,11 @@ const SAMPLE_CARS: CarType[] = [
   }
 ];
 
-export default function CarGrid() {
+interface CarGridProps {
+  className?: string;
+}
+
+export default function CarGrid({ className = '' }: CarGridProps) {
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   const [filterType, setFilterType] = React.useState('all');
@@ -57,74 +60,104 @@ export default function CarGrid() {
     dispatch(selectCar(car.id));
   };
 
-  return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header with filters */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <h2 className="text-2xl font-semibold text-foreground">Available Vehicles</h2>
+  // Filter options
+  const filterOptions = [
+    { value: 'all', label: 'All Types' },
+    { value: 'electric', label: 'Electric' },
+    { value: 'hybrid', label: 'Hybrid' },
+    { value: 'lpg', label: 'LPG' }
+  ];
 
-        {/* Desktop filters */}
-        <div className="hidden sm:block">
-          <select
-            className="bg-accent text-white px-4 py-2 rounded-lg transition-colors hover:bg-accent/80"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
+  return (
+    <div className={`space-y-4 ${className}`}>
+      {/* Header with filters */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-foreground">
+            Available Vehicles
+          </h2>
+          {/* Mobile filter button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full 
+                     bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
           >
-            <option value="all">All Types</option>
-            <option value="electric">Electric</option>
-            <option value="hybrid">Hybrid</option>
-          </select>
+            <Filter size={16} />
+            <span>{filterType === 'all' ? 'Filters' : filterOptions.find(opt => opt.value === filterType)?.label}</span>
+          </button>
         </div>
 
-        {/* Mobile filter button */}
-        <button
-          className="sm:hidden flex items-center gap-2 px-4 py-2 bg-accent rounded-lg text-white"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter size={18} />
-          Filters
-        </button>
+        {/* Filter drawer - Mobile */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="grid grid-cols-2 gap-2 p-4 rounded-2xl bg-card">
+                {filterOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      setFilterType(option.value);
+                      setShowFilters(false);
+                    }}
+                    className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors
+                              ${filterType === option.value 
+                                ? 'bg-accent text-white' 
+                                : 'bg-muted hover:bg-muted/80 text-foreground'}`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Mobile filters */}
-      {showFilters && (
-        <div className="sm:hidden mb-4">
-          <select
-            className="w-full bg-background text-white px-4 py-2 rounded-lg"
-            value={filterType}
-            onChange={(e) => {
-              setFilterType(e.target.value);
-              setShowFilters(false);
-            }}
-          >
-            <option value="all">All Types</option>
-            <option value="electric">Electric</option>
-            <option value="hybrid">Hybrid</option>
-          </select>
-        </div>
-      )}
-
       {/* Car grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {filteredCars.map((car) => (
-          <motion.div
-            key={car.id} // Important key for React
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <CarCard
-              car={car}
-              selected={selectedCarId === car.id}
-              onClick={() => handleSelectCar(car)}
-            />
-          </motion.div>
-        ))}
+      <div className="grid grid-cols-1 gap-4">
+        <AnimatePresence mode="popLayout">
+          {filteredCars.map((car) => (
+            <motion.div
+              key={car.id}
+              layout
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.3,
+                layout: { duration: 0.2 }
+              }}
+            >
+              <CarCard
+                car={car}
+                selected={selectedCarId === car.id}
+                onClick={() => handleSelectCar(car)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
         {filteredCars.length === 0 && (
-          <div className="col-span-full text-center text-gray-400 py-8">
-            No vehicles found matching your criteria.
-          </div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="py-12 text-center rounded-2xl bg-card"
+          >
+            <p className="text-muted-foreground">
+              No vehicles found matching your criteria.
+            </p>
+            <button
+              onClick={() => setFilterType('all')}
+              className="mt-4 text-sm text-accent hover:underline"
+            >
+              Clear filters
+            </button>
+          </motion.div>
         )}
       </div>
     </div>
