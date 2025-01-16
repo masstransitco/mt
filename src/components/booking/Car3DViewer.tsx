@@ -9,7 +9,7 @@ import {
 } from '@react-three/drei';
 import { 
   EffectComposer,
-  SSAOEffect,
+  SSAO,
 } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
@@ -72,10 +72,10 @@ export default function Car3DViewer({
         />
 
         <EffectComposer>
-          <SSAOEffect
+          <SSAO
             radius={0.037}
             intensity={0.911}
-            luminanceInfluence={0.0012}
+            bias={0.0012}
             color="black"
           />
         </EffectComposer>
