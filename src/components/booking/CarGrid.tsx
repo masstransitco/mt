@@ -15,7 +15,7 @@ const SAMPLE_CARS: CarType[] = [
     name: 'MG 4 Electric',
     type: 'Electric',
     price: 600,
-    image: '/cars/car1.png',
+    modelUrl: '/cars/car1.glb',
     available: true,
     features: {
       range: 300,
@@ -25,10 +25,10 @@ const SAMPLE_CARS: CarType[] = [
   },
   {
     id: 2,
-    name: 'BMW i4',
-    type: 'Electric',
+    name: 'Toyota Crown',
+    type: 'LPG',
     price: 800,
-    image: '/cars/car2.png',
+    modelUrl: '/cars/car2.glb',
     available: true,
     features: {
       range: 280,
