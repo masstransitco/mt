@@ -11,7 +11,7 @@ export default function HomePage() {
         <header className="mb-8">
           <Image
             src="/brand/logo.png"
-            alt="Car Rental App Logo"
+            alt="MTC Logo"
             width={200}
             height={60}
             priority
