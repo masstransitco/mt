@@ -3,15 +3,16 @@
 import React, { Suspense, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Html } from '@react-three/drei';
+import * as THREE from 'three'; // Import the namespace
 
 function CarModel({ url }: { url: string }) {
-  // Load the model, specifying the Draco decoder path if needed
   const { scene } = useGLTF(url, '/draco/');
 
-  // Compute bounding info to remove "Missing min/max" warnings.
   useEffect(() => {
     scene.traverse((child) => {
-      if (child.isMesh) {
+      // TypeScript: check if this child is a Mesh
+      if (child instanceof THREE.Mesh) {
+        // Now TS knows `child` is a Mesh, so geometry is defined
         child.geometry.computeBoundingBox();
         child.geometry.computeBoundingSphere();
       }
@@ -37,8 +38,6 @@ export default function Car3DViewer({
       <Canvas>
         <ambientLight intensity={0.5} />
         <directionalLight position={[0, 5, 5]} />
-        
-        {/* Use Suspense with a valid R3F fallback to avoid "Div is not part of the THREE namespace!" */}
         <Suspense
           fallback={
             <Html center>
