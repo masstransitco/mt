@@ -131,8 +131,7 @@
   }
 
   .bottom-sheet-list {
-    @apply overflow-y-auto scroll-container
-           overscroll-contain;
+    @apply overflow-y-auto overscroll-contain;
   }
 
   .bottom-sheet-item {
@@ -162,9 +161,7 @@
   
   /* Enhanced scrolling */
   .scroll-container {
-    @apply overflow-auto overscroll-contain
-           scrollbar-thin scrollbar-track-transparent
-           scrollbar-thumb-muted/50 hover:scrollbar-thumb-muted;
+    @apply overflow-auto overscroll-contain;
   }
 }
 
