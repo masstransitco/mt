@@ -47,14 +47,13 @@ export default function HomePage() {
           <div className="h-full w-full rounded-2xl overflow-hidden">
             <GMap 
               googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
-              className="h-full w-full"
             />
           </div>
         </div>
       </div>
 
       {/* Bottom sheet dialog */}
-      <BookingDialog className="rounded-t-3xl" />
+      <BookingDialog />
     </main>
   );
 }
