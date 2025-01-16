@@ -6,7 +6,6 @@ import {
   useGLTF, 
   Html, 
   Environment,
-  NormalPass, // Moved this import here
 } from '@react-three/drei';
 import { 
   EffectComposer,
@@ -53,6 +52,7 @@ export default function Car3DViewer({
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.0,
+          preserveDrawingBuffer: true // Added for SSAO compatibility
         }}
         camera={{ position: [0, 2, 5], fov: 45 }}
       >
@@ -72,21 +72,13 @@ export default function Car3DViewer({
           intensity={0.15}
           color="#4169E1"
         />
-        <EffectComposer>
-          <NormalPass />
-          <SSAO
-            blendFunction={BlendFunction.MULTIPLY}
-            samples={30}
-            radius={0.037}
-            intensity={0.911}
-            bias={0.0012}
-            color={new THREE.Color(0x000000)}
-            worldDistanceThreshold={1}
-            worldDistanceFalloff={1}
-            worldProximityThreshold={1}
-            worldProximityFalloff={1}
-            rings={7}
-            depthAwareUpsampling={true}
+        <EffectComposer multisampling={8}>
+          <SSAO 
+            samples={31} // increased samples for better quality
+            radius={5} // increased radius
+            intensity={30} // increased intensity
+            luminanceInfluence={0.5}
+            color="black"
           />
         </EffectComposer>
         <Environment preset="studio" background={false} />
