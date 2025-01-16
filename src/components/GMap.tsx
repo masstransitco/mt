@@ -166,62 +166,62 @@ export default function GMap({ googleApiKey }: GMapProps) {
       </GoogleMap>
 
       {viewState === 'showMap' && (
-        <div 
-          className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transform transition-transform duration-300 ease-in-out ${
-            isSheetMinimized ? 'h-24' : 'h-[70vh]'
-          }`}
-        >
-          <div 
-            className="p-4 border-b cursor-pointer hover:bg-gray-50"
-            onClick={toggleSheet}
-          >
+        <div className={`bottom-sheet ${isSheetMinimized ? 'h-20' : 'h-[70vh]'}`}>
+          <div className="bottom-sheet-header" onClick={toggleSheet}>
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Nearby Chargers</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-foreground">Nearby Chargers</h2>
+                {!isSheetMinimized && (
+                  <span className="text-sm text-muted-foreground">
+                    {stations.length} stations found
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-4">
                 {!isSheetMinimized && (
                   <div className="flex gap-2">
-                    <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                      Sort By
-                    </button>
-                    <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                      72-325 kW
-                    </button>
-                    <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                      0-72 kW
-                    </button>
+                    <button className="bottom-sheet-filter-btn">Sort By</button>
+                    <button className="bottom-sheet-filter-btn">72-325 kW</button>
+                    <button className="bottom-sheet-filter-btn">0-72 kW</button>
                   </div>
                 )}
                 {isSheetMinimized ? (
-                  <ChevronUp className="w-6 h-6 text-gray-500" />
+                  <ChevronUp className="w-6 h-6 text-muted-foreground" />
                 ) : (
-                  <ChevronDown className="w-6 h-6 text-gray-500" />
+                  <ChevronDown className="w-6 h-6 text-muted-foreground" />
                 )}
               </div>
             </div>
           </div>
 
           {!isSheetMinimized && (
-            <div className="overflow-y-auto h-[calc(70vh-64px)]">
+            <div className="bottom-sheet-list h-[calc(70vh-5rem)]">
               {stations.map((station) => (
                 <div
                   key={station.id}
-                  className="p-4 border-b hover:bg-gray-50 cursor-pointer"
+                  className="bottom-sheet-item"
                   onClick={() => handleMarkerClick(station)}
                 >
                   <div className="flex justify-between items-start">
-                    <div>
+                    <div className="space-y-2">
                       {station.properties.waitTime && station.properties.waitTime < 5 && (
-                        <div className="flex items-center text-sm text-gray-500 mb-1">
-                          <Clock className="w-4 h-4 mr-1" />
+                        <div className="bottom-sheet-item-detail">
+                          <Clock className="w-4 h-4" />
                           &lt;5 minute wait time
                         </div>
                       )}
-                      <h3 className="font-medium">{station.properties.Place}</h3>
-                      <div className="text-sm text-gray-500">
-                        {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                      <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
+                      <div className="flex items-center gap-4">
+                        <div className="bottom-sheet-item-detail">
+                          <Zap className="w-4 h-4" />
+                          {station.properties.maxPower} kW max
+                        </div>
+                        <div className="bottom-sheet-item-detail">
+                          {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                        </div>
                       </div>
                     </div>
-                    <div className="bg-gray-100 rounded px-2 py-1 text-sm">
+                    <div className="bottom-sheet-distance">
                       {station.distance?.toFixed(1)} km
                     </div>
                   </div>
@@ -234,3 +234,4 @@ export default function GMap({ googleApiKey }: GMapProps) {
     </div>
   );
 }
+
