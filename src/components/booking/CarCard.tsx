@@ -1,8 +1,10 @@
 'use client';
 
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Car as CarType } from '@/types/booking';
 import { Check, Battery, Gauge } from 'lucide-react';
+import Car3DViewer from './Car3DViewer'; // <-- Import our new 3D viewer
 
 interface CarCardProps {
   car: CarType;
@@ -20,18 +22,16 @@ export default function CarCard({ car, selected, onClick }: CarCardProps) {
       onClick={onClick}
     >
       <div className="relative aspect-[16/9] overflow-hidden">
-        <img
-          src={car.image}
-          alt={car.name}
-          className="w-full h-full object-cover"
-        />
+        {/* Instead of an <img>, we render the 3D .glb model */}
+        <Car3DViewer modelUrl={car.modelUrl} />
+
         {selected && (
           <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm flex items-center justify-center">
             <Check className="w-12 h-12 text-white" />
           </div>
         )}
       </div>
-      
+
       <div className="p-4">
         <div className="flex justify-between items-start mb-4">
           <div>
