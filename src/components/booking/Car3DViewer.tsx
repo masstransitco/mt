@@ -74,11 +74,18 @@ export default function Car3DViewer({
         />
         <EffectComposer multisampling={8}>
           <SSAO 
+            blendFunction={BlendFunction.MULTIPLY}
             samples={31}
             radius={5}
             intensity={30}
             luminanceInfluence={0.5}
             color={new THREE.Color(0x000000)}
+            worldDistanceThreshold={1}
+            worldDistanceFalloff={1}
+            worldProximityThreshold={1}
+            worldProximityFalloff={1}
+            distanceScaling={true}
+            depthAwareUpsampling={true}
           />
         </EffectComposer>
         <Environment preset="studio" background={false} />
