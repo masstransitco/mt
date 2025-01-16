@@ -34,6 +34,10 @@
     --radius: 1rem;  /* Larger radius for modern feel */
   }
 
+  html {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     -webkit-tap-highlight-color: transparent;
@@ -102,27 +106,29 @@
   .car-feature {
     @apply flex items-center gap-1.5;
   }
-  
+
   /* Bottom sheet styles */
   .bottom-sheet {
     @apply fixed bottom-0 left-0 right-0 
-           bg-card/95 backdrop-blur-sm border-t border-border
-           rounded-t-[var(--radius)] shadow-lg 
+           bg-card border-t border-border
+           rounded-t-[var(--radius)] shadow-2xl
            transform transition-all duration-300 ease-in-out
-           pb-safe-area-inset-bottom;
+           pb-safe-area-inset-bottom
+           shadow-black/20;
   }
 
   .bottom-sheet-header {
     @apply p-4 border-b border-border cursor-pointer
-           hover:bg-muted/50 transition-colors duration-200
+           hover:bg-muted/20 transition-colors duration-200
            select-none;
   }
 
   .bottom-sheet-filter-btn {
     @apply px-4 py-2 rounded-full text-sm 
-           bg-muted hover:bg-muted-foreground/10 
+           bg-muted hover:bg-muted/80 
            text-muted-foreground transition-colors
-           active:scale-[0.98];
+           active:scale-[0.98]
+           border border-border/50;
   }
 
   .bottom-sheet-list {
@@ -132,7 +138,7 @@
 
   .bottom-sheet-item {
     @apply p-4 border-b border-border 
-           hover:bg-muted/50 cursor-pointer 
+           hover:bg-muted/20 cursor-pointer 
            transition-colors duration-200;
   }
 
@@ -179,4 +185,16 @@ html {
 
 .three-d-scene-selected {
   @apply cursor-grab active:cursor-grabbing;
+}
+
+/* Font smoothing */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Text selection */
+::selection {
+  @apply bg-accent/30 text-foreground;
 }
