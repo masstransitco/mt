@@ -1,23 +1,36 @@
 'use client';
-
+import Image from 'next/image';
 import CarGrid from '@/components/booking/CarGrid';
 import GMap from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <div className="p-4">
-        <h1 className="text-3xl font-bold mb-6">Welcome to the Car Rental App</h1>
-        {/* Display the car grid */}
-        <CarGrid />
+    <main className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-6">
+        <header className="mb-8">
+          <Image
+            src="/brand/logo.png"
+            alt="Car Rental App Logo"
+            width={200}
+            height={60}
+            priority
+            className="h-auto w-auto"
+          />
+        </header>
 
-        <hr className="my-8" />
+        <section className="space-y-8">
+          <CarGrid />
+          
+          <div className="h-px bg-border" /> {/* Semantic divider */}
+          
+          <div className="h-[400px] w-full"> {/* Fixed height container for map */}
+            <GMap 
+              googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''} 
+            />
+          </div>
+        </section>
 
-        {/* Display the station map */}
-        <GMap googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''} />
-
-        {/* Booking dialog (opens automatically if car+station selected) */}
         <BookingDialog />
       </div>
     </main>
