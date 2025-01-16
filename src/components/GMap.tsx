@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Clock, Battery, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Battery, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 
 interface StationFeature {
   type: 'Feature';
@@ -115,7 +115,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleMarkerClick = useCallback((station: StationFeature) => {
     console.log('Station clicked:', station.properties.Place);
     dispatch(selectStation(station.id));
-    setIsSheetMinimized(false); // Expand sheet when marker is clicked
+    setIsSheetMinimized(false);
   }, [dispatch]);
 
   const toggleSheet = () => {
@@ -125,11 +125,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const defaultCenter = useMemo(() => userLocation || { lat: 22.3, lng: 114.0 }, [userLocation]);
 
   if (loadError) {
-    return <div className="text-red-500">Error loading Google Maps: {loadError.message}</div>;
+    return <div className="text-destructive">Error loading Google Maps: {loadError.message}</div>;
   }
 
   if (!isLoaded) {
-    return <div>Loading Google Map...</div>;
+    return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
   return (
@@ -234,4 +234,3 @@ export default function GMap({ googleApiKey }: GMapProps) {
     </div>
   );
 }
-
