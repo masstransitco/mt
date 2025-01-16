@@ -10,6 +10,7 @@ import {
 import { 
   EffectComposer,
   SSAO,
+  NormalPass,
 } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
@@ -71,8 +72,8 @@ export default function Car3DViewer({
           intensity={0.15}
           color="#4169E1"
         />
-
         <EffectComposer>
+          <NormalPass />
           <SSAO
             blendFunction={BlendFunction.MULTIPLY}
             samples={30}
@@ -88,10 +89,8 @@ export default function Car3DViewer({
             depthAwareUpsampling={true}
           />
         </EffectComposer>
-
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
-
         <Suspense
           fallback={
             <Html center>
