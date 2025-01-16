@@ -70,6 +70,7 @@ const CarModel = React.memo(function CarModel({ url }: { url: string }) {
   const { scene } = useGLTF(url, '/draco/', true); // Enable progressive loading
   
   useEffect(() => {
+    scene.rotation.y = Math.PI / 2;
     const materials: THREE.Material[] = [];
     
     scene.traverse((child) => {
