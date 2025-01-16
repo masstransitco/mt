@@ -76,7 +76,7 @@ export default function Car3DViewer({
             radius={0.037}
             intensity={0.911}
             bias={0.0012}
-            color="black"
+            color={new THREE.Color(0x000000)}
           />
         </EffectComposer>
 
