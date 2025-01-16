@@ -72,7 +72,7 @@ export default function Car3DViewer({
           intensity={0.15}
           color="#4169E1"
         />
-        <EffectComposer multisampling={8} disableNormalPass={false}>
+        <EffectComposer multisampling={8} enableNormalPass={true}>
           <SSAO 
             blendFunction={BlendFunction.MULTIPLY}
             samples={31}
