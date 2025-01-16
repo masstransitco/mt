@@ -1,12 +1,18 @@
 'use client';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import CarGrid from '@/components/booking/CarGrid';
 import GMap from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
+import { setViewState, selectViewState } from '@/store/userSlice';
 
 export default function HomePage() {
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const dispatch = useDispatch();
+  const viewState = useSelector(selectViewState);
+  
+  const toggleView = () => {
+    dispatch(setViewState(viewState === 'showMap' ? 'showCar' : 'showMap'));
+  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -22,25 +28,23 @@ export default function HomePage() {
             className="h-8 w-auto"
           />
           <button 
-            onClick={() => setIsMapExpanded(!isMapExpanded)}
+            onClick={toggleView}
             className="btn-primary text-sm py-2 px-4 h-auto"
           >
-            {isMapExpanded ? 'Show Cars' : 'Show Map'}
+            {viewState === 'showMap' ? 'Show Cars' : 'Show Map'}
           </button>
         </div>
       </header>
-
       <div className="container mx-auto px-4 pb-safe-area-inset-bottom">
         {/* Conditional rendering based on view mode */}
         <div className={`transition-all duration-300 ${
-          isMapExpanded ? 'h-0 overflow-hidden' : 'h-auto py-4'
+          viewState === 'showMap' ? 'h-0 overflow-hidden' : 'h-auto py-4'
         }`}>
           <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
         </div>
-
         {/* Expandable map */}
         <div className={`transition-all duration-300 ${
-          isMapExpanded 
+          viewState === 'showMap'
             ? 'h-[calc(100vh-4rem)] pt-4' 
             : 'h-0 overflow-hidden'
         }`}>
@@ -51,7 +55,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
       {/* Bottom sheet dialog */}
       <BookingDialog />
     </main>
