@@ -10,8 +10,8 @@ import {
 import { 
   EffectComposer,
   SSAO,
-  BlendFunction,
 } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
 function CarModel({ url }: { url: string }) {
