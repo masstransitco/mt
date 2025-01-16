@@ -41,29 +41,66 @@
 }
 
 @layer components {
-  /* Mobile-optimized card styles */
+  /* Updated car card styles */
   .car-card {
-    @apply relative overflow-hidden rounded-2xl
-           transition-all duration-300 active:scale-[0.98]
-           bg-card shadow-lg shadow-black/20
-           text-foreground mx-auto max-w-sm w-full;
+    @apply relative overflow-hidden rounded-xl
+           transition-all duration-300 
+           bg-card border border-border
+           hover:border-primary/50
+           text-foreground mx-auto w-full;
   }
   
   .car-card-selected {
-    @apply before:absolute before:inset-0 before:z-10
-           before:border-2 before:border-accent
-           before:rounded-2xl;
+    @apply border-primary shadow-lg shadow-primary/10;
   }
   
-  .car-image-container {
-    @apply relative aspect-[4/3] overflow-hidden rounded-t-2xl 
-           bg-gradient-to-b from-muted to-muted/50;
+  /* 3D viewer container styles */
+  .model-viewer-container {
+    @apply relative aspect-[16/9] overflow-hidden
+           bg-gradient-to-b from-black/5 to-transparent;
   }
   
+  .model-viewer-loading {
+    @apply absolute inset-0 flex items-center justify-center
+           bg-card text-muted-foreground text-sm;
+  }
+
+  /* Car details section */
   .car-details {
-    @apply relative z-20 p-4 space-y-2
-           bg-gradient-to-t from-card via-card/95 to-card/90
-           backdrop-blur-sm;
+    @apply p-4 space-y-4;
+  }
+
+  .car-header {
+    @apply flex justify-between items-start;
+  }
+
+  .car-title {
+    @apply text-lg font-semibold text-foreground leading-tight;
+  }
+
+  .car-type {
+    @apply flex items-center gap-1.5 text-sm text-muted-foreground;
+  }
+
+  .car-price {
+    @apply text-right;
+  }
+
+  .car-price-amount {
+    @apply text-2xl font-bold text-foreground leading-none;
+  }
+
+  .car-price-period {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  .car-features {
+    @apply flex items-center gap-4 text-sm text-muted-foreground 
+           border-t border-border/50 pt-4;
+  }
+
+  .car-feature {
+    @apply flex items-center gap-1.5;
   }
   
   /* Touch-optimized buttons */
@@ -91,4 +128,13 @@ html {
 /* Remove tap highlight on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* 3D viewer specific styles */
+.three-d-scene {
+  @apply touch-none select-none;
+}
+
+.three-d-scene-selected {
+  @apply cursor-grab active:cursor-grabbing;
 }
