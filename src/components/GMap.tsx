@@ -3,9 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { selectStation } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Clock, Battery } from "lucide-react";
+import { Clock, Battery } from 'lucide-react';
 
 interface StationFeature {
   type: 'Feature';
@@ -26,7 +24,7 @@ interface GMapProps {
   googleApiKey: string;
 }
 
-const containerStyle = { width: '100%', height: '500px' };
+const containerStyle = { width: '100%', height: 'calc(100vh - 280px)' };
 
 const mapOptions = {
   mapId: '94527c02bbb6243',
@@ -38,7 +36,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useDispatch();
   const [stations, setStations] = useState<StationFeature[]>([]);
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(true);
+  const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -47,7 +45,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: ['geometry']
   });
 
-  // Calculate distance between two points
   const calculateDistance = (
     lat1: number,
     lon1: number,
@@ -57,10 +54,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (!google?.maps?.geometry?.spherical) return 0;
     const from = new google.maps.LatLng(lat1, lon1);
     const to = new google.maps.LatLng(lat2, lon2);
-    return google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000; // Convert to km
+    return google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000;
   };
 
-  // Get user location
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setIsLoadingLocation(false);
@@ -82,7 +78,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }, []);
 
-  // Fetch stations and update with distances
   useEffect(() => {
     const fetchStations = async () => {
       try {
@@ -100,7 +95,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     getUserLocation();
   }, [getUserLocation]);
 
-  // Update stations with distances when user location changes
   useEffect(() => {
     if (userLocation && stations.length > 0) {
       const stationsWithDistance = stations.map((station) => ({
@@ -120,7 +114,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleMarkerClick = useCallback((station: StationFeature) => {
     console.log('Station clicked:', station.properties.Place);
     dispatch(selectStation(station.id));
-    setIsSheetOpen(true);
+    setIsBottomSheetOpen(true);
   }, [dispatch]);
 
   const defaultCenter = useMemo(() => userLocation || { lat: 22.3, lng: 114.0 }, [userLocation]);
@@ -134,7 +128,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-screen">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={defaultCenter}
@@ -166,49 +160,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
         })}
       </GoogleMap>
 
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="bottom" className="h-[70vh] p-0">
-          <SheetHeader className="p-4 border-b">
-            <SheetTitle className="flex items-center justify-between">
-              <span>Nearby Chargers</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm">Sort By</Button>
-                <Button variant="outline" size="sm">72-325 kW</Button>
-                <Button variant="outline" size="sm">0-72 kW</Button>
-              </div>
-            </SheetTitle>
-          </SheetHeader>
-          <div className="overflow-y-auto h-full pb-safe">
-            {stations.map((station) => (
-              <div
-                key={station.id}
-                className="p-4 border-b flex items-center justify-between"
-                onClick={() => handleMarkerClick(station)}
-              >
+      <div 
+        className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transform transition-transform duration-300 ease-in-out ${
+          isBottomSheetOpen ? 'translate-y-0' : 'translate-y-full'
+        }`}
+        style={{ height: '70vh' }}
+      >
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Nearby Chargers</h2>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                Sort By
+              </button>
+              <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                72-325 kW
+              </button>
+              <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                0-72 kW
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto h-[calc(70vh-64px)]">
+          {stations.map((station) => (
+            <div
+              key={station.id}
+              className="p-4 border-b hover:bg-gray-50 cursor-pointer"
+              onClick={() => handleMarkerClick(station)}
+            >
+              <div className="flex justify-between items-start">
                 <div>
-                  <div className="flex items-center gap-2">
-                    {station.properties.waitTime && station.properties.waitTime < 5 && (
-                      <div className="flex items-center text-sm text-gray-500">
-                        <Clock className="w-4 h-4 mr-1" />
-                        &lt;5 minute wait time
-                      </div>
-                    )}
-                  </div>
+                  {station.properties.waitTime && station.properties.waitTime < 5 && (
+                    <div className="flex items-center text-sm text-gray-500 mb-1">
+                      <Clock className="w-4 h-4 mr-1" />
+                      &lt;5 minute wait time
+                    </div>
+                  )}
                   <h3 className="font-medium">{station.properties.Place}</h3>
                   <div className="text-sm text-gray-500">
                     {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="bg-gray-100 rounded px-2 py-1">
-                    {station.distance?.toFixed(1)} km
-                  </div>
+                <div className="bg-gray-100 rounded px-2 py-1 text-sm">
+                  {station.distance?.toFixed(1)} km
                 </div>
               </div>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
