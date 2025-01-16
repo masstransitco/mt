@@ -15,8 +15,10 @@ export default function CarCard({ car, selected, onClick }: CarCardProps) {
   return (
     <motion.div
       whileHover={{ y: -5 }}
+      transition={{ type: "tween", duration: 0.2 }}
       className={`
-        relative overflow-hidden rounded-2xl bg-card transition-all duration-300
+        relative overflow-hidden rounded-2xl bg-card
+        transition-all duration-300 w-full
         ${selected 
           ? 'border-2 border-blue-500 shadow-lg' 
           : 'border border-border/50 hover:border-border'
@@ -24,15 +26,16 @@ export default function CarCard({ car, selected, onClick }: CarCardProps) {
       `}
       onClick={onClick}
     >
+      {/* Use aspect-ratio to maintain consistent proportions */}
       <div className={`
-        relative w-full 
-        ${selected ? 'h-[400px]' : 'h-[300px]'}
-        transition-all duration-300
+        relative w-full transition-all duration-300
+        ${selected ? 'aspect-[16/9]' : 'aspect-[16/4]'}
       `}>
         <Car3DViewer 
           modelUrl={car.modelUrl} 
           selected={selected}
           height="100%"
+          width="100%"
         />
       </div>
       
@@ -56,7 +59,6 @@ export default function CarCard({ car, selected, onClick }: CarCardProps) {
             </p>
           </div>
         </div>
-
         <div className="flex items-center gap-4 pt-2">
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Gauge className="w-4 h-4" />
