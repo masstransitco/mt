@@ -41,7 +41,7 @@
 }
 
 @layer components {
-  /* Updated car card styles */
+  /* Car card styles */
   .car-card {
     @apply relative overflow-hidden rounded-xl
            transition-all duration-300 
@@ -54,7 +54,7 @@
     @apply border-primary shadow-lg shadow-primary/10;
   }
   
-  /* 3D viewer container styles */
+  /* 3D viewer styles */
   .model-viewer-container {
     @apply relative aspect-[16/9] overflow-hidden
            bg-gradient-to-b from-black/5 to-transparent;
@@ -65,7 +65,7 @@
            bg-card text-muted-foreground text-sm;
   }
 
-  /* Car details section */
+  /* Car details styles */
   .car-details {
     @apply p-4 space-y-4;
   }
@@ -103,6 +103,49 @@
     @apply flex items-center gap-1.5;
   }
   
+  /* Bottom sheet styles */
+  .bottom-sheet {
+    @apply fixed bottom-0 left-0 right-0 
+           bg-card/95 backdrop-blur-sm border-t border-border
+           rounded-t-[var(--radius)] shadow-lg 
+           transform transition-all duration-300 ease-in-out
+           pb-safe-area-inset-bottom;
+  }
+
+  .bottom-sheet-header {
+    @apply p-4 border-b border-border cursor-pointer
+           hover:bg-muted/50 transition-colors duration-200
+           select-none;
+  }
+
+  .bottom-sheet-filter-btn {
+    @apply px-4 py-2 rounded-full text-sm 
+           bg-muted hover:bg-muted-foreground/10 
+           text-muted-foreground transition-colors
+           active:scale-[0.98];
+  }
+
+  .bottom-sheet-list {
+    @apply overflow-y-auto scroll-container
+           overscroll-contain;
+  }
+
+  .bottom-sheet-item {
+    @apply p-4 border-b border-border 
+           hover:bg-muted/50 cursor-pointer 
+           transition-colors duration-200;
+  }
+
+  .bottom-sheet-item-detail {
+    @apply flex items-center gap-1.5 text-sm text-muted-foreground;
+  }
+
+  .bottom-sheet-distance {
+    @apply bg-muted px-3 py-1.5 rounded-full 
+           text-sm text-muted-foreground
+           flex items-center gap-1.5;
+  }
+  
   /* Touch-optimized buttons */
   .btn-primary {
     @apply h-12 px-6 rounded-full bg-accent
@@ -112,7 +155,7 @@
            shadow-lg shadow-accent/25;
   }
   
-  /* Enhanced scrolling for mobile */
+  /* Enhanced scrolling */
   .scroll-container {
     @apply overflow-auto overscroll-contain
            scrollbar-thin scrollbar-track-transparent
@@ -120,12 +163,11 @@
   }
 }
 
-/* Enhanced smooth scrolling */
+/* Global styles */
 html {
   scroll-behavior: smooth;
 }
 
-/* Remove tap highlight on mobile */
 * {
   -webkit-tap-highlight-color: transparent;
 }
