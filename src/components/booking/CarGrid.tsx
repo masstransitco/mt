@@ -7,7 +7,6 @@ import { Filter, X } from 'lucide-react';
 import CarCard from './CarCard';
 import { Car as CarType } from '@/types/booking';
 
-// Sample cars data
 const SAMPLE_CARS: CarType[] = [
   {
     id: 1,
@@ -77,18 +76,26 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   const [filterType, setFilterType] = React.useState('all');
   const [showFilters, setShowFilters] = React.useState(false);
 
-  const filteredCars = React.useMemo(() => {
-    if (filterType === 'all') return SAMPLE_CARS;
-    return SAMPLE_CARS.filter(car =>
-      car.type.toLowerCase() === filterType.toLowerCase()
-    );
-  }, [filterType]);
+  const sortedAndFilteredCars = React.useMemo(() => {
+    // First apply the filter
+    const filtered = filterType === 'all' 
+      ? SAMPLE_CARS 
+      : SAMPLE_CARS.filter(car => 
+          car.type.toLowerCase() === filterType.toLowerCase()
+        );
+    
+    // Then sort to ensure selected car is at the top
+    return [...filtered].sort((a, b) => {
+      if (a.id === selectedCarId) return -1;
+      if (b.id === selectedCarId) return 1;
+      return 0;
+    });
+  }, [filterType, selectedCarId]);
 
   const handleSelectCar = (car: CarType) => {
     dispatch(selectCar(car.id));
   };
 
-  // Filter options
   const filterOptions = [
     { value: 'all', label: 'All Types' },
     { value: 'electric', label: 'Electric' },
@@ -104,7 +111,6 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           <h2 className="text-xl font-semibold text-foreground">
             Available Vehicles
           </h2>
-          {/* Mobile filter button */}
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full 
@@ -115,13 +121,13 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           </button>
         </div>
 
-        {/* Filter drawer - Mobile */}
         <AnimatePresence>
           {showFilters && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
               <div className="grid grid-cols-2 gap-2 p-4 rounded-2xl bg-card">
@@ -149,7 +155,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
       {/* Car grid */}
       <div className="grid grid-cols-1 gap-4">
         <AnimatePresence mode="popLayout">
-          {filteredCars.map((car) => (
+          {sortedAndFilteredCars.map((car) => (
             <motion.div
               key={car.id}
               layout
@@ -157,8 +163,12 @@ export default function CarGrid({ className = '' }: CarGridProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ 
-                duration: 0.3,
-                layout: { duration: 0.2 }
+                duration: 0.2,
+                layout: { 
+                  duration: 0.3, 
+                  type: "spring", 
+                  stiffness: 200 
+                }
               }}
             >
               <CarCard
@@ -170,7 +180,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           ))}
         </AnimatePresence>
 
-        {filteredCars.length === 0 && (
+        {sortedAndFilteredCars.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
