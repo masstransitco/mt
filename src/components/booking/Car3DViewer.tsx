@@ -9,9 +9,9 @@ import {
 } from '@react-three/drei';
 import { 
   EffectComposer,
-  NormalPass,        // <-- add NormalPass
   SSAO,
 } from '@react-three/postprocessing'; 
+import { NormalPass } from '@react-three/postprocessing/dist/NormalPass';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
