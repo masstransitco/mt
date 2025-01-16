@@ -1,5 +1,4 @@
 'use client';
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { selectStation } from '@/store/userSlice';
@@ -18,10 +17,19 @@ interface GMapProps {
 
 const containerStyle = { width: '100%', height: '500px' };
 
+const mapOptions = {
+  mapId: '94527c02bbb6243',
+  gestureHandling: 'greedy',
+  disableDefaultUI: true,
+  // If you need any specific controls, you can enable them individually:
+  // zoomControl: true,
+  // scaleControl: true,
+};
+
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useDispatch();
   const [stations, setStations] = useState<StationFeature[]>([]);
-
+  
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey
@@ -61,6 +69,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       mapContainerStyle={containerStyle}
       center={defaultCenter}
       zoom={10}
+      options={mapOptions}
     >
       {stations.map((st) => {
         const [lng, lat] = st.geometry.coordinates;
