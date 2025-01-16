@@ -16,6 +16,7 @@ const SAMPLE_CARS: CarType[] = [
     type: 'Electric',
     price: 600,
     modelUrl: '/cars/car1.glb',
+    image: 'string',
     available: true,
     features: {
       range: 300,
@@ -29,6 +30,7 @@ const SAMPLE_CARS: CarType[] = [
     type: 'LPG',
     price: 800,
     modelUrl: '/cars/car2.glb',
+    image: 'string',
     available: true,
     features: {
       range: 280,
