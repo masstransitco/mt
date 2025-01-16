@@ -1,10 +1,9 @@
 'use client';
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Car as CarType } from '@/types/booking';
-import { Check, Battery, Gauge } from 'lucide-react';
-import Car3DViewer from './Car3DViewer'; // <-- Import our new 3D viewer
+import { Battery, Gauge } from 'lucide-react';
+import Car3DViewer from './Car3DViewer';
 
 interface CarCardProps {
   car: CarType;
@@ -16,43 +15,39 @@ export default function CarCard({ car, selected, onClick }: CarCardProps) {
   return (
     <motion.div
       whileHover={{ y: -5 }}
-      className={`relative overflow-hidden rounded-lg bg-card border border-border ${
-        selected ? 'ring-2 ring-primary' : ''
-      }`}
+      className={`car-card ${selected ? 'car-card-selected' : ''}`}
       onClick={onClick}
     >
-      <div className="relative aspect-[16/9] overflow-hidden">
-        {/* Instead of an <img>, we render the 3D .glb model */}
-        <Car3DViewer modelUrl={car.modelUrl} />
-
-        {selected && (
-          <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm flex items-center justify-center">
-            <Check className="w-12 h-12 text-white" />
-          </div>
-        )}
+      <div className="model-viewer-container">
+        <Car3DViewer 
+          modelUrl={car.modelUrl} 
+          selected={selected}
+        />
       </div>
 
-      <div className="p-4">
-        <div className="flex justify-between items-start mb-4">
+      <div className="car-details">
+        <div className="car-header">
           <div>
-            <h3 className="text-xl font-semibold text-foreground mb-1">{car.name}</h3>
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <h3 className="car-title">
+              {car.name}
+            </h3>
+            <div className="car-type">
               <Battery className="w-4 h-4" />
               <span>{car.type}</span>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-foreground">${car.price}</p>
-            <p className="text-muted-foreground">per day</p>
+          <div className="car-price">
+            <p className="car-price-amount">${car.price}</p>
+            <p className="car-price-period">per day</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-4 text-muted-foreground text-sm">
-          <div className="flex items-center gap-1">
+
+        <div className="car-features">
+          <div className="car-feature">
             <Gauge className="w-4 h-4" />
             <span>{car.features.range} mi range</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="car-feature">
             <Battery className="w-4 h-4" />
             <span>{car.features.charging}</span>
           </div>
