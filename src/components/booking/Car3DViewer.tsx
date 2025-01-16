@@ -16,7 +16,9 @@ import * as THREE from 'three';
 
 // Camera adjustment component
 function CameraSetup({ modelUrl }: { modelUrl: string }) {
-  const { scene, camera } = useThree();
+  const three = useThree();
+  const camera = three.camera as THREE.PerspectiveCamera;
+  const { scene } = three;
   const controlsRef = useRef<any>();
 
   useEffect(() => {
