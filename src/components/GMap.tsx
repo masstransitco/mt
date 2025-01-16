@@ -3,12 +3,23 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch } from 'react-redux';
 import { selectStation } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Clock, Battery } from "lucide-react";
 
 interface StationFeature {
   type: 'Feature';
   id: number;
   geometry: { type: 'Point'; coordinates: [number, number]; };
-  properties: { Place: string; Address: string; };
+  properties: {
+    Place: string;
+    Address: string;
+    maxPower: number;
+    totalSpots: number;
+    availableSpots: number;
+    waitTime?: number;
+  };
+  distance?: number;
 }
 
 interface GMapProps {
@@ -21,22 +32,59 @@ const mapOptions = {
   mapId: '94527c02bbb6243',
   gestureHandling: 'greedy',
   disableDefaultUI: true,
-  // If you need any specific controls, you can enable them individually:
-  // zoomControl: true,
-  // scaleControl: true,
 };
 
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useDispatch();
   const [stations, setStations] = useState<StationFeature[]>([]);
-  
+  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(true);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: googleApiKey
+    googleMapsApiKey: googleApiKey,
+    libraries: ['geometry']
   });
 
+  // Calculate distance between two points
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    if (!google?.maps?.geometry?.spherical) return 0;
+    const from = new google.maps.LatLng(lat1, lon1);
+    const to = new google.maps.LatLng(lat2, lon2);
+    return google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000; // Convert to km
+  };
+
+  // Get user location
+  const getUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setIsLoadingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setIsLoadingLocation(false);
+      },
+      (error) => {
+        console.error('Error getting location:', error);
+        setIsLoadingLocation(false);
+      }
+    );
+  }, []);
+
+  // Fetch stations and update with distances
   useEffect(() => {
-    (async () => {
+    const fetchStations = async () => {
       try {
         const res = await fetch('/stations.geojson');
         const data = await res.json();
@@ -46,15 +94,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
       } catch (err) {
         console.error('Error fetching stations:', err);
       }
-    })();
-  }, []);
+    };
+
+    fetchStations();
+    getUserLocation();
+  }, [getUserLocation]);
+
+  // Update stations with distances when user location changes
+  useEffect(() => {
+    if (userLocation && stations.length > 0) {
+      const stationsWithDistance = stations.map((station) => ({
+        ...station,
+        distance: calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          station.geometry.coordinates[1],
+          station.geometry.coordinates[0]
+        ),
+      })).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      
+      setStations(stationsWithDistance);
+    }
+  }, [userLocation, stations.length]);
 
   const handleMarkerClick = useCallback((station: StationFeature) => {
     console.log('Station clicked:', station.properties.Place);
     dispatch(selectStation(station.id));
+    setIsSheetOpen(true);
   }, [dispatch]);
 
-  const defaultCenter = useMemo(() => ({ lat: 22.3, lng: 114.0 }), []);
+  const defaultCenter = useMemo(() => userLocation || { lat: 22.3, lng: 114.0 }, [userLocation]);
 
   if (loadError) {
     return <div className="text-red-500">Error loading Google Maps: {loadError.message}</div>;
@@ -65,22 +134,81 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }
 
   return (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={defaultCenter}
-      zoom={10}
-      options={mapOptions}
-    >
-      {stations.map((st) => {
-        const [lng, lat] = st.geometry.coordinates;
-        return (
+    <div className="relative h-full">
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={defaultCenter}
+        zoom={11}
+        options={mapOptions}
+      >
+        {userLocation && (
           <Marker
-            key={st.id}
-            position={{ lat, lng }}
-            onClick={() => handleMarkerClick(st)}
+            position={userLocation}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 7,
+              fillColor: "#4285F4",
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: "#FFFFFF",
+            }}
           />
-        );
-      })}
-    </GoogleMap>
+        )}
+        {stations.map((st) => {
+          const [lng, lat] = st.geometry.coordinates;
+          return (
+            <Marker
+              key={st.id}
+              position={{ lat, lng }}
+              onClick={() => handleMarkerClick(st)}
+            />
+          );
+        })}
+      </GoogleMap>
+
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent side="bottom" className="h-[70vh] p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle className="flex items-center justify-between">
+              <span>Nearby Chargers</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm">Sort By</Button>
+                <Button variant="outline" size="sm">72-325 kW</Button>
+                <Button variant="outline" size="sm">0-72 kW</Button>
+              </div>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="overflow-y-auto h-full pb-safe">
+            {stations.map((station) => (
+              <div
+                key={station.id}
+                className="p-4 border-b flex items-center justify-between"
+                onClick={() => handleMarkerClick(station)}
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    {station.properties.waitTime && station.properties.waitTime < 5 && (
+                      <div className="flex items-center text-sm text-gray-500">
+                        <Clock className="w-4 h-4 mr-1" />
+                        &lt;5 minute wait time
+                      </div>
+                    )}
+                  </div>
+                  <h3 className="font-medium">{station.properties.Place}</h3>
+                  <div className="text-sm text-gray-500">
+                    {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="bg-gray-100 rounded px-2 py-1">
+                    {station.distance?.toFixed(1)} km
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }
