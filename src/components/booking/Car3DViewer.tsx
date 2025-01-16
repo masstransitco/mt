@@ -10,8 +10,7 @@ import {
 import { 
   EffectComposer,
   SSAO,
-} from '@react-three/postprocessing'; 
-import { NormalPass } from '@react-three/postprocessing/dist/NormalPass';
+} from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
@@ -58,32 +57,35 @@ export default function Car3DViewer({
         camera={{ position: [0, 2, 5], fov: 45 }}
       >
         <ambientLight intensity={0.5} />
-        <directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
-        <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
-        <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
-
-        {/* EffectComposer now includes NormalPass before SSAO */}
-        <EffectComposer multisampling={8}>
-          <NormalPass />
-          <SSAO
+        <directionalLight 
+          position={[5, 5, 5]} 
+          intensity={1.0}
+          castShadow
+        />
+        <directionalLight 
+          position={[-5, 5, -5]} 
+          intensity={0.25}
+          color="#FFE4B5"
+        />
+        <directionalLight 
+          position={[0, -5, 0]} 
+          intensity={0.15}
+          color="#4169E1"
+        />
+        <EffectComposer multisampling={8} disableNormalPass={false}>
+          <SSAO 
             blendFunction={BlendFunction.MULTIPLY}
             samples={31}
             radius={5}
             intensity={30}
             luminanceInfluence={0.5}
             color={new THREE.Color(0x000000)}
-            worldDistanceThreshold={1}
-            worldDistanceFalloff={1}
-            worldProximityThreshold={1}
-            worldProximityFalloff={1}
-            distanceScaling
-            depthAwareUpsampling
+            distanceScaling={true}
+            depthAwareUpsampling={true}
           />
         </EffectComposer>
-
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
-
         <Suspense
           fallback={
             <Html center>
