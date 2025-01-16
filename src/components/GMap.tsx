@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Clock, Battery } from 'lucide-react';
+import { Clock, Battery, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface StationFeature {
   type: 'Feature';
@@ -38,9 +38,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [stations, setStations] = useState<StationFeature[]>([]);
   const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-
-  // Bottom sheet should only show when viewing the map
-  const showBottomSheet = viewState === 'showMap';
+  const [isSheetMinimized, setIsSheetMinimized] = useState(false);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -117,7 +115,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleMarkerClick = useCallback((station: StationFeature) => {
     console.log('Station clicked:', station.properties.Place);
     dispatch(selectStation(station.id));
+    setIsSheetMinimized(false); // Expand sheet when marker is clicked
   }, [dispatch]);
+
+  const toggleSheet = () => {
+    setIsSheetMinimized(!isSheetMinimized);
+  };
 
   const defaultCenter = useMemo(() => userLocation || { lat: 22.3, lng: 114.0 }, [userLocation]);
 
@@ -162,55 +165,70 @@ export default function GMap({ googleApiKey }: GMapProps) {
         })}
       </GoogleMap>
 
-      {showBottomSheet && (
+      {viewState === 'showMap' && (
         <div 
-          className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transform transition-transform duration-300 ease-in-out"
-          style={{ height: '70vh' }}
+          className={`fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-lg transform transition-transform duration-300 ease-in-out ${
+            isSheetMinimized ? 'h-24' : 'h-[70vh]'
+          }`}
         >
-          <div className="p-4 border-b">
+          <div 
+            className="p-4 border-b cursor-pointer hover:bg-gray-50"
+            onClick={toggleSheet}
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Nearby Chargers</h2>
-              <div className="flex gap-2">
-                <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                  Sort By
-                </button>
-                <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                  72-325 kW
-                </button>
-                <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
-                  0-72 kW
-                </button>
+              <div className="flex items-center gap-4">
+                {!isSheetMinimized && (
+                  <div className="flex gap-2">
+                    <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                      Sort By
+                    </button>
+                    <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                      72-325 kW
+                    </button>
+                    <button className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50">
+                      0-72 kW
+                    </button>
+                  </div>
+                )}
+                {isSheetMinimized ? (
+                  <ChevronUp className="w-6 h-6 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-6 h-6 text-gray-500" />
+                )}
               </div>
             </div>
           </div>
 
-          <div className="overflow-y-auto h-[calc(70vh-64px)]">
-            {stations.map((station) => (
-              <div
-                key={station.id}
-                className="p-4 border-b hover:bg-gray-50 cursor-pointer"
-                onClick={() => handleMarkerClick(station)}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    {station.properties.waitTime && station.properties.waitTime < 5 && (
-                      <div className="flex items-center text-sm text-gray-500 mb-1">
-                        <Clock className="w-4 h-4 mr-1" />
-                        &lt;5 minute wait time
+          {!isSheetMinimized && (
+            <div className="overflow-y-auto h-[calc(70vh-64px)]">
+              {stations.map((station) => (
+                <div
+                  key={station.id}
+                  className="p-4 border-b hover:bg-gray-50 cursor-pointer"
+                  onClick={() => handleMarkerClick(station)}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      {station.properties.waitTime && station.properties.waitTime < 5 && (
+                        <div className="flex items-center text-sm text-gray-500 mb-1">
+                          <Clock className="w-4 h-4 mr-1" />
+                          &lt;5 minute wait time
+                        </div>
+                      )}
+                      <h3 className="font-medium">{station.properties.Place}</h3>
+                      <div className="text-sm text-gray-500">
+                        {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
                       </div>
-                    )}
-                    <h3 className="font-medium">{station.properties.Place}</h3>
-                    <div className="text-sm text-gray-500">
-                      {station.properties.maxPower} kW max · {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                    </div>
+                    <div className="bg-gray-100 rounded px-2 py-1 text-sm">
+                      {station.distance?.toFixed(1)} km
                     </div>
                   </div>
-                  <div className="bg-gray-100 rounded px-2 py-1 text-sm">
-                    {station.distance?.toFixed(1)} km
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
