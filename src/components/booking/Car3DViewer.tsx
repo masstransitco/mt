@@ -9,8 +9,9 @@ import {
 } from '@react-three/drei';
 import { 
   EffectComposer,
+  NormalPass,        // <-- add NormalPass
   SSAO,
-} from '@react-three/postprocessing';
+} from '@react-three/postprocessing'; 
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
@@ -57,23 +58,14 @@ export default function Car3DViewer({
         camera={{ position: [0, 2, 5], fov: 45 }}
       >
         <ambientLight intensity={0.5} />
-        <directionalLight 
-          position={[5, 5, 5]} 
-          intensity={1.0}
-          castShadow
-        />
-        <directionalLight 
-          position={[-5, 5, -5]} 
-          intensity={0.25}
-          color="#FFE4B5"
-        />
-        <directionalLight 
-          position={[0, -5, 0]} 
-          intensity={0.15}
-          color="#4169E1"
-        />
+        <directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+        <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
+        <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
+
+        {/* EffectComposer now includes NormalPass before SSAO */}
         <EffectComposer multisampling={8}>
-          <SSAO 
+          <NormalPass />
+          <SSAO
             blendFunction={BlendFunction.MULTIPLY}
             samples={31}
             radius={5}
@@ -84,12 +76,14 @@ export default function Car3DViewer({
             worldDistanceFalloff={1}
             worldProximityThreshold={1}
             worldProximityFalloff={1}
-            distanceScaling={true}
-            depthAwareUpsampling={true}
+            distanceScaling
+            depthAwareUpsampling
           />
         </EffectComposer>
+
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
+
         <Suspense
           fallback={
             <Html center>
