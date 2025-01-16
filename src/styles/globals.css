@@ -1,117 +1,94 @@
 /* src/styles/globals.css */
-
-/* --- 1) Tailwind directives --- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* --- 2) Define CSS variables for color theming --- */
 @layer base {
   :root {
-    /* Minimal Dark Gray Background + Blue Accent */
-    --background: 220 9% 14%;      /* hsl(220, 9%, 14%) => fairly dark gray */
-    --foreground: 210 15% 88%;     /* hsl(210, 15%, 88%) => off-white text */
-
-    --card: 220 9% 18%;            /* slightly lighter than background */
-    --card-foreground: 210 15% 88%;
-
-    --popover: 220 9% 18%;
-    --popover-foreground: 210 15% 88%;
-
-    /* Accent color: a decently bright blue for highlights */
-    --accent: 215 74% 54%;         /* hsl(215, 74%, 54%) */
-    --accent-foreground: 210 15% 98%;
-
-    /* For consistency if you use them elsewhere */
-    --primary: 215 74% 54%;
-    --primary-foreground: 210 15% 98%;
-
-    --secondary: 199 66% 55%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 210 10% 35%;
-    --muted-foreground: 210 15% 88%;
-
-    --destructive: 0 63% 41%;
-    --destructive-foreground: 210 40% 98%;
-
-    /* Border/input colors remain subtle */
-    --border: 210 10% 25%;
-    --input: 210 10% 25%;
-    --ring: 215 74% 54%;
-
-    --radius: 0.4rem;  /* Slightly smaller corner radius for a sleek look */
+    /* Enhanced Dark Theme with Maximum Contrast */
+    --background: 0 0% 7%;          /* Almost black: hsl(0, 0%, 7%) */
+    --foreground: 0 0% 98%;         /* Almost white: hsl(0, 0%, 98%) */
+    --card: 0 0% 11%;              /* Slightly lighter than bg: hsl(0, 0%, 11%) */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 11%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Vibrant blue accent that pops against dark bg */
+    --accent: 214 100% 60%;        /* Bright blue: hsl(214, 100%, 60%) */
+    --accent-foreground: 0 0% 100%;
+    
+    /* Consistent color system */
+    --primary: 214 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 100% 65%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 85%;
+    --destructive: 0 100% 45%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Subtle but visible borders */
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 214 100% 60%;
+    --radius: 1rem;  /* Larger radius for modern feel */
   }
 
-  /* 
-    OPTIONAL: If you want a "dark" class for overriding variables,
-    e.g. <html class="dark">, you can define them here:
-    .dark {
-      --background: 224 71% 4%;
-      --foreground: 210 40% 98%;
-      ...
-    }
-  */
-
-  /* Base resets & styling */
-  * {
-    @apply border-border;
-  }
-
-  /* Apply global body style with our background & text color */
   body {
-    @apply bg-background text-foreground min-h-screen;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-      "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-      "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    @apply bg-background text-foreground antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
-/* --- 3) Component-level classes & custom styles --- */
 @layer components {
-  /* A typical "card" style (like the chat box or car card) */
+  /* Mobile-optimized card styles */
   .car-card {
-    @apply relative overflow-hidden rounded-xl
-           transition-all duration-300
-           hover:scale-[1.02]
-           bg-card
-           text-foreground;
+    @apply relative overflow-hidden rounded-2xl
+           transition-all duration-300 active:scale-[0.98]
+           bg-card shadow-lg shadow-black/20
+           text-foreground mx-auto max-w-sm w-full;
   }
-
+  
   .car-card-selected {
     @apply before:absolute before:inset-0 before:z-10
-           before:border-4 before:border-accent
-           before:rounded-xl;
+           before:border-2 before:border-accent
+           before:rounded-2xl;
   }
-
+  
   .car-image-container {
-    /* Subtle muted background behind images */
-    @apply relative aspect-[16/9] overflow-hidden rounded-t-xl bg-muted;
+    @apply relative aspect-[4/3] overflow-hidden rounded-t-2xl 
+           bg-gradient-to-b from-muted to-muted/50;
   }
-
+  
   .car-details {
-    /* Gradient from card to card/80 + a backdrop blur for layered effect */
-    @apply relative z-20 p-6 bg-gradient-to-t from-card to-card/80 backdrop-blur-sm;
+    @apply relative z-20 p-4 space-y-2
+           bg-gradient-to-t from-card via-card/95 to-card/90
+           backdrop-blur-sm;
   }
-
-  /* Typing indicator dots (if used in your ChatInterface) */
-  .typing-dot {
-    animation: bounce 0.6s infinite ease-in-out;
+  
+  /* Touch-optimized buttons */
+  .btn-primary {
+    @apply h-12 px-6 rounded-full bg-accent
+           text-accent-foreground font-medium
+           active:scale-[0.98] transition-all
+           disabled:opacity-50 disabled:pointer-events-none
+           shadow-lg shadow-accent/25;
   }
-  .typing-dot:nth-child(2) {
-    animation-delay: 150ms;
-  }
-  .typing-dot:nth-child(3) {
-    animation-delay: 300ms;
+  
+  /* Enhanced scrolling for mobile */
+  .scroll-container {
+    @apply overflow-auto overscroll-contain
+           scrollbar-thin scrollbar-track-transparent
+           scrollbar-thumb-muted/50 hover:scrollbar-thumb-muted;
   }
 }
 
-/* --- 4) Keyframes for 'bounce' animation (for typing indicator) --- */
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
+/* Enhanced smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Remove tap highlight on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
