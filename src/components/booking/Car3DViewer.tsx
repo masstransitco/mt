@@ -37,15 +37,17 @@ interface Car3DViewerProps {
   modelUrl: string;
   width?: string;
   height?: string;
+  selected?: boolean; // Changed from isSelected to selected to match existing prop name
 }
 
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
-  height = '300px'
+  height = '300px',
+  selected = false // Using the same prop name as CarCard
 }: Car3DViewerProps) {
   return (
-    <div style={{ width, height }}>
+    <div style={{ width, height, pointerEvents: selected ? 'auto' : 'none' }}>
       <Canvas
         shadows
         gl={{ 
@@ -100,9 +102,10 @@ export default function Car3DViewer({
           }
         >
           <OrbitControls 
-            enablePan 
-            enableZoom 
-            autoRotate 
+            enablePan={selected}
+            enableZoom={selected}
+            enableRotate={selected}
+            autoRotate={!selected}
             autoRotateSpeed={0.5}
             maxPolarAngle={Math.PI / 2}
             minPolarAngle={0}
