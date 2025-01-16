@@ -84,14 +84,8 @@ export default function Car3DViewer({
             worldDistanceFalloff={1}
             worldProximityThreshold={1}
             worldProximityFalloff={1}
-            distanceThreshold={1}
-            distanceFalloff={0.1}
-            proximityThreshold={1}
-            proximityFalloff={0.1}
-            minRadiusScale={0.1}
-            maxRadiusScale={1}
-            depthAwareUpsampling={true}
             rings={7}
+            depthAwareUpsampling={true}
           />
         </EffectComposer>
 
