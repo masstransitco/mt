@@ -12,6 +12,7 @@ export interface Car {
   type: string;
   price: number;
   image: string;
+  modelUrl: string;
   available: boolean;
   features: CarFeatures;
 }
