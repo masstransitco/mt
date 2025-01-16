@@ -6,11 +6,11 @@ import {
   useGLTF, 
   Html, 
   Environment,
+  NormalPass, // Moved this import here
 } from '@react-three/drei';
 import { 
   EffectComposer,
   SSAO,
-  NormalPass,
 } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
