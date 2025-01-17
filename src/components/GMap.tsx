@@ -3,13 +3,16 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Clock, Battery, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import Sheet from '@/components/ui/sheet';
 
 interface StationFeature {
   type: 'Feature';
   id: number;
-  geometry: { type: 'Point'; coordinates: [number, number] };
+  geometry: { 
+    type: 'Point'; 
+    coordinates: [number, number]; 
+  };
   properties: {
     Place: string;
     Address: string;
@@ -25,12 +28,45 @@ interface GMapProps {
   googleApiKey: string;
 }
 
-const containerStyle = { width: '100%', height: 'calc(100vh - 280px)' };
+const containerStyle = { 
+  width: '100%', 
+  height: 'calc(100vh - 64px)' 
+};
 
 const mapOptions = {
   mapId: '94527c02bbb6243',
   gestureHandling: 'greedy',
   disableDefaultUI: true,
+  backgroundColor: '#111111',
+  styles: [
+    {
+      "elementType": "geometry",
+      "stylers": [{ "color": "#242f3e" }]
+    },
+    {
+      "elementType": "labels.text.fill",
+      "stylers": [{ "color": "#746855" }]
+    },
+    {
+      "elementType": "labels.text.stroke",
+      "stylers": [{ "color": "#242f3e" }]
+    },
+    {
+      "featureType": "road",
+      "elementType": "geometry",
+      "stylers": [{ "color": "#38414e" }]
+    },
+    {
+      "featureType": "road",
+      "elementType": "geometry.stroke",
+      "stylers": [{ "color": "#212a37" }]
+    },
+    {
+      "featureType": "water",
+      "elementType": "geometry",
+      "stylers": [{ "color": "#17263c" }]
+    }
+  ]
 };
 
 export default function GMap({ googleApiKey }: GMapProps) {
@@ -114,7 +150,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [userLocation, stations.length]);
 
   const handleMarkerClick = useCallback((station: StationFeature) => {
-    console.log('Station clicked:', station.properties.Place);
     dispatch(selectStation(station.id));
     setIsSheetMinimized(false);
   }, [dispatch]);
@@ -139,7 +174,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <GoogleMap
           mapContainerStyle={containerStyle}
           center={defaultCenter}
-          zoom={11}
+          zoom={14}
           options={mapOptions}
         >
           {userLocation && (
@@ -162,6 +197,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 key={st.id}
                 position={{ lat, lng }}
                 onClick={() => handleMarkerClick(st)}
+                icon={{
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: "#FF4136",
+                  fillOpacity: 1,
+                  strokeWeight: 2,
+                  strokeColor: "#FFFFFF",
+                }}
               />
             );
           })}
@@ -172,45 +215,29 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={toggleSheet}
-          title="Nearby Chargers"
-          subtitle={isSheetMinimized ? undefined : `${stations.length} stations found`}
-          headerActions={
-            !isSheetMinimized && (
-              <div className="flex gap-2">
-                <button className="bottom-sheet-filter-btn">Sort By</button>
-                <button className="bottom-sheet-filter-btn">72-325 kW</button>
-                <button className="bottom-sheet-filter-btn">0-72 kW</button>
-              </div>
-            )
-          }
+          title="Nearby Stations"
+          count={stations.length}
         >
-          <div className="bottom-sheet-list">
+          <div className="divide-y divide-border/50">
             {stations.map((station) => (
               <div
                 key={station.id}
-                className="bottom-sheet-item"
+                className="px-4 py-3 hover:bg-muted/20"
                 onClick={() => handleMarkerClick(station)}
               >
                 <div className="flex justify-between items-start">
                   <div className="space-y-2">
-                    {station.properties.waitTime && station.properties.waitTime < 5 && (
-                      <div className="bottom-sheet-item-detail">
-                        <Clock className="w-4 h-4" />
-                        &lt;5 minute wait time
-                      </div>
-                    )}
-                    <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
-                    <div className="flex items-center gap-4">
-                      <div className="bottom-sheet-item-detail">
-                        <Zap className="w-4 h-4" />
-                        {station.properties.maxPower} kW max
-                      </div>
-                      <div className="bottom-sheet-item-detail">
-                        {station.properties.availableSpots}/{station.properties.totalSpots} Available
-                      </div>
+                    <h3 className="font-medium text-foreground">
+                      {station.properties.Place}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Zap className="w-4 h-4" />
+                      <span>{station.properties.maxPower} kW max</span>
+                      <span className="px-1">·</span>
+                      <span>{station.properties.availableSpots} Available</span>
                     </div>
                   </div>
-                  <div className="bottom-sheet-distance">
+                  <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
                     {station.distance?.toFixed(1)} km
                   </div>
                 </div>
