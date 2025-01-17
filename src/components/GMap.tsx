@@ -33,40 +33,14 @@ const containerStyle = {
   height: 'calc(100vh - 64px)' 
 };
 
+// Define libraries array outside component to prevent recreation
+const libraries: ("geometry")[] = ["geometry"];
+
 const mapOptions = {
   mapId: '94527c02bbb6243',
   gestureHandling: 'greedy',
   disableDefaultUI: true,
-  backgroundColor: '#111111',
-  styles: [
-    {
-      "elementType": "geometry",
-      "stylers": [{ "color": "#242f3e" }]
-    },
-    {
-      "elementType": "labels.text.fill",
-      "stylers": [{ "color": "#746855" }]
-    },
-    {
-      "elementType": "labels.text.stroke",
-      "stylers": [{ "color": "#242f3e" }]
-    },
-    {
-      "featureType": "road",
-      "elementType": "geometry",
-      "stylers": [{ "color": "#38414e" }]
-    },
-    {
-      "featureType": "road",
-      "elementType": "geometry.stroke",
-      "stylers": [{ "color": "#212a37" }]
-    },
-    {
-      "featureType": "water",
-      "elementType": "geometry",
-      "stylers": [{ "color": "#17263c" }]
-    }
-  ]
+  backgroundColor: '#111111'
 };
 
 export default function GMap({ googleApiKey }: GMapProps) {
@@ -80,7 +54,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
-    libraries: ['geometry']
+    libraries
   });
 
   const calculateDistance = (
@@ -210,42 +184,42 @@ export default function GMap({ googleApiKey }: GMapProps) {
           })}
         </GoogleMap>
       </div>
-{viewState === 'showMap' && (
-  <Sheet
-    isOpen={!isSheetMinimized}
-    onToggle={toggleSheet}
-    title="Nearby Stations"
-    count={stations.length}
-  >
-    <div className="divide-y divide-border/10">
-      {stations.map((station) => (
-        <div
-          key={station.id}
-          className="px-4 py-3 hover:bg-muted/20 cursor-pointer"
-          onClick={() => handleMarkerClick(station)}
-        >
-          <div className="flex justify-between items-start">
-            <div className="space-y-2">
-              <h3 className="font-medium text-foreground">
-                {station.properties.Place}
-              </h3>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Zap className="w-4 h-4" />
-                <span>{station.properties.maxPower} kW max</span>
-                <span className="px-1">·</span>
-                <span>{station.properties.availableSpots} Available</span>
-              </div>
-            </div>
-            <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
-              {station.distance?.toFixed(1)} km
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </Sheet>
-)}
 
+      {viewState === 'showMap' && (
+        <Sheet
+          isOpen={!isSheetMinimized}
+          onToggle={toggleSheet}
+          title="Nearby Stations"
+          count={stations.length}
+        >
+          <div className="divide-y divide-border/10">
+            {stations.map((station) => (
+              <div
+                key={station.id}
+                className="px-4 py-3 hover:bg-muted/20 cursor-pointer"
+                onClick={() => handleMarkerClick(station)}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <h3 className="font-medium text-foreground">
+                      {station.properties.Place}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Zap className="w-4 h-4" />
+                      <span>{station.properties.maxPower} kW max</span>
+                      <span className="px-1">·</span>
+                      <span>{station.properties.availableSpots} Available</span>
+                    </div>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
+                    {station.distance?.toFixed(1)} km
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
