@@ -173,13 +173,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     isOpen={!isSheetMinimized}
     onToggle={toggleSheet}
     title="Nearby Chargers"
-    subtitle={`${stations.length} stations found`}
+    subtitle={isSheetMinimized ? undefined : `${stations.length} stations found`}
     headerActions={
-      <div className="flex gap-2">
-        <button className="bottom-sheet-filter-btn">Sort By</button>
-        <button className="bottom-sheet-filter-btn">72-325 kW</button>
-        <button className="bottom-sheet-filter-btn">0-72 kW</button>
-      </div>
+      !isSheetMinimized && (
+        <div className="flex gap-2">
+          <button className="bottom-sheet-filter-btn">Sort By</button>
+          <button className="bottom-sheet-filter-btn">72-325 kW</button>
+          <button className="bottom-sheet-filter-btn">0-72 kW</button>
+        </div>
+      )
     }
   >
     <div className="bottom-sheet-list">
