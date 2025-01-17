@@ -9,7 +9,7 @@ import Sheet from '@/components/ui/sheet';
 interface StationFeature {
   type: 'Feature';
   id: number;
-  geometry: { type: 'Point'; coordinates: [number, number]; };
+  geometry: { type: 'Point'; coordinates: [number, number] };
   properties: {
     Place: string;
     Address: string;
@@ -168,54 +168,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-{viewState === 'showMap' && (
-  <Sheet
-    isOpen={!isSheetMinimized}
-    onToggle={toggleSheet}
-    title="Nearby Chargers"
-    subtitle={isSheetMinimized ? undefined : `${stations.length} stations found`}
-    headerActions={
-      !isSheetMinimized && (
-        <div className="flex gap-2">
-          <button className="bottom-sheet-filter-btn">Sort By</button>
-          <button className="bottom-sheet-filter-btn">72-325 kW</button>
-          <button className="bottom-sheet-filter-btn">0-72 kW</button>
-        </div>
-      )
-    }
-  >
-    <div className="bottom-sheet-list">
-      {stations.map((station) => (
-        <div
-          key={station.id}
-          className="bottom-sheet-item"
-          onClick={() => handleMarkerClick(station)}
+      {viewState === 'showMap' && (
+        <Sheet
+          isOpen={!isSheetMinimized}
+          onToggle={toggleSheet}
+          title="Nearby Chargers"
+          subtitle={isSheetMinimized ? undefined : `${stations.length} stations found`}
+          headerActions={
+            !isSheetMinimized && (
+              <div className="flex gap-2">
+                <button className="bottom-sheet-filter-btn">Sort By</button>
+                <button className="bottom-sheet-filter-btn">72-325 kW</button>
+                <button className="bottom-sheet-filter-btn">0-72 kW</button>
+              </div>
+            )
+          }
         >
-          <div className="flex justify-between items-start">
-            <div className="space-y-2">
-              {station.properties.waitTime && station.properties.waitTime < 5 && (
-                <div className="bottom-sheet-item-detail">
-                  <Clock className="w-4 h-4" />
-                  &lt;5 minute wait time
-                </div>
-              )}
-              <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
-              <div className="flex items-center gap-4">
-                <div className="bottom-sheet-item-detail">
-                  <Zap className="w-4 h-4" />
-                  {station.properties.maxPower} kW max
-                </div>
-                <div className="bottom-sheet-item-detail">
-                  {station.properties.availableSpots}/{station.properties.totalSpots} Available
+          <div className="bottom-sheet-list">
+            {stations.map((station) => (
+              <div
+                key={station.id}
+                className="bottom-sheet-item"
+                onClick={() => handleMarkerClick(station)}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    {station.properties.waitTime && station.properties.waitTime < 5 && (
+                      <div className="bottom-sheet-item-detail">
+                        <Clock className="w-4 h-4" />
+                        &lt;5 minute wait time
+                      </div>
+                    )}
+                    <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
+                    <div className="flex items-center gap-4">
+                      <div className="bottom-sheet-item-detail">
+                        <Zap className="w-4 h-4" />
+                        {station.properties.maxPower} kW max
+                      </div>
+                      <div className="bottom-sheet-item-detail">
+                        {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bottom-sheet-distance">
+                    {station.distance?.toFixed(1)} km
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="bottom-sheet-distance">
-              {station.distance?.toFixed(1)} km
-            </div>
+            ))}
           </div>
-        </div>
-      ))}
+        </Sheet>
+      )}
     </div>
-  </Sheet>
-)}
+  );
+}
