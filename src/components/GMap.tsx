@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Clock, Battery, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import Sheet from '@/components/ui/sheet';
 
 interface StationFeature {
   type: 'Feature';
