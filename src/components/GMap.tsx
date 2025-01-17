@@ -167,78 +167,52 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {viewState === 'showMap' && (
-        <div 
-          className={`bottom-sheet ${
-            isSheetMinimized 
-              ? 'h-20' 
-              : 'h-[70vh] max-h-[calc(100vh-64px)]'
-          }`}
+{viewState === 'showMap' && (
+  <Sheet
+    isOpen={!isSheetMinimized}
+    onToggle={toggleSheet}
+    title="Nearby Chargers"
+    subtitle={`${stations.length} stations found`}
+    headerActions={
+      <div className="flex gap-2">
+        <button className="bottom-sheet-filter-btn">Sort By</button>
+        <button className="bottom-sheet-filter-btn">72-325 kW</button>
+        <button className="bottom-sheet-filter-btn">0-72 kW</button>
+      </div>
+    }
+  >
+    <div className="bottom-sheet-list">
+      {stations.map((station) => (
+        <div
+          key={station.id}
+          className="bottom-sheet-item"
+          onClick={() => handleMarkerClick(station)}
         >
-          <div className="bottom-sheet-header" onClick={toggleSheet}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-foreground">Nearby Chargers</h2>
-                {!isSheetMinimized && (
-                  <span className="text-sm text-muted-foreground">
-                    {stations.length} stations found
-                  </span>
-                )}
-              </div>
+          <div className="flex justify-between items-start">
+            <div className="space-y-2">
+              {station.properties.waitTime && station.properties.waitTime < 5 && (
+                <div className="bottom-sheet-item-detail">
+                  <Clock className="w-4 h-4" />
+                  &lt;5 minute wait time
+                </div>
+              )}
+              <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
               <div className="flex items-center gap-4">
-                {!isSheetMinimized && (
-                  <div className="flex gap-2">
-                    <button className="bottom-sheet-filter-btn">Sort By</button>
-                    <button className="bottom-sheet-filter-btn">72-325 kW</button>
-                    <button className="bottom-sheet-filter-btn">0-72 kW</button>
-                  </div>
-                )}
-                {isSheetMinimized ? (
-                  <ChevronUp className="w-6 h-6 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="w-6 h-6 text-muted-foreground" />
-                )}
+                <div className="bottom-sheet-item-detail">
+                  <Zap className="w-4 h-4" />
+                  {station.properties.maxPower} kW max
+                </div>
+                <div className="bottom-sheet-item-detail">
+                  {station.properties.availableSpots}/{station.properties.totalSpots} Available
+                </div>
               </div>
+            </div>
+            <div className="bottom-sheet-distance">
+              {station.distance?.toFixed(1)} km
             </div>
           </div>
-
-          {!isSheetMinimized && (
-            <div className="bottom-sheet-list h-[calc(100%-4rem)] max-h-[calc(70vh-4rem)]">
-              {stations.map((station) => (
-                <div
-                  key={station.id}
-                  className="bottom-sheet-item"
-                  onClick={() => handleMarkerClick(station)}
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-2">
-                      {station.properties.waitTime && station.properties.waitTime < 5 && (
-                        <div className="bottom-sheet-item-detail">
-                          <Clock className="w-4 h-4" />
-                          &lt;5 minute wait time
-                        </div>
-                      )}
-                      <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
-                      <div className="flex items-center gap-4">
-                        <div className="bottom-sheet-item-detail">
-                          <Zap className="w-4 h-4" />
-                          {station.properties.maxPower} kW max
-                        </div>
-                        <div className="bottom-sheet-item-detail">
-                          {station.properties.availableSpots}/{station.properties.totalSpots} Available
-                        </div>
-                      </div>
-                    </div>
-                    <div className="bottom-sheet-distance">
-                      {station.distance?.toFixed(1)} km
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      )}
+      ))}
     </div>
-  );
-}
+  </Sheet>
+)}
