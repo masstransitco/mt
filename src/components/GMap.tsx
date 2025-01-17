@@ -210,42 +210,42 @@ export default function GMap({ googleApiKey }: GMapProps) {
           })}
         </GoogleMap>
       </div>
-
-      {viewState === 'showMap' && (
-        <Sheet
-          isOpen={!isSheetMinimized}
-          onToggle={toggleSheet}
-          title="Nearby Stations"
-          count={stations.length}
+{viewState === 'showMap' && (
+  <Sheet
+    isOpen={!isSheetMinimized}
+    onToggle={toggleSheet}
+    title="Nearby Stations"
+    count={stations.length}
+  >
+    <div className="divide-y divide-border/10">
+      {stations.map((station) => (
+        <div
+          key={station.id}
+          className="px-4 py-3 hover:bg-muted/20 cursor-pointer"
+          onClick={() => handleMarkerClick(station)}
         >
-          <div className="divide-y divide-border/50">
-            {stations.map((station) => (
-              <div
-                key={station.id}
-                className="px-4 py-3 hover:bg-muted/20"
-                onClick={() => handleMarkerClick(station)}
-              >
-                <div className="flex justify-between items-start">
-                  <div className="space-y-2">
-                    <h3 className="font-medium text-foreground">
-                      {station.properties.Place}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Zap className="w-4 h-4" />
-                      <span>{station.properties.maxPower} kW max</span>
-                      <span className="px-1">·</span>
-                      <span>{station.properties.availableSpots} Available</span>
-                    </div>
-                  </div>
-                  <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
-                    {station.distance?.toFixed(1)} km
-                  </div>
-                </div>
+          <div className="flex justify-between items-start">
+            <div className="space-y-2">
+              <h3 className="font-medium text-foreground">
+                {station.properties.Place}
+              </h3>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Zap className="w-4 h-4" />
+                <span>{station.properties.maxPower} kW max</span>
+                <span className="px-1">·</span>
+                <span>{station.properties.availableSpots} Available</span>
               </div>
-            ))}
+            </div>
+            <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
+              {station.distance?.toFixed(1)} km
+            </div>
           </div>
-        </Sheet>
-      )}
+        </div>
+      ))}
+    </div>
+  </Sheet>
+)}
+
     </div>
   );
 }
