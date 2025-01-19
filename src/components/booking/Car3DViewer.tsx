@@ -174,6 +174,12 @@ const PostProcessing = React.memo(({ selected }: { selected: boolean }) => (
       intensity={30}
       luminanceInfluence={0.5}
       color={new THREE.Color(0x000000)}
+      distanceScaling={true}
+      depthAwareUpsampling={true}
+      worldDistanceThreshold={1}
+      worldDistanceFalloff={1}
+      worldProximityThreshold={1}
+      worldProximityFalloff={1}
     />
   </EffectComposer>
 ));
