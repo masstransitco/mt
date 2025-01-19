@@ -1,6 +1,6 @@
 'use client';
-import React, { Suspense, useEffect, useRef, useMemo } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import React, { Suspense, useEffect, useRef, useMemo, useState } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { 
   OrbitControls, 
   useGLTF, 
@@ -8,6 +8,10 @@ import {
   Environment,
   Preload,
   useProgress,
+  AdaptiveDpr,
+  AdaptiveEvents,
+  BakeShadows,
+  useTexture
 } from '@react-three/drei';
 import { 
   EffectComposer,
@@ -15,6 +19,9 @@ import {
 } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
+
+// Cache for loaded models
+const modelCache = new Map<string, THREE.Group>();
 
 function LoadingScreen() {
   const { progress } = useProgress();
@@ -32,8 +39,11 @@ function CameraSetup() {
   const camera = three.camera as THREE.PerspectiveCamera;
   const { scene } = three;
   const controlsRef = useRef<any>();
+  const isAdjusted = useRef(false);
 
   useEffect(() => {
+    if (isAdjusted.current) return;
+
     const adjustCamera = () => {
       const box = new THREE.Box3().setFromObject(scene);
       const size = new THREE.Vector3();
@@ -54,30 +64,62 @@ function CameraSetup() {
         controlsRef.current.target.copy(center);
         controlsRef.current.update();
       }
+      
+      isAdjusted.current = true;
     };
 
     const timeoutId = setTimeout(adjustCamera, 100);
     return () => clearTimeout(timeoutId);
   }, [scene, camera]);
 
-  return <OrbitControls ref={controlsRef} />;
+  return <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.05} />;
 }
 
-const CarModel = React.memo(function CarModel({ url }: { url: string }) {
+// Optimized car model with LOD
+const CarModel = React.memo(function CarModel({ url, selected }: { url: string; selected: boolean }) {
   const { scene } = useGLTF(url, '/draco/', true);
+  const modelRef = useRef<THREE.Group>();
+  const [isVisible, setIsVisible] = useState(true);
   
+  // Performance optimization - only update when visible
+  useFrame(({ camera }) => {
+    if (modelRef.current) {
+      const distance = camera.position.distanceTo(modelRef.current.position);
+      const visible = distance < 100; // Adjust based on your needs
+      if (visible !== isVisible) setIsVisible(visible);
+    }
+  });
+
   useEffect(() => {
+    if (!modelCache.has(url)) {
+      const clonedScene = scene.clone(true);
+      modelCache.set(url, clonedScene);
+    }
+
+    const cachedModel = modelCache.get(url);
+    if (cachedModel && modelRef.current) {
+      modelRef.current.copy(cachedModel);
+    }
+
     scene.rotation.y = Math.PI / 2;
     const materials: THREE.Material[] = [];
     const geometries: THREE.BufferGeometry[] = [];
     
     scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        // Optimize geometries
         child.geometry.computeBoundingBox();
         child.geometry.computeBoundingSphere();
         if (child.material) {
-          child.material.roughness = 0.4;
-          child.material.metalness = 0.8;
+          if (child.material instanceof THREE.MeshStandardMaterial) {
+            child.material.roughness = 0.4;
+            child.material.metalness = 0.8;
+            // Enable texture compression
+            if (child.material.map) {
+              child.material.map.generateMipmaps = true;
+              child.material.map.minFilter = THREE.LinearMipmapLinearFilter;
+            }
+          }
           materials.push(child.material);
           geometries.push(child.geometry);
         }
@@ -91,45 +133,47 @@ const CarModel = React.memo(function CarModel({ url }: { url: string }) {
           material.normalMap?.dispose();
           material.roughnessMap?.dispose();
           material.metalnessMap?.dispose();
-          material.emissiveMap?.dispose();
-          material.alphaMap?.dispose();
+          material.dispose();
         }
-        material.dispose();
       });
       
       geometries.forEach(geometry => {
         geometry.dispose();
       });
     };
-  }, [scene]);
+  }, [scene, url]);
   
-  return <primitive object={scene} />;
+  if (!isVisible) return null;
+  
+  return <primitive ref={modelRef} object={scene} />;
 });
 
 const SceneLighting = React.memo(() => (
   <>
     <ambientLight intensity={0.5} />
-    <directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+    <directionalLight 
+      position={[5, 5, 5]} 
+      intensity={1.0} 
+      castShadow 
+      shadow-mapSize={[1024, 1024]}
+    />
     <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
     <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
   </>
 ));
 
-const PostProcessing = React.memo(() => (
-  <EffectComposer multisampling={8} enableNormalPass={true}>
+const PostProcessing = React.memo(({ selected }: { selected: boolean }) => (
+  <EffectComposer 
+    multisampling={selected ? 8 : 4} 
+    enabled={selected}
+  >
     <SSAO 
       blendFunction={BlendFunction.MULTIPLY}
-      samples={31}
+      samples={selected ? 31 : 17}
       radius={5}
       intensity={30}
       luminanceInfluence={0.5}
       color={new THREE.Color(0x000000)}
-      distanceScaling={true}
-      depthAwareUpsampling={true}
-      worldDistanceThreshold={1}
-      worldDistanceFalloff={1}
-      worldProximityThreshold={1}
-      worldProximityFalloff={1}
     />
   </EffectComposer>
 ));
@@ -151,15 +195,18 @@ export default function Car3DViewer({
     antialias: true,
     toneMapping: THREE.ACESFilmicToneMapping,
     toneMappingExposure: 1.0,
-    preserveDrawingBuffer: true
+    preserveDrawingBuffer: true,
+    powerPreference: "high-performance" as WebGLPowerPreference,
   }), []);
 
+  // Preload the model
   useEffect(() => {
+    useGLTF.preload(modelUrl);
     return () => {
       try {
-        const { scene: cachedScene } = useGLTF.get(modelUrl);
-        if (cachedScene) {
-          cachedScene.traverse((object) => {
+        const gltf = useGLTF(modelUrl);
+        if (gltf.scene) {
+          gltf.scene.traverse((object) => {
             if (object instanceof THREE.Mesh) {
               object.geometry.dispose();
               if (Array.isArray(object.material)) {
@@ -182,7 +229,7 @@ export default function Car3DViewer({
             }
           });
         }
-        useGLTF.remove(modelUrl);
+        modelCache.delete(modelUrl);
       } catch (error) {
         console.error('Error during cleanup:', error);
       }
@@ -191,14 +238,22 @@ export default function Car3DViewer({
 
   return (
     <div style={{ width, height, pointerEvents: selected ? 'auto' : 'none' }}>
-      <Canvas shadows gl={glSettings} camera={{ position: [0, 2, 5], fov: 45 }}>
+      <Canvas 
+        shadows 
+        gl={glSettings} 
+        camera={{ position: [0, 2, 5], fov: 45 }}
+        dpr={[1, selected ? 2 : 1.5]} // Adaptive DPR based on selection
+      >
+        <AdaptiveDpr pixelated />
+        <AdaptiveEvents />
+        <BakeShadows />
         <SceneLighting />
-        <PostProcessing />
+        <PostProcessing selected={selected} />
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup />
-          <CarModel url={modelUrl} />
+          <CarModel url={modelUrl} selected={selected} />
           <Preload all />
         </Suspense>
       </Canvas>
