@@ -16,7 +16,6 @@ import {
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
-// Loading progress component
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -28,7 +27,6 @@ function LoadingScreen() {
   );
 }
 
-// Camera adjustment component with memoization
 function CameraSetup() {
   const three = useThree();
   const camera = three.camera as THREE.PerspectiveCamera;
@@ -65,13 +63,13 @@ function CameraSetup() {
   return <OrbitControls ref={controlsRef} />;
 }
 
-// Memoized car model component
 const CarModel = React.memo(function CarModel({ url }: { url: string }) {
-  const { scene } = useGLTF(url, '/draco/', true); // Enable progressive loading
+  const { scene } = useGLTF(url, '/draco/', true);
   
   useEffect(() => {
     scene.rotation.y = Math.PI / 2;
     const materials: THREE.Material[] = [];
+    const geometries: THREE.BufferGeometry[] = [];
     
     scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
@@ -81,20 +79,33 @@ const CarModel = React.memo(function CarModel({ url }: { url: string }) {
           child.material.roughness = 0.4;
           child.material.metalness = 0.8;
           materials.push(child.material);
+          geometries.push(child.geometry);
         }
       }
     });
 
-    // Cleanup materials on unmount
     return () => {
-      materials.forEach(material => material.dispose());
+      materials.forEach(material => {
+        if (material instanceof THREE.Material) {
+          if (material.map) material.map.dispose();
+          if (material.normalMap) material.normalMap.dispose();
+          if (material.roughnessMap) material.roughnessMap.dispose();
+          if (material.metalnessMap) material.metalnessMap.dispose();
+          material.dispose();
+        }
+      });
+      
+      geometries.forEach(geometry => {
+        geometry.dispose();
+      });
+      
+      useGLTF.remove(url);
     };
-  }, [scene]);
+  }, [scene, url]);
   
   return <primitive object={scene} />;
 });
 
-// Lighting setup component
 const SceneLighting = React.memo(() => (
   <>
     <ambientLight intensity={0.5} />
@@ -104,7 +115,6 @@ const SceneLighting = React.memo(() => (
   </>
 ));
 
-// Post-processing setup
 const PostProcessing = React.memo(() => (
   <EffectComposer multisampling={8} enableNormalPass={true}>
     <SSAO 
@@ -137,13 +147,31 @@ export default function Car3DViewer({
   height = '300px',
   selected = false
 }: Car3DViewerProps) {
-  // Memoize canvas settings
   const glSettings = useMemo(() => ({
     antialias: true,
     toneMapping: THREE.ACESFilmicToneMapping,
     toneMappingExposure: 1.0,
     preserveDrawingBuffer: true
   }), []);
+
+  useEffect(() => {
+    return () => {
+      // Cleanup when component unmounts
+      const { scene: cachedScene } = useGLTF.get(modelUrl);
+      if (cachedScene) {
+        cachedScene.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            object.geometry.dispose();
+            if (Array.isArray(object.material)) {
+              object.material.forEach(material => material.dispose());
+            } else {
+              object.material.dispose();
+            }
+          }
+        });
+      }
+    };
+  }, [modelUrl]);
 
   return (
     <div style={{ width, height, pointerEvents: selected ? 'auto' : 'none' }}>
@@ -155,14 +183,13 @@ export default function Car3DViewer({
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup />
           <CarModel url={modelUrl} />
-          <Preload all /> {/* Preload all assets */}
+          <Preload all />
         </Suspense>
       </Canvas>
     </div>
   );
 }
 
-// Preload models for faster subsequent loads
 export function preloadCarModels(urls: string[]) {
   urls.forEach(url => useGLTF.preload(url));
 }
