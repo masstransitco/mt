@@ -54,7 +54,7 @@ function CameraSetup() {
 
       const maxDim = Math.max(size.x, size.y, size.z);
       const fov = camera.fov * (Math.PI / 180);
-      const cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
+      const cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 0.4;
 
       camera.position.set(center.x, center.y + maxDim * 0.5, center.z + cameraZ);
       camera.lookAt(center);
