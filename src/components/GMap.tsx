@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, PropsWithChildren } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
@@ -33,8 +33,15 @@ const containerStyle = {
   height: 'calc(100vh - 64px)' 
 };
 
-class MapErrorBoundary extends React.Component {
-  state = { hasError: false };
+interface MapErrorBoundaryState {
+  hasError: boolean;
+}
+
+class MapErrorBoundary extends React.Component<PropsWithChildren, MapErrorBoundaryState> {
+  constructor(props: PropsWithChildren) {
+    super(props);
+    this.state = { hasError: false };
+  }
   
   static getDerivedStateFromError() {
     return { hasError: true };
