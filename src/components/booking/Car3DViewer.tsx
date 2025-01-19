@@ -86,22 +86,22 @@ const CarModel = React.memo(function CarModel({ url }: { url: string }) {
 
     return () => {
       materials.forEach(material => {
-        if (material instanceof THREE.Material) {
-          if (material.map) material.map.dispose();
-          if (material.normalMap) material.normalMap.dispose();
-          if (material.roughnessMap) material.roughnessMap.dispose();
-          if (material.metalnessMap) material.metalnessMap.dispose();
-          material.dispose();
+        if (material instanceof THREE.MeshStandardMaterial) {
+          material.map?.dispose();
+          material.normalMap?.dispose();
+          material.roughnessMap?.dispose();
+          material.metalnessMap?.dispose();
+          material.emissiveMap?.dispose();
+          material.alphaMap?.dispose();
         }
+        material.dispose();
       });
       
       geometries.forEach(geometry => {
         geometry.dispose();
       });
-      
-      useGLTF.remove(url);
     };
-  }, [scene, url]);
+  }, [scene]);
   
   return <primitive object={scene} />;
 });
@@ -156,19 +156,35 @@ export default function Car3DViewer({
 
   useEffect(() => {
     return () => {
-      // Cleanup when component unmounts
-      const { scene: cachedScene } = useGLTF.get(modelUrl);
-      if (cachedScene) {
-        cachedScene.traverse((object) => {
-          if (object instanceof THREE.Mesh) {
-            object.geometry.dispose();
-            if (Array.isArray(object.material)) {
-              object.material.forEach(material => material.dispose());
-            } else {
-              object.material.dispose();
+      try {
+        const { scene: cachedScene } = useGLTF.get(modelUrl);
+        if (cachedScene) {
+          cachedScene.traverse((object) => {
+            if (object instanceof THREE.Mesh) {
+              object.geometry.dispose();
+              if (Array.isArray(object.material)) {
+                object.material.forEach(mat => {
+                  if (mat instanceof THREE.MeshStandardMaterial) {
+                    mat.map?.dispose();
+                    mat.normalMap?.dispose();
+                    mat.roughnessMap?.dispose();
+                    mat.metalnessMap?.dispose();
+                  }
+                  mat.dispose();
+                });
+              } else if (object.material instanceof THREE.MeshStandardMaterial) {
+                object.material.map?.dispose();
+                object.material.normalMap?.dispose();
+                object.material.roughnessMap?.dispose();
+                object.material.metalnessMap?.dispose();
+                object.material.dispose();
+              }
             }
-          }
-        });
+          });
+        }
+        useGLTF.remove(modelUrl);
+      } catch (error) {
+        console.error('Error during cleanup:', error);
       }
     };
   }, [modelUrl]);
