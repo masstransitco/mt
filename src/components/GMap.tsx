@@ -1,11 +1,10 @@
 'use client';
+
 import React, {
   useState,
   useEffect,
   useCallback,
-  useMemo,
   PropsWithChildren,
-  Suspense,
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
@@ -13,7 +12,8 @@ import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
 import { FixedSizeList } from 'react-window';
 
-const Sheet = React.lazy(() => import('@/components/ui/sheet'));
+// Import Sheet directly (instead of React.lazy + Suspense)
+import Sheet from '@/components/ui/sheet';
 
 /* --------------------------- Interfaces --------------------------- */
 
@@ -124,29 +124,28 @@ function GMap({ googleApiKey }: GMapProps) {
   const [isSheetMinimized, setIsSheetMinimized] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const libraries = useMemo(() => ['geometry'] as ('geometry')[], []);
+  // We'll load the geometry library for distance calculations
+  const libraries = ['geometry'] as ('geometry')[];
 
-  const mapOptions = useMemo(
-    () => ({
-      mapId: '94527c02bbb6243',
-      gestureHandling: 'greedy',
-      disableDefaultUI: true,
-      backgroundColor: '#111111',
-      maxZoom: 18,
-      minZoom: 8,
-      clickableIcons: false,
-      restriction: {
-        latLngBounds: {
-          north: 22.6,
-          south: 22.1,
-          east: 114.4,
-          west: 113.8,
-        },
-        strictBounds: true,
+  // Map styling/options
+  const mapOptions = {
+    mapId: '94527c02bbb6243',
+    gestureHandling: 'greedy',
+    disableDefaultUI: true,
+    backgroundColor: '#111111',
+    maxZoom: 18,
+    minZoom: 8,
+    clickableIcons: false,
+    restriction: {
+      latLngBounds: {
+        north: 22.6,
+        south: 22.1,
+        east: 114.4,
+        west: 113.8,
       },
-    }),
-    []
-  );
+      strictBounds: true,
+    },
+  };
 
   // Load the Google Maps API
   const { isLoaded, loadError } = useJsApiLoader({
@@ -197,7 +196,7 @@ function GMap({ googleApiKey }: GMapProps) {
       const cached = localStorage.getItem('stations');
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        // If cached data is fresh (less than 1 hour old), use it
+        // If cached data is < 1 hour old, use it
         if (Date.now() - timestamp < 3600000) {
           setStations(data);
           return;
@@ -230,7 +229,7 @@ function GMap({ googleApiKey }: GMapProps) {
     getUserLocation();
   }, [fetchStations, getUserLocation]);
 
-  /* ------------ Recalculate distance once we have location ----- */
+  /* -------- Recalculate distance once we have location --------- */
   useEffect(() => {
     if (userLocation && stations.length > 0) {
       const stationsWithDistance = stations
@@ -247,7 +246,7 @@ function GMap({ googleApiKey }: GMapProps) {
 
       setStations(stationsWithDistance);
     }
-  }, [userLocation, stations.length, calculateDistance]);
+  }, [userLocation, stations, calculateDistance]);
 
   /* ------------------- Marker Click Handler --------------------- */
   const handleMarkerClick = useCallback(
@@ -264,10 +263,7 @@ function GMap({ googleApiKey }: GMapProps) {
   }, []);
 
   /* ----------------- Default Center for Map --------------------- */
-  const defaultCenter = useMemo(
-    () => userLocation || { lat: 22.3, lng: 114.0 },
-    [userLocation]
-  );
+  const defaultCenter = userLocation || { lat: 22.3, lng: 114.0 };
 
   /* ------------------ Early Returns: Errors --------------------- */
   if (error) {
@@ -283,70 +279,14 @@ function GMap({ googleApiKey }: GMapProps) {
   }
 
   /* ------------------ Early Return: Not Loaded ------------------ */
-  // Make sure 'google?.maps' is defined before we try to use SymbolPath
   if (!isLoaded || !google?.maps) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
-  /* ------------------- Safe to Create Markers ------------------- */
-  const memoizedMarkers = useMemo(
-    () =>
-      stations.map((st) => {
-        const [lng, lat] = st.geometry.coordinates;
-        return (
-          <Marker
-            key={st.id}
-            position={{ lat, lng }}
-            onClick={() => handleMarkerClick(st)}
-            // Now safe to reference google.maps.SymbolPath.CIRCLE
-            icon={{
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 8,
-              fillColor: '#FF4136',
-              fillOpacity: 1,
-              strokeWeight: 2,
-              strokeColor: '#FFFFFF',
-            }}
-          />
-        );
-      }),
-    [stations, handleMarkerClick]
-  );
-
-  /* ------------------- User Location Marker --------------------- */
-  const userLocationMarker = userLocation && (
-    <Marker
-      position={userLocation}
-      icon={{
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 7,
-        fillColor: '#4285F4',
-        fillOpacity: 1,
-        strokeWeight: 2,
-        strokeColor: '#FFFFFF',
-      }}
-    />
-  );
-
-  /* --------------- Virtualized Station List --------------------- */
-  const VirtualizedStationList = useMemo(
-    () => (
-      <FixedSizeList
-        height={400}
-        width="100%"
-        itemCount={stations.length}
-        itemSize={80}
-        itemData={stations}
-      >
-        {StationListItem}
-      </FixedSizeList>
-    ),
-    [stations]
-  );
-
   /* -------------------------- Render ---------------------------- */
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
+      {/* Map Container */}
       <div className="absolute inset-0">
         <GoogleMap
           mapContainerStyle={containerStyle}
@@ -354,22 +294,62 @@ function GMap({ googleApiKey }: GMapProps) {
           zoom={14}
           options={mapOptions}
         >
-          {userLocationMarker}
-          {memoizedMarkers}
+          {/* User Location Marker */}
+          {userLocation && (
+            <Marker
+              position={userLocation}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 7,
+                fillColor: '#4285F4',
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: '#FFFFFF',
+              }}
+            />
+          )}
+
+          {/* Station Markers */}
+          {stations.map((station) => {
+            const [lng, lat] = station.geometry.coordinates;
+            return (
+              <Marker
+                key={station.id}
+                position={{ lat, lng }}
+                onClick={() => handleMarkerClick(station)}
+                icon={{
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: '#FF4136',
+                  fillOpacity: 1,
+                  strokeWeight: 2,
+                  strokeColor: '#FFFFFF',
+                }}
+              />
+            );
+          })}
         </GoogleMap>
       </div>
 
+      {/* Station List Sheet */}
       {viewState === 'showMap' && (
-        <Suspense fallback={<div>Loading...</div>}>
-          <Sheet
-            isOpen={!isSheetMinimized}
-            onToggle={toggleSheet}
-            title="Nearby Stations"
-            count={stations.length}
+        <Sheet
+          isOpen={!isSheetMinimized}
+          onToggle={toggleSheet}
+          title="Nearby Stations"
+          count={stations.length}
+        >
+          {/* Virtualized List */}
+          <FixedSizeList
+            height={400}
+            width="100%"
+            itemCount={stations.length}
+            itemSize={80}
+            itemData={stations}
           >
-            {VirtualizedStationList}
-          </Sheet>
-        </Suspense>
+            {StationListItem}
+          </FixedSizeList>
+        </Sheet>
       )}
     </div>
   );
