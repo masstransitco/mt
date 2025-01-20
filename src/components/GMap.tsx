@@ -9,16 +9,19 @@ import React, {
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+
+// If using @react-google-maps/api v2+, the type is usually exported as Library
+import { GoogleMap, Marker, useJsApiLoader, Library } from '@react-google-maps/api';
+
 import { Zap } from 'lucide-react';
 import { FixedSizeList } from 'react-window';
-
-// Import the Sheet directly
 import Sheet from '@/components/ui/sheet';
 
 /* ------------------------------------------------------------------
-  1) Define constants OUTSIDE the component, so they never re-create
+   1) Define constants OUTSIDE the component as mutable arrays
+   so they never re-create (and avoid the TypeScript "readonly" error)
 ------------------------------------------------------------------- */
+const GOOGLE_MAP_LIBRARIES: Library[] = ['geometry'];
 
 const CONTAINER_STYLE = {
   width: '100%',
@@ -50,7 +53,7 @@ interface StationFeature {
   id: number;
   geometry: {
     type: 'Point';
-    coordinates: [number, number];
+    coordinates: [number, number]; // [lng, lat]
   };
   properties: {
     Place: string;
@@ -148,12 +151,12 @@ function GMap({ googleApiKey }: GMapProps) {
   const [error, setError] = useState<string | null>(null);
 
   /* 
-    2) Use a stable reference for libraries to avoid reloading the script:
+    2) Use the stable reference for libraries to avoid script reloading:
   */
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
-    libraries: 'geometry', // important
+    libraries: GOOGLE_MAP_LIBRARIES,
   });
 
   /* ------------ Geolocation + Stations Data Fetch ------------- */
@@ -255,7 +258,6 @@ function GMap({ googleApiKey }: GMapProps) {
     [userLocation]
   );
 
-  // Build station markers only once if stations or handleMarkerClick changes
   const stationMarkers = useMemo(() => {
     return stations.map((st) => {
       const [lng, lat] = st.geometry.coordinates;
