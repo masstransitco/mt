@@ -19,7 +19,6 @@ import Sheet from '@/components/ui/sheet';
 /* ------------------------------------------------------------------
   1) Define constants OUTSIDE the component, so they never re-create
 ------------------------------------------------------------------- */
-const GOOGLE_MAP_LIBRARIES = ['geometry'] as const;
 
 const CONTAINER_STYLE = {
   width: '100%',
@@ -154,7 +153,7 @@ function GMap({ googleApiKey }: GMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
-    libraries: GOOGLE_MAP_LIBRARIES, // important
+    libraries: 'geometry', // important
   });
 
   /* ------------ Geolocation + Stations Data Fetch ------------- */
