@@ -1,28 +1,32 @@
 'use client';
-import React, { Suspense, useEffect, useRef, useMemo, useState } from 'react';
+
+import React, {
+  Suspense,
+  useRef,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { 
-  OrbitControls, 
-  useGLTF, 
-  Html, 
+import {
+  OrbitControls,
+  useGLTF,
+  Html,
   Environment,
   Preload,
   useProgress,
   AdaptiveDpr,
   AdaptiveEvents,
   BakeShadows,
-  useTexture
 } from '@react-three/drei';
-import { 
+import {
   EffectComposer,
   SSAO,
 } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
-// Cache for loaded models
-const modelCache = new Map<string, THREE.Group>();
-
+/* ------------------- Loading Overlay -------------------- */
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -34,232 +38,205 @@ function LoadingScreen() {
   );
 }
 
-function CameraSetup() {
-  const three = useThree();
-  const camera = three.camera as THREE.PerspectiveCamera;
-  const { scene } = three;
-  const controlsRef = useRef<any>();
-  const isAdjusted = useRef(false);
+/* ------------------- Camera and Controls ---------------- */
+function CameraSetup({ interactive }: { interactive: boolean }) {
+  const { camera, scene } = useThree();
+  const controlsRef = useRef<OrbitControls>(null);
+  const onceRef = useRef(false);
 
+  // Auto-fit the camera around the loaded scene (only runs once).
   useEffect(() => {
-    if (isAdjusted.current) return;
+    if (onceRef.current) return;
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
 
-    const adjustCamera = () => {
-      const box = new THREE.Box3().setFromObject(scene);
-      const size = new THREE.Vector3();
-      const center = new THREE.Vector3();
-      
-      box.getSize(size);
-      box.getCenter(center);
+    box.getSize(size);
+    box.getCenter(center);
 
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * (Math.PI / 180);
-      const cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 0.4;
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fovRad = (camera.fov * Math.PI) / 180;
+    const distance = Math.abs(maxDim / Math.sin(fovRad / 2)) * 0.4;
 
-      camera.position.set(center.x, center.y + maxDim * 0.5, center.z + cameraZ);
-      camera.lookAt(center);
-      camera.updateProjectionMatrix();
+    camera.position.set(center.x, center.y + maxDim * 0.5, center.z + distance);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
 
-      if (controlsRef.current) {
-        controlsRef.current.target.copy(center);
-        controlsRef.current.update();
-      }
-      
-      isAdjusted.current = true;
-    };
+    if (controlsRef.current) {
+      controlsRef.current.target.copy(center);
+      controlsRef.current.update();
+    }
+    onceRef.current = true;
+  }, [camera, scene]);
 
-    const timeoutId = setTimeout(adjustCamera, 100);
-    return () => clearTimeout(timeoutId);
-  }, [scene, camera]);
-
-  return <OrbitControls ref={controlsRef} enableDamping dampingFactor={0.05} />;
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      enableDamping
+      dampingFactor={0.05}
+      // Disable user controls if not interactive
+      enabled={interactive}
+    />
+  );
 }
 
-// Optimized car model with LOD
-const CarModel = React.memo(function CarModel({ url, selected }: { url: string; selected: boolean }) {
-  const { scene } = useGLTF(url, '/draco/', true);
-  const modelRef = useRef<THREE.Group>();
-  const [isVisible, setIsVisible] = useState(true);
-  
-  // Performance optimization - only update when visible
-  useFrame(({ camera }) => {
-    if (modelRef.current) {
-      const distance = camera.position.distanceTo(modelRef.current.position);
-      const visible = distance < 100; // Adjust based on your needs
-      if (visible !== isVisible) setIsVisible(visible);
+/* -------------------- 3D Car Model ----------------------- */
+function CarModel({
+  url,
+  interactive,
+}: {
+  url: string;
+  interactive: boolean;
+}) {
+  const groupRef = useRef<THREE.Group>(null);
+
+  // `useGLTF` caches internally, so the same URL won't be re-fetched.
+  const { scene } = useGLTF(url, '/draco/', true) as any;
+
+  // If not interactive, we optionally do a slow rotation in the render loop.
+  useFrame(() => {
+    if (!interactive && groupRef.current) {
+      groupRef.current.rotation.y += 0.002;
     }
   });
 
+  // Minimal setup once the model is loaded:
   useEffect(() => {
-    if (!modelCache.has(url)) {
-      const clonedScene = scene.clone(true);
-      modelCache.set(url, clonedScene);
-    }
+    if (!scene) return;
 
-    const cachedModel = modelCache.get(url);
-    if (cachedModel && modelRef.current) {
-      modelRef.current.copy(cachedModel);
-    }
-
+    // Rotate model to face a consistent direction
     scene.rotation.y = Math.PI / 2;
-    const materials: THREE.Material[] = [];
-    const geometries: THREE.BufferGeometry[] = [];
-    
-    scene.traverse((child) => {
+
+    // Optionally tweak materials
+    scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
-        // Optimize geometries
         child.geometry.computeBoundingBox();
         child.geometry.computeBoundingSphere();
-        if (child.material) {
-          if (child.material instanceof THREE.MeshStandardMaterial) {
-            child.material.roughness = 0.4;
-            child.material.metalness = 0.8;
-            // Enable texture compression
-            if (child.material.map) {
-              child.material.map.generateMipmaps = true;
-              child.material.map.minFilter = THREE.LinearMipmapLinearFilter;
-            }
-          }
-          materials.push(child.material);
-          geometries.push(child.geometry);
+
+        if (child.material instanceof THREE.MeshStandardMaterial) {
+          child.material.roughness = 0.4;
+          child.material.metalness = 0.8;
         }
       }
     });
+  }, [scene]);
 
-    return () => {
-      materials.forEach(material => {
-        if (material instanceof THREE.MeshStandardMaterial) {
-          material.map?.dispose();
-          material.normalMap?.dispose();
-          material.roughnessMap?.dispose();
-          material.metalnessMap?.dispose();
-          material.dispose();
-        }
-      });
-      
-      geometries.forEach(geometry => {
-        geometry.dispose();
-      });
-    };
-  }, [scene, url]);
-  
-  if (!isVisible) return null;
-  
-  return <primitive ref={modelRef} object={scene} />;
-});
-
-const SceneLighting = React.memo(() => (
-  <>
-    <ambientLight intensity={0.5} />
-    <directionalLight 
-      position={[5, 5, 5]} 
-      intensity={1.0} 
-      castShadow 
-      shadow-mapSize={[1024, 1024]}
-    />
-    <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
-    <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
-  </>
-));
-
-const PostProcessing = React.memo(({ selected }: { selected: boolean }) => (
-  <EffectComposer 
-    multisampling={selected ? 8 : 4} 
-    enabled={selected}
-  >
-    <SSAO 
-      blendFunction={BlendFunction.MULTIPLY}
-      samples={selected ? 31 : 17}
-      radius={5}
-      intensity={30}
-      luminanceInfluence={0.5}
-      color={new THREE.Color(0x000000)}
-      distanceScaling={true}
-      depthAwareUpsampling={true}
-      worldDistanceThreshold={1}
-      worldDistanceFalloff={1}
-      worldProximityThreshold={1}
-      worldProximityFalloff={1}
-    />
-  </EffectComposer>
-));
-
-interface Car3DViewerProps {
-  modelUrl: string;
-  width?: string;
-  height?: string;
-  selected?: boolean;
+  return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
+/* ----------------- Scene Lighting Setup ----------------- */
+function SceneLighting() {
+  return (
+    <>
+      <ambientLight intensity={0.5} />
+      <directionalLight
+        position={[5, 5, 5]}
+        intensity={1.0}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+      />
+      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
+      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
+    </>
+  );
+}
+
+/* ------------------- Post Processing -------------------- */
+function PostProcessing({ interactive }: { interactive: boolean }) {
+  // Only enable the postprocessing if interactive (selected)
+  return (
+    <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
+      <SSAO
+        blendFunction={BlendFunction.MULTIPLY}
+        samples={interactive ? 31 : 0}
+        radius={5}
+        intensity={30}
+        luminanceInfluence={0.5}
+        color={new THREE.Color(0x000000)}
+        distanceScaling
+        depthAwareUpsampling
+        worldDistanceThreshold={1}
+        worldDistanceFalloff={1}
+        worldProximityThreshold={1}
+        worldProximityFalloff={1}
+      />
+    </EffectComposer>
+  );
+}
+
+/* ------------------- Main Viewer Comp ------------------- */
+export interface Car3DViewerProps {
+  modelUrl: string;
+  width?: string | number;
+  height?: string | number;
+  selected?: boolean; // "interactive" concept
+}
+
+/**
+ * Car3DViewer
+ *
+ * - If `selected` is true, orbit controls + postprocessing are enabled.
+ * - Otherwise, the model is still visible but is less GPU-intensive.
+ */
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
   height = '300px',
-  selected = false
+  selected = false,
 }: Car3DViewerProps) {
-  const glSettings = useMemo(() => ({
-    antialias: true,
-    toneMapping: THREE.ACESFilmicToneMapping,
-    toneMappingExposure: 1.0,
-    preserveDrawingBuffer: true,
-    powerPreference: "high-performance" as WebGLPowerPreference,
-  }), []);
+  const glSettings = useMemo(
+    () => ({
+      antialias: true,
+      toneMapping: THREE.ACESFilmicToneMapping,
+      toneMappingExposure: 1.0,
+      preserveDrawingBuffer: false,
+      powerPreference: 'high-performance' as WebGLPowerPreference,
+    }),
+    []
+  );
 
-  // Preload the model
+  // Preload model
   useEffect(() => {
+    // Preload the model so it’s cached by useGLTF:
     useGLTF.preload(modelUrl);
-    return () => {
-      try {
-        const gltf = useGLTF(modelUrl);
-        if (gltf.scene) {
-          gltf.scene.traverse((object) => {
-            if (object instanceof THREE.Mesh) {
-              object.geometry.dispose();
-              if (Array.isArray(object.material)) {
-                object.material.forEach(mat => {
-                  if (mat instanceof THREE.MeshStandardMaterial) {
-                    mat.map?.dispose();
-                    mat.normalMap?.dispose();
-                    mat.roughnessMap?.dispose();
-                    mat.metalnessMap?.dispose();
-                  }
-                  mat.dispose();
-                });
-              } else if (object.material instanceof THREE.MeshStandardMaterial) {
-                object.material.map?.dispose();
-                object.material.normalMap?.dispose();
-                object.material.roughnessMap?.dispose();
-                object.material.metalnessMap?.dispose();
-                object.material.dispose();
-              }
-            }
-          });
-        }
-        modelCache.delete(modelUrl);
-      } catch (error) {
-        console.error('Error during cleanup:', error);
-      }
-    };
   }, [modelUrl]);
 
   return (
-    <div style={{ width, height, pointerEvents: selected ? 'auto' : 'none' }}>
-      <Canvas 
-        shadows 
-        gl={glSettings} 
+    <div
+      style={{
+        width,
+        height,
+        // If not selected, remove pointer events so it's not interactive
+        pointerEvents: selected ? 'auto' : 'none',
+      }}
+    >
+      <Canvas
+        shadows
+        gl={glSettings}
         camera={{ position: [0, 2, 5], fov: 45 }}
-        dpr={[1, selected ? 2 : 1.5]} // Adaptive DPR based on selection
+        // Lower dpr if not selected for performance
+        dpr={[1, selected ? 1.5 : 1]}
       >
+        {/* Reduces overhead for unselected items */}
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <BakeShadows />
+
         <SceneLighting />
-        <PostProcessing selected={selected} />
+
+        {/* Interactive-based post-processing */}
+        <PostProcessing interactive={selected} />
+
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
+
         <Suspense fallback={<LoadingScreen />}>
-          <CameraSetup />
-          <CarModel url={modelUrl} selected={selected} />
+          {/* The camera/controls are interactive only if selected */}
+          <CameraSetup interactive={selected} />
+
+          <CarModel url={modelUrl} interactive={selected} />
+
+          {/* Preload all current used assets for better performance */}
           <Preload all />
         </Suspense>
       </Canvas>
@@ -267,6 +244,7 @@ export default function Car3DViewer({
   );
 }
 
+/* ------------------ Utility Preloader ------------------- */
 export function preloadCarModels(urls: string[]) {
-  urls.forEach(url => useGLTF.preload(url));
+  urls.forEach((url) => useGLTF.preload(url));
 }
