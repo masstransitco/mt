@@ -8,10 +8,6 @@ import React, {
   useState,
 } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-/**
- * 1) Import the OrbitControls component from @react-three/drei
- * 2) Import the OrbitControls type (OrbitControlsImpl) from three-stdlib
- */
 import {
   OrbitControls,
   useGLTF,
@@ -24,12 +20,11 @@ import {
   useProgress,
 } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-
+import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
-import * as THREE from 'three';
 
-/* -------------------- Loading Overlay -------------------- */
+/* -------------- Loading Overlay -------------- */
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -41,19 +36,18 @@ function LoadingScreen() {
   );
 }
 
-/* ------------------- Camera and Controls ----------------- */
+/* -------------- Camera + Controls -------------- */
 function CameraSetup({ interactive }: { interactive: boolean }) {
   const { camera, scene } = useThree();
-
-  /**
-   * 3) Use OrbitControlsImpl in your ref type.
-   */
-  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const controlsRef = useRef<OrbitControlsImpl>(null);
   const onceRef = useRef(false);
 
   // Auto-fit the camera around the loaded scene (only once).
   useEffect(() => {
     if (onceRef.current) return;
+
+    // 1) Cast camera to a PerspectiveCamera so we can safely access fov
+    const perspectiveCam = camera as THREE.PerspectiveCamera;
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
@@ -62,17 +56,18 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
     box.getCenter(center);
 
     const maxDim = Math.max(size.x, size.y, size.z);
-    const fovRad = (camera.fov * Math.PI) / 180;
+    const fovRad = (perspectiveCam.fov * Math.PI) / 180;
     const distance = Math.abs(maxDim / Math.sin(fovRad / 2)) * 0.4;
 
-    camera.position.set(center.x, center.y + maxDim * 0.5, center.z + distance);
-    camera.lookAt(center);
-    camera.updateProjectionMatrix();
+    perspectiveCam.position.set(center.x, center.y + maxDim * 0.5, center.z + distance);
+    perspectiveCam.lookAt(center);
+    perspectiveCam.updateProjectionMatrix();
 
     if (controlsRef.current) {
       controlsRef.current.target.copy(center);
       controlsRef.current.update();
     }
+
     onceRef.current = true;
   }, [camera, scene]);
 
@@ -81,23 +76,17 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
       ref={controlsRef}
       enableDamping
       dampingFactor={0.05}
-      enabled={interactive} // disable controls if not interactive
+      enabled={interactive} // disable user controls if not interactive
     />
   );
 }
 
-/* -------------------- 3D Car Model ----------------------- */
-function CarModel({
-  url,
-  interactive,
-}: {
-  url: string;
-  interactive: boolean;
-}) {
+/* -------------- Car Model -------------- */
+function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF(url, '/draco/', true) as any;
 
-  // If not interactive, we rotate the model slowly.
+  // If not interactive, rotate the model slowly
   useFrame(() => {
     if (!interactive && groupRef.current) {
       groupRef.current.rotation.y += 0.002;
@@ -106,11 +95,15 @@ function CarModel({
 
   useEffect(() => {
     if (!scene) return;
+
+    // Rotate the entire scene so car faces a consistent direction
     scene.rotation.y = Math.PI / 2;
+
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
         child.geometry.computeBoundingSphere();
+
         if (child.material instanceof THREE.MeshStandardMaterial) {
           child.material.roughness = 0.4;
           child.material.metalness = 0.8;
@@ -122,7 +115,7 @@ function CarModel({
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
-/* ----------------- Scene Lighting Setup ----------------- */
+/* -------------- Scene Lighting -------------- */
 function SceneLighting() {
   return (
     <>
@@ -139,7 +132,7 @@ function SceneLighting() {
   );
 }
 
-/* ------------------- Post Processing -------------------- */
+/* -------------- Post Processing -------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
     <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
@@ -161,7 +154,7 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-/* ------------------- Main Viewer Comp ------------------- */
+/* -------------- Main Viewer Component -------------- */
 export interface Car3DViewerProps {
   modelUrl: string;
   width?: string | number;
@@ -169,12 +162,6 @@ export interface Car3DViewerProps {
   selected?: boolean; // "interactive" concept
 }
 
-/**
- * Car3DViewer
- *
- * - If `selected` is true, orbit controls + postprocessing are enabled.
- * - Otherwise, the model is still visible but is less GPU-intensive.
- */
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
@@ -197,6 +184,8 @@ export default function Car3DViewer({
     useGLTF.preload(modelUrl);
   }, [modelUrl]);
 
+  // If not selected, we show scroll (overflow: auto),
+  // and disable orbit controls.
   const containerStyles = useMemo<React.CSSProperties>(() => {
     return {
       width,
@@ -211,18 +200,25 @@ export default function Car3DViewer({
       <Canvas
         shadows
         gl={glSettings}
+        /**
+         * 2) This ensures we have a perspective camera with fov,
+         *    not an orthographic one.
+         */
+        orthographic={false}
         camera={{ position: [0, 2, 5], fov: 45 }}
         dpr={[1, selected ? 1.5 : 1]}
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <BakeShadows />
+
         <SceneLighting />
         <PostProcessing interactive={selected} />
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
 
         <Suspense fallback={<LoadingScreen />}>
+          {/* Interactive if selected */}
           <CameraSetup interactive={selected} />
           <CarModel url={modelUrl} interactive={selected} />
           <Preload all />
@@ -232,9 +228,6 @@ export default function Car3DViewer({
   );
 }
 
-/* -----------------------------------------------------------
-   Optional Preload Utility
------------------------------------------------------------ */
 export function preloadCarModels(urls: string[]) {
   urls.forEach((url) => useGLTF.preload(url));
 }
