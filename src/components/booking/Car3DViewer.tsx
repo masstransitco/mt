@@ -14,19 +14,15 @@ import {
   Html,
   Environment,
   Preload,
-  useProgress,
   AdaptiveDpr,
   AdaptiveEvents,
   BakeShadows,
+  useProgress,
 } from '@react-three/drei';
-import {
-  EffectComposer,
-  SSAO,
-} from '@react-three/postprocessing';
+import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
 
-/* ------------------- Loading Overlay -------------------- */
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -38,13 +34,16 @@ function LoadingScreen() {
   );
 }
 
-/* ------------------- Camera and Controls ---------------- */
+/* -----------------------------------------------------------
+   CameraSetup:
+   - OrbitControls are enabled only if `interactive === true`
+----------------------------------------------------------- */
 function CameraSetup({ interactive }: { interactive: boolean }) {
   const { camera, scene } = useThree();
   const controlsRef = useRef<OrbitControls>(null);
   const onceRef = useRef(false);
 
-  // Auto-fit the camera around the loaded scene (only runs once).
+  // Auto-fit the camera around the loaded scene (only once).
   useEffect(() => {
     if (onceRef.current) return;
     const box = new THREE.Box3().setFromObject(scene);
@@ -74,13 +73,16 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
       ref={controlsRef}
       enableDamping
       dampingFactor={0.05}
-      // Disable user controls if not interactive
-      enabled={interactive}
+      enabled={interactive} // disable controls if not interactive
     />
   );
 }
 
-/* -------------------- 3D Car Model ----------------------- */
+/* -----------------------------------------------------------
+   CarModel:
+   - Rotates slowly if not interactive
+   - Otherwise, user can orbit (if enabled in CameraSetup)
+----------------------------------------------------------- */
 function CarModel({
   url,
   interactive,
@@ -90,24 +92,23 @@ function CarModel({
 }) {
   const groupRef = useRef<THREE.Group>(null);
 
-  // `useGLTF` caches internally, so the same URL won't be re-fetched.
+  // useGLTF caches internally.
   const { scene } = useGLTF(url, '/draco/', true) as any;
 
-  // If not interactive, we optionally do a slow rotation in the render loop.
+  // If not interactive, we rotate the model slowly.
   useFrame(() => {
     if (!interactive && groupRef.current) {
       groupRef.current.rotation.y += 0.002;
     }
   });
 
-  // Minimal setup once the model is loaded:
   useEffect(() => {
     if (!scene) return;
 
-    // Rotate model to face a consistent direction
+    // Face a consistent direction
     scene.rotation.y = Math.PI / 2;
 
-    // Optionally tweak materials
+    // Tweak materials
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
@@ -124,7 +125,9 @@ function CarModel({
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
-/* ----------------- Scene Lighting Setup ----------------- */
+/* -----------------------------------------------------------
+   Scene Lighting
+----------------------------------------------------------- */
 function SceneLighting() {
   return (
     <>
@@ -141,9 +144,11 @@ function SceneLighting() {
   );
 }
 
-/* ------------------- Post Processing -------------------- */
+/* -----------------------------------------------------------
+   PostProcessing:
+   - Only meaningful if interactive === true
+----------------------------------------------------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
-  // Only enable the postprocessing if interactive (selected)
   return (
     <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
       <SSAO
@@ -164,20 +169,18 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-/* ------------------- Main Viewer Comp ------------------- */
+/* -----------------------------------------------------------
+   Main Viewer
+   - If selected => interactive camera (OrbitControls), no scrolling
+   - If not selected => camera is static, user can scroll inside
+----------------------------------------------------------- */
 export interface Car3DViewerProps {
   modelUrl: string;
   width?: string | number;
   height?: string | number;
-  selected?: boolean; // "interactive" concept
+  selected?: boolean; // true => orbit controls, no scroll
 }
 
-/**
- * Car3DViewer
- *
- * - If `selected` is true, orbit controls + postprocessing are enabled.
- * - Otherwise, the model is still visible but is less GPU-intensive.
- */
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
@@ -197,46 +200,40 @@ export default function Car3DViewer({
 
   // Preload model
   useEffect(() => {
-    // Preload the model so it’s cached by useGLTF:
     useGLTF.preload(modelUrl);
   }, [modelUrl]);
 
+  // If not selected => orbit controls disabled,
+  // allow user to scroll the container (overflow: auto).
+  // If selected => orbit controls enabled, no scrolling (overflow: hidden).
+  const containerStyles = useMemo<React.CSSProperties>(() => {
+    return {
+      width,
+      height,
+      overflow: selected ? 'hidden' : 'auto',
+      pointerEvents: 'auto', // still let the user scroll or click
+    };
+  }, [width, height, selected]);
+
   return (
-    <div
-      style={{
-        width,
-        height,
-        // If not selected, remove pointer events so it's not interactive
-        pointerEvents: selected ? 'auto' : 'none',
-      }}
-    >
+    <div style={containerStyles}>
       <Canvas
         shadows
         gl={glSettings}
         camera={{ position: [0, 2, 5], fov: 45 }}
-        // Lower dpr if not selected for performance
         dpr={[1, selected ? 1.5 : 1]}
       >
-        {/* Reduces overhead for unselected items */}
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <BakeShadows />
-
         <SceneLighting />
-
-        {/* Interactive-based post-processing */}
         <PostProcessing interactive={selected} />
-
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
 
         <Suspense fallback={<LoadingScreen />}>
-          {/* The camera/controls are interactive only if selected */}
           <CameraSetup interactive={selected} />
-
           <CarModel url={modelUrl} interactive={selected} />
-
-          {/* Preload all current used assets for better performance */}
           <Preload all />
         </Suspense>
       </Canvas>
@@ -244,7 +241,7 @@ export default function Car3DViewer({
   );
 }
 
-/* ------------------ Utility Preloader ------------------- */
+/* Optionally export a preload utility */
 export function preloadCarModels(urls: string[]) {
   urls.forEach((url) => useGLTF.preload(url));
 }
