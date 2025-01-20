@@ -15,15 +15,11 @@ import { FixedSizeList } from 'react-window';
 import Sheet from '@/components/ui/sheet';
 
 /* ------------------------------------------------------------------
-  Define a union type for libraries (as used by useJsApiLoader).
-  Typically, @react-google-maps/api can accept these values:
-    "places" | "drawing" | "geometry" | "localContext" | "visualization"
+  1) Define only the values your installed @react-google-maps/api accepts.
+     Typically: "places" | "drawing" | "geometry" | "visualization"
 ------------------------------------------------------------------- */
-type GoogleMapLibrary = "geometry" | "places" | "drawing" | "localContext" | "visualization";
+type GoogleMapLibrary = "places" | "drawing" | "geometry" | "visualization";
 
-/* ------------------------------------------------------------------
-  Provide your selected libraries as a typed array of GoogleMapLibrary
-------------------------------------------------------------------- */
 const GOOGLE_MAP_LIBRARIES: GoogleMapLibrary[] = ["geometry"];
 
 const CONTAINER_STYLE = {
@@ -51,7 +47,6 @@ const MAP_OPTIONS: google.maps.MapOptions = {
 };
 
 /* --------------------------- Interfaces --------------------------- */
-
 interface StationFeature {
   type: 'Feature';
   id: number;
@@ -155,7 +150,7 @@ function GMap({ googleApiKey }: GMapProps) {
   const [error, setError] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------
-    1) Using the libraries array typed as GoogleMapLibrary[]
+    2) Use the typed libraries array
   ------------------------------------------------------------------- */
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -333,7 +328,6 @@ function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* Bottom Sheet with Station List */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
