@@ -1,10 +1,12 @@
 'use client';
-import React, { useState, useEffect, useCallback, useMemo, PropsWithChildren } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, PropsWithChildren, Suspense } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
-import Sheet from '@/components/ui/sheet';
+import { FixedSizeList } from 'react-window';
+
+const Sheet = React.lazy(() => import('@/components/ui/sheet'));
 
 interface StationFeature {
   type: 'Feature';
@@ -59,6 +61,38 @@ class MapErrorBoundary extends React.Component<PropsWithChildren, MapErrorBounda
   }
 }
 
+const StationListItem = React.memo(({ data, index, style }: any) => {
+  const station = data[index];
+  const dispatch = useDispatch();
+
+  const handleClick = useCallback(() => {
+    dispatch(selectStation(station.id));
+  }, [dispatch, station.id]);
+
+  return (
+    <div style={style} className="px-4 py-3 hover:bg-muted/20 cursor-pointer" onClick={handleClick}>
+      <div className="flex justify-between items-start">
+        <div className="space-y-2">
+          <h3 className="font-medium text-foreground">
+            {station.properties.Place}
+          </h3>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Zap className="w-4 h-4" />
+            <span>{station.properties.maxPower} kW max</span>
+            <span className="px-1">·</span>
+            <span>{station.properties.availableSpots} Available</span>
+          </div>
+        </div>
+        <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
+          {station.distance?.toFixed(1)} km
+        </div>
+      </div>
+    </div>
+  );
+});
+
+StationListItem.displayName = 'StationListItem';
+
 function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useDispatch();
   const viewState = useSelector(selectViewState);
@@ -74,7 +108,19 @@ function GMap({ googleApiKey }: GMapProps) {
     mapId: '94527c02bbb6243',
     gestureHandling: 'greedy',
     disableDefaultUI: true,
-    backgroundColor: '#111111'
+    backgroundColor: '#111111',
+    maxZoom: 18,
+    minZoom: 8,
+    clickableIcons: false,
+    restriction: {
+      latLngBounds: {
+        north: 22.6,
+        south: 22.1,
+        east: 114.4,
+        west: 113.8,
+      },
+      strictBounds: true,
+    }
   }), []);
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -119,24 +165,37 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, []);
 
-  useEffect(() => {
-    const fetchStations = async () => {
-      try {
-        const res = await fetch('/stations.geojson');
-        if (!res.ok) throw new Error('Failed to fetch stations');
-        const data = await res.json();
-        if (data.type === 'FeatureCollection') {
-          setStations(data.features);
+  const fetchStations = useCallback(async () => {
+    try {
+      const cached = localStorage.getItem('stations');
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 3600000) {
+          setStations(data);
+          return;
         }
-      } catch (err) {
-        setError('Failed to load stations');
-        console.error('Error fetching stations:', err);
       }
-    };
 
+      const res = await fetch('/stations.geojson');
+      if (!res.ok) throw new Error('Failed to fetch stations');
+      const data = await res.json();
+      if (data.type === 'FeatureCollection') {
+        setStations(data.features);
+        localStorage.setItem('stations', JSON.stringify({
+          data: data.features,
+          timestamp: Date.now()
+        }));
+      }
+    } catch (err) {
+      setError('Failed to load stations');
+      console.error('Error fetching stations:', err);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchStations();
     getUserLocation();
-  }, [getUserLocation]);
+  }, [fetchStations, getUserLocation]);
 
   useEffect(() => {
     if (userLocation && stations.length > 0) {
@@ -186,32 +245,17 @@ function GMap({ googleApiKey }: GMapProps) {
     }), [stations, handleMarkerClick]
   );
 
-  const memoizedStationList = useMemo(() => 
-    stations.map((station) => (
-      <div
-        key={station.id}
-        className="px-4 py-3 hover:bg-muted/20 cursor-pointer"
-        onClick={() => handleMarkerClick(station)}
-      >
-        <div className="flex justify-between items-start">
-          <div className="space-y-2">
-            <h3 className="font-medium text-foreground">
-              {station.properties.Place}
-            </h3>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Zap className="w-4 h-4" />
-              <span>{station.properties.maxPower} kW max</span>
-              <span className="px-1">·</span>
-              <span>{station.properties.availableSpots} Available</span>
-            </div>
-          </div>
-          <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
-            {station.distance?.toFixed(1)} km
-          </div>
-        </div>
-      </div>
-    )), [stations, handleMarkerClick]
-  );
+  const VirtualizedStationList = useMemo(() => (
+    <FixedSizeList
+      height={400}
+      width="100%"
+      itemCount={stations.length}
+      itemSize={80}
+      itemData={stations}
+    >
+      {StationListItem}
+    </FixedSizeList>
+  ), [stations]);
 
   if (error) {
     return <div className="text-destructive">{error}</div>;
@@ -252,16 +296,16 @@ function GMap({ googleApiKey }: GMapProps) {
       </div>
 
       {viewState === 'showMap' && (
-        <Sheet
-          isOpen={!isSheetMinimized}
-          onToggle={toggleSheet}
-          title="Nearby Stations"
-          count={stations.length}
-        >
-          <div className="divide-y divide-border/10">
-            {memoizedStationList}
-          </div>
-        </Sheet>
+        <Suspense fallback={<div>Loading...</div>}>
+          <Sheet
+            isOpen={!isSheetMinimized}
+            onToggle={toggleSheet}
+            title="Nearby Stations"
+            count={stations.length}
+          >
+            {VirtualizedStationList}
+          </Sheet>
+        </Suspense>
       )}
     </div>
   );
