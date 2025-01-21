@@ -65,7 +65,7 @@ export default function CarCard({
             {(!selected || !shouldLoad3D) && (
               <div className="absolute inset-0">
                 <Image
-                  src={car.placeholderUrl || car.image}
+                  src={car.image}
                   alt={car.name}
                   fill
                   className="object-cover rounded-t-2xl"
