@@ -1,7 +1,7 @@
 // src/constants/cars.ts
 import { Car } from '@/types/cars';
 
-export const SAMPLE_CARS: Car[] = [
+export const SAMPLE_CARS = [
   {
     id: 1,
     name: 'MG 4 Electric',
@@ -9,7 +9,6 @@ export const SAMPLE_CARS: Car[] = [
     price: 600,
     modelUrl: '/cars/car1.glb',
     image: '/cars/car1.png',
-    placeholderUrl: '/cars/car1.png',
     available: true,
     features: {
       range: 320,
@@ -24,7 +23,6 @@ export const SAMPLE_CARS: Car[] = [
     price: 800,
     modelUrl: '/cars/car2.glb',
     image: '/cars/car2.png',
-    placeholderUrl: '/cars/car2.png',
     available: true,
     features: {
       range: 380,
@@ -39,7 +37,6 @@ export const SAMPLE_CARS: Car[] = [
     price: 1200,
     modelUrl: '/cars/car3.glb',
     image: '/cars/car3.png',
-    placeholderUrl: '/cars/car3.png',
     available: true,
     features: {
       range: 850,
@@ -54,7 +51,6 @@ export const SAMPLE_CARS: Car[] = [
     price: 400,
     modelUrl: '/cars/car4.glb',
     image: '/cars/car4.png',
-    placeholderUrl: '/cars/car4.png',
     available: true,
     features: {
       range: 330,
@@ -64,29 +60,17 @@ export const SAMPLE_CARS: Car[] = [
   }
 ] as const;
 
-// Type for specific car IDs
+// Derive car types from the sample cars
+export const CAR_TYPES = [...new Set(SAMPLE_CARS.map(car => car.type))] as const;
+export type CarType = typeof CAR_TYPES[number];
 export type CarId = typeof SAMPLE_CARS[number]['id'];
 
-// Helper to get car by ID
-export function getCarById(id: CarId): Car | undefined {
-  return SAMPLE_CARS.find(car => car.id === id);
-}
-
-// Helper to get available cars
-export function getAvailableCars(): Car[] {
-  return SAMPLE_CARS.filter(car => car.available);
-}
-
-// Helper to get cars by type
-export function getCarsByType(type: string): Car[] {
-  return SAMPLE_CARS.filter(car => car.type.toLowerCase() === type.toLowerCase());
-}
-
-// Export types of cars for filtering
-export const CAR_TYPES = ['Electric', 'LPG', 'Hybrid'] as const;
-export type CarType = typeof CAR_TYPES[number];
-
-// Validate if a string is a valid car type
-export function isValidCarType(type: string): type is CarType {
-  return CAR_TYPES.includes(type as CarType);
-}
+// Simplified helpers with better type inference
+export const cars = {
+  getById: (id: CarId) => SAMPLE_CARS.find(car => car.id === id),
+  getAvailable: () => SAMPLE_CARS.filter(car => car.available),
+  getByType: (type: CarType) => 
+    SAMPLE_CARS.filter(car => car.type === type),
+  isValidType: (type: string): type is CarType => 
+    CAR_TYPES.includes(type as CarType)
+} as const;
