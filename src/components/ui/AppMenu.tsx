@@ -2,8 +2,8 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { LogOut } from 'lucide-react'; // Example icon
-import { Tesla, Zap, ChevronRight } from 'lucide-react'; // Or any icons you prefer
+// Example icons from lucide-react
+import { LogOut, Car, Zap, ChevronRight } from 'lucide-react';
 
 export default function AppMenu() {
   return (
@@ -43,7 +43,7 @@ export default function AppMenu() {
         <li>
           <button className="flex items-center justify-between w-full text-left">
             <div className="flex items-center gap-2 text-sm">
-              <Tesla className="w-4 h-4" />
+              <Car className="w-4 h-4" />
               <span>My Products</span>
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -67,7 +67,9 @@ export default function AppMenu() {
 
       {/* Footer Section */}
       <div className="border-t border-border mt-6 pt-4 text-sm space-y-2">
-        <p className="text-muted-foreground">App Version <span className="text-foreground">v4.40.1-3113</span></p>
+        <p className="text-muted-foreground">
+          App Version <span className="text-foreground">v4.40.1-3113</span>
+        </p>
         <div className="flex gap-4 text-muted-foreground">
           <button className="underline">Privacy</button>
           <button className="underline">Legal</button>
