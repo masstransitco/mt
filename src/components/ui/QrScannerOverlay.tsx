@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Scanner } from '@yudiel/react-qr-scanner';
+import { Scanner, IDetectedBarcode } from '@yudiel/react-qr-scanner';
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
@@ -13,11 +13,12 @@ export default function QrScannerOverlay({
   onClose,
   onScan
 }: QrScannerOverlayProps) {
-  const handleScan = useCallback((text: string | null) => {
-    if (text) {
-      console.log('QR Code Scanned:', text);
+  const handleScan = useCallback((detectedCodes: IDetectedBarcode[]) => {
+    if (detectedCodes.length > 0 && detectedCodes[0].value) {
+      const scannedValue = detectedCodes[0].value;
+      console.log('QR Code Scanned:', scannedValue);
       if (onScan) {
-        onScan(text);
+        onScan(scannedValue);
       }
       onClose();
     }
