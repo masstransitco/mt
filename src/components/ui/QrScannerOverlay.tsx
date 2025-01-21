@@ -14,8 +14,8 @@ export default function QrScannerOverlay({
   onScan
 }: QrScannerOverlayProps) {
   const handleScan = useCallback((detectedCodes: IDetectedBarcode[]) => {
-    if (detectedCodes.length > 0 && detectedCodes[0].value) {
-      const scannedValue = detectedCodes[0].value;
+    if (detectedCodes.length > 0 && detectedCodes[0].rawValue) {
+      const scannedValue = detectedCodes[0].rawValue;
       console.log('QR Code Scanned:', scannedValue);
       if (onScan) {
         onScan(scannedValue);
