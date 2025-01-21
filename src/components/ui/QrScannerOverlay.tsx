@@ -55,7 +55,7 @@ export default function QrScannerOverlay({
               </p>
 
               <div className="mt-3 overflow-hidden rounded-md">
-                <QrScanner
+                <Scanner
                   onDecode={handleDecode}
                   onError={handleError}
                   // Optional props, e.g.:
