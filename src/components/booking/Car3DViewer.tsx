@@ -24,6 +24,14 @@ import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 
+/* -------------- Interfaces -------------- */
+export interface Car3DViewerProps {
+  modelUrl: string;
+  width?: string | number;
+  height?: string | number;
+  selected?: boolean;
+}
+
 /* -------------- Loading Overlay -------------- */
 function LoadingScreen() {
   const { progress } = useProgress();
@@ -135,8 +143,46 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
   );
 }
 
-/* -------------- Other Components Remain Same -------------- */
+/* -------------- Scene Lighting -------------- */
+function SceneLighting() {
+  return (
+    <>
+      <ambientLight intensity={0.5} />
+      <directionalLight
+        position={[5, 5, 5]}
+        intensity={1.0}
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+      />
+      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
+      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
+    </>
+  );
+}
 
+/* -------------- Post Processing -------------- */
+function PostProcessing({ interactive }: { interactive: boolean }) {
+  return (
+    <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
+      <SSAO
+        blendFunction={BlendFunction.MULTIPLY}
+        samples={interactive ? 31 : 0}
+        radius={5}
+        intensity={30}
+        luminanceInfluence={0.5}
+        color={new THREE.Color(0x000000)}
+        distanceScaling
+        depthAwareUpsampling
+        worldDistanceThreshold={1}
+        worldDistanceFalloff={1}
+        worldProximityThreshold={1}
+        worldProximityFalloff={1}
+      />
+    </EffectComposer>
+  );
+}
+
+/* -------------- Main Viewer Component -------------- */
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
