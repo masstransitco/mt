@@ -3,6 +3,7 @@ import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 import chatReducer from './chatSlice';
 import userReducer from './userSlice';
 import bookingReducer from './bookingSlice';
+import stationsReducer from './stationsSlice';
 
 export const store = configureStore({
   reducer: {
