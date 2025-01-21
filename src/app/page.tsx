@@ -5,28 +5,32 @@ import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
 import { setViewState, selectViewState } from '@/store/userSlice';
 
-// Icons (lucide-react or your preferred icon library)
-import { Car, Map, Menu as MenuIcon } from 'lucide-react';
+// Import icons from lucide-react
+import { Car, Map, Menu as MenuIcon, QrCode } from 'lucide-react';
 
 import CarGrid from '@/components/booking/CarGrid';
 import GMap from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
-
-// Import the side-sheet and the menu content
 import SideSheet from '@/components/ui/SideSheet';
 import AppMenu from '@/components/ui/AppMenu';
+// NEW: Import your QR overlay
+import QrScannerOverlay from '@/components/ui/QrScannerOverlay';
 
 export default function HomePage() {
   const dispatch = useDispatch();
   const viewState = useSelector(selectViewState);
 
+  // SideSheet state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // QR Scanner state
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const toggleView = useCallback(() => {
     dispatch(setViewState(viewState === 'showMap' ? 'showCar' : 'showMap'));
   }, [dispatch, viewState]);
 
-  // Toggle side-sheet open/closed
+  // Toggle side-sheet
   const toggleMenu = useCallback(() => {
     setIsMenuOpen((prev) => !prev);
   }, []);
@@ -48,6 +52,24 @@ export default function HomePage() {
 
           {/* Right-side controls */}
           <div className="flex items-center gap-2">
+            {/* QR Code Scanner Button */}
+            <button
+              onClick={() => setIsScannerOpen(true)}
+              aria-label="Open QR Scanner"
+              className="
+                flex items-center justify-center
+                w-10 h-10
+                rounded-full
+                text-gray-400
+                hover:text-gray-200
+                hover:bg-gray-700
+                active:bg-gray-600
+                transition-colors
+              "
+            >
+              <QrCode className="w-5 h-5" />
+            </button>
+
             {/* Map/Car Toggle Button */}
             <button
               onClick={toggleView}
@@ -117,6 +139,12 @@ export default function HomePage() {
       <SideSheet isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)}>
         <AppMenu />
       </SideSheet>
+
+      {/* QR Scanner Overlay */}
+      <QrScannerOverlay
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+      />
     </main>
   );
 }
