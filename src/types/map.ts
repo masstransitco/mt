@@ -1,3 +1,6 @@
+import type { CSSProperties } from 'react';
+import type { MapOptions as GoogleMapOptions } from '@react-google-maps/api';
+
 export interface GMapProps {
   googleApiKey: string;
 }
@@ -32,7 +35,7 @@ export interface StationFeature {
 export interface StationListItemProps {
   data: StationFeature[];
   index: number;
-  style: React.CSSProperties;
+  style: CSSProperties;
 }
 
 export interface MapBounds {
@@ -42,7 +45,7 @@ export interface MapBounds {
   west: number;
 }
 
-export interface MapOptions extends google.maps.MapOptions {
+export interface MapOptions extends GoogleMapOptions {
   restriction?: {
     latLngBounds: MapBounds;
     strictBounds: boolean;
