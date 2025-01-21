@@ -24,16 +24,19 @@ interface StationsState {
   loading: boolean;
   error: string | null;
   lastFetched: number | null;
+  userLocation: google.maps.LatLngLiteral | null;
+  isSheetMinimized: boolean;
 }
 
 const initialState: StationsState = {
   items: [],
   loading: false,
   error: null,
-  lastFetched: null
+  lastFetched: null,
+  userLocation: null,
+  isSheetMinimized: false
 };
 
-// Async thunk for fetching stations
 export const fetchStations = createAsyncThunk(
   'stations/fetchStations',
   async (_, { rejectWithValue }) => {
@@ -41,7 +44,7 @@ export const fetchStations = createAsyncThunk(
       const cached = localStorage.getItem('stations');
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 3600000) { // 1 hour
+        if (Date.now() - timestamp < 3600000) {
           return { data, timestamp };
         }
       }
@@ -69,32 +72,31 @@ export const fetchStations = createAsyncThunk(
   }
 );
 
-// Update stations with distances
-export const updateStationDistances = createAsyncThunk(
-  'stations/updateDistances',
-  async (userLocation: google.maps.LatLngLiteral, { getState }) => {
-    const state = getState() as RootState;
-    const stations = state.stations.items;
-
-    const updatedStations = stations.map(station => {
-      const [lng, lat] = station.geometry.coordinates;
-      const distance = calculateDistance(
-        userLocation.lat,
-        userLocation.lng,
-        lat,
-        lng
-      );
-      return { ...station, distance };
-    }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
-
-    return updatedStations;
-  }
-);
-
 const stationsSlice = createSlice({
   name: 'stations',
   initialState,
-  reducers: {},
+  reducers: {
+    setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
+      state.userLocation = action.payload;
+    },
+    toggleSheet: (state) => {
+      state.isSheetMinimized = !state.isSheetMinimized;
+    },
+    updateDistances: (state) => {
+      if (!state.userLocation) return;
+      
+      state.items = state.items.map(station => {
+        const [lng, lat] = station.geometry.coordinates;
+        if (!google?.maps?.geometry?.spherical) return station;
+        
+        const from = new google.maps.LatLng(state.userLocation!.lat, state.userLocation!.lng);
+        const to = new google.maps.LatLng(lat, lng);
+        const distance = google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000;
+        
+        return { ...station, distance };
+      }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    }
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchStations.pending, (state) => {
@@ -109,31 +111,16 @@ const stationsSlice = createSlice({
       .addCase(fetchStations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
-      })
-      .addCase(updateStationDistances.fulfilled, (state, action) => {
-        state.items = action.payload;
       });
   }
 });
 
+export const { setUserLocation, toggleSheet, updateDistances } = stationsSlice.actions;
 export default stationsSlice.reducer;
 
 // Selectors
 export const selectAllStations = (state: RootState) => state.stations.items;
 export const selectStationsLoading = (state: RootState) => state.stations.loading;
 export const selectStationsError = (state: RootState) => state.stations.error;
-export const selectStationById = (id: number) => (state: RootState) => 
-  state.stations.items.find(station => station.id === id);
-
-// Helper function for distance calculation
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  if (!google?.maps?.geometry?.spherical) return 0;
-  const from = new google.maps.LatLng(lat1, lon1);
-  const to = new google.maps.LatLng(lat2, lon2);
-  return google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000;
-}
+export const selectUserLocation = (state: RootState) => state.stations.userLocation;
+export const selectIsSheetMinimized = (state: RootState) => state.stations.isSheetMinimized;
