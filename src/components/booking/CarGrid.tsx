@@ -1,70 +1,12 @@
 'use client';
 import React from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectCar } from '@/store/userSlice';
+import { selectCar, selectViewState } from '@/store/userSlice';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, X } from 'lucide-react';
+import { Filter } from 'lucide-react';
 import CarCard from './CarCard';
 import { Car as CarType } from '@/types/booking';
-
-const SAMPLE_CARS: CarType[] = [
-  {
-    id: 1,
-    name: 'MG 4 Electric',
-    type: 'Electric',
-    price: 600,
-    modelUrl: '/cars/car1.glb',
-    image: 'string',
-    available: true,
-    features: {
-      range: 320,
-      charging: 'MTC Stations',
-      acceleration: '0-60 in 7.5s'
-    }
-  },
-  {
-    id: 2,
-    name: 'Toyota Crown',
-    type: 'LPG',
-    price: 800,
-    modelUrl: '/cars/car2.glb',
-    image: 'string',
-    available: true,
-    features: {
-      range: 380,
-      charging: 'LPG Stations',
-      acceleration: '0-60 in 3.7s'
-    }
-  },
-  {
-    id: 3,
-    name: 'Toyota Vellfire',
-    type: 'Hybrid',
-    price: 1200,
-    modelUrl: '/cars/car3.glb',
-    image: 'string',
-    available: true,
-    features: {
-      range: 850,
-      charging: 'PG Stations',
-      acceleration: '0-60 in 8.9s'
-    }
-  },
-  {
-    id: 4,
-    name: 'Toyota Prius',
-    type: 'Hybrid',
-    price: 400,
-    modelUrl: '/cars/car4.glb',
-    image: 'string',
-    available: true,
-    features: {
-      range: 330,
-      charging: 'PG Stations',
-      acceleration: '0-60 in 10.8s'
-    }
-  }
-];
+import { SAMPLE_CARS } from '@/constants/cars'; // Move sample cars to constants
 
 interface CarGridProps {
   className?: string;
@@ -73,24 +15,31 @@ interface CarGridProps {
 export default function CarGrid({ className = '' }: CarGridProps) {
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
+  const viewState = useAppSelector(selectViewState);
   const [filterType, setFilterType] = React.useState('all');
   const [showFilters, setShowFilters] = React.useState(false);
 
+  // Only compute cars if we're in the car view
   const sortedAndFilteredCars = React.useMemo(() => {
-    // First apply the filter
+    if (viewState !== 'showCar') return [];
+    
     const filtered = filterType === 'all' 
       ? SAMPLE_CARS 
       : SAMPLE_CARS.filter(car => 
           car.type.toLowerCase() === filterType.toLowerCase()
         );
     
-    // Then sort to ensure selected car is at the top
     return [...filtered].sort((a, b) => {
       if (a.id === selectedCarId) return -1;
       if (b.id === selectedCarId) return 1;
       return 0;
     });
-  }, [filterType, selectedCarId]);
+  }, [filterType, selectedCarId, viewState]);
+
+  // If we're not showing cars, return null
+  if (viewState !== 'showCar') {
+    return null;
+  }
 
   const handleSelectCar = (car: CarType) => {
     dispatch(selectCar(car.id));
@@ -175,6 +124,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                 car={car}
                 selected={selectedCarId === car.id}
                 onClick={() => handleSelectCar(car)}
+                isVisible={viewState === 'showCar'} // Only render 3D viewer when in car view
               />
             </motion.div>
           ))}
@@ -201,3 +151,12 @@ export default function CarGrid({ className = '' }: CarGridProps) {
     </div>
   );
 }
+
+// Create a separate file for constants
+export const preloadAllCarModels = () => {
+  SAMPLE_CARS.forEach(car => {
+    import('./Car3DViewer').then(module => {
+      module.preloadCarModels([car.modelUrl]);
+    });
+  });
+};
