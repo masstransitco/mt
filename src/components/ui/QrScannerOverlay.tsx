@@ -1,29 +1,29 @@
 import React, { useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Scanner } from '@yudiel/react-qr-scanner';
+import { QrScanner } from '@yudiel/react-qr-scanner';
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
   onClose: () => void;
+  onScan?: (result: string) => void;
 }
 
 export default function QrScannerOverlay({
   isOpen,
-  onClose
+  onClose,
+  onScan
 }: QrScannerOverlayProps) {
-  const handleDecode = useCallback((result: string | null) => {
-    if (result) {
-      console.log('QR Code Scanned:', result);
-      // Perform your action here
-      onClose();
+  const handleScan = useCallback((result: string) => {
+    console.log('QR Code Scanned:', result);
+    if (onScan) {
+      onScan(result);
     }
-  }, [onClose]);
+    onClose();
+  }, [onClose, onScan]);
 
-  // Change the error type to 'unknown' or 'any'
-  const handleError = useCallback((error: unknown) => {
+  const handleError = useCallback((error: Error) => {
     console.error('QR Scanner Error:', error);
-    // Optionally, you could refine the type:
-    // if (error instanceof Error) { ... }
+    // You could add error handling UI here
   }, []);
 
   return (
@@ -38,22 +38,25 @@ export default function QrScannerOverlay({
           <div className="w-full max-w-sm relative m-4">
             <button
               onClick={onClose}
-              className="absolute top-2 right-2 text-white text-lg"
+              className="absolute top-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
               aria-label="Close QR Scanner"
             >
               ✕
             </button>
-
-            <div className="p-4 text-center text-white space-y-3 bg-black bg-opacity-50 rounded-md">
+            
+            <div className="p-4 text-center text-white space-y-3 bg-black bg-opacity-50 rounded-lg">
               <h2 className="text-xl font-bold">Scan QR Code</h2>
               <p className="text-sm">
                 Point your camera at the QR code on the car to start driving
               </p>
-
-              <div className="mt-3 overflow-hidden rounded-md">
-                <Scanner 
-                  onDecode={handleDecode} 
-                  onError={handleError} 
+              
+              <div className="mt-3 overflow-hidden rounded-lg">
+                <QrScanner
+                  onResult={handleScan}
+                  onError={handleError}
+                  constraints={{
+                    facingMode: 'environment'
+                  }}
                 />
               </div>
             </div>
