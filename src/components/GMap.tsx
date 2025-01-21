@@ -4,16 +4,18 @@ import React, { useEffect, useCallback, useRef, memo } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { 
   selectStation, 
-  selectViewState,
-  setUserLocation,
-  toggleStationsList
+  selectViewState 
 } from '@/store/userSlice';
 import { 
   selectAllStations, 
   selectStationsLoading,
   selectStationsError,
+  selectUserLocation,
+  selectIsSheetMinimized,
   fetchStations,
-  updateStationDistances
+  setUserLocation,
+  toggleSheet,
+  updateDistances
 } from '@/store/stationsSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
@@ -56,30 +58,6 @@ interface GMapProps {
 }
 
 /* ----------------------- Station List Item ------------------------ */
-'use client';
-
-import React, { useEffect, useCallback, useRef, memo } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectStation, selectViewState } from '@/store/userSlice';
-import { 
-  selectAllStations, 
-  selectStationsLoading,
-  selectStationsError,
-  selectUserLocation,
-  selectIsSheetMinimized,
-  fetchStations,
-  setUserLocation,
-  toggleSheet,
-  updateDistances
-} from '@/store/stationsSlice';
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Zap } from 'lucide-react';
-import { FixedSizeList } from 'react-window';
-import Sheet from '@/components/ui/sheet';
-import type { StationFeature } from '@/types/stations';
-
-// [Previous constants remain the same]
-
 const StationListItem = memo(({ data, index, style }: any) => {
   const station = data[index];
   const dispatch = useAppDispatch();
@@ -114,6 +92,7 @@ const StationListItem = memo(({ data, index, style }: any) => {
 
 StationListItem.displayName = 'StationListItem';
 
+/* -------------------------- Main GMap ---------------------------- */
 function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -253,6 +232,37 @@ function GMap({ googleApiKey }: GMapProps) {
   );
 }
 
+/* --------------- Error Boundary Class ---------------------- */
+class MapErrorBoundary extends React.Component<
+  React.PropsWithChildren,
+  { hasError: boolean }
+> {
+  constructor(props: React.PropsWithChildren) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Map Error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="text-destructive">
+          Something went wrong loading the map. Please try again.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* --------------- Export with Error Boundary --------------------- */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
