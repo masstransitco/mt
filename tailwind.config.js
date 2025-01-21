@@ -56,7 +56,9 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
-      /* Optional: extended font sizes for a clean, modern scale */
+      borderWidth: {
+        '3': '3px',
+      },
       fontSize: {
         xs: ['0.75rem', '1.2'],
         sm: ['0.875rem', '1.4'],
@@ -69,9 +71,28 @@ module.exports = {
         '5xl': ['3rem', '1.1'],
         '6xl': ['3.75rem', '1.1'],
       },
+      animation: {
+        'spin': 'spin 1s linear infinite',
+        'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      keyframes: {
+        spin: {
+          to: { transform: 'rotate(360deg)' },
+        },
+        pulse: {
+          '0%, 100%': {
+            opacity: 1,
+            transform: 'scale(1)',
+          },
+          '50%': {
+            opacity: .5,
+            transform: 'scale(0.95)',
+          },
+        },
+      },
     },
   },
   plugins: [
-    require('tailwindcss-animate'), // includes your animate plugin
+    require('tailwindcss-animate'),
   ],
 };
