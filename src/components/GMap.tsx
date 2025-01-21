@@ -16,6 +16,14 @@ import { FixedSizeList } from 'react-window';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import Sheet from '@/components/ui/sheet';
 import useDebounce from '@/hooks/useDebounce';
+import type {
+  GMapProps,
+  StationFeature,
+  StationListItemProps,
+  MapOptions,
+  MapBounds,
+  MapErrorBoundaryState
+} from '@/types/map';
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ("geometry")[] = ['geometry'];
