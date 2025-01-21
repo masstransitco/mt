@@ -22,6 +22,8 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
+import LoadingOverlay from '@/components/ui/loading-overlay';
+
 
 interface Car3DViewerProps {
   modelUrl: string;
@@ -36,9 +38,7 @@ function LoadingScreen() {
   const { progress } = useProgress();
   return (
     <Html center>
-      <div style={{ color: '#fff', textAlign: 'center' }}>
-        Loading 3D model... {progress.toFixed(0)}%
-      </div>
+      <LoadingOverlay message={`Loading model... ${progress.toFixed(0)}%`} />
     </Html>
   );
 }
