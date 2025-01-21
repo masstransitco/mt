@@ -56,6 +56,30 @@ interface GMapProps {
 }
 
 /* ----------------------- Station List Item ------------------------ */
+'use client';
+
+import React, { useEffect, useCallback, useRef, memo } from 'react';
+import { useAppDispatch, useAppSelector } from '@/store/store';
+import { selectStation, selectViewState } from '@/store/userSlice';
+import { 
+  selectAllStations, 
+  selectStationsLoading,
+  selectStationsError,
+  selectUserLocation,
+  selectIsSheetMinimized,
+  fetchStations,
+  setUserLocation,
+  toggleSheet,
+  updateDistances
+} from '@/store/stationsSlice';
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { Zap } from 'lucide-react';
+import { FixedSizeList } from 'react-window';
+import Sheet from '@/components/ui/sheet';
+import type { StationFeature } from '@/types/stations';
+
+// [Previous constants remain the same]
+
 const StationListItem = memo(({ data, index, style }: any) => {
   const station = data[index];
   const dispatch = useAppDispatch();
@@ -90,7 +114,6 @@ const StationListItem = memo(({ data, index, style }: any) => {
 
 StationListItem.displayName = 'StationListItem';
 
-/* -------------------------- Main GMap ---------------------------- */
 function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -100,22 +123,17 @@ function GMap({ googleApiKey }: GMapProps) {
   const stations = useAppSelector(selectAllStations);
   const isLoading = useAppSelector(selectStationsLoading);
   const error = useAppSelector(selectStationsError);
-  const userLocation = useAppSelector(state => state.user.userLocation);
-  const isStationsListOpen = useAppSelector(state => state.user.isStationsListOpen);
+  const userLocation = useAppSelector(selectUserLocation);
+  const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Load the Google Maps API
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  /* ------------------ Get User Location ------------------------- */
   const getUserLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      // Handle error through Redux if needed
-      return;
-    }
+    if (!navigator.geolocation) return;
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -123,50 +141,32 @@ function GMap({ googleApiKey }: GMapProps) {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         }));
+        dispatch(updateDistances());
       },
       (err) => {
         console.error('Geolocation error:', err);
-        // Handle error through Redux if needed
       },
       { timeout: 10000, maximumAge: 60000 }
     );
   }, [dispatch]);
 
-  /* -------------- Initial Data Loading --------------- */
   useEffect(() => {
     dispatch(fetchStations());
     getUserLocation();
   }, [dispatch, getUserLocation]);
 
-  /* -------- Update distances when location changes --------- */
-  useEffect(() => {
-    if (userLocation && stations.length > 0) {
-      dispatch(updateStationDistances(userLocation));
-    }
-  }, [userLocation, stations.length, dispatch]);
-
-  /* ------------------- Event Handlers --------------------- */
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
-      dispatch(toggleStationsList(true)); // Open the sheet
+      dispatch(toggleSheet());
     },
     [dispatch]
   );
 
-  const handleToggleSheet = useCallback(() => {
-    dispatch(toggleStationsList());
-  }, [dispatch]);
-
-  /* ------------------ Error Handling --------------------- */
-  if (error) {
-    return <div className="text-destructive">{error}</div>;
-  }
-
-  if (loadError) {
+  if (error || loadError) {
     return (
       <div className="text-destructive">
-        Error loading Google Maps: {loadError.message}
+        {error || `Error loading Google Maps: ${loadError?.message}`}
       </div>
     );
   }
@@ -187,7 +187,6 @@ function GMap({ googleApiKey }: GMapProps) {
             mapRef.current = map;
           }}
         >
-          {/* User Location Marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -203,7 +202,6 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Station Markers */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -227,11 +225,10 @@ function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* Station List Sheet */}
       {viewState === 'showMap' && (
         <Sheet
-          isOpen={isStationsListOpen}
-          onToggle={handleToggleSheet}
+          isOpen={!isSheetMinimized}
+          onToggle={() => dispatch(toggleSheet())}
           title="Nearby Stations"
           count={stations.length}
         >
@@ -256,7 +253,6 @@ function GMap({ googleApiKey }: GMapProps) {
   );
 }
 
-/* --------------- Export with Error Boundary --------------------- */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
