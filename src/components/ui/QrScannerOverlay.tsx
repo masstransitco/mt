@@ -13,17 +13,18 @@ export default function QrScannerOverlay({
   onClose,
   onScan
 }: QrScannerOverlayProps) {
-  const handleResult = useCallback((result: { text: string }) => {
-    console.log('QR Code Scanned:', result.text);
-    if (onScan) {
-      onScan(result.text);
+  const handleDecode = useCallback((text: string | null) => {
+    if (text) {
+      console.log('QR Code Scanned:', text);
+      if (onScan) {
+        onScan(text);
+      }
+      onClose();
     }
-    onClose();
   }, [onClose, onScan]);
 
   const handleError = useCallback((error: unknown) => {
     console.error('QR Scanner Error:', error);
-    // Type guard to safely handle Error objects
     if (error instanceof Error) {
       console.error('Error message:', error.message);
     } else {
@@ -57,10 +58,12 @@ export default function QrScannerOverlay({
               
               <div className="mt-3 overflow-hidden rounded-lg">
                 <Scanner
-                  onResult={handleResult}
+                  onDecode={handleDecode}
                   onError={handleError}
-                  constraints={{
-                    facingMode: 'environment'
+                  options={{
+                    constraints: {
+                      facingMode: 'environment'
+                    }
                   }}
                 />
               </div>
