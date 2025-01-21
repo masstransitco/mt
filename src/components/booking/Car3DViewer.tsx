@@ -23,7 +23,6 @@ import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 
-// Define interfaces at the top of the file
 interface Car3DViewerProps {
   modelUrl: string;
   width?: string | number;
@@ -88,8 +87,10 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
           }
         }
       });
+      // Clean up GLTF cache for this specific model
+      useGLTF.clear(url);
     };
-  }, [scene]);
+  }, [scene, url]);
 
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
@@ -126,7 +127,6 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
 
     onceRef.current = true;
 
-    // Cleanup function
     return () => {
       onceRef.current = false;
     };
@@ -181,7 +181,6 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-/* -------------- Main Viewer Component -------------- */
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
@@ -204,9 +203,9 @@ export default function Car3DViewer({
   useEffect(() => {
     useGLTF.preload(modelUrl);
     
-    // Cleanup function
     return () => {
-      useGLTF.clear(); // Clear the GLTF cache when component unmounts
+      // Clear the specific model from GLTF cache
+      useGLTF.clear(modelUrl);
       if (canvasRef.current) {
         const gl = canvasRef.current.getContext('webgl2') || canvasRef.current.getContext('webgl');
         if (gl) {
