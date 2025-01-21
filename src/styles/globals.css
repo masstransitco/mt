@@ -4,12 +4,6 @@
 
 @layer base {
   :root {
-    /* Design tokens */
-    --radius-sm: 0.875rem;
-    --radius-md: 1rem;
-    --radius-lg: 1.25rem;
-    
-    /* Color system */
     --background: 0 0% 7%;
     --foreground: 0 0% 98%;
     --card: 0 0% 11%;
@@ -29,178 +23,123 @@
     --border: 0 0% 18%;
     --input: 0 0% 18%;
     --ring: 214 100% 60%;
-    --radius: var(--radius-md);
-
-    /* Animation tokens */
-    --transition-fast: 150ms;
-    --transition-normal: 200ms;
-    --transition-slow: 300ms;
-    --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-    --ease-in-out: cubic-bezier(0.4, 0, 0.6, 1);
+    --radius: 1rem;
   }
 
-  /* Base styles with performance optimizations */
   html {
-    font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
-    text-size-adjust: 100%;
-    scroll-behavior: smooth;
-    -webkit-tap-highlight-color: transparent;
-    content-visibility: auto;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
-    text-rendering: optimizeLegibility;
-  }
-
-  /* Improve scrolling performance */
-  @media (prefers-reduced-motion: no-preference) {
-    :where(html:focus-within) {
-      scroll-behavior: smooth;
-    }
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
 @layer components {
-  /* Car Card Component */
   .car-card {
-    @apply relative overflow-hidden rounded-xl
-           transition-all duration-[var(--transition-normal)] ease-[var(--ease-default)]
-           bg-card border border-border
-           hover:border-primary/50
-           text-foreground mx-auto w-full
-           will-change-transform;
+    @apply relative overflow-hidden rounded-xl transition-all duration-300 bg-card border border-border hover:border-primary/50 text-foreground mx-auto w-full;
   }
   
   .car-card-selected {
     @apply border-primary shadow-lg shadow-primary/10;
   }
-
-  /* Model Viewer Component */
+  
   .model-viewer-container {
-    @apply relative aspect-[16/9] overflow-hidden
-           bg-gradient-to-b from-black/5 to-transparent
-           will-change-transform;
+    @apply relative aspect-[16/9] overflow-hidden bg-gradient-to-b from-black/5 to-transparent;
   }
   
   .model-viewer-loading {
-    @apply absolute inset-0 flex items-center justify-center
-           bg-card text-muted-foreground text-sm;
+    @apply absolute inset-0 flex items-center justify-center bg-card text-muted-foreground text-sm;
   }
 
-  /* Car Details Component */
   .car-details {
-    @apply space-y-4 p-4;
-
-    &-header {
-      @apply flex justify-between items-start;
-    }
-
-    &-title {
-      @apply text-lg font-semibold text-foreground leading-tight;
-    }
-
-    &-type {
-      @apply flex items-center gap-1.5 text-sm text-muted-foreground;
-    }
-
-    &-price {
-      @apply text-right;
-
-      &-amount {
-        @apply text-2xl font-bold text-foreground leading-none;
-      }
-
-      &-period {
-        @apply text-sm text-muted-foreground mt-1;
-      }
-    }
-
-    &-features {
-      @apply flex items-center gap-4 text-sm text-muted-foreground 
-             border-t border-border/50 pt-4;
-    }
+    @apply p-4 space-y-4;
   }
 
-  /* Bottom Sheet Component */
+  .car-header {
+    @apply flex justify-between items-start;
+  }
+
+  .car-title {
+    @apply text-lg font-semibold text-foreground leading-tight;
+  }
+
+  .car-type {
+    @apply flex items-center gap-1.5 text-sm text-muted-foreground;
+  }
+
+  .car-price {
+    @apply text-right;
+  }
+
+  .car-price-amount {
+    @apply text-2xl font-bold text-foreground leading-none;
+  }
+
+  .car-price-period {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  .car-features {
+    @apply flex items-center gap-4 text-sm text-muted-foreground border-t border-border/50 pt-4;
+  }
+
+  .car-feature {
+    @apply flex items-center gap-1.5;
+  }
+  
   .bottom-sheet {
-    --sheet-radius: var(--radius-lg);
-    
-    @apply fixed bottom-0 left-0 right-0 
-           bg-card border-t border-border
-           rounded-t-[var(--sheet-radius)] shadow-2xl
-           transform transition-all duration-[var(--transition-slow)] ease-[var(--ease-in-out)]
-           pb-4
-           will-change-transform;
-
-    &-header {
-      @apply p-4 border-b border-border cursor-pointer
-             hover:bg-muted/20 transition-colors duration-[var(--transition-fast)]
-             select-none;
-    }
-
-    &-filter-btn {
-      @apply px-4 py-2 rounded-full text-sm 
-             bg-muted hover:bg-muted/80 
-             text-muted-foreground
-             active:scale-[0.98]
-             border border-border/50
-             transition-all duration-[var(--transition-fast)];
-    }
-
-    &-list {
-      @apply overflow-y-auto overscroll-contain;
-      scroll-padding: 1rem;
-    }
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border rounded-t-[var(--radius)] shadow-2xl transform transition-all duration-300 ease-in-out pb-4;
   }
 
-  /* Touch-optimized Button Components */
+  .bottom-sheet-header {
+    @apply p-4 border-b border-border cursor-pointer hover:bg-muted/20 transition-colors duration-200 select-none;
+  }
+
+  .bottom-sheet-filter-btn {
+    @apply px-4 py-2 rounded-full text-sm bg-muted hover:bg-muted/80 text-muted-foreground transition-colors active:scale-[0.98] border border-border/50;
+  }
+
+  .bottom-sheet-list {
+    @apply overflow-y-auto overscroll-contain;
+  }
+
+  .bottom-sheet-item {
+    @apply p-4 border-b border-border hover:bg-muted/20 cursor-pointer transition-colors duration-200;
+  }
+
+  .bottom-sheet-item-detail {
+    @apply flex items-center gap-1.5 text-sm text-muted-foreground;
+  }
+
+  .bottom-sheet-distance {
+    @apply bg-muted px-3 py-1.5 rounded-full text-sm text-muted-foreground flex items-center gap-1.5;
+  }
+  
   .btn-primary {
-    @apply h-12 px-6 rounded-full bg-accent
-           text-accent-foreground font-medium
-           active:scale-[0.98]
-           disabled:opacity-50 disabled:pointer-events-none
-           shadow-lg shadow-accent/25
-           transition-all duration-[var(--transition-fast)]
-           will-change-transform;
+    @apply h-12 px-6 rounded-full bg-accent text-accent-foreground font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-accent/25;
+  }
+  
+  .scroll-container {
+    @apply overflow-auto overscroll-contain;
   }
 }
 
-/* Performance Optimizations */
-@layer utilities {
-  .gpu {
-    transform: translateZ(0);
-    backface-visibility: hidden;
-    perspective: 1000;
-    will-change: transform;
-  }
-
-  .touch-action-none {
-    touch-action: none;
-  }
-
-  .overscroll-contain {
-    overscroll-behavior: contain;
-  }
+.three-d-scene {
+  @apply touch-none select-none;
 }
 
-/* Global Optimizations */
+.three-d-scene-selected {
+  @apply cursor-grab active:cursor-grabbing;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 ::selection {
   @apply bg-accent/30 text-foreground;
-}
-
-* {
-  @apply font-smooth;
-}
-
-/* Reduced Motion */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
 }
