@@ -10,9 +10,15 @@ export interface Car {
   name: string;
   type: string;
   price: number;
-  image: string;      // Keep existing image field
+  image: string;
   modelUrl: string;
+  placeholderUrl: string; // Added this field
   available: boolean;
   features: CarFeatures;
-  placeholderUrl?: string; // Add optional placeholder for graceful fallback
 }
+
+// Additional type utilities
+export type CarId = number;
+
+export const CAR_TYPES = ['Electric', 'LPG', 'Hybrid'] as const;
+export type CarType = typeof CAR_TYPES[number];
