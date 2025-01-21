@@ -18,10 +18,12 @@
     "@react-three/fiber": "^8.15.12",
     "@react-three/postprocessing": "^2.15.1",
     "@reduxjs/toolkit": "^1.9.5",
+    "@tanstack/react-virtual": "^3.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.1",
     "framer-motion": "^11.0.8",
+    "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.344.0",
     "next": "14.1.0",
     "postprocessing": "^6.34.1",
@@ -35,6 +37,7 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/lodash.debounce": "^4.0.9",
     "@types/node": "^20.11.24",
     "@types/react": "^18.2.61",
     "@types/react-dom": "^18.2.19",
