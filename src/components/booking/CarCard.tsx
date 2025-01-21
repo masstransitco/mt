@@ -3,15 +3,19 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Car as CarType } from '@/types/booking';
 import { Battery, Gauge } from 'lucide-react';
-import Car3DViewer from './Car3DViewer';
+import dynamic from 'next/dynamic';
+
+// Dynamically import Car3DViewer with no SSR
+const Car3DViewer = dynamic(() => import('./Car3DViewer'), { ssr: false });
 
 interface CarCardProps {
   car: CarType;
   selected: boolean;
   onClick: () => void;
+  isVisible?: boolean;
 }
 
-export default function CarCard({ car, selected, onClick }: CarCardProps) {
+export default function CarCard({ car, selected, onClick, isVisible = true }: CarCardProps) {
   return (
     <motion.div
       whileHover={{ y: -5 }}
@@ -31,12 +35,14 @@ export default function CarCard({ car, selected, onClick }: CarCardProps) {
         relative w-full transition-all duration-300
         ${selected ? 'aspect-[16/9]' : 'aspect-[16/4]'}
       `}>
-        <Car3DViewer 
-          modelUrl={car.modelUrl} 
-          selected={selected}
-          height="100%"
-          width="100%"
-        />
+        {isVisible && (
+          <Car3DViewer 
+            modelUrl={car.modelUrl} 
+            selected={selected}
+            height="100%"
+            width="100%"
+          />
+        )}
       </div>
       
       <div className="p-6 space-y-4">
