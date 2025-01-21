@@ -5,7 +5,6 @@ import React, {
   useRef,
   useEffect,
   useMemo,
-  useState,
 } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import {
@@ -24,8 +23,8 @@ import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 
-/* -------------- Interfaces -------------- */
-export interface Car3DViewerProps {
+// Define interfaces at the top of the file
+interface Car3DViewerProps {
   modelUrl: string;
   width?: string | number;
   height?: string | number;
