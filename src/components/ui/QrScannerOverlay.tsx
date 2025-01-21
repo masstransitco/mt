@@ -3,7 +3,7 @@
 
 import React, { useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import QrReader from 'react-qr-reader';
+import { QrScanner } from '@yudiel/react-qr-scanner';
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
@@ -14,22 +14,18 @@ export default function QrScannerOverlay({
   isOpen,
   onClose
 }: QrScannerOverlayProps) {
-  // Handle successful QR code scan
-  const handleScan = useCallback(
-    (data: string | null) => {
-      if (data) {
-        console.log('QR Code Scanned:', data);
-        // Here, you can dispatch an action, navigate, or do anything with the scanned data
-        onClose();
-      }
+  const handleDecode = useCallback(
+    (result: string) => {
+      console.log('QR Code Scanned:', result);
+      // do something with the result
+      onClose();
     },
     [onClose]
   );
 
-  // Handle errors (e.g., camera permission issues)
-  const handleError = useCallback((err: unknown) => {
-    console.error('QR Scanner Error:', err);
-    // Optionally, show a user-friendly error message
+  const handleError = useCallback((error: Error) => {
+    console.error('QR Scanner Error:', error);
+    // Optionally handle or display a user-friendly error
   }, []);
 
   return (
@@ -51,7 +47,7 @@ export default function QrScannerOverlay({
               ✕
             </button>
 
-            {/* Prompt + Camera Feed */}
+            {/* Scanner + Prompt */}
             <div className="p-4 text-center text-white space-y-3 bg-black bg-opacity-50 rounded-md">
               <h2 className="text-xl font-bold">Scan QR Code</h2>
               <p className="text-sm">
@@ -59,11 +55,12 @@ export default function QrScannerOverlay({
               </p>
 
               <div className="mt-3 overflow-hidden rounded-md">
-                <QrReader
-                  delay={300}
+                <QrScanner
+                  onDecode={handleDecode}
                   onError={handleError}
-                  onScan={handleScan}
-                  style={{ width: '100%' }}
+                  // Optional props, e.g.:
+                  // containerStyle={{ width: '100%' }}
+                  // videoStyle={{ width: '100%', borderRadius: '8px' }}
                 />
               </div>
             </div>
