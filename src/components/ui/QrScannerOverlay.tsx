@@ -61,10 +61,6 @@ export default function QrScannerOverlay({
                 <Scanner
                   onScan={handleScan}
                   onError={handleError}
-                  constraints={{
-                    facingMode: 'environment'
-                  }}
-                  captureSize={1080}
                 />
               </div>
             </div>
