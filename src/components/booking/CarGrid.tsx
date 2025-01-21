@@ -5,8 +5,8 @@ import { selectCar, selectViewState } from '@/store/userSlice';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter } from 'lucide-react';
 import CarCard from './CarCard';
-import { Car as CarType } from '@/types/booking';
-import { SAMPLE_CARS } from '@/constants/cars'; // Move sample cars to constants
+import { Car as CarType } from '@/types/cars';
+import { SAMPLE_CARS } from '@/constants/cars';
 
 interface CarGridProps {
   className?: string;
@@ -19,10 +19,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   const [filterType, setFilterType] = React.useState('all');
   const [showFilters, setShowFilters] = React.useState(false);
 
-  // Only compute cars if we're in the car view
   const sortedAndFilteredCars = React.useMemo(() => {
-    if (viewState !== 'showCar') return [];
-    
     const filtered = filterType === 'all' 
       ? SAMPLE_CARS 
       : SAMPLE_CARS.filter(car => 
@@ -34,12 +31,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
       if (b.id === selectedCarId) return 1;
       return 0;
     });
-  }, [filterType, selectedCarId, viewState]);
-
-  // If we're not showing cars, return null
-  if (viewState !== 'showCar') {
-    return null;
-  }
+  }, [filterType, selectedCarId]);
 
   const handleSelectCar = (car: CarType) => {
     dispatch(selectCar(car.id));
@@ -53,7 +45,13 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   ];
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div 
+      className={`space-y-4 ${className} transition-all duration-300`}
+      style={{
+        display: viewState === 'showCar' ? 'block' : 'none',
+        visibility: viewState === 'showCar' ? 'visible' : 'hidden'
+      }}
+    >
       {/* Header with filters */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
@@ -124,7 +122,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                 car={car}
                 selected={selectedCarId === car.id}
                 onClick={() => handleSelectCar(car)}
-                isVisible={viewState === 'showCar'} // Only render 3D viewer when in car view
+                isVisible={viewState === 'showCar'}
               />
             </motion.div>
           ))}
@@ -152,7 +150,6 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   );
 }
 
-// Create a separate file for constants
 export const preloadAllCarModels = () => {
   SAMPLE_CARS.forEach(car => {
     import('./Car3DViewer').then(module => {
