@@ -8,7 +8,8 @@ export const store = configureStore({
   reducer: {
     chat: chatReducer,
     user: userReducer,
-    booking: bookingReducer
+    booking: bookingReducer,
+    stations: stationsReducer
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
