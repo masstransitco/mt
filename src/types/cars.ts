@@ -1,4 +1,6 @@
 // src/types/cars.ts
+
+// Core interfaces for car data
 export interface CarFeatures {
   range: number;
   charging: string;
@@ -12,13 +14,12 @@ export interface Car {
   price: number;
   image: string;
   modelUrl: string;
-  placeholderUrl: string; // Added this field
   available: boolean;
   features: CarFeatures;
 }
 
-// Additional type utilities
-export type CarId = number;
-
-export const CAR_TYPES = ['Electric', 'LPG', 'Hybrid'] as const;
-export type CarType = typeof CAR_TYPES[number];
+// Note: We remove the following as they're now defined in constants:
+// - CAR_TYPES constant
+// - CarType type definition
+// - CarId type definition
+// These should be imported from '@/constants/cars' when needed
