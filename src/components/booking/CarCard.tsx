@@ -85,6 +85,7 @@ export default function CarCard({
               >
                 <Car3DViewer 
                   modelUrl={car.modelUrl}
+                  imageUrl={car.image}
                   selected={selected}
                   height="100%"
                   width="100%"
