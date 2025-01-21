@@ -1,3 +1,4 @@
+// src/types/cars.ts
 export interface CarFeatures {
   range: number;
   charging: string;
@@ -9,8 +10,9 @@ export interface Car {
   name: string;
   type: string;
   price: number;
-  image: string;
+  image: string;      // Keep existing image field
   modelUrl: string;
   available: boolean;
   features: CarFeatures;
+  placeholderUrl?: string; // Add optional placeholder for graceful fallback
 }
