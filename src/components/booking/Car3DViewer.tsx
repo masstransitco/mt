@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useMemo,
 } from 'react';
+import Image from 'next/image';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import {
   OrbitControls,
@@ -24,13 +25,13 @@ import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 import LoadingOverlay from '@/components/ui/loading-overlay';
 
-
 interface Car3DViewerProps {
   modelUrl: string;
+  imageUrl: string;  // Add imageUrl prop for the placeholder
   width?: string | number;
   height?: string | number;
   selected?: boolean;
-  isVisible?: boolean; // Add visibility prop
+  isVisible?: boolean;
 }
 
 /* -------------- Loading Overlay -------------- */
@@ -59,7 +60,6 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   useEffect(() => {
     if (!scene) return;
 
-    // Rotate the entire scene so car faces a consistent direction
     scene.rotation.y = Math.PI / 2;
 
     scene.traverse((child: THREE.Object3D) => {
@@ -121,7 +121,7 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
   );
 }
 
-/* -------------- Scene Lighting -------------- */
+/* -------------- Scene Components -------------- */
 function SceneLighting() {
   return (
     <>
@@ -138,7 +138,6 @@ function SceneLighting() {
   );
 }
 
-/* -------------- Post Processing -------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
     <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
@@ -164,6 +163,7 @@ const modelsCache = new Map<string, any>();
 
 export default function Car3DViewer({
   modelUrl,
+  imageUrl,
   width = '100%',
   height = '300px',
   selected = false,
@@ -182,13 +182,13 @@ export default function Car3DViewer({
     []
   );
 
-  // Preload models and cache them
+  // Only preload model when selected
   useEffect(() => {
-    if (!modelsCache.has(modelUrl)) {
+    if (selected && !modelsCache.has(modelUrl)) {
       useGLTF.preload(modelUrl);
       modelsCache.set(modelUrl, true);
     }
-  }, [modelUrl]);
+  }, [modelUrl, selected]);
 
   const containerStyles = useMemo<React.CSSProperties>(
     () => ({
@@ -197,15 +197,33 @@ export default function Car3DViewer({
       overflow: selected ? 'hidden' : 'auto',
       pointerEvents: 'auto',
       display: isVisible ? 'block' : 'none',
+      position: 'relative',
     }),
     [width, height, selected, isVisible]
   );
 
-  // Don't render canvas if not visible
+  // Don't render anything if not visible
   if (!isVisible) {
-    return <div style={containerStyles} />;
+    return null;
   }
 
+  // Show image placeholder when not selected
+  if (!selected) {
+    return (
+      <div style={containerStyles}>
+        <Image
+          src={imageUrl}
+          alt="Car preview"
+          fill
+          className="object-cover rounded-lg"
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          priority={!selected} // Prioritize loading of placeholder images
+        />
+      </div>
+    );
+  }
+
+  // Show 3D viewer when selected
   return (
     <div style={containerStyles}>
       <Canvas
@@ -214,19 +232,19 @@ export default function Car3DViewer({
         gl={glSettings}
         orthographic={false}
         camera={{ position: [0, 2, 5], fov: 45 }}
-        dpr={[1, selected ? 1.5 : 1]}
+        dpr={[1, 1.5]}
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <BakeShadows />
         <SceneLighting />
-        <PostProcessing interactive={selected} />
+        <PostProcessing interactive={true} />
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
 
         <Suspense fallback={<LoadingScreen />}>
-          <CameraSetup interactive={selected} />
-          <CarModel url={modelUrl} interactive={selected} />
+          <CameraSetup interactive={true} />
+          <CarModel url={modelUrl} interactive={true} />
           <Preload all />
         </Suspense>
       </Canvas>
