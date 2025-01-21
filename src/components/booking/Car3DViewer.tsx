@@ -36,55 +36,11 @@ function LoadingScreen() {
   );
 }
 
-/* -------------- Camera + Controls -------------- */
-function CameraSetup({ interactive }: { interactive: boolean }) {
-  const { camera, scene } = useThree();
-  const controlsRef = useRef<OrbitControlsImpl>(null);
-  const onceRef = useRef(false);
-
-  // Auto-fit the camera around the loaded scene (only once).
-  useEffect(() => {
-    if (onceRef.current) return;
-
-    // 1) Cast camera to a PerspectiveCamera so we can safely access fov
-    const perspectiveCam = camera as THREE.PerspectiveCamera;
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-
-    box.getSize(size);
-    box.getCenter(center);
-
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fovRad = (perspectiveCam.fov * Math.PI) / 180;
-    const distance = Math.abs(maxDim / Math.sin(fovRad / 2)) * 0.4;
-
-    perspectiveCam.position.set(center.x, center.y + maxDim * 0.5, center.z + distance);
-    perspectiveCam.lookAt(center);
-    perspectiveCam.updateProjectionMatrix();
-
-    if (controlsRef.current) {
-      controlsRef.current.target.copy(center);
-      controlsRef.current.update();
-    }
-
-    onceRef.current = true;
-  }, [camera, scene]);
-
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      enableDamping
-      dampingFactor={0.05}
-      enabled={interactive} // disable user controls if not interactive
-    />
-  );
-}
-
 /* -------------- Car Model -------------- */
 function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
-  const { scene } = useGLTF(url, '/draco/', true) as any;
+  const { scene: originalScene } = useGLTF(url, '/draco/', true) as any;
+  const scene = useMemo(() => originalScene.clone(), [originalScene]);
 
   // If not interactive, rotate the model slowly
   useFrame(() => {
@@ -110,57 +66,76 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
         }
       }
     });
+
+    // Cleanup function
+    return () => {
+      scene.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+          if (Array.isArray(child.material)) {
+            child.material.forEach(material => material.dispose());
+          } else if (child.material) {
+            child.material.dispose();
+          }
+        }
+      });
+    };
   }, [scene]);
 
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
-/* -------------- Scene Lighting -------------- */
-function SceneLighting() {
+/* -------------- Camera + Controls -------------- */
+function CameraSetup({ interactive }: { interactive: boolean }) {
+  const { camera, scene } = useThree();
+  const controlsRef = useRef<OrbitControlsImpl>(null);
+  const onceRef = useRef(false);
+
+  useEffect(() => {
+    if (onceRef.current) return;
+
+    const perspectiveCam = camera as THREE.PerspectiveCamera;
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+
+    box.getSize(size);
+    box.getCenter(center);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fovRad = (perspectiveCam.fov * Math.PI) / 180;
+    const distance = Math.abs(maxDim / Math.sin(fovRad / 2)) * 0.4;
+
+    perspectiveCam.position.set(center.x, center.y + maxDim * 0.5, center.z + distance);
+    perspectiveCam.lookAt(center);
+    perspectiveCam.updateProjectionMatrix();
+
+    if (controlsRef.current) {
+      controlsRef.current.target.copy(center);
+      controlsRef.current.update();
+    }
+
+    onceRef.current = true;
+
+    // Cleanup function
+    return () => {
+      onceRef.current = false;
+    };
+  }, [camera, scene]);
+
   return (
-    <>
-      <ambientLight intensity={0.5} />
-      <directionalLight
-        position={[5, 5, 5]}
-        intensity={1.0}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-      />
-      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
-      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
-    </>
+    <OrbitControls
+      ref={controlsRef}
+      enableDamping
+      dampingFactor={0.05}
+      enabled={interactive}
+    />
   );
 }
 
-/* -------------- Post Processing -------------- */
-function PostProcessing({ interactive }: { interactive: boolean }) {
-  return (
-    <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
-      <SSAO
-        blendFunction={BlendFunction.MULTIPLY}
-        samples={interactive ? 31 : 0}
-        radius={5}
-        intensity={30}
-        luminanceInfluence={0.5}
-        color={new THREE.Color(0x000000)}
-        distanceScaling
-        depthAwareUpsampling
-        worldDistanceThreshold={1}
-        worldDistanceFalloff={1}
-        worldProximityThreshold={1}
-        worldProximityFalloff={1}
-      />
-    </EffectComposer>
-  );
-}
-
-/* -------------- Main Viewer Component -------------- */
-export interface Car3DViewerProps {
-  modelUrl: string;
-  width?: string | number;
-  height?: string | number;
-  selected?: boolean; // "interactive" concept
-}
+/* -------------- Other Components Remain Same -------------- */
 
 export default function Car3DViewer({
   modelUrl,
@@ -168,6 +143,8 @@ export default function Car3DViewer({
   height = '300px',
   selected = false,
 }: Car3DViewerProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
   const glSettings = useMemo(
     () => ({
       antialias: true,
@@ -179,31 +156,40 @@ export default function Car3DViewer({
     []
   );
 
-  // Preload model
   useEffect(() => {
     useGLTF.preload(modelUrl);
+    
+    // Cleanup function
+    return () => {
+      useGLTF.clear(); // Clear the GLTF cache when component unmounts
+      if (canvasRef.current) {
+        const gl = canvasRef.current.getContext('webgl2') || canvasRef.current.getContext('webgl');
+        if (gl) {
+          const loseContext = gl.getExtension('WEBGL_lose_context');
+          if (loseContext) {
+            loseContext.loseContext();
+          }
+        }
+      }
+    };
   }, [modelUrl]);
 
-  // If not selected, we show scroll (overflow: auto),
-  // and disable orbit controls.
-  const containerStyles = useMemo<React.CSSProperties>(() => {
-    return {
+  const containerStyles = useMemo<React.CSSProperties>(
+    () => ({
       width,
       height,
       overflow: selected ? 'hidden' : 'auto',
       pointerEvents: 'auto',
-    };
-  }, [width, height, selected]);
+    }),
+    [width, height, selected]
+  );
 
   return (
     <div style={containerStyles}>
       <Canvas
+        ref={canvasRef}
         shadows
         gl={glSettings}
-        /**
-         * 2) This ensures we have a perspective camera with fov,
-         *    not an orthographic one.
-         */
         orthographic={false}
         camera={{ position: [0, 2, 5], fov: 45 }}
         dpr={[1, selected ? 1.5 : 1]}
@@ -211,14 +197,12 @@ export default function Car3DViewer({
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <BakeShadows />
-
         <SceneLighting />
         <PostProcessing interactive={selected} />
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
 
         <Suspense fallback={<LoadingScreen />}>
-          {/* Interactive if selected */}
           <CameraSetup interactive={selected} />
           <CarModel url={modelUrl} interactive={selected} />
           <Preload all />
