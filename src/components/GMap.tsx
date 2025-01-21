@@ -27,6 +27,7 @@ import type {
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ("geometry")[] = ['geometry'];
+
 const MAP_OPTIONS = {
   mapId: '94527c02bbb6243',
   gestureHandling: 'greedy' as const,
@@ -46,7 +47,23 @@ const MAP_OPTIONS = {
   },
 } as const;
 
-// Create map instance cache
+const CONTAINER_STYLE = {
+  width: '100%',
+  height: 'calc(100vh - 64px)',
+} as const;
+
+const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 } as const;
+
+const CACHE_DURATION = 3600000; // 1 hour in milliseconds
+
+// Geolocation options
+const GEOLOCATION_OPTIONS = {
+  enableHighAccuracy: true,
+  timeout: 10000,
+  maximumAge: 30000
+} as const;
+
+// Map instance cache (WeakMap won't hold references to garbage collected maps)
 const mapInstanceCache = new WeakMap();
 
 /* --------------------------- Custom Hooks --------------------------- */
