@@ -1,12 +1,20 @@
+
+// src/components/booking/CarCard.tsx
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Car as CarType } from '@/types/booking';
 import { Battery, Gauge } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 
 // Dynamically import Car3DViewer with no SSR
-const Car3DViewer = dynamic(() => import('./Car3DViewer'), { ssr: false });
+const Car3DViewer = dynamic(() => import('./Car3DViewer'), { 
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full bg-card animate-pulse rounded-t-2xl" />
+  ),
+});
 
 interface CarCardProps {
   car: CarType;
@@ -15,7 +23,21 @@ interface CarCardProps {
   isVisible?: boolean;
 }
 
-export default function CarCard({ car, selected, onClick, isVisible = true }: CarCardProps) {
+export default function CarCard({ 
+  car, 
+  selected, 
+  onClick, 
+  isVisible = true 
+}: CarCardProps) {
+  const [shouldLoad3D, setShouldLoad3D] = useState(false);
+  
+  // Only load 3D viewer when car is selected
+  useEffect(() => {
+    if (selected && !shouldLoad3D) {
+      setShouldLoad3D(true);
+    }
+  }, [selected]);
+
   return (
     <motion.div
       whileHover={{ y: -5 }}
@@ -30,21 +52,51 @@ export default function CarCard({ car, selected, onClick, isVisible = true }: Ca
       `}
       onClick={onClick}
     >
-      {/* Use aspect-ratio to maintain consistent proportions */}
-      <div className={`
-        relative w-full transition-all duration-300
-        ${selected ? 'aspect-[16/9]' : 'aspect-[16/4]'}
-      `}>
+      {/* Car visualization container */}
+      <div 
+        className={`
+          relative w-full transition-all duration-300
+          ${selected ? 'aspect-[16/9]' : 'aspect-[16/4]'}
+        `}
+      >
         {isVisible && (
-          <Car3DViewer 
-            modelUrl={car.modelUrl} 
-            selected={selected}
-            height="100%"
-            width="100%"
-          />
+          <>
+            {/* Show placeholder image when not selected or 3D not loaded */}
+            {(!selected || !shouldLoad3D) && (
+              <div className="absolute inset-0">
+                <Image
+                  src={car.placeholderUrl || car.image}
+                  alt={car.name}
+                  fill
+                  className="object-cover rounded-t-2xl"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  priority={!selected}
+                />
+              </div>
+            )}
+            
+            {/* Load 3D viewer only when selected */}
+            {shouldLoad3D && (
+              <div 
+                className={`
+                  absolute inset-0 transition-opacity duration-300
+                  ${selected ? 'opacity-100' : 'opacity-0'}
+                `}
+              >
+                <Car3DViewer 
+                  modelUrl={car.modelUrl}
+                  selected={selected}
+                  height="100%"
+                  width="100%"
+                  isVisible={selected}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
       
+      {/* Car information */}
       <div className="p-6 space-y-4">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
