@@ -18,9 +18,9 @@ import useDebounce from '@/hooks/useDebounce';
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ("geometry")[] = ['geometry'];
 
-const MAP_OPTIONS = {
+const MAP_OPTIONS: google.maps.MapOptions = {
   mapId: '94527c02bbb6243',
-  gestureHandling: 'greedy' as const,
+  gestureHandling: 'greedy',
   disableDefaultUI: true,
   backgroundColor: '#111111',
   maxZoom: 18,
@@ -35,7 +35,7 @@ const MAP_OPTIONS = {
     },
     strictBounds: true,
   },
-} as const;
+};
 
 const CONTAINER_STYLE = {
   width: '100%',
