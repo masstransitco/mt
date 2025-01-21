@@ -26,6 +26,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           car.type.toLowerCase() === filterType.toLowerCase()
         );
     
+    // Bring the selected car to the front (optional)
     return [...filtered].sort((a, b) => {
       if (a.id === selectedCarId) return -1;
       if (b.id === selectedCarId) return 1;
@@ -64,7 +65,11 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                      bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
           >
             <Filter size={16} />
-            <span>{filterType === 'all' ? 'Filters' : filterOptions.find(opt => opt.value === filterType)?.label}</span>
+            <span>
+              {filterType === 'all'
+                ? 'Filters'
+                : filterOptions.find(opt => opt.value === filterType)?.label}
+            </span>
           </button>
         </div>
 
@@ -74,7 +79,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
               <div className="grid grid-cols-2 gap-2 p-4 rounded-2xl bg-card">
@@ -86,9 +91,11 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                       setShowFilters(false);
                     }}
                     className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors
-                              ${filterType === option.value 
-                                ? 'bg-accent text-white' 
-                                : 'bg-muted hover:bg-muted/80 text-foreground'}`}
+                              ${
+                                filterType === option.value 
+                                  ? 'bg-accent text-white' 
+                                  : 'bg-muted hover:bg-muted/80 text-foreground'
+                              }`}
                   >
                     {option.label}
                   </button>
@@ -105,18 +112,10 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           {sortedAndFilteredCars.map((car) => (
             <motion.div
               key={car.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ 
-                duration: 0.2,
-                layout: { 
-                  duration: 0.3, 
-                  type: "spring", 
-                  stiffness: 200 
-                }
-              }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
             >
               <CarCard
                 car={car}
@@ -132,6 +131,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
             className="py-12 text-center rounded-2xl bg-card"
           >
             <p className="text-muted-foreground">
