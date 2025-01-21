@@ -68,7 +68,7 @@ export default function CarCard({
                   src={car.image}
                   alt={car.name}
                   fill
-                  className="object-cover rounded-t-2xl"
+                  className="object-contain rounded-t-2xl"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   priority={!selected}
                 />
