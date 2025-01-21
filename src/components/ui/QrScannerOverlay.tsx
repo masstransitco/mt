@@ -13,7 +13,7 @@ export default function QrScannerOverlay({
   onClose,
   onScan
 }: QrScannerOverlayProps) {
-  const handleDecode = useCallback((text: string | null) => {
+  const handleScan = useCallback((text: string | null) => {
     if (text) {
       console.log('QR Code Scanned:', text);
       if (onScan) {
@@ -58,7 +58,7 @@ export default function QrScannerOverlay({
               
               <div className="mt-3 overflow-hidden rounded-lg">
                 <Scanner
-                  onDecode={handleDecode}
+                  onScan={handleScan}
                   onError={handleError}
                   options={{
                     constraints: {
