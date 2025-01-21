@@ -57,8 +57,14 @@ interface GMapProps {
   googleApiKey: string;
 }
 
+interface StationListItemProps {
+  data: StationFeature[];
+  index: number;
+  style: React.CSSProperties;
+}
+
 /* ----------------------- Station List Item ------------------------ */
-const StationListItem = memo(({ data, index, style }: any) => {
+const StationListItem = memo(({ data, index, style }: StationListItemProps) => {
   const station = data[index];
   const dispatch = useAppDispatch();
 
@@ -181,7 +187,7 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {stations.map((station) => {
+          {stations.map((station: StationFeature) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
@@ -262,7 +268,6 @@ class MapErrorBoundary extends React.Component<
   }
 }
 
-/* --------------- Export with Error Boundary --------------------- */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
