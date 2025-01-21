@@ -1,29 +1,19 @@
+'use client';
+
 import React, {
   useState,
   useEffect,
   useCallback,
   useRef,
-  useMemo,
-  useTransition,
-  Suspense,
-  startTransition
+  PropsWithChildren,
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Zap, Loader2 } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { FixedSizeList } from 'react-window';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import Sheet from '@/components/ui/sheet';
 import useDebounce from '@/hooks/useDebounce';
-import type {
-  GMapProps,
-  StationFeature,
-  StationListItemProps,
-  MapOptions,
-  MapBounds,
-  MapErrorBoundaryState
-} from '@/types/map';
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ("geometry")[] = ['geometry'];
@@ -56,33 +46,156 @@ const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 } as const;
 
 const CACHE_DURATION = 3600000; // 1 hour in milliseconds
 
-// Geolocation options
-const GEOLOCATION_OPTIONS = {
-  enableHighAccuracy: true,
-  timeout: 10000,
-  maximumAge: 30000
-} as const;
+/* --------------------------- Interfaces --------------------------- */
+interface GMapProps {
+  googleApiKey: string;
+}
 
-// Map instance cache (WeakMap won't hold references to garbage collected maps)
-const mapInstanceCache = new WeakMap();
+interface StationFeature {
+  type: 'Feature';
+  id: number;
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number];
+  };
+  properties: {
+    Place: string;
+    Address: string;
+    maxPower: number;
+    totalSpots: number;
+    availableSpots: number;
+    waitTime?: number;
+  };
+  distance?: number;
+}
 
-/* --------------------------- Custom Hooks --------------------------- */
-const useStationsData = () => {
+interface MapErrorBoundaryState {
+  hasError: boolean;
+}
+
+/* ---------------------- Error Boundary Class ---------------------- */
+class MapErrorBoundary extends React.Component<
+  PropsWithChildren,
+  MapErrorBoundaryState
+> {
+  constructor(props: PropsWithChildren) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('Map Error:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="text-destructive">
+          Something went wrong loading the map. Please try again.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* ----------------------- Station List Item ------------------------ */
+const StationListItem = React.memo(({ data, index, style }: any) => {
+  const station = data[index];
+  const dispatch = useDispatch();
+
+  const handleClick = useCallback(() => {
+    dispatch(selectStation(station.id));
+  }, [dispatch, station.id]);
+
+  return (
+    <div
+      style={style}
+      className="px-4 py-3 hover:bg-muted/20 cursor-pointer"
+      onClick={handleClick}
+    >
+      <div className="flex justify-between items-start">
+        <div className="space-y-2">
+          <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Zap className="w-4 h-4" />
+            <span>{station.properties.maxPower} kW max</span>
+            <span className="px-1">·</span>
+            <span>{station.properties.availableSpots} Available</span>
+          </div>
+        </div>
+        <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
+          {station.distance?.toFixed(1)} km
+        </div>
+      </div>
+    </div>
+  );
+});
+
+StationListItem.displayName = 'StationListItem';
+
+/* -------------------------- Main GMap ---------------------------- */
+function GMap({ googleApiKey }: GMapProps) {
+  const dispatch = useDispatch();
+  const viewState = useSelector(selectViewState);
+  const mapRef = useRef<google.maps.Map | null>(null);
+
   const [stations, setStations] = useState<StationFeature[]>([]);
+  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+  const [isSheetMinimized, setIsSheetMinimized] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Load the Google Maps API with static libraries array
+  const { isLoaded, loadError } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: googleApiKey,
+    libraries: LIBRARIES,
+  });
+
+  /* ------------------- Distance Calculation ---------------------- */
+  const calculateDistance = useCallback(
+    (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      if (!google?.maps?.geometry?.spherical) return 0;
+      const from = new google.maps.LatLng(lat1, lon1);
+      const to = new google.maps.LatLng(lat2, lon2);
+      return google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000;
+    },
+    []
+  );
+
+  /* ------------------ Get User Location ------------------------- */
+  const getUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      setIsLoadingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setIsLoadingLocation(false);
+      },
+      (err) => {
+        setError('Failed to get your location');
+        console.error('Geolocation error:', err);
+        setIsLoadingLocation(false);
+      },
+      { timeout: 10000, maximumAge: 60000 }
+    );
+  }, []);
+
+  /* ------------------ Fetch Stations Data ----------------------- */
   const fetchStations = useCallback(async () => {
     try {
-      // Cancel previous request if it exists
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      // Create new abort controller
-      abortControllerRef.current = new AbortController();
-
-      // Check cache first
       const cached = localStorage.getItem('stations');
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
@@ -92,196 +205,80 @@ const useStationsData = () => {
         }
       }
 
-      const res = await fetch('/stations.geojson', {
-        signal: abortControllerRef.current.signal
-      });
-      
+      const res = await fetch('/stations.geojson');
       if (!res.ok) throw new Error('Failed to fetch stations');
-      
       const data = await res.json();
       if (data.type === 'FeatureCollection') {
-        startTransition(() => {
-          setStations(data.features);
-          localStorage.setItem(
-            'stations',
-            JSON.stringify({
-              data: data.features,
-              timestamp: Date.now(),
-            })
-          );
-        });
+        setStations(data.features);
+        localStorage.setItem(
+          'stations',
+          JSON.stringify({
+            data: data.features,
+            timestamp: Date.now(),
+          })
+        );
       }
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        return; // Ignore abort errors
-      }
       setError('Failed to load stations');
       console.error('Error fetching stations:', err);
     }
   }, []);
 
+  /* -------------- On Mount: Fetch & Get Location --------------- */
   useEffect(() => {
     fetchStations();
-    
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [fetchStations]);
+    getUserLocation();
+  }, [fetchStations, getUserLocation]);
 
-  return { stations, error, refetch: fetchStations };
-};
-
-const useGeolocation = () => {
-  const [location, setLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const watchIdRef = useRef<number | null>(null);
-
-  const getLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      setError('Geolocation is not supported');
-      setIsLoading(false);
-      return;
-    }
-
-    // Watch position instead of getting it once
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setIsLoading(false);
-      },
-      (err) => {
-        setError('Failed to get location');
-        console.error('Geolocation error:', err);
-        setIsLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 30000
-      }
-    );
-  }, []);
-
+  /* -------- Recalculate distance once we have location --------- */
   useEffect(() => {
-    getLocation();
-    
-    return () => {
-      if (watchIdRef.current) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
-  }, [getLocation]);
+    if (userLocation && stations.length > 0) {
+      const stationsWithDistance = stations
+        .map((station) => ({
+          ...station,
+          distance: calculateDistance(
+            userLocation.lat,
+            userLocation.lng,
+            station.geometry.coordinates[1],
+            station.geometry.coordinates[0]
+          ),
+        }))
+        .sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
-  return { location, error, isLoading };
-};
+      setStations(stationsWithDistance);
+    }
+  }, [userLocation, stations, calculateDistance]);
 
-/* -------------------------- Optimized Markers ---------------------------- */
-const StationMarker = React.memo(({ 
-  station,
-  onClick 
-}: { 
-  station: StationFeature;
-  onClick: (station: StationFeature) => void;
-}) => {
-  const [lng, lat] = station.geometry.coordinates;
-  
-  return (
-    <Marker
-      position={{ lat, lng }}
-      onClick={() => onClick(station)}
-      icon={{
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 8,
-        fillColor: '#FF4136',
-        fillOpacity: 1,
-        strokeWeight: 2,
-        strokeColor: '#FFFFFF',
-      }}
-      optimized={true}
-    />
-  );
-});
-
-StationMarker.displayName = 'StationMarker';
-
-/* -------------------------- Main GMap ---------------------------- */
-function GMap({ googleApiKey }: GMapProps) {
-  const dispatch = useDispatch();
-  const viewState = useSelector(selectViewState);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const [isPending, startTransition] = useTransition();
-  
-  const [isSheetMinimized, setIsSheetMinimized] = useState(false);
-  const { stations, error: stationsError, refetch } = useStationsData();
-  const { location: userLocation, error: locationError, isLoading: isLoadingLocation } = useGeolocation();
-  
-  // Debounce map bounds changes
-  const [mapBounds, setMapBounds] = useState<google.maps.LatLngBounds | null>(null);
-  const debouncedBounds = useDebounce(mapBounds, 500);
-
-  // Load the Google Maps API with static libraries array
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: googleApiKey,
-    libraries: LIBRARIES,
-  });
-
-  // Memoize the visible stations based on map bounds
-  const visibleStations = useMemo(() => {
-    if (!debouncedBounds || !stations.length) return stations;
-    
-    return stations.filter(station => {
-      const [lng, lat] = station.geometry.coordinates;
-      return debouncedBounds.contains({ lat, lng });
-    });
-  }, [stations, debouncedBounds]);
-
-  // Optimize marker click handler
+  /* ------------------- Marker Click Handler --------------------- */
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
-      startTransition(() => {
-        dispatch(selectStation(station.id));
-        setIsSheetMinimized(false);
-      });
+      dispatch(selectStation(station.id));
+      setIsSheetMinimized(false);
     },
     [dispatch]
   );
 
-  // Map load handler
-  const onMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-    mapInstanceCache.set(map, true);
+  /* ------------------ Sheet State Toggle ------------------------ */
+  const toggleSheet = useCallback(() => {
+    setIsSheetMinimized((prev) => !prev);
   }, []);
 
-  // Handle map bounds changes
-  const onBoundsChanged = useCallback(() => {
-    if (mapRef.current) {
-      const bounds = mapRef.current.getBounds();
-      if (bounds) {
-        setMapBounds(bounds);
-      }
-    }
-  }, []);
-
-  // Error handling
-  const error = locationError || stationsError || loadError;
+  /* ------------------ Early Returns: Errors --------------------- */
   if (error) {
     return <div className="text-destructive">{error}</div>;
   }
 
-  if (!isLoaded || !google?.maps) {
+  if (loadError) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin" />
-        <span className="ml-2">Loading map...</span>
+      <div className="text-destructive">
+        Error loading Google Maps: {loadError.message}
       </div>
     );
+  }
+
+  /* ------------------ Early Return: Not Loaded ------------------ */
+  if (!isLoaded || !google?.maps) {
+    return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
   return (
@@ -292,8 +289,9 @@ function GMap({ googleApiKey }: GMapProps) {
           center={userLocation || DEFAULT_CENTER}
           zoom={14}
           options={MAP_OPTIONS}
-          onLoad={onMapLoad}
-          onBoundsChanged={onBoundsChanged}
+          onLoad={(map) => {
+            mapRef.current = map;
+          }}
         >
           {/* User Location Marker */}
           {userLocation && (
@@ -307,52 +305,62 @@ function GMap({ googleApiKey }: GMapProps) {
                 strokeWeight: 2,
                 strokeColor: '#FFFFFF',
               }}
+              clickable={false}
             />
           )}
 
           {/* Station Markers */}
-          <Suspense fallback={null}>
-            {visibleStations.map((station) => (
-              <StationMarker
+          {stations.map((station) => {
+            const [lng, lat] = station.geometry.coordinates;
+            return (
+              <Marker
                 key={station.id}
-                station={station}
-                onClick={handleMarkerClick}
+                position={{ lat, lng }}
+                onClick={() => handleMarkerClick(station)}
+                icon={{
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: '#FF4136',
+                  fillOpacity: 1,
+                  strokeWeight: 2,
+                  strokeColor: '#FFFFFF',
+                }}
+                clickable={true}
+                visible={true}
               />
-            ))}
-          </Suspense>
+            );
+          })}
         </GoogleMap>
       </div>
 
-      {/* Station List Sheet with loading states */}
+      {/* Station List Sheet */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
-          onToggle={() => setIsSheetMinimized(prev => !prev)}
-          title={`Nearby Stations ${isPending ? '(Updating...)' : ''}`}
-          count={visibleStations.length}
+          onToggle={toggleSheet}
+          title="Nearby Stations"
+          count={stations.length}
         >
-          <Suspense fallback={<div>Loading stations...</div>}>
-            <FixedSizeList
-              height={400}
-              width="100%"
-              itemCount={visibleStations.length}
-              itemSize={80}
-              itemData={visibleStations}
-              overscanCount={5}
-            >
-              {StationListItem}
-            </FixedSizeList>
-          </Suspense>
+          <FixedSizeList
+            height={400}
+            width="100%"
+            itemCount={stations.length}
+            itemSize={80}
+            itemData={stations}
+          >
+            {StationListItem}
+          </FixedSizeList>
         </Sheet>
       )}
     </div>
   );
 }
 
-export default React.memo(function GMapWithErrorBoundary(props: GMapProps) {
+/* --------------- Export with Error Boundary --------------------- */
+export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
       <GMap {...props} />
     </MapErrorBoundary>
   );
-});
+}
