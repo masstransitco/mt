@@ -21,9 +21,14 @@ export default function QrScannerOverlay({
     onClose();
   }, [onClose, onScan]);
 
-  const handleError = useCallback((error: Error) => {
+  const handleError = useCallback((error: unknown) => {
     console.error('QR Scanner Error:', error);
-    // You could add error handling UI here
+    // Type guard to safely handle Error objects
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+    } else {
+      console.error('Unknown error:', error);
+    }
   }, []);
 
   return (
