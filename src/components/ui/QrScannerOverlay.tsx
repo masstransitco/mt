@@ -1,9 +1,5 @@
-// src/components/ui/QrScannerOverlay.tsx
-'use client';
-
 import React, { useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-// NOTE: using 'Scanner' here if 'QrScanner' is unavailable
 import { Scanner } from '@yudiel/react-qr-scanner';
 
 interface QrScannerOverlayProps {
@@ -11,21 +7,23 @@ interface QrScannerOverlayProps {
   onClose: () => void;
 }
 
-export default function QrScannerOverlay({ isOpen, onClose }: QrScannerOverlayProps) {
-  const handleDecode = useCallback(
-    (result: string) => {
-      if (result) {
-        console.log('QR Code Scanned:', result);
-        // do something with the result
-        onClose();
-      }
-    },
-    [onClose]
-  );
+export default function QrScannerOverlay({
+  isOpen,
+  onClose
+}: QrScannerOverlayProps) {
+  const handleDecode = useCallback((result: string | null) => {
+    if (result) {
+      console.log('QR Code Scanned:', result);
+      // Perform your action here
+      onClose();
+    }
+  }, [onClose]);
 
-  const handleError = useCallback((error: Error) => {
+  // Change the error type to 'unknown' or 'any'
+  const handleError = useCallback((error: unknown) => {
     console.error('QR Scanner Error:', error);
-    // Optionally show user-friendly error
+    // Optionally, you could refine the type:
+    // if (error instanceof Error) { ... }
   }, []);
 
   return (
@@ -53,7 +51,10 @@ export default function QrScannerOverlay({ isOpen, onClose }: QrScannerOverlayPr
               </p>
 
               <div className="mt-3 overflow-hidden rounded-md">
-                <Scanner onDecode={handleDecode} onError={handleError} />
+                <Scanner 
+                  onDecode={handleDecode} 
+                  onError={handleError} 
+                />
               </div>
             </div>
           </div>
