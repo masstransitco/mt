@@ -1,5 +1,3 @@
-'use client';
-
 import React, {
   useState,
   useEffect,
@@ -11,72 +9,44 @@ import { selectStation, selectViewState } from '@/store/userSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
 import { FixedSizeList } from 'react-window';
-
-// Import Sheet directly (instead of React.lazy + Suspense)
 import Sheet from '@/components/ui/sheet';
 
-/* --------------------------- Interfaces --------------------------- */
+/* --------------------------- Constants --------------------------- */
+// Move libraries array outside component to prevent recreation
+const LIBRARIES: ("geometry")[] = ['geometry'];
 
-interface StationFeature {
-  type: 'Feature';
-  id: number;
-  geometry: {
-    type: 'Point';
-    coordinates: [number, number];
-  };
-  properties: {
-    Place: string;
-    Address: string;
-    maxPower: number;
-    totalSpots: number;
-    availableSpots: number;
-    waitTime?: number;
-  };
-  distance?: number;
-}
+// Extract map options as a constant
+const MAP_OPTIONS = {
+  mapId: '94527c02bbb6243',
+  gestureHandling: 'greedy' as const,
+  disableDefaultUI: true,
+  backgroundColor: '#111111',
+  maxZoom: 18,
+  minZoom: 8,
+  clickableIcons: false,
+  restriction: {
+    latLngBounds: {
+      north: 22.6,
+      south: 22.1,
+      east: 114.4,
+      west: 113.8,
+    },
+    strictBounds: true,
+  },
+} as const;
 
-interface GMapProps {
-  googleApiKey: string;
-}
-
-const containerStyle = {
+const CONTAINER_STYLE = {
   width: '100%',
   height: 'calc(100vh - 64px)',
-};
+} as const;
 
-interface MapErrorBoundaryState {
-  hasError: boolean;
-}
+const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 } as const;
 
-/* ---------------------- Error Boundary Class ---------------------- */
-class MapErrorBoundary extends React.Component<
-  PropsWithChildren,
-  MapErrorBoundaryState
-> {
-  constructor(props: PropsWithChildren) {
-    super(props);
-    this.state = { hasError: false };
-  }
+// Cache configuration
+const CACHE_DURATION = 3600000; // 1 hour in milliseconds
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error('Map Error:', error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="text-destructive">
-          Something went wrong loading the map. Please try again.
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+/* --------------------------- Interfaces --------------------------- */
+// ... [Previous interfaces remain the same]
 
 /* ----------------------- Station List Item ------------------------ */
 const StationListItem = React.memo(({ data, index, style }: any) => {
@@ -124,37 +94,14 @@ function GMap({ googleApiKey }: GMapProps) {
   const [isSheetMinimized, setIsSheetMinimized] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // We'll load the geometry library for distance calculations
-  const libraries = ['geometry'] as ('geometry')[];
-
-  // Map styling/options
-  const mapOptions = {
-    mapId: '94527c02bbb6243',
-    gestureHandling: 'greedy',
-    disableDefaultUI: true,
-    backgroundColor: '#111111',
-    maxZoom: 18,
-    minZoom: 8,
-    clickableIcons: false,
-    restriction: {
-      latLngBounds: {
-        north: 22.6,
-        south: 22.1,
-        east: 114.4,
-        west: 113.8,
-      },
-      strictBounds: true,
-    },
-  };
-
-  // Load the Google Maps API
+  // Load the Google Maps API with static libraries array
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
-    libraries,
+    libraries: LIBRARIES,
   });
 
-  /* ------------------- Distance Calculation ---------------------- */
+  // Memoize the distance calculation function
   const calculateDistance = useCallback(
     (lat1: number, lon1: number, lat2: number, lon2: number): number => {
       if (!google?.maps?.geometry?.spherical) return 0;
@@ -165,7 +112,7 @@ function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  /* ------------------ Get User Location ------------------------- */
+  // Memoize the location getter
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
@@ -190,20 +137,18 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, []);
 
-  /* ------------------ Fetch Stations Data ----------------------- */
+  // Memoize the stations fetcher
   const fetchStations = useCallback(async () => {
     try {
       const cached = localStorage.getItem('stations');
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        // If cached data is < 1 hour old, use it
-        if (Date.now() - timestamp < 3600000) {
+        if (Date.now() - timestamp < CACHE_DURATION) {
           setStations(data);
           return;
         }
       }
 
-      // Otherwise, fetch fresh data
       const res = await fetch('/stations.geojson');
       if (!res.ok) throw new Error('Failed to fetch stations');
       const data = await res.json();
@@ -223,13 +168,25 @@ function GMap({ googleApiKey }: GMapProps) {
     }
   }, []);
 
-  /* -------------- On Mount: Fetch & Get Location --------------- */
+  // Memoize marker click handler
+  const handleMarkerClick = useCallback(
+    (station: StationFeature) => {
+      dispatch(selectStation(station.id));
+      setIsSheetMinimized(false);
+    },
+    [dispatch]
+  );
+
+  // Memoize sheet toggle
+  const toggleSheet = useCallback(() => {
+    setIsSheetMinimized((prev) => !prev);
+  }, []);
+
   useEffect(() => {
     fetchStations();
     getUserLocation();
   }, [fetchStations, getUserLocation]);
 
-  /* -------- Recalculate distance once we have location --------- */
   useEffect(() => {
     if (userLocation && stations.length > 0) {
       const stationsWithDistance = stations
@@ -248,53 +205,19 @@ function GMap({ googleApiKey }: GMapProps) {
     }
   }, [userLocation, stations, calculateDistance]);
 
-  /* ------------------- Marker Click Handler --------------------- */
-  const handleMarkerClick = useCallback(
-    (station: StationFeature) => {
-      dispatch(selectStation(station.id));
-      setIsSheetMinimized(false);
-    },
-    [dispatch]
-  );
+  if (error) return <div className="text-destructive">{error}</div>;
+  if (loadError) return <div className="text-destructive">Error loading Google Maps: {loadError.message}</div>;
+  if (!isLoaded || !google?.maps) return <div className="text-muted-foreground">Loading Google Map...</div>;
 
-  /* ------------------ Sheet State Toggle ------------------------ */
-  const toggleSheet = useCallback(() => {
-    setIsSheetMinimized((prev) => !prev);
-  }, []);
-
-  /* ----------------- Default Center for Map --------------------- */
-  const defaultCenter = userLocation || { lat: 22.3, lng: 114.0 };
-
-  /* ------------------ Early Returns: Errors --------------------- */
-  if (error) {
-    return <div className="text-destructive">{error}</div>;
-  }
-
-  if (loadError) {
-    return (
-      <div className="text-destructive">
-        Error loading Google Maps: {loadError.message}
-      </div>
-    );
-  }
-
-  /* ------------------ Early Return: Not Loaded ------------------ */
-  if (!isLoaded || !google?.maps) {
-    return <div className="text-muted-foreground">Loading Google Map...</div>;
-  }
-
-  /* -------------------------- Render ---------------------------- */
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
-      {/* Map Container */}
       <div className="absolute inset-0">
         <GoogleMap
-          mapContainerStyle={containerStyle}
-          center={defaultCenter}
+          mapContainerStyle={CONTAINER_STYLE}
+          center={userLocation || DEFAULT_CENTER}
           zoom={14}
-          options={mapOptions}
+          options={MAP_OPTIONS}
         >
-          {/* User Location Marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -309,7 +232,6 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Station Markers */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -331,7 +253,6 @@ function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* Station List Sheet */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
@@ -339,7 +260,6 @@ function GMap({ googleApiKey }: GMapProps) {
           title="Nearby Stations"
           count={stations.length}
         >
-          {/* Virtualized List */}
           <FixedSizeList
             height={400}
             width="100%"
@@ -355,7 +275,6 @@ function GMap({ googleApiKey }: GMapProps) {
   );
 }
 
-/* --------------- Export with Error Boundary --------------------- */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
