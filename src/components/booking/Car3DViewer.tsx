@@ -28,6 +28,7 @@ interface Car3DViewerProps {
   width?: string | number;
   height?: string | number;
   selected?: boolean;
+  isVisible?: boolean; // Add visibility prop
 }
 
 /* -------------- Loading Overlay -------------- */
@@ -72,25 +73,7 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
         }
       }
     });
-
-    // Cleanup function
-    return () => {
-      scene.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh) {
-          if (child.geometry) {
-            child.geometry.dispose();
-          }
-          if (Array.isArray(child.material)) {
-            child.material.forEach(material => material.dispose());
-          } else if (child.material) {
-            child.material.dispose();
-          }
-        }
-      });
-      // Clean up GLTF cache for this specific model
-      useGLTF.clear(url);
-    };
-  }, [scene, url]);
+  }, [scene]);
 
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
@@ -126,10 +109,6 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
     }
 
     onceRef.current = true;
-
-    return () => {
-      onceRef.current = false;
-    };
   }, [camera, scene]);
 
   return (
@@ -181,11 +160,14 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
+const modelsCache = new Map<string, any>();
+
 export default function Car3DViewer({
   modelUrl,
   width = '100%',
   height = '300px',
   selected = false,
+  isVisible = true,
 }: Car3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -200,22 +182,12 @@ export default function Car3DViewer({
     []
   );
 
+  // Preload models and cache them
   useEffect(() => {
-    useGLTF.preload(modelUrl);
-    
-    return () => {
-      // Clear the specific model from GLTF cache
-      useGLTF.clear(modelUrl);
-      if (canvasRef.current) {
-        const gl = canvasRef.current.getContext('webgl2') || canvasRef.current.getContext('webgl');
-        if (gl) {
-          const loseContext = gl.getExtension('WEBGL_lose_context');
-          if (loseContext) {
-            loseContext.loseContext();
-          }
-        }
-      }
-    };
+    if (!modelsCache.has(modelUrl)) {
+      useGLTF.preload(modelUrl);
+      modelsCache.set(modelUrl, true);
+    }
   }, [modelUrl]);
 
   const containerStyles = useMemo<React.CSSProperties>(
@@ -224,9 +196,15 @@ export default function Car3DViewer({
       height,
       overflow: selected ? 'hidden' : 'auto',
       pointerEvents: 'auto',
+      display: isVisible ? 'block' : 'none',
     }),
-    [width, height, selected]
+    [width, height, selected, isVisible]
   );
+
+  // Don't render canvas if not visible
+  if (!isVisible) {
+    return <div style={containerStyles} />;
+  }
 
   return (
     <div style={containerStyles}>
@@ -257,5 +235,10 @@ export default function Car3DViewer({
 }
 
 export function preloadCarModels(urls: string[]) {
-  urls.forEach((url) => useGLTF.preload(url));
+  urls.forEach((url) => {
+    if (!modelsCache.has(url)) {
+      useGLTF.preload(url);
+      modelsCache.set(url, true);
+    }
+  });
 }
