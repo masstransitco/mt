@@ -1,19 +1,25 @@
 'use client';
 
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  PropsWithChildren,
-} from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { selectStation, selectViewState } from '@/store/userSlice';
+import React, { useEffect, useCallback, useRef, memo } from 'react';
+import { useAppDispatch, useAppSelector } from '@/store/store';
+import { 
+  selectStation, 
+  selectViewState,
+  setUserLocation,
+  toggleStationsList
+} from '@/store/userSlice';
+import { 
+  selectAllStations, 
+  selectStationsLoading,
+  selectStationsError,
+  fetchStations,
+  updateStationDistances
+} from '@/store/stationsSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
 import { FixedSizeList } from 'react-window';
 import Sheet from '@/components/ui/sheet';
-import useDebounce from '@/hooks/useDebounce';
+import type { StationFeature } from '@/types/stations';
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ("geometry")[] = ['geometry'];
@@ -44,69 +50,15 @@ const CONTAINER_STYLE = {
 
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 } as const;
 
-const CACHE_DURATION = 3600000; // 1 hour in milliseconds
-
 /* --------------------------- Interfaces --------------------------- */
 interface GMapProps {
   googleApiKey: string;
 }
 
-interface StationFeature {
-  type: 'Feature';
-  id: number;
-  geometry: {
-    type: 'Point';
-    coordinates: [number, number];
-  };
-  properties: {
-    Place: string;
-    Address: string;
-    maxPower: number;
-    totalSpots: number;
-    availableSpots: number;
-    waitTime?: number;
-  };
-  distance?: number;
-}
-
-interface MapErrorBoundaryState {
-  hasError: boolean;
-}
-
-/* ---------------------- Error Boundary Class ---------------------- */
-class MapErrorBoundary extends React.Component<
-  PropsWithChildren,
-  MapErrorBoundaryState
-> {
-  constructor(props: PropsWithChildren) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error('Map Error:', error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="text-destructive">
-          Something went wrong loading the map. Please try again.
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 /* ----------------------- Station List Item ------------------------ */
-const StationListItem = React.memo(({ data, index, style }: any) => {
+const StationListItem = memo(({ data, index, style }: any) => {
   const station = data[index];
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
 
   const handleClick = useCallback(() => {
     dispatch(selectStation(station.id));
@@ -140,130 +92,73 @@ StationListItem.displayName = 'StationListItem';
 
 /* -------------------------- Main GMap ---------------------------- */
 function GMap({ googleApiKey }: GMapProps) {
-  const dispatch = useDispatch();
-  const viewState = useSelector(selectViewState);
+  const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
+  
+  // Redux state selectors
+  const viewState = useAppSelector(selectViewState);
+  const stations = useAppSelector(selectAllStations);
+  const isLoading = useAppSelector(selectStationsLoading);
+  const error = useAppSelector(selectStationsError);
+  const userLocation = useAppSelector(state => state.user.userLocation);
+  const isStationsListOpen = useAppSelector(state => state.user.isStationsListOpen);
 
-  const [stations, setStations] = useState<StationFeature[]>([]);
-  const [userLocation, setUserLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-  const [isSheetMinimized, setIsSheetMinimized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load the Google Maps API with static libraries array
+  // Load the Google Maps API
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  /* ------------------- Distance Calculation ---------------------- */
-  const calculateDistance = useCallback(
-    (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-      if (!google?.maps?.geometry?.spherical) return 0;
-      const from = new google.maps.LatLng(lat1, lon1);
-      const to = new google.maps.LatLng(lat2, lon2);
-      return google.maps.geometry.spherical.computeDistanceBetween(from, to) / 1000;
-    },
-    []
-  );
-
   /* ------------------ Get User Location ------------------------- */
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser');
-      setIsLoadingLocation(false);
+      // Handle error through Redux if needed
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserLocation({
+        dispatch(setUserLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
-        setIsLoadingLocation(false);
+        }));
       },
       (err) => {
-        setError('Failed to get your location');
         console.error('Geolocation error:', err);
-        setIsLoadingLocation(false);
+        // Handle error through Redux if needed
       },
       { timeout: 10000, maximumAge: 60000 }
     );
-  }, []);
+  }, [dispatch]);
 
-  /* ------------------ Fetch Stations Data ----------------------- */
-  const fetchStations = useCallback(async () => {
-    try {
-      const cached = localStorage.getItem('stations');
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
-          setStations(data);
-          return;
-        }
-      }
-
-      const res = await fetch('/stations.geojson');
-      if (!res.ok) throw new Error('Failed to fetch stations');
-      const data = await res.json();
-      if (data.type === 'FeatureCollection') {
-        setStations(data.features);
-        localStorage.setItem(
-          'stations',
-          JSON.stringify({
-            data: data.features,
-            timestamp: Date.now(),
-          })
-        );
-      }
-    } catch (err) {
-      setError('Failed to load stations');
-      console.error('Error fetching stations:', err);
-    }
-  }, []);
-
-  /* -------------- On Mount: Fetch & Get Location --------------- */
+  /* -------------- Initial Data Loading --------------- */
   useEffect(() => {
-    fetchStations();
+    dispatch(fetchStations());
     getUserLocation();
-  }, [fetchStations, getUserLocation]);
+  }, [dispatch, getUserLocation]);
 
-  /* -------- Recalculate distance once we have location --------- */
+  /* -------- Update distances when location changes --------- */
   useEffect(() => {
     if (userLocation && stations.length > 0) {
-      const stationsWithDistance = stations
-        .map((station) => ({
-          ...station,
-          distance: calculateDistance(
-            userLocation.lat,
-            userLocation.lng,
-            station.geometry.coordinates[1],
-            station.geometry.coordinates[0]
-          ),
-        }))
-        .sort((a, b) => (a.distance || 0) - (b.distance || 0));
-
-      setStations(stationsWithDistance);
+      dispatch(updateStationDistances(userLocation));
     }
-  }, [userLocation, stations, calculateDistance]);
+  }, [userLocation, stations.length, dispatch]);
 
-  /* ------------------- Marker Click Handler --------------------- */
+  /* ------------------- Event Handlers --------------------- */
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
-      setIsSheetMinimized(false);
+      dispatch(toggleStationsList(true)); // Open the sheet
     },
     [dispatch]
   );
 
-  /* ------------------ Sheet State Toggle ------------------------ */
-  const toggleSheet = useCallback(() => {
-    setIsSheetMinimized((prev) => !prev);
-  }, []);
+  const handleToggleSheet = useCallback(() => {
+    dispatch(toggleStationsList());
+  }, [dispatch]);
 
-  /* ------------------ Early Returns: Errors --------------------- */
+  /* ------------------ Error Handling --------------------- */
   if (error) {
     return <div className="text-destructive">{error}</div>;
   }
@@ -276,7 +171,6 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  /* ------------------ Early Return: Not Loaded ------------------ */
   if (!isLoaded || !google?.maps) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
@@ -336,20 +230,26 @@ function GMap({ googleApiKey }: GMapProps) {
       {/* Station List Sheet */}
       {viewState === 'showMap' && (
         <Sheet
-          isOpen={!isSheetMinimized}
-          onToggle={toggleSheet}
+          isOpen={isStationsListOpen}
+          onToggle={handleToggleSheet}
           title="Nearby Stations"
           count={stations.length}
         >
-          <FixedSizeList
-            height={400}
-            width="100%"
-            itemCount={stations.length}
-            itemSize={80}
-            itemData={stations}
-          >
-            {StationListItem}
-          </FixedSizeList>
+          {isLoading ? (
+            <div className="p-4 text-center text-muted-foreground">
+              Loading stations...
+            </div>
+          ) : (
+            <FixedSizeList
+              height={400}
+              width="100%"
+              itemCount={stations.length}
+              itemSize={80}
+              itemData={stations}
+            >
+              {StationListItem}
+            </FixedSizeList>
+          )}
         </Sheet>
       )}
     </div>
