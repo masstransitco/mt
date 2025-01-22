@@ -1,5 +1,4 @@
 'use client';
-
 import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
@@ -31,10 +30,10 @@ export default function HomePage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+    <main className="min-h-screen bg-background flex flex-col">
+      {/* Header - height: 57px (14px + 29px + 14px) */}
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-[57px]">
+        <div className="h-full px-4 flex items-center justify-between">
           <Image
             src="/brand/logo.png"
             alt="MTC Logo"
@@ -70,34 +69,36 @@ export default function HomePage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 pb-safe-area-inset-bottom relative">
+      {/* Main content area */}
+      <div className="flex-1 relative">
+        {/* Cars Grid */}
         <div 
-          className={`transition-opacity duration-300 ${
+          className={`px-4 transition-opacity duration-300 ${
             viewState === 'showMap' ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
         >
           <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
         </div>
+
+        {/* Map */}
         {viewState === 'showMap' && (
-          <div className="absolute inset-0 h-[calc(100vh-4rem)] pt-4">
-            <div className="h-full w-full rounded-2xl overflow-hidden">
-              <GMap 
-                googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
-              />
-            </div>
+          <div className="absolute inset-0">
+            <GMap 
+              googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+            />
           </div>
         )}
       </div>
 
       <BookingDialog />
-
-<SideSheet 
-  isOpen={isMenuOpen} 
-  onClose={handleMenuClose}
-  size="full"
->
-  <AppMenu onClose={handleMenuClose} />
-</SideSheet>
+      
+      <SideSheet 
+        isOpen={isMenuOpen} 
+        onClose={handleMenuClose}
+        size="full"
+      >
+        <AppMenu onClose={handleMenuClose} />
+      </SideSheet>
 
       {isScannerOpen && (
         <QrScannerOverlay
