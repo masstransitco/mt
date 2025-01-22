@@ -6,7 +6,9 @@ import {
   Car, 
   Zap, 
   ChevronRight, 
-  ChevronLeft
+  ChevronLeft,
+  Clock,
+  Wallet
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
@@ -102,23 +104,25 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
         {/* Menu Items */}
         <nav className="py-1">
           {/* Quick Actions */}
-          {user && (
-            <>
-              <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
-                <div className="flex items-center gap-3">
-                  <Zap className="w-5 h-5" />
-                  <span className="font-medium">Trips</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
+{user && (
+  <>
+    <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
+      <div className="flex items-center gap-3">
+        {/* Replace Zap with Timer for Trips - represents journey/time tracking */}
+        <Clock className="w-5 h-5" />
+        <span className="font-medium">Trips</span>
+      </div>
+      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+    </button>
 
-              <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
-                <div className="flex items-center gap-3">
-                  <Car className="w-5 h-5" />
-                  <span className="font-medium">Fare Payments</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
+    <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
+      <div className="flex items-center gap-3">
+        {/* Replace Car with Wallet for Payments - better represents financial transactions */}
+        <Wallet className="w-5 h-5" />
+        <span className="font-medium">Fare Payments</span>
+      </div>
+      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+    </button>
             </>
           )}
 
