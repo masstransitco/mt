@@ -23,9 +23,6 @@ export default function RootLayout({
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setLoading(false);
-      if (!user && window.location.pathname !== '/signin') {
-        router.push('/signin');
-      }
     });
 
     return () => unsubscribe();
