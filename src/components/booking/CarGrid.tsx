@@ -23,22 +23,21 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   // Set car1 as selected on initial load
   useEffect(() => {
     if (!selectedCarId) {
-      dispatch(selectCar(1)); // Select first car by default
+      dispatch(selectCar(1));
     }
   }, [dispatch, selectedCarId]);
 
-  const sortedAndFilteredCars = React.useMemo(() => {
+  const { selectedCar, otherCars } = React.useMemo(() => {
     const filtered = filterType === 'all' 
       ? SAMPLE_CARS 
       : SAMPLE_CARS.filter(car => 
           car.type.toLowerCase() === filterType.toLowerCase()
         );
     
-    return [...filtered].sort((a, b) => {
-      if (a.id === selectedCarId) return -1;
-      if (b.id === selectedCarId) return 1;
-      return 0;
-    });
+    return {
+      selectedCar: filtered.find(car => car.id === selectedCarId),
+      otherCars: filtered.filter(car => car.id !== selectedCarId)
+    };
   }, [filterType, selectedCarId]);
 
   const handleSelectCar = (car: CarType) => {
@@ -111,33 +110,55 @@ export default function CarGrid({ className = '' }: CarGridProps) {
         </AnimatePresence>
       </div>
 
-      {/* Responsive car grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <AnimatePresence mode="popLayout">
-          {sortedAndFilteredCars.map((car) => (
-            <motion.div
-              key={car.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.2 }}
-            >
-              <CarCard
-                car={car}
-                selected={selectedCarId === car.id}
-                onClick={() => handleSelectCar(car)}
-                isVisible={viewState === 'showCar'}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      {/* Car grid with selected car on top */}
+      <div className="space-y-6">
+        {/* Selected Car */}
+        {selectedCar && (
+          <motion.div
+            layout
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <CarCard
+              car={selectedCar}
+              selected={true}
+              onClick={() => {}} // No action needed when clicking selected car
+              isVisible={viewState === 'showCar'}
+              size="large"
+            />
+          </motion.div>
+        )}
 
-        {sortedAndFilteredCars.length === 0 && (
+        {/* Other Cars Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <AnimatePresence mode="popLayout">
+            {otherCars.map((car) => (
+              <motion.div
+                key={car.id}
+                layout
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CarCard
+                  car={car}
+                  selected={false}
+                  onClick={() => handleSelectCar(car)}
+                  isVisible={viewState === 'showCar'}
+                  size="small"
+                />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {otherCars.length === 0 && !selectedCar && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="col-span-full py-12 text-center rounded-2xl bg-card"
+            className="py-12 text-center rounded-2xl bg-card"
           >
             <p className="text-muted-foreground">
               No vehicles found matching your criteria.
@@ -154,4 +175,3 @@ export default function CarGrid({ className = '' }: CarGridProps) {
     </div>
   );
 }
-
