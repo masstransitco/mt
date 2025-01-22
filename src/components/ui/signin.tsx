@@ -14,8 +14,8 @@ import { auth } from "@/lib/firebase";
 // Extend Window interface to include our custom properties
 declare global {
   interface Window {
-    recaptchaVerifier: RecaptchaVerifier | undefined;
-    confirmationResult: ConfirmationResult | undefined;
+    recaptchaVerifier?: RecaptchaVerifier;
+    confirmationResult?: ConfirmationResult;
   }
 }
 
@@ -27,7 +27,6 @@ export default function SignIn() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && !window.recaptchaVerifier) {
-      // Correct order: auth instance, container ID, options
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,
         'recaptcha-container',
