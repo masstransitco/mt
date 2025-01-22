@@ -189,10 +189,72 @@ body {
     max-width: none !important;
     border-radius: 0 !important;
     min-height: 100vh !important;
+    height: 100vh !important; /* Force full height */
+    position: fixed !important; /* Ensure it stays fixed */
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
   }
 
   .dialog-content-fullwidth {
     padding: 0 !important;
     border: none !important;
+    height: 100% !important; /* Take full height */
+    max-height: 100vh !important; /* Prevent overflow */
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
   }
+  
+  /* New styles for welcome section */
+  .welcome-hero {
+    height: 55vh !important; /* Adjusted from 65vh for better mobile view */
+    min-height: 400px !important; /* Ensure minimum height */
+    max-height: 600px !important; /* Prevent too much stretching */
+    position: relative !important;
+  }
+
+  .welcome-content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Handle iOS safe areas */
+  .dialog-content-fullwidth {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  }
+}
+
+/* Larger screens */
+@media (min-width: 641px) {
+  .dialog-fullwidth {
+    max-width: 448px !important; /* Match design width */
+    height: 85vh !important;
+    max-height: 800px !important; /* Prevent too much stretching */
+  }
+
+  .welcome-hero {
+    height: 360px !important; /* Fixed height for desktop */
+  }
+}
+
+/* Shared styles for all screen sizes */
+.modal-gradient-overlay {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0%,
+    rgba(0, 0, 0, 0.6) 50%,
+    var(--background) 100%
+  );
+}
+
+.modal-content-transition {
+  background: linear-gradient(
+    to bottom,
+    var(--background) 0%,
+    var(--background) 100%
+  );
 }
