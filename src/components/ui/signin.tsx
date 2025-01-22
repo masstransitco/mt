@@ -1,4 +1,3 @@
-// src/components/ui/signin.tsx
 import React, { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
@@ -6,43 +5,42 @@ import {
   signInWithPhoneNumber,
   signInWithPopup,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  Auth,
+  ConfirmationResult
 } from "firebase/auth";
-import { auth } from "@/lib/firebase"; // Make sure this points to the file above
+import { auth } from "@/lib/firebase";
+
+// Extend Window interface to include our custom properties
+declare global {
+  interface Window {
+    recaptchaVerifier: RecaptchaVerifier | undefined;
+    confirmationResult: ConfirmationResult | undefined;
+  }
+}
 
 export default function SignIn() {
-  // ------------------------------
-  //              STATE
-  // ------------------------------
   const [phoneNumber, setPhoneNumber] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ------------------------------
-  //         SETUP reCAPTCHA
-  // ------------------------------
   useEffect(() => {
-    // This runs only in the browser
     if (typeof window !== "undefined" && !window.recaptchaVerifier) {
-      // The constructor signature is:
-      //   new RecaptchaVerifier(containerOrId, parameters, authExtern)
+      // Correct order: auth instance, container ID, options
       window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container",  // <-- string container ID or HTMLElement
+        auth,
+        'recaptcha-container',
         {
-          size: "invisible",    // "normal" or "invisible"
+          size: "invisible",
           callback: (response: any) => {
             // reCAPTCHA solved, allow signInWithPhoneNumber
           },
-        },
-        auth // <-- your Auth instance
+        }
       );
     }
   }, []);
 
-  // ------------------------------
-  //        GOOGLE SIGN-IN
-  // ------------------------------
   const handleGoogleSignIn = async () => {
     try {
       const provider = new GoogleAuthProvider();
@@ -54,12 +52,8 @@ export default function SignIn() {
     }
   };
 
-  // ------------------------------
-  //         PHONE SIGN-IN
-  // ------------------------------
   const sendVerificationCode = async () => {
     try {
-      // Check the reCAPTCHA
       const appVerifier = window.recaptchaVerifier;
       if (!appVerifier) {
         alert("reCAPTCHA not ready.");
@@ -71,7 +65,6 @@ export default function SignIn() {
         phoneNumber,
         appVerifier
       );
-      // Store the confirmationResult in window to verify later
       window.confirmationResult = confirmationResult;
       alert("SMS verification code sent!");
     } catch (error) {
@@ -86,7 +79,6 @@ export default function SignIn() {
         alert("No confirmation result. Send code first.");
         return;
       }
-      // If successful, user is now signed in
       await window.confirmationResult.confirm(verificationCode);
       alert("Phone number verified!");
     } catch (error) {
@@ -95,9 +87,6 @@ export default function SignIn() {
     }
   };
 
-  // ------------------------------
-  //    EMAIL/PASSWORD SIGN-IN
-  // ------------------------------
   const handleEmailSignIn = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -108,9 +97,6 @@ export default function SignIn() {
     }
   };
 
-  // ------------------------------
-  //    EMAIL/PASSWORD SIGN-UP
-  // ------------------------------
   const handleEmailSignUp = async () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
@@ -171,7 +157,7 @@ export default function SignIn() {
           </button>
         </div>
 
-        {/* This container is required by reCAPTCHA */}
+        {/* reCAPTCHA container */}
         <div id="recaptcha-container" />
       </div>
 
