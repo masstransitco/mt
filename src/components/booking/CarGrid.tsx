@@ -63,7 +63,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">
-            Available Vehicles
+            Available Cars
           </h2>
           <button
             onClick={() => setShowFilters(!showFilters)}
