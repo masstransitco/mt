@@ -19,7 +19,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-type AuthMethod = 'google' | 'phone' | 'email' | null;
+type AuthMethod = 'google' | 'phone' | 'phone-verify' | 'email' | null;
 type AuthAction = 'signin' | 'signup' | null;
 
 interface SignInModalProps {
@@ -71,7 +71,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setError(null);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      // No need to call handleClose() - auth state change listener will handle it
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -112,6 +111,24 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
+  const handleVerifyCode = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      if (!window.confirmationResult) {
+        throw new Error('No verification code was sent');
+      }
+
+      await window.confirmationResult.confirm(verificationCode);
+      // Auth state listener will handle the redirect
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEmailAuth = async () => {
     try {
       setLoading(true);
@@ -122,7 +139,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      // Auth state change listener will handle closing
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -155,7 +171,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       </button>
 
       <button
-        onClick={() => setSelectedMethod('email')}
+        onClick={() => {
+          setSelectedMethod('email');
+          setAuthAction('signin');
+        }}
         disabled={loading}
         className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
       >
@@ -206,7 +225,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin mx-auto" />
               ) : (
-                'Continue'
+                authAction === 'signin' ? 'Sign In' : 'Create Account'
               )}
             </button>
             <button
@@ -253,6 +272,39 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <div id="recaptcha-container" />
         </div>
       )}
+
+      {selectedMethod === 'phone-verify' && (
+        <div className="space-y-4">
+          <input
+            type="text"
+            placeholder="Enter verification code"
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value)}
+            disabled={loading}
+            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
+          />
+          <div className="grid gap-2">
+            <button
+              onClick={handleVerifyCode}
+              disabled={loading || !verificationCode}
+              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+              ) : (
+                'Verify Code'
+              )}
+            </button>
+            <button
+              onClick={() => setSelectedMethod('phone')}
+              disabled={loading}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -261,7 +313,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Sign in to continue
+            {selectedMethod === 'phone-verify' 
+              ? 'Enter Verification Code'
+              : selectedMethod === 'phone'
+              ? 'Sign in with Phone'
+              : selectedMethod === 'email'
+              ? authAction === 'signin' ? 'Sign in with Email' : 'Create Account'
+              : 'Sign in to continue'}
           </DialogTitle>
         </DialogHeader>
         <div className="p-4">
