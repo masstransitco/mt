@@ -1,5 +1,3 @@
-// src/components/ui/SideSheet.tsx
-
 import React from 'react';
 import { X } from 'lucide-react';
 
@@ -7,9 +5,15 @@ interface SideSheetProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
+  size?: 'default' | 'full';
 }
 
-export default function SideSheet({ isOpen, onClose, children }: SideSheetProps) {
+export default function SideSheet({ 
+  isOpen, 
+  onClose, 
+  children,
+  size = 'default' 
+}: SideSheetProps) {
   return (
     <div
       className={`
@@ -23,12 +27,13 @@ export default function SideSheet({ isOpen, onClose, children }: SideSheetProps)
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
       />
-
+      
       {/* Side panel */}
       <div
         className={`
-          relative w-72 max-w-full bg-card text-foreground h-full
-          shadow-xl transform transition-transform
+          relative bg-card text-foreground h-full
+          shadow-xl transform transition-transform duration-300 ease-out
+          ${size === 'full' ? 'w-full' : 'w-72 max-w-full'}
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
