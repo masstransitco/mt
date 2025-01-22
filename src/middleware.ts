@@ -1,23 +1,26 @@
+// src/middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Get session or token from cookie/header
-  const isAuthenticated = request.cookies.get('auth_token'); // adjust based on your auth setup
+  // Public paths that don't require authentication
+  const publicPaths = ['/signin', '/api/auth'];
+  
+  // Check if the path is public
+  const isPublicPath = publicPaths.some(path => 
+    request.nextUrl.pathname.startsWith(path)
+  );
 
-  // List of public paths that don't require authentication
-  const publicPaths = ['/signin'];
+  // Get the Firebase auth session from cookie
+  const session = request.cookies.get('__session')?.value;
 
-  // Check if the requested path is public
-  const isPublicPath = publicPaths.includes(request.nextUrl.pathname);
-
-  if (!isAuthenticated && !isPublicPath) {
-    // Redirect to signin if trying to access protected route while not authenticated
+  if (!session && !isPublicPath) {
+    // Redirect to signin if no session and trying to access protected route
     return NextResponse.redirect(new URL('/signin', request.url));
   }
 
-  if (isAuthenticated && isPublicPath) {
-    // Redirect to home if trying to access signin while authenticated
+  if (session && request.nextUrl.pathname === '/signin') {
+    // Redirect to home if has session and trying to access signin
     return NextResponse.redirect(new URL('/', request.url));
   }
 
@@ -25,5 +28,14 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    /*
+     * Match all request paths except:
+     * 1. /api/auth/* (auth endpoints)
+     * 2. /_next/* (Next.js internals)
+     * 3. /static/* (static files)
+     * 4. /favicon.ico, /robots.txt (public files)
+     */
+    '/((?!api/auth|_next/static|_next/image|static|favicon.ico|robots.txt).*)',
+  ],
 };
