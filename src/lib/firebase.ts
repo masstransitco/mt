@@ -1,7 +1,6 @@
 // lib/firebase.ts
 
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 
 // --- Your Firebase project config (use your own credentials) ---
@@ -16,12 +15,6 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-
-// Optionally enable analytics
-// Make sure your environment supports analytics (e.g., not SSR)
-if (typeof window !== "undefined") {
-  getAnalytics(app);
-}
 
 // Export the Auth instance to be used throughout your app
 export const auth = getAuth(app);
