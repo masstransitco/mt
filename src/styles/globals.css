@@ -185,76 +185,68 @@ body {
 @media (max-width: 640px) {
   .dialog-fullwidth {
     width: 100vw !important;
+    height: 100dvh !important; /* Use dynamic viewport height */
     margin: 0 !important;
     max-width: none !important;
+    max-height: none !important;
     border-radius: 0 !important;
-    min-height: 100vh !important;
-    height: 100vh !important; /* Force full height */
-    position: fixed !important; /* Ensure it stays fixed */
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
+    position: fixed !important;
+    inset: 0 !important;
+    overflow: hidden !important;
   }
 
   .dialog-content-fullwidth {
+    width: 100% !important;
+    height: 100% !important;
     padding: 0 !important;
     border: none !important;
-    height: 100% !important; /* Take full height */
-    max-height: 100vh !important; /* Prevent overflow */
     display: flex !important;
     flex-direction: column !important;
     position: relative !important;
+    overflow: hidden !important; /* Prevent content overflow */
   }
-  
-  /* New styles for welcome section */
+
   .welcome-hero {
-    height: 55vh !important; /* Adjusted from 65vh for better mobile view */
-    min-height: 400px !important; /* Ensure minimum height */
-    max-height: 600px !important; /* Prevent too much stretching */
     position: relative !important;
+    height: 45vh !important; /* Reduced height for better content balance */
+    min-height: 300px !important;
+    max-height: 45vh !important;
+    width: 100% !important;
   }
 
   .welcome-content {
     flex: 1 !important;
+    min-height: 0 !important; /* Important for proper flex behavior */
     overflow-y: auto !important;
+    overscroll-behavior: contain !important;
     -webkit-overflow-scrolling: touch !important;
-  }
-
-  /* Handle iOS safe areas */
-  .dialog-content-fullwidth {
-    padding-top: env(safe-area-inset-top, 0px) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    background-color: hsl(var(--background)) !important;
   }
 }
 
-/* Larger screens */
+/* Update desktop styles */
 @media (min-width: 641px) {
   .dialog-fullwidth {
-    max-width: 448px !important; /* Match design width */
+    width: 100% !important;
+    max-width: 448px !important;
     height: 85vh !important;
-    max-height: 800px !important; /* Prevent too much stretching */
+    max-height: 800px !important;
+    margin: 3vh auto !important;
+    overflow: hidden !important;
   }
 
   .welcome-hero {
-    height: 360px !important; /* Fixed height for desktop */
+    height: 320px !important;
   }
 }
 
-/* Shared styles for all screen sizes */
+/* Shared styles */
 .modal-gradient-overlay {
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.2) 0%,
-    rgba(0, 0, 0, 0.6) 50%,
-    var(--background) 100%
-  );
-}
-
-.modal-content-transition {
-  background: linear-gradient(
-    to bottom,
-    var(--background) 0%,
-    var(--background) 100%
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.3) 30%,
+    rgba(0, 0, 0, 0.7) 70%,
+    hsl(var(--background)) 100%
   );
 }
