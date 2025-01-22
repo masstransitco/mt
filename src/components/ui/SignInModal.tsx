@@ -7,20 +7,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Mail, Phone, Loader2 } from 'lucide-react';
+import { Phone, Loader2 } from 'lucide-react';
 import {
-  GoogleAuthProvider,
   RecaptchaVerifier,
   signInWithPhoneNumber,
-  signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  onAuthStateChanged
+  onAuthStateChanged,
+  ConfirmationResult
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-type AuthMethod = 'google' | 'phone' | 'phone-verify' | 'email' | null;
-type AuthAction = 'signin' | 'signup' | null;
+type AuthMethod = 'phone' | 'phone-verify' | null;
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -29,18 +25,15 @@ interface SignInModalProps {
 
 declare global {
   interface Window {
-    recaptchaVerifier: RecaptchaVerifier;
-    confirmationResult: any;
+    recaptchaVerifier?: RecaptchaVerifier;
+    confirmationResult?: ConfirmationResult;
   }
 }
 
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<AuthMethod>(null);
-  const [authAction, setAuthAction] = useState<AuthAction>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,11 +56,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   const resetState = () => {
     setSelectedMethod(null);
-    setAuthAction(null);
     setPhoneNumber('');
     setVerificationCode('');
-    setEmail('');
-    setPassword('');
     setError(null);
     setLoading(false);
   };
@@ -75,55 +65,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const handleClose = () => {
     resetState();
     onClose();
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: 'select_account'
-      });
-
-      const result = await signInWithPopup(auth, provider).catch((error) => {
-        if (error.code === 'auth/popup-closed-by-user') {
-          return null;
-        }
-        throw error;
-      });
-
-      if (!result) {
-        // User closed popup - no error needed
-        return;
-      }
-
-    } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      
-      let errorMessage = 'Failed to sign in with Google. Please try again.';
-      
-      switch (error.code) {
-        case 'auth/popup-blocked':
-          errorMessage = 'Pop-up was blocked. Please enable pop-ups and try again.';
-          break;
-        case 'auth/cancelled-popup-request':
-          errorMessage = 'Sign-in was interrupted. Please try again.';
-          break;
-        case 'auth/popup-closed-by-user':
-          return; // Don't show error
-        case 'auth/network-request-failed':
-          errorMessage = 'Network error. Please check your connection and try again.';
-          break;
-        default:
-          errorMessage = error.message || 'An unexpected error occurred. Please try again.';
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handlePhoneSignIn = async () => {
@@ -198,60 +139,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
-  const handleEmailAuth = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      if (authAction === 'signin') {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
-    } catch (error: any) {
-      console.error('Email auth error:', error);
-      let errorMessage = 'Authentication failed. Please try again.';
-      
-      switch (error.code) {
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          errorMessage = 'Invalid email or password.';
-          break;
-        case 'auth/email-already-in-use':
-          errorMessage = 'Email already registered. Please sign in instead.';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password should be at least 6 characters.';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many attempts. Please try again later.';
-          break;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const renderMethodSelection = () => (
     <div className="grid gap-4">
-      <button
-        onClick={handleGoogleSignIn}
-        disabled={loading}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50 transition-colors"
-      >
-        {loading ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
-        ) : (
-          <img src="/icons/google.svg" alt="Google" className="w-5 h-5" />
-        )}
-        <span>Continue with Google</span>
-      </button>
-
       <button
         onClick={() => setSelectedMethod('phone')}
         disabled={loading}
@@ -259,18 +148,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       >
         <Phone className="w-5 h-5" />
         <span>Continue with Phone</span>
-      </button>
-
-      <button
-        onClick={() => {
-          setSelectedMethod('email');
-          setAuthAction('signin');
-        }}
-        disabled={loading}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50 transition-colors"
-      >
-        <Mail className="w-5 h-5" />
-        <span>Continue with Email</span>
       </button>
     </div>
   );
@@ -289,56 +166,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       
       {!selectedMethod && renderMethodSelection()}
       
-      {selectedMethod === 'email' && (
-        <div className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={loading}
-            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            disabled={loading}
-            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
-          />
-          <div className="grid gap-2">
-            <button
-              onClick={handleEmailAuth}
-              disabled={loading || !email || !password}
-              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-              ) : (
-                authAction === 'signin' ? 'Sign In' : 'Create Account'
-              )}
-            </button>
-            <button
-              onClick={() => {
-                setAuthAction(authAction === 'signin' ? 'signup' : 'signin');
-              }}
-              disabled={loading}
-              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
-            >
-              {authAction === 'signin' ? 'Create an account' : 'Already have an account?'}
-            </button>
-            <button
-              onClick={() => setSelectedMethod(null)}
-              disabled={loading}
-              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
-            >
-              Back to sign in options
-            </button>
-          </div>
-        </div>
-      )}
-
       {selectedMethod === 'phone' && (
         <div className="space-y-4">
           <input
@@ -366,7 +193,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               disabled={loading}
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              Back to sign in options
+              Back
             </button>
           </div>
           <div id="recaptcha-container" />
@@ -400,7 +227,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               disabled={loading}
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              Back to phone number
+              Back
             </button>
           </div>
         </div>
@@ -417,8 +244,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               ? 'Enter Verification Code'
               : selectedMethod === 'phone'
               ? 'Sign in with Phone'
-              : selectedMethod === 'email'
-              ? authAction === 'signin' ? 'Sign in with Email' : 'Create Account'
               : 'Sign in to continue'}
           </DialogTitle>
         </DialogHeader>
