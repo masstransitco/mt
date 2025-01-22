@@ -134,54 +134,55 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
 const renderWelcomeContent = () => (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="welcome-hero shrink-0">
-        <Image
-          src="/brand/drive.gif"
-          alt="Welcome Banner"
-          fill
-          className="object-cover"
-          priority
-        />
-        <div className="absolute inset-0 modal-gradient-overlay" />
-        
-        <div className="absolute inset-x-0 bottom-0 p-6 space-y-4">
-          <h2 className="text-4xl font-semibold text-white leading-none">
-            Welcome to Mass Transit
-          </h2>
-          <div className="space-y-2 text-lg text-white/90">
-            <p>Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.</p>
-            <p>Enjoy premium travel at lower costs than taxis or rideshares.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="welcome-content">
-        <div className="px-6 py-6 space-y-6">
-          <div className="space-y-3 text-base text-muted-foreground">
-            <p>• Access 150+ stations with seamless entry and exit.</p>
-            <p>• No deposits. Daily fares capped at $400.</p>
-          </div>
-
-          <div className="text-sm text-muted-foreground/80">
-            By clicking "Continue," you confirm you're 18 or older with a valid driver's license or permit. Trip and driving data may be collected to improve services. See our{' '}
-            <a href="/privacy" className="text-primary hover:underline">
-              Privacy Policy
-            </a>{' '}
-            for details.
-          </div>
-
-          <button
-            onClick={() => setSelectedMethod('phone')}
-            disabled={loading}
-            className="w-full p-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors text-base font-medium"
-          >
-            Continue
-          </button>
+  <div className="flex flex-col h-full overflow-hidden">
+    <div className="relative w-full h-[45vh] sm:h-[320px] shrink-0">
+      <Image
+        src="/brand/drive.gif"
+        alt="Welcome Banner"
+        fill
+        className="object-cover"
+        priority
+      />
+      <div className="absolute inset-0 modal-gradient-overlay" />
+      
+      <div className="absolute inset-x-0 bottom-0 p-6">
+        <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight mb-3">
+          Welcome to Mass Transit
+        </h2>
+        <div className="text-base sm:text-lg text-white/90">
+          <p className="line-clamp-2">
+            Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad. Enjoy premium travel at lower costs than taxis or rideshares.
+          </p>
         </div>
       </div>
     </div>
-  );
+
+    <div className="flex-1 overflow-y-auto">
+      <div className="p-6 space-y-5">
+        <div className="space-y-2.5 text-base text-muted-foreground">
+          <p>• Access 150+ stations with seamless entry and exit</p>
+          <p>• No deposits. Daily fares capped at $400</p>
+        </div>
+
+        <div className="text-sm text-muted-foreground/80">
+          By clicking "Continue," you confirm you're 18 or older with a valid driver's license or permit. Trip and driving data may be collected to improve services. See our{' '}
+          <a href="/privacy" className="text-primary hover:underline">
+            Privacy Policy
+          </a>{' '}
+          for details.
+        </div>
+
+        <button
+          onClick={() => setSelectedMethod('phone')}
+          disabled={loading}
+          className="w-full p-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors text-base font-medium"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
   const renderPhoneInput = () => (
     <div className="flex flex-col h-full">
