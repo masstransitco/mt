@@ -1,10 +1,9 @@
-// src/types/global.d.ts 
-
+// src/types/global.d.ts
 export {};
 
 declare global {
   interface Window {
-    recaptchaVerifier?: any;
-    confirmationResult?: any;
+    recaptchaVerifier?: import("firebase/auth").RecaptchaVerifier;
+    confirmationResult?: import("firebase/auth").ConfirmationResult;
   }
 }
