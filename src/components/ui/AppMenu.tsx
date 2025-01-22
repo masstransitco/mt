@@ -21,7 +21,6 @@ export default function AppMenu() {
     }
   };
 
-  // Generate initials for avatar fallback
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -30,121 +29,88 @@ export default function AppMenu() {
       .toUpperCase();
   };
 
-  // Helper to determine avatar content
-  const renderAvatar = () => {
-    if (!user) {
-      return (
-        <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
-          <User className="w-6 h-6 text-primary-foreground" />
-        </div>
-      );
-    }
-
-    if (user.photoURL) {
-      return (
-        <Image
-          src={user.photoURL}
-          alt="User Profile"
-          width={48}
-          height={48}
-          className="rounded-full object-cover"
-        />
-      );
-    }
-
-    return (
-      <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-medium">
-        {getInitials(user.displayName || user.email?.split('@')[0] || 'U')}
-      </div>
-    );
+  const handleDiscoverClick = () => {
+    window.open('https://home-nine-indol.vercel.app', '_blank');
   };
 
   return (
-    <nav className="w-80 min-h-screen bg-background border-r border-border px-4 pb-4">
-      {/* Header */}
-      <h2 className="text-xl font-medium py-2">Menu</h2>
-
-      {/* Profile Section */}
-      <div className="flex items-center gap-3 my-4">
-        <div className="w-12 h-12 rounded-full overflow-hidden">
-          {renderAvatar()}
-        </div>
-        <div className="flex flex-col">
-          {user ? (
-            <>
-              <span className="font-semibold">
-                {user.displayName || user.email?.split('@')[0] || 'User'}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {user.email}
-              </span>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowSignInModal(true)}
-                className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm w-full"
-              >
-                Sign In
-              </button>
-            </div>
-          )}
-        </div>
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
+      {/* Header Section */}
+      <div className="px-6 py-4 border-b border-border">
+        <h2 className="text-xl font-medium">Menu</h2>
       </div>
 
-      {/* Menu Items - Only show if user is signed in */}
+      {/* Profile Section - Only show if user is signed in */}
       {user && (
-        <ul className="space-y-4">
-          <li>
-            <button className="flex items-center justify-between w-full text-left hover:bg-accent/10 p-2 rounded-lg">
-              <div className="flex items-center gap-2 text-sm">
-                <Zap className="w-4 h-4" />
-                <span>Charging</span>
+        <div className="flex items-center gap-4 p-6 border-b border-border">
+          <div className="w-12 h-12 rounded-full overflow-hidden">
+            {user.photoURL ? (
+              <Image
+                src={user.photoURL}
+                alt="Profile"
+                width={48}
+                height={48}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-primary flex items-center justify-center text-primary-foreground font-medium">
+                {getInitials(user.displayName || user.email?.split('@')[0] || 'U')}
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </li>
-          <li>
-            <button className="flex items-center justify-between w-full text-left hover:bg-accent/10 p-2 rounded-lg">
-              <div className="flex items-center gap-2 text-sm">
-                <Car className="w-4 h-4" />
-                <span>My Products</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </button>
-          </li>
-        </ul>
+            )}
+          </div>
+          <div>
+            <h3 className="font-medium">{user.displayName || user.email?.split('@')[0]}</h3>
+            <p className="text-sm text-muted-foreground">{user.email}</p>
+          </div>
+        </div>
       )}
 
-      {/* Brand Animation */}
-      <div className="my-6">
-        <Image
-          src="/brand/drive.gif"
-          alt="Drive Animation"
-          width={200}
-          height={100}
-          className="w-full object-contain"
-        />
-      </div>
+      {/* Sign In Button - Only show if user is not signed in */}
+      {!user && (
+        <div className="p-6 border-b border-border">
+          <button
+            onClick={() => setShowSignInModal(true)}
+            className="w-full bg-primary text-primary-foreground px-4 py-3 rounded-lg text-sm font-medium"
+          >
+            Sign In
+          </button>
+        </div>
+      )}
 
-      {/* Discover Section */}
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">Discover</h3>
-        <p className="text-xs text-muted-foreground">
-          Products, Accessories and Tesla Insurance
-        </p>
-      </div>
+      {/* Menu Items - Show regardless of auth state */}
+      <nav className="p-6 space-y-4">
+        <button 
+          onClick={handleDiscoverClick}
+          className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-accent/10"
+        >
+          <span className="text-sm font-medium">Discover</span>
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        </button>
 
-      <div className="mt-4 space-y-1">
-        <h3 className="text-sm font-semibold">Charge Your Other EV</h3>
-        <p className="text-xs text-muted-foreground">
-          Charge on the Largest Global Network
-        </p>
-      </div>
+        {user && (
+          <>
+            <button className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-accent/10">
+              <div className="flex items-center gap-3">
+                <Zap className="w-4 h-4" />
+                <span className="text-sm font-medium">Charging</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+
+            <button className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-accent/10">
+              <div className="flex items-center gap-3">
+                <Car className="w-4 h-4" />
+                <span className="text-sm font-medium">My Products</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </>
+        )}
+      </nav>
 
       {/* Sign Out Button - Only show if user is signed in */}
       {user && (
-        <div className="mt-4">
+        <div className="px-6 py-4 border-t border-border">
           <button 
             onClick={handleSignOut}
             className="flex items-center gap-2 text-sm text-destructive hover:text-destructive/80"
@@ -155,16 +121,11 @@ export default function AppMenu() {
         </div>
       )}
 
-      {/* Footer Section */}
-      <div className="border-t border-border mt-6 pt-4 text-sm space-y-2">
-        <p className="text-muted-foreground">
-          App Version <span className="text-foreground">v4.40.1-3113</span>
+      {/* Version Info */}
+      <div className="px-6 py-4 mt-auto">
+        <p className="text-sm text-muted-foreground">
+          Version 4.40.1-3113
         </p>
-        <div className="flex gap-4 text-muted-foreground">
-          <button className="hover:text-foreground">Privacy</button>
-          <button className="hover:text-foreground">Legal</button>
-          <button className="hover:text-foreground">Acknowledgements</button>
-        </div>
       </div>
 
       {/* Sign In Modal */}
@@ -172,6 +133,6 @@ export default function AppMenu() {
         isOpen={showSignInModal} 
         onClose={() => setShowSignInModal(false)} 
       />
-    </nav>
+    </div>
   );
 }
