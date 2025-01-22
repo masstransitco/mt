@@ -91,9 +91,13 @@ export default function HomePage() {
 
       <BookingDialog />
 
-      <SideSheet isOpen={isMenuOpen} onClose={handleMenuClose}>
-        <AppMenu onClose={handleMenuClose} />
-      </SideSheet>
+<SideSheet 
+  isOpen={isMenuOpen} 
+  onClose={handleMenuClose}
+  size="full"
+>
+  <AppMenu onClose={handleMenuClose} />
+</SideSheet>
 
       {isScannerOpen && (
         <QrScannerOverlay
