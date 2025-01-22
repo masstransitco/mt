@@ -81,11 +81,11 @@ export default function AppMenu() {
             </>
           ) : (
             <div className="space-y-2">
-              <Link href="/signin">
-                <button className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm">
-                  Sign In
-                </button>
-              </Link>
+              <Link href="/signin" className="w-full">
+  <button className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm w-full">
+    Sign In
+  </button>
+</Link>
             </div>
           )}
         </div>
