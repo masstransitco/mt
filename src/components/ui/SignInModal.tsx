@@ -135,7 +135,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
 const renderWelcomeContent = () => (
   <div className="flex flex-col h-full overflow-hidden">
-    <div className="relative w-full h-[35vh] sm:h-[280px] shrink-0">
+    <div className="relative w-full h-[28vh] shrink-0">
       <Image
         src="/brand/drive.gif"
         alt="Welcome Banner"
@@ -143,28 +143,30 @@ const renderWelcomeContent = () => (
         className="object-cover"
         priority
       />
-      <div className="absolute inset-0 modal-gradient-overlay" />
+      <div className="absolute inset-0" 
+        style={{
+          background: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)'
+        }}
+      />
       
-      <div className="absolute inset-x-0 bottom-0 p-4">
-        <h2 className="text-2xl sm:text-3xl font-semibold text-white leading-tight mb-2">
+      <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
+        <h2 className="text-[28px] font-semibold text-white leading-tight mb-1">
           Welcome to Mass Transit
         </h2>
-        <div className="text-sm sm:text-base text-white/90">
-          <p className="line-clamp-2">
-            Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.
-          </p>
-        </div>
+        <p className="text-[15px] text-white/80 leading-snug">
+          Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.
+        </p>
       </div>
     </div>
-    <div className="flex-1 overflow-y-auto">
-      <div className="p-4 space-y-4">
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p>• Access 150+ stations with seamless entry and exit</p>
-          <p>• No deposits. Daily fares capped at $400</p>
+    <div className="flex-1 overflow-y-auto px-4 pt-3">
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <p className="text-[15px] text-white/70">• Access 150+ stations with seamless entry and exit</p>
+          <p className="text-[15px] text-white/70">• No deposits. Daily fares capped at $400</p>
         </div>
-        <div className="text-xs text-muted-foreground/80">
+        <div className="text-[13px] text-white/60 leading-relaxed">
           By clicking "Continue," you confirm you're 18 or older with a valid driver's license or permit. Trip and driving data may be collected to improve services. See our{' '}
-          <a href="/privacy" className="text-primary hover:underline">
+          <a href="/privacy" className="text-[#0080ff]">
             Privacy Policy
           </a>{' '}
           for details.
@@ -172,7 +174,7 @@ const renderWelcomeContent = () => (
         <button
           onClick={() => setSelectedMethod('phone')}
           disabled={loading}
-          className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors text-sm font-medium"
+          className="w-full py-3.5 mt-1 rounded-xl bg-[#0080ff] text-white text-[15px] font-medium active:opacity-90 disabled:opacity-50"
         >
           Continue
         </button>
