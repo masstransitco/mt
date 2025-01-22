@@ -36,7 +36,102 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ... keep existing auth logic unchanged ...
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        handleClose();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        delete window.recaptchaVerifier;
+      }
+    };
+  }, []);
+
+  const handleClose = () => {
+    setSelectedMethod(null);
+    setPhoneNumber('');
+    setVerificationCode('');
+    setError(null);
+    setLoading(false);
+    onClose();
+  };
+
+  const handlePhoneSignIn = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+      }
+      
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        'recaptcha-container',
+        {
+          size: 'invisible',
+          callback: () => {},
+          'expired-callback': () => {
+            setError('reCAPTCHA expired. Please try again.');
+            setLoading(false);
+          }
+        }
+      );
+
+      const confirmationResult = await signInWithPhoneNumber(
+        auth,
+        phoneNumber,
+        window.recaptchaVerifier
+      );
+      window.confirmationResult = confirmationResult;
+      setSelectedMethod('phone-verify');
+    } catch (error: any) {
+      console.error('Phone sign-in error:', error);
+      let errorMessage = 'Failed to send verification code. Please try again.';
+      
+      if (error.code === 'auth/invalid-phone-number') {
+        errorMessage = 'Invalid phone number. Please enter a valid number.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Please try again later.';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      if (!window.confirmationResult) {
+        throw new Error('No verification code was sent');
+      }
+
+      await window.confirmationResult.confirm(verificationCode);
+      // Success is handled by the onAuthStateChanged listener
+    } catch (error: any) {
+      console.error('Code verification error:', error);
+      let errorMessage = 'Failed to verify code. Please try again.';
+      
+      if (error.code === 'auth/invalid-verification-code') {
+        errorMessage = 'Invalid code. Please check and try again.';
+      } else if (error.code === 'auth/code-expired') {
+        errorMessage = 'Code expired. Please request a new one.';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderWelcomeContent = () => (
     <div className="space-y-8">
@@ -90,11 +185,11 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="p-0 gap-0 max-w-md">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="p-0 gap-0 max-w-md dialog-fullwidth">
         <DialogHeader className="absolute right-4 top-4 z-10">
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-full p-2 bg-background/80 backdrop-blur-sm hover:bg-background/90 transition-colors"
           >
             <X className="w-4 h-4" />
