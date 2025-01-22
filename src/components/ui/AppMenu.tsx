@@ -1,21 +1,21 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { LogOut, Car, Zap, ChevronRight, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
+import SignInModal from './SignInModal';
 
 export default function AppMenu() {
   const router = useRouter();
   const user = auth.currentUser;
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      router.push('/signin');
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -81,11 +81,12 @@ export default function AppMenu() {
             </>
           ) : (
             <div className="space-y-2">
-              <Link href="/signin" className="w-full">
-  <button className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm w-full">
-    Sign In
-  </button>
-</Link>
+              <button
+                onClick={() => setShowSignInModal(true)}
+                className="bg-primary text-primary-foreground px-4 py-2 rounded text-sm w-full"
+              >
+                Sign In
+              </button>
             </div>
           )}
         </div>
@@ -165,6 +166,12 @@ export default function AppMenu() {
           <button className="hover:text-foreground">Acknowledgements</button>
         </div>
       </div>
+
+      {/* Sign In Modal */}
+      <SignInModal 
+        isOpen={showSignInModal} 
+        onClose={() => setShowSignInModal(false)} 
+      />
     </nav>
   );
 }
