@@ -6,7 +6,7 @@ import { LogOut, Car, Zap, ChevronRight, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
-import SignInModal from './SignInModal';
+import SignInModal from './signin';
 
 export default function AppMenu() {
   const router = useRouter();
