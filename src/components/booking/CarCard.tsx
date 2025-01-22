@@ -1,18 +1,16 @@
-
-// src/components/booking/CarCard.tsx
+// CarCard.tsx
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Car as CarType } from '@/types/booking';
-import { Battery, Gauge } from 'lucide-react';
+import { Battery, Gauge, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 
-// Dynamically import Car3DViewer with no SSR
 const Car3DViewer = dynamic(() => import('./Car3DViewer'), { 
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-card animate-pulse rounded-t-2xl" />
+    <div className="w-full h-full bg-card animate-pulse rounded-2xl" />
   ),
 });
 
@@ -31,7 +29,6 @@ export default function CarCard({
 }: CarCardProps) {
   const [shouldLoad3D, setShouldLoad3D] = useState(false);
   
-  // Only load 3D viewer when car is selected
   useEffect(() => {
     if (selected && !shouldLoad3D) {
       setShouldLoad3D(true);
@@ -44,7 +41,7 @@ export default function CarCard({
       transition={{ type: "tween", duration: 0.2 }}
       className={`
         relative overflow-hidden rounded-2xl bg-card
-        transition-all duration-300 w-full
+        transition-all duration-300 w-full cursor-pointer
         ${selected 
           ? 'border-2 border-blue-500 shadow-lg' 
           : 'border border-border/50 hover:border-border'
@@ -52,11 +49,21 @@ export default function CarCard({
       `}
       onClick={onClick}
     >
+      {/* Selected Label */}
+      {selected && (
+        <div className="absolute top-3 right-3 z-10">
+          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500 text-white text-sm">
+            <Check size={14} />
+            <span>Selected</span>
+          </div>
+        </div>
+      )}
+
       {/* Car visualization container */}
       <div 
         className={`
           relative w-full transition-all duration-300
-          ${selected ? 'aspect-[16/9]' : 'aspect-[16/4]'}
+          ${selected ? 'aspect-video' : 'aspect-square'}
         `}
       >
         {isVisible && (
@@ -68,8 +75,8 @@ export default function CarCard({
                   src={car.image}
                   alt={car.name}
                   fill
-                  className="object-contain rounded-t-2xl"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  className="object-cover rounded-t-2xl"
+                  sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                   priority={!selected}
                 />
               </div>
@@ -98,10 +105,10 @@ export default function CarCard({
       </div>
       
       {/* Car information */}
-      <div className="p-6 space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <h3 className="text-xl font-semibold text-foreground">
+      <div className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h3 className="font-semibold text-foreground">
               {car.name}
             </h3>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -110,21 +117,21 @@ export default function CarCard({
             </div>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-bold text-foreground">
+            <p className="text-lg font-bold text-foreground">
               ${car.price}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               per day
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-4 pt-2">
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Gauge className="w-4 h-4" />
-            <span>{car.features.range} mi range</span>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <Gauge className="w-3.5 h-3.5" />
+            <span>{car.features.range} mi</span>
           </div>
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Battery className="w-4 h-4" />
+          <div className="flex items-center gap-1">
+            <Battery className="w-3.5 h-3.5" />
             <span>{car.features.charging}</span>
           </div>
         </div>
