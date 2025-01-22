@@ -15,6 +15,7 @@ import {
   ConfirmationResult
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import PhoneInput from './PhoneInput';
 
 type AuthMethod = 'phone' | 'phone-verify' | null;
 
@@ -89,10 +90,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         }
       );
 
-      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      // Phone number is already formatted with country code by PhoneInput
       const confirmationResult = await signInWithPhoneNumber(
         auth,
-        formattedPhone,
+        phoneNumber, // PhoneInput already includes the "+" prefix
         window.recaptchaVerifier
       );
       window.confirmationResult = confirmationResult;
@@ -123,6 +124,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }
 
       await window.confirmationResult.confirm(verificationCode);
+      // Success is handled by the onAuthStateChanged listener
     } catch (error: any) {
       console.error('Code verification error:', error);
       let errorMessage = 'Failed to verify code. Please try again.';
@@ -168,18 +170,15 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       
       {selectedMethod === 'phone' && (
         <div className="space-y-4">
-          <input
-            type="tel"
-            placeholder="+1 (555) 000-0000"
+          <PhoneInput
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={setPhoneNumber}
             disabled={loading}
-            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
           />
           <div className="grid gap-2">
             <button
               onClick={handlePhoneSignIn}
-              disabled={loading || !phoneNumber}
+              disabled={loading || !phoneNumber || phoneNumber.length < 8}
               className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {loading ? (
@@ -202,18 +201,22 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
       {selectedMethod === 'phone-verify' && (
         <div className="space-y-4">
+          <div className="text-sm text-muted-foreground">
+            Enter the 6-digit code sent to {phoneNumber}
+          </div>
           <input
             type="text"
             placeholder="Enter verification code"
             value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value)}
+            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             disabled={loading}
             className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
+            maxLength={6}
           />
           <div className="grid gap-2">
             <button
               onClick={handleVerifyCode}
-              disabled={loading || !verificationCode}
+              disabled={loading || verificationCode.length !== 6}
               className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {loading ? (
@@ -235,22 +238,22 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
-return (
-  <Dialog open={isOpen} onOpenChange={handleClose}>
-    <DialogContent className="p-0 gap-0 sm:p-6 sm:gap-4">
-      <DialogHeader className="p-4 border-b border-border">
-        <DialogTitle>
-          {selectedMethod === 'phone-verify' 
-            ? 'Enter Verification Code'
-            : selectedMethod === 'phone'
-            ? 'Sign in with Phone'
-            : 'Sign in to continue'}
-        </DialogTitle>
-      </DialogHeader>
-      <div className="flex-1 overflow-y-auto p-4">
-        {renderContent()}
-      </div>
-    </DialogContent>
-  </Dialog>
-);
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="p-0 gap-0 sm:p-6 sm:gap-4">
+        <DialogHeader className="p-4 border-b border-border">
+          <DialogTitle>
+            {selectedMethod === 'phone-verify' 
+              ? 'Enter Verification Code'
+              : selectedMethod === 'phone'
+              ? 'Sign in with Phone'
+              : 'Sign in to continue'}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto p-4">
+          {renderContent()}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
