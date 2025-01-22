@@ -33,10 +33,14 @@
   body {
     @apply bg-background text-foreground antialiased;
     -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 }
 
 @layer components {
+  /* Car related components */
   .car-card {
     @apply relative overflow-hidden rounded-xl transition-all duration-300 bg-card border border-border hover:border-primary/50 text-foreground mx-auto w-full;
   }
@@ -89,6 +93,7 @@
     @apply flex items-center gap-1.5;
   }
   
+  /* Bottom sheet components */
   .bottom-sheet {
     @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border rounded-t-[var(--radius)] shadow-2xl transform transition-all duration-300 ease-in-out pb-4;
   }
@@ -117,126 +122,98 @@
     @apply bg-muted px-3 py-1.5 rounded-full text-sm text-muted-foreground flex items-center gap-1.5;
   }
   
+  /* Button components */
   .btn-primary {
     @apply h-12 px-6 rounded-full bg-accent text-accent-foreground font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-accent/25;
   }
   
+  /* Scroll components */
   .scroll-container {
     @apply overflow-auto overscroll-contain;
   }
+
+  /* Dialog components */
+  .dialog-content {
+    @apply bg-background sm:rounded-lg overflow-hidden;
+    @apply w-full sm:w-[448px];
+    @apply p-0 gap-0 border border-border/40;
+  }
 }
 
-.three-d-scene {
-  @apply touch-none select-none;
+/* Menu components */
+.app-menu {
+  @apply fixed inset-0 bg-background z-50 flex flex-col min-h-screen w-full;
 }
 
-.three-d-scene-selected {
-  @apply cursor-grab active:cursor-grabbing;
+.app-menu-header {
+  @apply sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60;
+  margin-top: env(safe-area-inset-top, 0px);
 }
 
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+.app-menu-header-content {
+  @apply flex items-center px-4 h-14 border-b border-border/40;
 }
 
-::selection {
-  @apply bg-accent/30 text-foreground;
+.app-menu-back-button {
+  @apply p-2 -ml-2 hover:bg-accent/10 rounded-full transition-colors;
 }
 
-  .app-menu {
-    @apply fixed inset-0 bg-background z-50 flex flex-col min-h-screen w-full;
-  }
+.app-menu-title {
+  @apply text-xl font-medium ml-2;
+}
 
-  .app-menu-header {
-    @apply sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60;
-    margin-top: env(safe-area-inset-top, 0px); /* Use safe area for iOS */
-  }
+.app-menu-section {
+  @apply p-4 border-b border-border/40;
+}
 
-  .app-menu-header-content {
-    @apply flex items-center px-4 h-14 border-b border-border/40;
-  }
+.app-menu-discover-icon {
+  @apply w-14 h-14 rounded-lg bg-card flex items-center justify-center overflow-hidden;
+}
 
-  .app-menu-back-button {
-    @apply p-2 -ml-2 hover:bg-accent/10 rounded-full transition-colors;
-  }
+.app-menu-discover-image {
+  @apply w-10 h-10 object-cover;
+}
 
-  .app-menu-title {
-    @apply text-xl font-medium ml-2;
-  }
+.app-menu-footer {
+  @apply sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t border-border/40;
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
 
-  .app-menu-section {
-    @apply p-4 border-b border-border/40;
-  }
-
-  .app-menu-discover-icon {
-    @apply w-14 h-14 rounded-lg bg-card flex items-center justify-center overflow-hidden;
-  }
-
-  .app-menu-discover-image {
-    @apply w-10 h-10 object-cover;  /* Increased size of discover.gif */
-  }
-
-  .app-menu-footer {
-    @apply sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t border-border/40;
-    padding-bottom: env(safe-area-inset-bottom, 16px); /* Use safe area for iOS */
-  }
-
+/* Mobile styles */
 @media (max-width: 640px) {
-  .dialog-fullwidth {
-    width: 100vw !important;
-    height: 100dvh !important; /* Use dynamic viewport height */
-    margin: 0 !important;
-    max-width: none !important;
-    max-height: none !important;
-    border-radius: 0 !important;
-    position: fixed !important;
-    inset: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .dialog-content-fullwidth {
-    width: 100% !important;
-    height: 100% !important;
-    padding: 0 !important;
-    border: none !important;
-    display: flex !important;
-    flex-direction: column !important;
-    position: relative !important;
-    overflow: hidden !important; /* Prevent content overflow */
+  .dialog-content {
+    max-height: 100dvh;
+    height: 100dvh;
+    width: 100vw;
+    margin: 0;
+    border-radius: 0;
+    border: none;
   }
 
   .welcome-hero {
-    position: relative !important;
-    height: 45vh !important; /* Reduced height for better content balance */
-    min-height: 300px !important;
-    max-height: 45vh !important;
-    width: 100% !important;
+    height: 45vh;
+    min-height: 300px;
+    max-height: 45vh;
   }
 
   .welcome-content {
-    flex: 1 !important;
-    min-height: 0 !important; /* Important for proper flex behavior */
-    overflow-y: auto !important;
-    overscroll-behavior: contain !important;
-    -webkit-overflow-scrolling: touch !important;
-    background-color: hsl(var(--background)) !important;
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
-/* Update desktop styles */
+/* Desktop styles */
 @media (min-width: 641px) {
-  .dialog-fullwidth {
-    width: 100% !important;
-    max-width: 448px !important;
-    height: 85vh !important;
-    max-height: 800px !important;
-    margin: 3vh auto !important;
-    overflow: hidden !important;
+  .dialog-content {
+    height: 85vh;
+    max-height: 800px;
+    margin-top: 3vh;
   }
 
   .welcome-hero {
-    height: 320px !important;
+    height: 320px;
   }
 }
 
@@ -249,4 +226,17 @@ body {
     rgba(0, 0, 0, 0.7) 70%,
     hsl(var(--background)) 100%
   );
+}
+
+/* Utility classes */
+.three-d-scene {
+  @apply touch-none select-none;
+}
+
+.three-d-scene-selected {
+  @apply cursor-grab active:cursor-grabbing;
+}
+
+::selection {
+  @apply bg-accent/30 text-foreground;
 }
