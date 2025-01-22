@@ -1,39 +1,68 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { setViewState, selectViewState } from '@/store/userSlice';
+import { auth } from '@/lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 // Import icons from lucide-react
 import { Car, Map, Menu as MenuIcon, QrCode } from 'lucide-react';
 
+// Import components
 import CarGrid from '@/components/booking/CarGrid';
 import GMap from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
 import SideSheet from '@/components/ui/SideSheet';
 import AppMenu from '@/components/ui/AppMenu';
-// NEW: Import your QR overlay
 import QrScannerOverlay from '@/components/ui/QrScannerOverlay';
 
 export default function HomePage() {
+  const router = useRouter();
   const dispatch = useDispatch();
   const viewState = useSelector(selectViewState);
 
-  // SideSheet state
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
 
-  // QR Scanner state
+  // UI state
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Auth check effect
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      setAuthChecked(true);
+
+      if (!user) {
+        router.push('/signin');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
 
   const toggleView = useCallback(() => {
     dispatch(setViewState(viewState === 'showMap' ? 'showCar' : 'showMap'));
   }, [dispatch, viewState]);
 
-  // Toggle side-sheet
   const toggleMenu = useCallback(() => {
     setIsMenuOpen((prev) => !prev);
   }, []);
+
+  // Show nothing while checking auth
+  if (!authChecked) {
+    return null;
+  }
+
+  // If not authenticated, the middleware will handle redirect
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -115,27 +144,31 @@ export default function HomePage() {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 pb-safe-area-inset-bottom relative">
-        {/* Car Grid always present */}
-        <div className="relative">
+        {/* Car Grid always present but hidden when map is shown */}
+        <div className={`transition-opacity duration-300 ${
+          viewState === 'showMap' ? 'opacity-0' : 'opacity-100'
+        }`}>
           <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
         </div>
 
-        {/* Condition: Show map on top if viewState is 'showMap' */}
-        {viewState === 'showMap' && (
-          <div className="absolute inset-0 h-[calc(100vh-4rem)] pt-4">
-            <div className="h-full w-full rounded-2xl overflow-hidden">
-              <GMap 
-                googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
-              />
-            </div>
+        {/* Map absolute positioned on top when active */}
+        <div className={`
+          absolute inset-0 h-[calc(100vh-4rem)]
+          transition-opacity duration-300
+          ${viewState === 'showMap' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
+        `}>
+          <div className="h-full w-full rounded-2xl overflow-hidden">
+            <GMap 
+              googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+            />
           </div>
-        )}
+        </div>
       </div>
 
       {/* Booking Dialog */}
       <BookingDialog />
 
-      {/* Side-Sheet + Menu */}
+      {/* Side-Sheet Menu */}
       <SideSheet isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)}>
         <AppMenu />
       </SideSheet>
