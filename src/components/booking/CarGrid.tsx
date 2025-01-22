@@ -1,5 +1,6 @@
+// CarGrid.tsx
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectCar, selectViewState } from '@/store/userSlice';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,6 +20,13 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   const [filterType, setFilterType] = React.useState('all');
   const [showFilters, setShowFilters] = React.useState(false);
 
+  // Set car1 as selected on initial load
+  useEffect(() => {
+    if (!selectedCarId) {
+      dispatch(selectCar(1)); // Select first car by default
+    }
+  }, [dispatch, selectedCarId]);
+
   const sortedAndFilteredCars = React.useMemo(() => {
     const filtered = filterType === 'all' 
       ? SAMPLE_CARS 
@@ -26,7 +34,6 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           car.type.toLowerCase() === filterType.toLowerCase()
         );
     
-    // Bring the selected car to the front (optional)
     return [...filtered].sort((a, b) => {
       if (a.id === selectedCarId) return -1;
       if (b.id === selectedCarId) return 1;
@@ -47,7 +54,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
 
   return (
     <div 
-      className={`space-y-4 ${className} transition-all duration-300`}
+      className={`space-y-6 ${className} transition-all duration-300`}
       style={{
         display: viewState === 'showCar' ? 'block' : 'none',
         visibility: viewState === 'showCar' ? 'visible' : 'hidden'
@@ -79,7 +86,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
               <div className="grid grid-cols-2 gap-2 p-4 rounded-2xl bg-card">
@@ -91,11 +98,9 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                       setShowFilters(false);
                     }}
                     className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors
-                              ${
-                                filterType === option.value 
-                                  ? 'bg-accent text-white' 
-                                  : 'bg-muted hover:bg-muted/80 text-foreground'
-                              }`}
+                              ${filterType === option.value 
+                                ? 'bg-accent text-white' 
+                                : 'bg-muted hover:bg-muted/80 text-foreground'}`}
                   >
                     {option.label}
                   </button>
@@ -106,16 +111,17 @@ export default function CarGrid({ className = '' }: CarGridProps) {
         </AnimatePresence>
       </div>
 
-      {/* Car grid */}
-      <div className="grid grid-cols-1 gap-4">
+      {/* Responsive car grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <AnimatePresence mode="popLayout">
           {sortedAndFilteredCars.map((car) => (
             <motion.div
               key={car.id}
-              initial={{ opacity: 0, y: 8 }}
+              layout
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.2 }}
             >
               <CarCard
                 car={car}
@@ -131,8 +137,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.2 }}
-            className="py-12 text-center rounded-2xl bg-card"
+            className="col-span-full py-12 text-center rounded-2xl bg-card"
           >
             <p className="text-muted-foreground">
               No vehicles found matching your criteria.
@@ -150,10 +155,3 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   );
 }
 
-export const preloadAllCarModels = () => {
-  SAMPLE_CARS.forEach(car => {
-    import('./Car3DViewer').then(module => {
-      module.preloadCarModels([car.modelUrl]);
-    });
-  });
-};
