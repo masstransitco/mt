@@ -135,7 +135,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
 const renderWelcomeContent = () => (
   <div className="flex flex-col h-full overflow-hidden">
-    <div className="relative w-full h-[45vh] sm:h-[320px] shrink-0">
+    <div className="relative w-full h-[35vh] sm:h-[280px] shrink-0">
       <Image
         src="/brand/drive.gif"
         alt="Welcome Banner"
@@ -145,37 +145,34 @@ const renderWelcomeContent = () => (
       />
       <div className="absolute inset-0 modal-gradient-overlay" />
       
-      <div className="absolute inset-x-0 bottom-0 p-6">
-        <h2 className="text-3xl sm:text-4xl font-semibold text-white leading-tight mb-3">
+      <div className="absolute inset-x-0 bottom-0 p-4">
+        <h2 className="text-2xl sm:text-3xl font-semibold text-white leading-tight mb-2">
           Welcome to Mass Transit
         </h2>
-        <div className="text-base sm:text-lg text-white/90">
+        <div className="text-sm sm:text-base text-white/90">
           <p className="line-clamp-2">
-            Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad. Enjoy premium travel at lower costs than taxis or rideshares.
+            Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.
           </p>
         </div>
       </div>
     </div>
-
     <div className="flex-1 overflow-y-auto">
-      <div className="p-6 space-y-5">
-        <div className="space-y-2.5 text-base text-muted-foreground">
+      <div className="p-4 space-y-4">
+        <div className="space-y-2 text-sm text-muted-foreground">
           <p>• Access 150+ stations with seamless entry and exit</p>
           <p>• No deposits. Daily fares capped at $400</p>
         </div>
-
-        <div className="text-sm text-muted-foreground/80">
+        <div className="text-xs text-muted-foreground/80">
           By clicking "Continue," you confirm you're 18 or older with a valid driver's license or permit. Trip and driving data may be collected to improve services. See our{' '}
           <a href="/privacy" className="text-primary hover:underline">
             Privacy Policy
           </a>{' '}
           for details.
         </div>
-
         <button
           onClick={() => setSelectedMethod('phone')}
           disabled={loading}
-          className="w-full p-4 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors text-base font-medium"
+          className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors text-sm font-medium"
         >
           Continue
         </button>
