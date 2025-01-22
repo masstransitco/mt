@@ -1,51 +1,33 @@
 {
   "compilerOptions": {
-    // Target modern or a suitable ES standard
     "target": "ES2022",
-    // Libraries you'll use (DOM, ESNext, etc.)
     "lib": ["dom", "dom.iterable", "esnext"],
-    // Allow JS in your project if needed
     "allowJs": true,
-    // Skips type-checking of d.ts files from libraries
     "skipLibCheck": true,
-    // Enable all strict type-checking options
     "strict": true,
-    // No compiled output in a Next.js project (handled by Next)
     "noEmit": true,
-    // Allows default imports from modules with no default export
     "esModuleInterop": true,
-    // Use the most modern module system supported by Next
     "module": "esnext",
-    // For Next.js 13+, bundler-based resolution can work well
-    "moduleResolution": "bundler",
-    // Resolve JSON files
+    "moduleResolution": "bundler", // or "node"
     "resolveJsonModule": true,
-    // Treat each file as a separate module
     "isolatedModules": true,
-    // Keep track of changes in incremental builds
+    "jsx": "preserve",
     "incremental": true,
-
-    // Next.js-specific TypeScript plugin
     "plugins": [
       {
         "name": "next"
       }
     ],
-
-    // Example path alias to reference files with @/*
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  // You MUST include your custom .d.ts files so TypeScript can see them
   "include": [
     "next-env.d.ts",
-    // Our custom global types folder
-    "src/types/**/*.d.ts",
+    "src/types/**/*.d.ts", // <-- important: include global.d.ts
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  // Exclude node_modules (typical in most projects)
   "exclude": ["node_modules"]
 }
