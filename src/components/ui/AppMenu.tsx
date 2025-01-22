@@ -128,7 +128,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
               onClick={handleDiscoverClick}
               className="flex items-center gap-4 w-full px-4 py-3 hover:bg-accent/10 transition-colors"
             >
-              <div className="w-14 h-14 rounded-lg overflow-hidden bg-card">
+              <div className="w-14 h-14 rounded overflow-hidden bg-card">
                 <Image
                   src="/brand/discover.gif"
                   alt="Discover"
