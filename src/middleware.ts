@@ -3,25 +3,22 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Public paths that don't require authentication
-  const publicPaths = ['/signin', '/api/auth'];
+  // Get the Firebase auth session from cookie
+  const session = request.cookies.get('__session')?.value;
+
+  // List of paths that don't require authentication
+  const publicPaths = ['/api/auth'];
   
   // Check if the path is public
   const isPublicPath = publicPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
   );
 
-  // Get the Firebase auth session from cookie
-  const session = request.cookies.get('__session')?.value;
-
-  if (!session && !isPublicPath) {
-    // Redirect to signin if no session and trying to access protected route
-    return NextResponse.redirect(new URL('/signin', request.url));
-  }
-
-  if (session && request.nextUrl.pathname === '/signin') {
-    // Redirect to home if has session and trying to access signin
-    return NextResponse.redirect(new URL('/', request.url));
+  // Only redirect if trying to access protected path without session
+  if (!session && !isPublicPath && !request.nextUrl.pathname.startsWith('/_next')) {
+    // Instead of redirecting, we'll let the client-side handle auth
+    // The app will show the sign-in modal when needed
+    return NextResponse.next();
   }
 
   return NextResponse.next();
