@@ -27,6 +27,13 @@ interface SignInModalProps {
   onClose: () => void;
 }
 
+declare global {
+  interface Window {
+    recaptchaVerifier: RecaptchaVerifier;
+    confirmationResult: any;
+  }
+}
+
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [selectedMethod, setSelectedMethod] = useState<AuthMethod>(null);
   const [authAction, setAuthAction] = useState<AuthAction>(null);
@@ -37,16 +44,21 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is signed in
         handleClose();
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      // Cleanup recaptcha when component unmounts
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        delete window.recaptchaVerifier;
+      }
+    };
   }, []);
 
   const resetState = () => {
@@ -69,10 +81,46 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     try {
       setLoading(true);
       setError(null);
+      
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+
+      const result = await signInWithPopup(auth, provider).catch((error) => {
+        if (error.code === 'auth/popup-closed-by-user') {
+          return null;
+        }
+        throw error;
+      });
+
+      if (!result) {
+        // User closed popup - no error needed
+        return;
+      }
+
     } catch (error: any) {
-      setError(error.message);
+      console.error('Google sign-in error:', error);
+      
+      let errorMessage = 'Failed to sign in with Google. Please try again.';
+      
+      switch (error.code) {
+        case 'auth/popup-blocked':
+          errorMessage = 'Pop-up was blocked. Please enable pop-ups and try again.';
+          break;
+        case 'auth/cancelled-popup-request':
+          errorMessage = 'Sign-in was interrupted. Please try again.';
+          break;
+        case 'auth/popup-closed-by-user':
+          return; // Don't show error
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your connection and try again.';
+          break;
+        default:
+          errorMessage = error.message || 'An unexpected error occurred. Please try again.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -83,18 +131,22 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setLoading(true);
       setError(null);
       
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(
-          auth,
-          'recaptcha-container',
-          {
-            size: 'invisible',
-            callback: () => {
-              // reCAPTCHA solved
-            }
-          }
-        );
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
       }
+      
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        auth,
+        'recaptcha-container',
+        {
+          size: 'invisible',
+          callback: () => {},
+          'expired-callback': () => {
+            setError('reCAPTCHA expired. Please try again.');
+            setLoading(false);
+          }
+        }
+      );
 
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
       const confirmationResult = await signInWithPhoneNumber(
@@ -105,7 +157,16 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       window.confirmationResult = confirmationResult;
       setSelectedMethod('phone-verify');
     } catch (error: any) {
-      setError(error.message);
+      console.error('Phone sign-in error:', error);
+      let errorMessage = 'Failed to send verification code. Please try again.';
+      
+      if (error.code === 'auth/invalid-phone-number') {
+        errorMessage = 'Invalid phone number. Please enter a valid number.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Please try again later.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -121,9 +182,17 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }
 
       await window.confirmationResult.confirm(verificationCode);
-      // Auth state listener will handle the redirect
     } catch (error: any) {
-      setError(error.message);
+      console.error('Code verification error:', error);
+      let errorMessage = 'Failed to verify code. Please try again.';
+      
+      if (error.code === 'auth/invalid-verification-code') {
+        errorMessage = 'Invalid code. Please check and try again.';
+      } else if (error.code === 'auth/code-expired') {
+        errorMessage = 'Code expired. Please request a new one.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -140,7 +209,29 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         await createUserWithEmailAndPassword(auth, email, password);
       }
     } catch (error: any) {
-      setError(error.message);
+      console.error('Email auth error:', error);
+      let errorMessage = 'Authentication failed. Please try again.';
+      
+      switch (error.code) {
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          errorMessage = 'Invalid email or password.';
+          break;
+        case 'auth/email-already-in-use':
+          errorMessage = 'Email already registered. Please sign in instead.';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password should be at least 6 characters.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many attempts. Please try again later.';
+          break;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -151,7 +242,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       <button
         onClick={handleGoogleSignIn}
         disabled={loading}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50 transition-colors"
       >
         {loading ? (
           <Loader2 className="w-5 h-5 animate-spin" />
@@ -164,7 +255,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       <button
         onClick={() => setSelectedMethod('phone')}
         disabled={loading}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50 transition-colors"
       >
         <Phone className="w-5 h-5" />
         <span>Continue with Phone</span>
@@ -176,7 +267,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           setAuthAction('signin');
         }}
         disabled={loading}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50 transition-colors"
       >
         <Mail className="w-5 h-5" />
         <span>Continue with Email</span>
@@ -186,7 +277,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   const renderError = () => (
     error && (
-      <div className="p-3 mb-4 text-sm text-destructive bg-destructive/10 rounded-lg">
+      <div className="p-3 mb-4 text-sm text-destructive bg-destructive/10 rounded-lg animate-in fade-in slide-in-from-top-2 duration-200">
         {error}
       </div>
     )
@@ -220,7 +311,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <button
               onClick={handleEmailAuth}
               disabled={loading || !email || !password}
-              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin mx-auto" />
@@ -229,11 +320,20 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               )}
             </button>
             <button
+              onClick={() => {
+                setAuthAction(authAction === 'signin' ? 'signup' : 'signin');
+              }}
+              disabled={loading}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {authAction === 'signin' ? 'Create an account' : 'Already have an account?'}
+            </button>
+            <button
               onClick={() => setSelectedMethod(null)}
               disabled={loading}
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              Back
+              Back to sign in options
             </button>
           </div>
         </div>
@@ -253,7 +353,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <button
               onClick={handlePhoneSignIn}
               disabled={loading || !phoneNumber}
-              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin mx-auto" />
@@ -266,7 +366,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               disabled={loading}
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              Back
+              Back to sign in options
             </button>
           </div>
           <div id="recaptcha-container" />
@@ -287,7 +387,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <button
               onClick={handleVerifyCode}
               disabled={loading || !verificationCode}
-              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin mx-auto" />
@@ -300,7 +400,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               disabled={loading}
               className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
-              Back
+              Back to phone number
             </button>
           </div>
         </div>
