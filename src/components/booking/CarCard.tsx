@@ -19,13 +19,15 @@ interface CarCardProps {
   selected: boolean;
   onClick: () => void;
   isVisible?: boolean;
+  size?: 'small' | 'large';
 }
 
 export default function CarCard({ 
   car, 
   selected, 
   onClick, 
-  isVisible = true 
+  isVisible = true,
+  size = 'large'
 }: CarCardProps) {
   const [shouldLoad3D, setShouldLoad3D] = useState(false);
   
@@ -35,9 +37,11 @@ export default function CarCard({
     }
   }, [selected]);
 
+  const isSmall = size === 'small';
+
   return (
     <motion.div
-      whileHover={{ y: -5 }}
+      whileHover={{ y: isSmall ? -2 : -5 }}
       transition={{ type: "tween", duration: 0.2 }}
       className={`
         relative overflow-hidden rounded-2xl bg-card
@@ -63,7 +67,7 @@ export default function CarCard({
       <div 
         className={`
           relative w-full transition-all duration-300
-          ${selected ? 'aspect-video' : 'aspect-square'}
+          ${selected ? 'aspect-[16/9]' : 'aspect-square'}
         `}
       >
         {isVisible && (
@@ -75,21 +79,19 @@ export default function CarCard({
                   src={car.image}
                   alt={car.name}
                   fill
-                  className="object-cover rounded-t-2xl"
-                  sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-                  priority={!selected}
+                  className="object-contain p-4"
+                  sizes={isSmall 
+                    ? "(max-width: 768px) 33vw, 25vw"
+                    : "(max-width: 768px) 100vw, 50vw"
+                  }
+                  priority={selected}
                 />
               </div>
             )}
             
             {/* Load 3D viewer only when selected */}
-            {shouldLoad3D && (
-              <div 
-                className={`
-                  absolute inset-0 transition-opacity duration-300
-                  ${selected ? 'opacity-100' : 'opacity-0'}
-                `}
-              >
+            {shouldLoad3D && selected && (
+              <div className="absolute inset-0 transition-opacity duration-300">
                 <Car3DViewer 
                   modelUrl={car.modelUrl}
                   imageUrl={car.image}
@@ -105,36 +107,38 @@ export default function CarCard({
       </div>
       
       {/* Car information */}
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
+      <div className={`p-${isSmall ? '3' : '4'}`}>
+        <div className="flex items-start justify-between mb-2">
           <div>
-            <h3 className="font-semibold text-foreground">
+            <h3 className={`font-semibold text-foreground ${isSmall ? 'text-sm' : 'text-base'}`}>
               {car.name}
             </h3>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Battery className="w-4 h-4" />
+            <div className={`flex items-center gap-1 ${isSmall ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
+              <Battery className={`${isSmall ? 'w-3 h-3' : 'w-4 h-4'}`} />
               <span>{car.type}</span>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold text-foreground">
+            <p className={`font-bold text-foreground ${isSmall ? 'text-base' : 'text-lg'}`}>
               ${car.price}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className={`${isSmall ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
               per day
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Gauge className="w-3.5 h-3.5" />
-            <span>{car.features.range} mi</span>
+        {!isSmall && (
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Gauge className="w-3.5 h-3.5" />
+              <span>{car.features.range} mi</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Battery className="w-3.5 h-3.5" />
+              <span>{car.features.charging}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Battery className="w-3.5 h-3.5" />
-            <span>{car.features.charging}</span>
-          </div>
-        </div>
+        )}
       </div>
     </motion.div>
   );
