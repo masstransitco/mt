@@ -133,9 +133,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
-  const renderWelcomeContent = () => (
-    <div className="flex flex-col h-full">
-      <div className="welcome-hero">
+const renderWelcomeContent = () => (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="welcome-hero shrink-0">
         <Image
           src="/brand/drive.gif"
           alt="Welcome Banner"
@@ -143,23 +143,21 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0 modal-gradient-overlay pointer-events-none" />
+        <div className="absolute inset-0 modal-gradient-overlay" />
         
-        <div className="absolute inset-0 flex flex-col justify-end p-6">
-          <div className="space-y-4 text-white">
-            <h2 className="text-4xl font-semibold leading-tight">
-              Welcome to Mass Transit
-            </h2>
-            <div className="space-y-2 text-lg text-white/90">
-              <p>Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.</p>
-              <p>Enjoy premium travel at lower costs than taxis or rideshares.</p>
-            </div>
+        <div className="absolute inset-x-0 bottom-0 p-6 space-y-4">
+          <h2 className="text-4xl font-semibold text-white leading-none">
+            Welcome to Mass Transit
+          </h2>
+          <div className="space-y-2 text-lg text-white/90">
+            <p>Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.</p>
+            <p>Enjoy premium travel at lower costs than taxis or rideshares.</p>
           </div>
         </div>
       </div>
 
-      <div className="welcome-content modal-content-transition">
-        <div className="px-6 pt-6 pb-8 space-y-6">
+      <div className="welcome-content">
+        <div className="px-6 py-6 space-y-6">
           <div className="space-y-3 text-base text-muted-foreground">
             <p>• Access 150+ stations with seamless entry and exit.</p>
             <p>• No deposits. Daily fares capped at $400.</p>
@@ -186,19 +184,23 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   );
 
   const renderPhoneInput = () => (
-    <div className="h-full p-6 space-y-4">
-      <h3 className="text-xl font-semibold">Enter your phone number</h3>
-      <PhoneInput
-        value={phoneNumber}
-        onChange={setPhoneNumber}
-        disabled={loading}
-      />
-      {error && (
-        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
-          {error}
-        </div>
-      )}
-      <div className="grid gap-2">
+    <div className="flex flex-col h-full">
+      <div className="flex-1 p-6 space-y-4">
+        <h3 className="text-xl font-semibold">Enter your phone number</h3>
+        <PhoneInput
+          value={phoneNumber}
+          onChange={setPhoneNumber}
+          disabled={loading}
+        />
+        {error && (
+          <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+            {error}
+          </div>
+        )}
+        <div id="recaptcha-container" />
+      </div>
+
+      <div className="p-6 pt-0 space-y-3">
         <button
           onClick={handlePhoneSignIn}
           disabled={loading || !phoneNumber || phoneNumber.length < 8}
@@ -213,36 +215,38 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         <button
           onClick={() => setSelectedMethod(null)}
           disabled={loading}
-          className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="w-full p-3 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           Back
         </button>
       </div>
-      <div id="recaptcha-container" />
     </div>
   );
 
   const renderVerification = () => (
-    <div className="h-full p-6 space-y-4">
-      <h3 className="text-xl font-semibold">Verify your number</h3>
-      <div className="text-sm text-muted-foreground">
-        Enter the 6-digit code sent to {phoneNumber}
-      </div>
-      <input
-        type="text"
-        placeholder="Enter verification code"
-        value={verificationCode}
-        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-        disabled={loading}
-        className="w-full p-4 rounded-lg border border-border bg-background disabled:opacity-50"
-        maxLength={6}
-      />
-      {error && (
-        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
-          {error}
+    <div className="flex flex-col h-full">
+      <div className="flex-1 p-6 space-y-4">
+        <h3 className="text-xl font-semibold">Verify your number</h3>
+        <div className="text-sm text-muted-foreground">
+          Enter the 6-digit code sent to {phoneNumber}
         </div>
-      )}
-      <div className="grid gap-2">
+        <input
+          type="text"
+          placeholder="Enter verification code"
+          value={verificationCode}
+          onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          disabled={loading}
+          className="w-full p-4 rounded-lg border border-border bg-background disabled:opacity-50"
+          maxLength={6}
+        />
+        {error && (
+          <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+            {error}
+          </div>
+        )}
+      </div>
+
+      <div className="p-6 pt-0 space-y-3">
         <button
           onClick={handleVerifyCode}
           disabled={loading || verificationCode.length !== 6}
@@ -257,7 +261,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         <button
           onClick={() => setSelectedMethod('phone')}
           disabled={loading}
-          className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="w-full p-3 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           Back
         </button>
