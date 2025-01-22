@@ -18,6 +18,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-50 bg-black/80",
+      // Radix states for animations
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
@@ -36,13 +37,10 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 grid w-full gap-4 bg-background p-0",
-        "duration-200",
-        // Mobile styles
-        "w-full h-[100dvh] inset-0",
-        // Desktop styles
-        "sm:h-auto sm:max-h-[85vh] sm:w-[420px] sm:rounded-2xl",
-        "sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]",
+        "fixed z-50 bg-background p-0",
+        // Position & sizing to always maintain 75vw x 60vh
+        "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+        "w-[75vw] h-[60vh] rounded-2xl", // Remove or change "rounded-2xl" if desired
         // Animations
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -67,10 +65,7 @@ const DialogHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("flex flex-col space-y-1.5", className)}
-    {...props}
-  />
+  <div className={cn("flex flex-col space-y-1.5", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 
@@ -78,10 +73,7 @@ const DialogFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn("flex flex-col gap-2", className)}
-    {...props}
-  />
+  <div className={cn("flex flex-col gap-2", className)} {...props} />
 );
 DialogFooter.displayName = "DialogFooter";
 
