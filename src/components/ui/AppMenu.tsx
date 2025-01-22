@@ -7,7 +7,7 @@ import {
   Zap, 
   ChevronRight, 
   ChevronLeft,
-  Clock,
+  Route,
   Wallet
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -109,7 +109,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
     <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
       <div className="flex items-center gap-3">
         {/* Replace Zap with Timer for Trips - represents journey/time tracking */}
-        <Clock className="w-5 h-5" />
+        <Route className="w-5 h-5" />
         <span className="font-medium">Trips</span>
       </div>
       <ChevronRight className="w-5 h-5 text-muted-foreground" />
