@@ -269,22 +269,21 @@ const renderWelcomeContent = () => (
     </div>
   );
 
-  return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="p-0 gap-0 dialog-fullwidth dialog-content-fullwidth">
-        <DialogHeader className="absolute right-4 top-4 z-10">
-          <button 
-            onClick={handleClose}
-            className="rounded-full p-2 bg-black/20 backdrop-blur-sm hover:bg-black/30 transition-colors"
-          >
-            <X className="w-4 h-4 text-white" />
-          </button>
-        </DialogHeader>
+return (
+  <Dialog open={isOpen} onOpenChange={handleClose}>
+    <DialogContent className="w-full sm:w-[448px] h-[85vh] bg-background p-0 gap-0 border border-border/40 overflow-hidden">
+      <DialogHeader className="absolute right-4 top-4 z-10">
+        <button 
+          onClick={handleClose}
+          className="rounded-full p-2 bg-black/20 backdrop-blur-sm hover:bg-black/30 transition-colors"
+        >
+          <X className="w-4 h-4 text-white" />
+        </button>
+      </DialogHeader>
 
-        {!selectedMethod && renderWelcomeContent()}
-        {selectedMethod === 'phone' && renderPhoneInput()}
-        {selectedMethod === 'phone-verify' && renderVerification()}
-      </DialogContent>
-    </Dialog>
-  );
-}
+      {!selectedMethod && renderWelcomeContent()}
+      {selectedMethod === 'phone' && renderPhoneInput()}
+      {selectedMethod === 'phone-verify' && renderVerification()}
+    </DialogContent>
+  </Dialog>
+);
