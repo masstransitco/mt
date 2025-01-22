@@ -1,18 +1,18 @@
-// src/pages/signin.tsx
+// src/components/ui/signin.tsx
 import React, { useEffect, useState } from "react";
 import {
   GoogleAuthProvider,
   RecaptchaVerifier,
-  signInWithPopup,
   signInWithPhoneNumber,
+  signInWithPopup,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
+  createUserWithEmailAndPassword
 } from "firebase/auth";
-import { auth } from "@/lib/firebase"; // Your Firebase config that exports getAuth(app)
+import { auth } from "@/lib/firebase"; // Make sure this points to the file above
 
 export default function SignIn() {
   // ------------------------------
-  //            STATE
+  //              STATE
   // ------------------------------
   const [phoneNumber, setPhoneNumber] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -20,33 +20,34 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
 
   // ------------------------------
-  //        Setup reCAPTCHA
+  //         SETUP reCAPTCHA
   // ------------------------------
   useEffect(() => {
-    // Run only in the browser, and only if not already set
+    // This runs only in the browser
     if (typeof window !== "undefined" && !window.recaptchaVerifier) {
+      // The constructor signature is:
+      //   new RecaptchaVerifier(containerOrId, parameters, authExtern)
       window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container",
+        "recaptcha-container",  // <-- string container ID or HTMLElement
         {
-          size: "invisible", // 'invisible' or 'normal'
+          size: "invisible",    // "normal" or "invisible"
           callback: (response: any) => {
-            // reCAPTCHA solved - allow signInWithPhoneNumber
+            // reCAPTCHA solved, allow signInWithPhoneNumber
           },
         },
-        auth
+        auth // <-- your Auth instance
       );
     }
   }, []);
 
   // ------------------------------
-  //        Google Sign-In
+  //        GOOGLE SIGN-IN
   // ------------------------------
   const handleGoogleSignIn = async () => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       alert("Signed in with Google!");
-      // Optionally navigate or do something after sign in
     } catch (error) {
       console.error("Google sign-in error:", error);
       alert("Error signing in with Google");
@@ -54,20 +55,23 @@ export default function SignIn() {
   };
 
   // ------------------------------
-  //        Phone Sign-In
+  //         PHONE SIGN-IN
   // ------------------------------
   const sendVerificationCode = async () => {
     try {
+      // Check the reCAPTCHA
       const appVerifier = window.recaptchaVerifier;
       if (!appVerifier) {
-        alert("reCAPTCHA not ready");
+        alert("reCAPTCHA not ready.");
         return;
       }
+
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
         appVerifier
       );
+      // Store the confirmationResult in window to verify later
       window.confirmationResult = confirmationResult;
       alert("SMS verification code sent!");
     } catch (error) {
@@ -79,26 +83,25 @@ export default function SignIn() {
   const verifyCode = async () => {
     try {
       if (!window.confirmationResult) {
-        alert("No confirmation result");
+        alert("No confirmation result. Send code first.");
         return;
       }
+      // If successful, user is now signed in
       await window.confirmationResult.confirm(verificationCode);
       alert("Phone number verified!");
-      // Optionally navigate or do something after verification
     } catch (error) {
-      console.error("Verification error:", error);
+      console.error("Verify code error:", error);
       alert("Invalid verification code");
     }
   };
 
   // ------------------------------
-  //    Email/Password Sign-In
+  //    EMAIL/PASSWORD SIGN-IN
   // ------------------------------
   const handleEmailSignIn = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       alert("Signed in with email!");
-      // Optionally navigate or do something after sign in
     } catch (error) {
       console.error("Email sign-in error:", error);
       alert("Error signing in with email");
@@ -106,22 +109,18 @@ export default function SignIn() {
   };
 
   // ------------------------------
-  //    Email/Password Sign-Up
+  //    EMAIL/PASSWORD SIGN-UP
   // ------------------------------
   const handleEmailSignUp = async () => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       alert("Account created!");
-      // Optionally navigate or do something after sign up
     } catch (error) {
       console.error("Email sign-up error:", error);
       alert("Error creating account");
     }
   };
 
-  // ------------------------------
-  //            RENDER
-  // ------------------------------
   return (
     <div className="p-4">
       <h1 className="text-xl font-semibold mb-4">Sign In Page</h1>
@@ -172,11 +171,11 @@ export default function SignIn() {
           </button>
         </div>
 
-        {/* reCAPTCHA container element */}
+        {/* This container is required by reCAPTCHA */}
         <div id="recaptcha-container" />
       </div>
 
-      {/* Email/Password Sign-In & Sign-Up */}
+      {/* Email/Password Sign In & Sign Up */}
       <div className="mb-6">
         <label className="block mb-1">Email</label>
         <input
