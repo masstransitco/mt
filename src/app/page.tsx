@@ -1,13 +1,10 @@
-// src/app/page.tsx
 'use client';
 
 import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useDispatch, useSelector } from 'react-redux';
 import { setViewState, selectViewState } from '@/store/userSlice';
-
 import { Car, Map, Menu as MenuIcon, QrCode } from 'lucide-react';
-
 import CarGrid from '@/components/booking/CarGrid';
 import GMap from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
@@ -18,13 +15,16 @@ import QrScannerOverlay from '@/components/ui/QrScannerOverlay';
 export default function HomePage() {
   const dispatch = useDispatch();
   const viewState = useSelector(selectViewState);
-
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const toggleView = useCallback(() => {
     dispatch(setViewState(viewState === 'showMap' ? 'showCar' : 'showMap'));
   }, [dispatch, viewState]);
+
+  const handleMenuClose = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
 
   const toggleMenu = useCallback(() => {
     setIsMenuOpen((prev) => !prev);
@@ -43,7 +43,6 @@ export default function HomePage() {
             priority
             className="h-8 w-auto"
           />
-
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsScannerOpen(true)}
@@ -51,7 +50,6 @@ export default function HomePage() {
             >
               <QrCode className="w-5 h-5" />
             </button>
-
             <button
               onClick={toggleView}
               className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
@@ -62,7 +60,6 @@ export default function HomePage() {
                 <Map className="w-5 h-5" />
               )}
             </button>
-
             <button
               onClick={toggleMenu}
               className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
@@ -74,12 +71,13 @@ export default function HomePage() {
       </header>
 
       <div className="container mx-auto px-4 pb-safe-area-inset-bottom relative">
-        <div className={`transition-opacity duration-300 ${
-          viewState === 'showMap' ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        }`}>
+        <div 
+          className={`transition-opacity duration-300 ${
+            viewState === 'showMap' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        >
           <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
         </div>
-
         {viewState === 'showMap' && (
           <div className="absolute inset-0 h-[calc(100vh-4rem)] pt-4">
             <div className="h-full w-full rounded-2xl overflow-hidden">
@@ -93,8 +91,8 @@ export default function HomePage() {
 
       <BookingDialog />
 
-      <SideSheet isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)}>
-        <AppMenu />
+      <SideSheet isOpen={isMenuOpen} onClose={handleMenuClose}>
+        <AppMenu onClose={handleMenuClose} />
       </SideSheet>
 
       {isScannerOpen && (
