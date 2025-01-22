@@ -144,6 +144,44 @@ body {
   @apply bg-accent/30 text-foreground;
 }
 
+  .app-menu {
+    @apply fixed inset-0 bg-background z-50 flex flex-col min-h-screen w-full;
+  }
+
+  .app-menu-header {
+    @apply sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60;
+    margin-top: env(safe-area-inset-top, 0px); /* Use safe area for iOS */
+  }
+
+  .app-menu-header-content {
+    @apply flex items-center px-4 h-14 border-b border-border/40;
+  }
+
+  .app-menu-back-button {
+    @apply p-2 -ml-2 hover:bg-accent/10 rounded-full transition-colors;
+  }
+
+  .app-menu-title {
+    @apply text-xl font-medium ml-2;
+  }
+
+  .app-menu-section {
+    @apply p-4 border-b border-border/40;
+  }
+
+  .app-menu-discover-icon {
+    @apply w-14 h-14 rounded-lg bg-card flex items-center justify-center overflow-hidden;
+  }
+
+  .app-menu-discover-image {
+    @apply w-10 h-10 object-cover;  /* Increased size of discover.gif */
+  }
+
+  .app-menu-footer {
+    @apply sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t border-border/40;
+    padding-bottom: env(safe-area-inset-bottom, 16px); /* Use safe area for iOS */
+  }
+
 @media (max-width: 640px) {
   .dialog-fullwidth {
     width: 100vw !important;
