@@ -237,18 +237,21 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {selectedMethod === 'phone-verify' 
-              ? 'Enter Verification Code'
-              : selectedMethod === 'phone'
-              ? 'Sign in with Phone'
-              : 'Sign in to continue'}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="p-4">
-          {renderContent()}
+      <DialogContent className="sm:max-w-md dialog-fullwidth">
+        <div className="h-full flex flex-col dialog-content-fullwidth">
+          <DialogHeader className="px-4 py-4 border-b border-border">
+            <DialogTitle>
+              {selectedMethod === 'phone-verify' 
+                ? 'Enter Verification Code'
+                : selectedMethod === 'phone'
+                ? 'Sign in with Phone'
+                : 'Sign in to continue'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 p-4 overflow-y-auto">
+            {renderContent()}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
