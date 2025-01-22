@@ -143,3 +143,18 @@ body {
 ::selection {
   @apply bg-accent/30 text-foreground;
 }
+
+@media (max-width: 640px) {
+  .dialog-fullwidth {
+    width: 100vw !important;
+    margin: 0 !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    min-height: 100vh !important;
+  }
+
+  .dialog-content-fullwidth {
+    padding: 0 !important;
+    border: none !important;
+  }
+}
