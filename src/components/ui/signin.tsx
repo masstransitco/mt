@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { X, Mail, Phone, Github } from 'lucide-react';
+import { Mail, Phone, Loader2 } from 'lucide-react';
 import {
   GoogleAuthProvider,
   RecaptchaVerifier,
@@ -15,6 +15,7 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  onAuthStateChanged
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
@@ -33,64 +34,99 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [verificationCode, setVerificationCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Reset state when modal closes
-  const handleClose = () => {
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in
+        handleClose();
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const resetState = () => {
     setSelectedMethod(null);
     setAuthAction(null);
     setPhoneNumber('');
     setVerificationCode('');
     setEmail('');
     setPassword('');
+    setError(null);
+    setLoading(false);
+  };
+
+  const handleClose = () => {
+    resetState();
     onClose();
   };
 
-  // Google Sign In
   const handleGoogleSignIn = async () => {
     try {
+      setLoading(true);
+      setError(null);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      handleClose();
-    } catch (error) {
-      console.error('Google sign-in error:', error);
+      // No need to call handleClose() - auth state change listener will handle it
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Phone Sign In
   const handlePhoneSignIn = async () => {
     try {
+      setLoading(true);
+      setError(null);
+      
       if (!window.recaptchaVerifier) {
         window.recaptchaVerifier = new RecaptchaVerifier(
           auth,
           'recaptcha-container',
           {
             size: 'invisible',
+            callback: () => {
+              // reCAPTCHA solved
+            }
           }
         );
       }
 
+      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
       const confirmationResult = await signInWithPhoneNumber(
         auth,
-        phoneNumber,
+        formattedPhone,
         window.recaptchaVerifier
       );
       window.confirmationResult = confirmationResult;
-    } catch (error) {
-      console.error('Phone sign-in error:', error);
+      setSelectedMethod('phone-verify');
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Email Sign In/Up
   const handleEmailAuth = async () => {
     try {
+      setLoading(true);
+      setError(null);
+
       if (authAction === 'signin') {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      handleClose();
-    } catch (error) {
-      console.error('Email auth error:', error);
+      // Auth state change listener will handle closing
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -98,26 +134,30 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     <div className="grid gap-4">
       <button
         onClick={handleGoogleSignIn}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10"
+        disabled={loading}
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
       >
-        <img src="/icons/google.svg" alt="Google" className="w-5 h-5" />
+        {loading ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <img src="/icons/google.svg" alt="Google" className="w-5 h-5" />
+        )}
         <span>Continue with Google</span>
       </button>
 
       <button
         onClick={() => setSelectedMethod('phone')}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10"
+        disabled={loading}
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
       >
         <Phone className="w-5 h-5" />
         <span>Continue with Phone</span>
       </button>
 
       <button
-        onClick={() => {
-          setSelectedMethod('email');
-          setAuthAction(null);
-        }}
-        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10"
+        onClick={() => setSelectedMethod('email')}
+        disabled={loading}
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10 disabled:opacity-50"
       >
         <Mail className="w-5 h-5" />
         <span>Continue with Email</span>
@@ -125,127 +165,108 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
-  const renderEmailActions = () => (
-    <div className="grid gap-4">
-      <button
-        onClick={() => setAuthAction('signin')}
-        className="p-3 rounded-lg border border-border hover:bg-accent/10"
-      >
-        Sign In with Email
-      </button>
-      <button
-        onClick={() => setAuthAction('signup')}
-        className="p-3 rounded-lg border border-border hover:bg-accent/10"
-      >
-        Create New Account
-      </button>
-      <button
-        onClick={() => {
-          setSelectedMethod(null);
-          setAuthAction(null);
-        }}
-        className="text-sm text-muted-foreground hover:text-foreground"
-      >
-        Back to all options
-      </button>
-    </div>
-  );
-
-  const renderEmailForm = () => (
-    <div className="space-y-4">
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className="w-full p-2 rounded border border-border bg-background"
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className="w-full p-2 rounded border border-border bg-background"
-      />
-      <div className="grid gap-2">
-        <button
-          onClick={handleEmailAuth}
-          className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          {authAction === 'signin' ? 'Sign In' : 'Create Account'}
-        </button>
-        <button
-          onClick={() => setAuthAction(null)}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back
-        </button>
+  const renderError = () => (
+    error && (
+      <div className="p-3 mb-4 text-sm text-destructive bg-destructive/10 rounded-lg">
+        {error}
       </div>
-    </div>
+    )
   );
 
-  const renderPhoneForm = () => (
+  const renderContent = () => (
     <div className="space-y-4">
-      <input
-        type="tel"
-        placeholder="+1 (555) 000-0000"
-        value={phoneNumber}
-        onChange={(e) => setPhoneNumber(e.target.value)}
-        className="w-full p-2 rounded border border-border bg-background"
-      />
-      <div className="grid gap-2">
-        <button
-          onClick={handlePhoneSignIn}
-          className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          Send Code
-        </button>
-        <button
-          onClick={() => setSelectedMethod(null)}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
-          Back to all options
-        </button>
-      </div>
-      <div id="recaptcha-container" />
+      {renderError()}
+      
+      {!selectedMethod && renderMethodSelection()}
+      
+      {selectedMethod === 'email' && (
+        <div className="space-y-4">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
+            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
+          />
+          <div className="grid gap-2">
+            <button
+              onClick={handleEmailAuth}
+              disabled={loading || !email || !password}
+              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+              ) : (
+                'Continue'
+              )}
+            </button>
+            <button
+              onClick={() => setSelectedMethod(null)}
+              disabled={loading}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selectedMethod === 'phone' && (
+        <div className="space-y-4">
+          <input
+            type="tel"
+            placeholder="+1 (555) 000-0000"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            disabled={loading}
+            className="w-full p-3 rounded-lg border border-border bg-background disabled:opacity-50"
+          />
+          <div className="grid gap-2">
+            <button
+              onClick={handlePhoneSignIn}
+              disabled={loading || !phoneNumber}
+              className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+              ) : (
+                'Send Code'
+              )}
+            </button>
+            <button
+              onClick={() => setSelectedMethod(null)}
+              disabled={loading}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              Back
+            </button>
+          </div>
+          <div id="recaptcha-container" />
+        </div>
+      )}
     </div>
   );
-
-  const renderContent = () => {
-    if (!selectedMethod) {
-      return renderMethodSelection();
-    }
-
-    if (selectedMethod === 'email' && !authAction) {
-      return renderEmailActions();
-    }
-
-    if (selectedMethod === 'email' && authAction) {
-      return renderEmailForm();
-    }
-
-    if (selectedMethod === 'phone') {
-      return renderPhoneForm();
-    }
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {!selectedMethod
-              ? 'Sign In or Create Account'
-              : selectedMethod === 'email' && !authAction
-              ? 'Choose Email Option'
-              : authAction === 'signin'
-              ? 'Sign In'
-              : authAction === 'signup'
-              ? 'Create Account'
-              : 'Continue with Phone'}
+            Sign in to continue
           </DialogTitle>
         </DialogHeader>
-        <div className="p-4">{renderContent()}</div>
+        <div className="p-4">
+          {renderContent()}
+        </div>
       </DialogContent>
     </Dialog>
   );
