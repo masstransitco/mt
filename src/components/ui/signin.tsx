@@ -2,10 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import {
+  GoogleAuthProvider,
+  signInWithPopup,
   RecaptchaVerifier,
   signInWithPhoneNumber,
-  // ...other imports
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
 } from "firebase/auth";
+
 import { auth } from "@/lib/firebase";
 
 declare global {
