@@ -1,6 +1,13 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { X, Mail, Phone, Github } from 'lucide-react';
 import {
   GoogleAuthProvider,
   RecaptchaVerifier,
@@ -8,195 +15,238 @@ import {
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  Auth,
-  ConfirmationResult
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
+} from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
-// Extend Window interface to include our custom properties
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-    confirmationResult?: ConfirmationResult;
-  }
+type AuthMethod = 'google' | 'phone' | 'email' | null;
+type AuthAction = 'signin' | 'signup' | null;
+
+interface SignInModalProps {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export default function SignIn() {
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
+  const [selectedMethod, setSelectedMethod] = useState<AuthMethod>(null);
+  const [authAction, setAuthAction] = useState<AuthAction>(null);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,
-        'recaptcha-container',
-        {
-          size: "invisible",
-          callback: (response: any) => {
-            // reCAPTCHA solved, allow signInWithPhoneNumber
-          },
-        }
-      );
-    }
-  }, []);
+  // Reset state when modal closes
+  const handleClose = () => {
+    setSelectedMethod(null);
+    setAuthAction(null);
+    setPhoneNumber('');
+    setVerificationCode('');
+    setEmail('');
+    setPassword('');
+    onClose();
+  };
 
+  // Google Sign In
   const handleGoogleSignIn = async () => {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      alert("Signed in with Google!");
+      handleClose();
     } catch (error) {
-      console.error("Google sign-in error:", error);
-      alert("Error signing in with Google");
+      console.error('Google sign-in error:', error);
     }
   };
 
-  const sendVerificationCode = async () => {
+  // Phone Sign In
+  const handlePhoneSignIn = async () => {
     try {
-      const appVerifier = window.recaptchaVerifier;
-      if (!appVerifier) {
-        alert("reCAPTCHA not ready.");
-        return;
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(
+          auth,
+          'recaptcha-container',
+          {
+            size: 'invisible',
+          }
+        );
       }
 
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
-        appVerifier
+        window.recaptchaVerifier
       );
       window.confirmationResult = confirmationResult;
-      alert("SMS verification code sent!");
     } catch (error) {
-      console.error("Phone sign-in error:", error);
-      alert("Error sending SMS");
+      console.error('Phone sign-in error:', error);
     }
   };
 
-  const verifyCode = async () => {
+  // Email Sign In/Up
+  const handleEmailAuth = async () => {
     try {
-      if (!window.confirmationResult) {
-        alert("No confirmation result. Send code first.");
-        return;
+      if (authAction === 'signin') {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password);
       }
-      await window.confirmationResult.confirm(verificationCode);
-      alert("Phone number verified!");
+      handleClose();
     } catch (error) {
-      console.error("Verify code error:", error);
-      alert("Invalid verification code");
+      console.error('Email auth error:', error);
     }
   };
 
-  const handleEmailSignIn = async () => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      alert("Signed in with email!");
-    } catch (error) {
-      console.error("Email sign-in error:", error);
-      alert("Error signing in with email");
-    }
-  };
+  const renderMethodSelection = () => (
+    <div className="grid gap-4">
+      <button
+        onClick={handleGoogleSignIn}
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10"
+      >
+        <img src="/icons/google.svg" alt="Google" className="w-5 h-5" />
+        <span>Continue with Google</span>
+      </button>
 
-  const handleEmailSignUp = async () => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      alert("Account created!");
-    } catch (error) {
-      console.error("Email sign-up error:", error);
-      alert("Error creating account");
+      <button
+        onClick={() => setSelectedMethod('phone')}
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10"
+      >
+        <Phone className="w-5 h-5" />
+        <span>Continue with Phone</span>
+      </button>
+
+      <button
+        onClick={() => {
+          setSelectedMethod('email');
+          setAuthAction(null);
+        }}
+        className="flex items-center justify-center gap-2 p-3 rounded-lg border border-border hover:bg-accent/10"
+      >
+        <Mail className="w-5 h-5" />
+        <span>Continue with Email</span>
+      </button>
+    </div>
+  );
+
+  const renderEmailActions = () => (
+    <div className="grid gap-4">
+      <button
+        onClick={() => setAuthAction('signin')}
+        className="p-3 rounded-lg border border-border hover:bg-accent/10"
+      >
+        Sign In with Email
+      </button>
+      <button
+        onClick={() => setAuthAction('signup')}
+        className="p-3 rounded-lg border border-border hover:bg-accent/10"
+      >
+        Create New Account
+      </button>
+      <button
+        onClick={() => {
+          setSelectedMethod(null);
+          setAuthAction(null);
+        }}
+        className="text-sm text-muted-foreground hover:text-foreground"
+      >
+        Back to all options
+      </button>
+    </div>
+  );
+
+  const renderEmailForm = () => (
+    <div className="space-y-4">
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full p-2 rounded border border-border bg-background"
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className="w-full p-2 rounded border border-border bg-background"
+      />
+      <div className="grid gap-2">
+        <button
+          onClick={handleEmailAuth}
+          className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          {authAction === 'signin' ? 'Sign In' : 'Create Account'}
+        </button>
+        <button
+          onClick={() => setAuthAction(null)}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          Back
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderPhoneForm = () => (
+    <div className="space-y-4">
+      <input
+        type="tel"
+        placeholder="+1 (555) 000-0000"
+        value={phoneNumber}
+        onChange={(e) => setPhoneNumber(e.target.value)}
+        className="w-full p-2 rounded border border-border bg-background"
+      />
+      <div className="grid gap-2">
+        <button
+          onClick={handlePhoneSignIn}
+          className="w-full p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          Send Code
+        </button>
+        <button
+          onClick={() => setSelectedMethod(null)}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          Back to all options
+        </button>
+      </div>
+      <div id="recaptcha-container" />
+    </div>
+  );
+
+  const renderContent = () => {
+    if (!selectedMethod) {
+      return renderMethodSelection();
+    }
+
+    if (selectedMethod === 'email' && !authAction) {
+      return renderEmailActions();
+    }
+
+    if (selectedMethod === 'email' && authAction) {
+      return renderEmailForm();
+    }
+
+    if (selectedMethod === 'phone') {
+      return renderPhoneForm();
     }
   };
 
   return (
-    <div className="p-4">
-      <h1 className="text-xl font-semibold mb-4">Sign In Page</h1>
-
-      {/* Google Sign In */}
-      <div className="mb-6">
-        <button
-          onClick={handleGoogleSignIn}
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Sign in with Google
-        </button>
-      </div>
-
-      {/* Phone Sign In */}
-      <div className="mb-6">
-        <label className="block mb-1">Phone Number</label>
-        <input
-          type="tel"
-          placeholder="+1 555 123 4567"
-          className="border p-2 w-full mb-2"
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-        />
-
-        <button
-          onClick={sendVerificationCode}
-          className="bg-green-500 text-white px-4 py-2 rounded"
-        >
-          Send Verification Code
-        </button>
-
-        <div className="mt-4">
-          <label className="block mb-1">Verification Code</label>
-          <input
-            type="text"
-            placeholder="Enter code"
-            className="border p-2 w-full mb-2"
-            value={verificationCode}
-            onChange={(e) => setVerificationCode(e.target.value)}
-          />
-
-          <button
-            onClick={verifyCode}
-            className="bg-green-500 text-white px-4 py-2 rounded"
-          >
-            Verify Code
-          </button>
-        </div>
-
-        {/* reCAPTCHA container */}
-        <div id="recaptcha-container" />
-      </div>
-
-      {/* Email/Password Sign In & Sign Up */}
-      <div className="mb-6">
-        <label className="block mb-1">Email</label>
-        <input
-          type="email"
-          placeholder="you@example.com"
-          className="border p-2 w-full mb-2"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-
-        <label className="block mb-1">Password</label>
-        <input
-          type="password"
-          placeholder="********"
-          className="border p-2 w-full mb-4"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        <div className="space-x-2">
-          <button
-            onClick={handleEmailSignIn}
-            className="bg-blue-500 text-white px-4 py-2 rounded"
-          >
-            Sign In
-          </button>
-          <button
-            onClick={handleEmailSignUp}
-            className="bg-purple-500 text-white px-4 py-2 rounded"
-          >
-            Sign Up
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {!selectedMethod
+              ? 'Sign In or Create Account'
+              : selectedMethod === 'email' && !authAction
+              ? 'Choose Email Option'
+              : authAction === 'signin'
+              ? 'Sign In'
+              : authAction === 'signup'
+              ? 'Create Account'
+              : 'Continue with Phone'}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="p-4">{renderContent()}</div>
+      </DialogContent>
+    </Dialog>
   );
 }
