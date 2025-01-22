@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-// Example icons from lucide-react
+import Link from 'next/link';
 import { LogOut, Car, Zap, ChevronRight } from 'lucide-react';
 
 export default function AppMenu() {
@@ -13,7 +13,6 @@ export default function AppMenu() {
 
       {/* Profile Section */}
       <div className="flex items-center gap-3 my-4">
-        {/* Circular user image */}
         <div className="w-12 h-12 rounded-full overflow-hidden">
           <Image
             src="/some-avatar.jpg"
@@ -63,6 +62,13 @@ export default function AppMenu() {
         <p className="text-xs text-muted-foreground">
           Charge on the Largest Global Network
         </p>
+      </div>
+
+      {/* Sign In / Sign Out Link (Example) */}
+      <div className="mt-4">
+        <Link href="/signin">
+          <button className="underline text-sm">Sign In</button>
+        </Link>
       </div>
 
       {/* Footer Section */}
