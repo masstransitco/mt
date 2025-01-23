@@ -14,7 +14,7 @@ import { FixedSizeList, ListChildComponentProps } from 'react-window';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 
-// ---- Import from stationsSlice (fetch & station data) ----
+// -- stationsSlice: fetch + station data
 import {
   fetchStations,
   selectStationsWithDistance,
@@ -22,14 +22,14 @@ import {
   selectStationsError,
 } from '@/store/stationsSlice';
 
-// ---- Import from userSlice (user location & selected station) ----
+// -- userSlice: user location & selected station
 import {
   setUserLocation,
   selectUserLocation,
   selectStation,
 } from '@/store/userSlice';
 
-// ---- Import from uiSlice (UI states) ----
+// -- uiSlice: UI states (view mode, sheet toggles)
 import {
   selectViewState,
   selectIsSheetMinimized,
@@ -84,7 +84,6 @@ const StationListItem = memo<StationListItemProps>((props) => {
   const dispatch = useAppDispatch();
 
   const handleClick = useCallback(() => {
-    // Select the station in userSlice
     dispatch(selectStation(station.id));
   }, [dispatch, station.id]);
 
@@ -124,17 +123,19 @@ function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // ---- Selectors from each slice ----
+  // -- Station data
   const stations = useAppSelector(selectStationsWithDistance);
   const isLoading = useAppSelector(selectStationsLoading);
   const error = useAppSelector(selectStationsError);
 
+  // -- User location
   const userLocation = useAppSelector(selectUserLocation);
 
+  // -- UI states: which view + sheet minimization
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Memoize stations for the list
+  // Memoize stations to prevent unnecessary re-renders in FixedSizeList
   const memoizedStations = useMemo(() => stations, [stations]);
 
   // Load Google Maps script
@@ -169,7 +170,7 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, [dispatch]);
 
-  // On mount, fetch stations and get user location
+  // On mount, fetch stations and user location
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -186,7 +187,7 @@ function GMap({ googleApiKey }: GMapProps) {
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
-      dispatch(toggleSheet()); // from uiSlice
+      dispatch(toggleSheet());
     },
     [dispatch]
   );
@@ -205,7 +206,7 @@ function GMap({ googleApiKey }: GMapProps) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
-  // ---- Render the Google Map plus the sheet/list ----
+  // Render the map + bottom sheet
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
@@ -254,6 +255,7 @@ function GMap({ googleApiKey }: GMapProps) {
         </MemoizedGoogleMap>
       </div>
 
+      {/* If the UI is in "showMap" mode, display the bottom sheet */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
@@ -282,7 +284,7 @@ function GMap({ googleApiKey }: GMapProps) {
   );
 }
 
-/* --------------- Error Boundary Class ---------------------- */
+/* ------------------ Error Boundary ------------------ */
 class MapErrorBoundary extends React.Component<
   React.PropsWithChildren,
   { hasError: boolean }
@@ -291,15 +293,12 @@ class MapErrorBoundary extends React.Component<
     super(props);
     this.state = { hasError: false };
   }
-
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-
   componentDidCatch(error: Error) {
     console.error('Map Error:', error);
   }
-
   render() {
     if (this.state.hasError) {
       return (
@@ -312,7 +311,7 @@ class MapErrorBoundary extends React.Component<
   }
 }
 
-/* ------------------ Main Export with Error Boundary ------------------ */
+/* -------------- Export with Error Boundary -------------- */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
