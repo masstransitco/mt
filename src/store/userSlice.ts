@@ -1,15 +1,18 @@
+// src/store/userSlice.ts
+
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { RootState } from './store';
 
 interface UserState {
-  selectedCarId: number | null;
-  selectedStationId: number | null;
-  viewState: 'showCar' | 'showMap';  // Added view state
+  selectedCarId: number | null;              // The car the user selected
+  selectedStationId: number | null;          // The station the user selected
+  userLocation: google.maps.LatLngLiteral | null; // The user's current location
 }
 
 const initialState: UserState = {
   selectedCarId: null,
   selectedStationId: null,
-  viewState: 'showCar'  // Default to car view
+  userLocation: null,
 };
 
 const userSlice = createSlice({
@@ -22,21 +25,27 @@ const userSlice = createSlice({
     selectStation: (state, action: PayloadAction<number>) => {
       state.selectedStationId = action.payload;
     },
-    setViewState: (state, action: PayloadAction<'showCar' | 'showMap'>) => {
-      state.viewState = action.payload;
+    setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
+      state.userLocation = action.payload;
     },
     resetBooking: (state) => {
       state.selectedCarId = null;
       state.selectedStationId = null;
-      // Note: doesn't reset viewState as that's independent
-    }
-  }
+      // userLocation remains, but you could reset it here if desired
+    },
+  },
 });
 
-export const { selectCar, selectStation, setViewState, resetBooking } = userSlice.actions;
+export const {
+  selectCar,
+  selectStation,
+  setUserLocation,
+  resetBooking,
+} = userSlice.actions;
+
 export default userSlice.reducer;
 
-// Selectors
-export const selectSelectedCarId = (state: { user: UserState }) => state.user.selectedCarId;
-export const selectSelectedStationId = (state: { user: UserState }) => state.user.selectedStationId;
-export const selectViewState = (state: { user: UserState }) => state.user.viewState;
+/* --------------------------- Selectors --------------------------- */
+export const selectSelectedCarId = (state: RootState) => state.user.selectedCarId;
+export const selectSelectedStationId = (state: RootState) => state.user.selectedStationId;
+export const selectUserLocation = (state: RootState) => state.user.userLocation;
