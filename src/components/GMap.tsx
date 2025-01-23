@@ -119,6 +119,11 @@ function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
+  // Memoize the onLoad function to prevent re-renders
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+  }, []);
+
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
 
@@ -132,6 +137,7 @@ function GMap({ googleApiKey }: GMapProps) {
       },
       (err) => {
         console.error('Geolocation error:', err);
+        // Optionally, set a default location or notify the user
       },
       { timeout: 10000, maximumAge: 60000 }
     );
@@ -170,7 +176,7 @@ function GMap({ googleApiKey }: GMapProps) {
   }
 
   // Memoize GoogleMap to prevent unnecessary re-renders
-  const MemoizedGoogleMap = memo(GoogleMap);
+  const MemoizedGoogleMap = useMemo(() => memo(GoogleMap), []);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -180,9 +186,7 @@ function GMap({ googleApiKey }: GMapProps) {
           center={userLocation || DEFAULT_CENTER}
           zoom={14}
           options={MAP_OPTIONS}
-          onLoad={(map) => {
-            mapRef.current = map;
-          }}
+          onLoad={handleMapLoad} // Use the memoized onLoad function
         >
           {userLocation && (
             <Marker
@@ -197,7 +201,7 @@ function GMap({ googleApiKey }: GMapProps) {
               }}
               clickable={false}
             />
-          )}
+          }
 
           {stations.map((station: StationFeature) => {
             const [lng, lat] = station.geometry.coordinates;
