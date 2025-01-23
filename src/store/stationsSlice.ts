@@ -9,7 +9,10 @@ import {
 import type { RootState } from './store';
 import { selectUserLocation } from './userSlice';
 
-/* --------------------------- Interfaces --------------------------- */
+/**
+ * Station feature as returned by your /stations.geojson,
+ * possibly extended with a computed distance.
+ */
 export interface StationFeature {
   type: 'Feature';
   id: number;
@@ -25,7 +28,7 @@ export interface StationFeature {
     availableSpots: number;
     waitTime?: number;
   };
-  distance?: number; // Distance (in km) from the user's location, if computed
+  distance?: number; // Distance from user's location
 }
 
 interface StationsState {
@@ -44,9 +47,9 @@ const initialState: StationsState = {
 
 /* --------------------------- Thunks --------------------------- */
 /**
- * 1. Checks localStorage for a cached stations list.
- * 2. If it's older than 1 hour or not present, fetches from /stations.geojson.
- * 3. Dispatches either fulfilled or rejected depending on success.
+ * 1) Checks localStorage for a cached stations list.
+ * 2) If it's older than 1 hour or not present, fetch from /stations.geojson.
+ * 3) Dispatches either fulfilled or rejected depending on success.
  */
 export const fetchStations = createAsyncThunk<
   { data: StationFeature[]; timestamp: number },
@@ -63,12 +66,13 @@ export const fetchStations = createAsyncThunk<
       }
     }
 
-    // Not cached or expired, fetch fresh
+    // If no valid cache, fetch fresh data
     const response = await fetch('/stations.geojson');
     if (!response.ok) {
       throw new Error('Failed to fetch stations');
     }
     const data = await response.json();
+
     if (data.type === 'FeatureCollection') {
       const features: StationFeature[] = data.features;
       localStorage.setItem(
@@ -112,17 +116,14 @@ const stationsSlice = createSlice({
 export default stationsSlice.reducer;
 
 /* --------------------------- Selectors --------------------------- */
-
+export const selectAllStations = (state: RootState) => state.stations.items;
 export const selectStationsLoading = (state: RootState) => state.stations.loading;
 export const selectStationsError = (state: RootState) => state.stations.error;
-export const selectAllStations = (state: RootState) => state.stations.items;
 
-/* --------------------- Distance Calculation ---------------------- */
-
-// Simple Haversine formula for distance in kilometers
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const R = 6371; // Earth's radius in km
+  // Basic Haversine formula
+  const toRad = (val: number) => (val * Math.PI) / 180;
+  const R = 6371; // Earth radius in km
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
@@ -136,15 +137,16 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 /**
- * Memoized selector that calculates distance from the user's location
- * for each station, returning a sorted list (nearest first).
+ * Memoized selector to return stations sorted by distance
+ * from the user's location. If userLocation is null, returns
+ * stations unsorted.
  */
 export const selectStationsWithDistance = createSelector(
   [selectAllStations, selectUserLocation],
   (stations, userLocation) => {
     if (!userLocation) return stations;
-    const { lat: userLat, lng: userLng } = userLocation;
 
+    const { lat: userLat, lng: userLng } = userLocation;
     return stations
       .map((station) => {
         const [lng, lat] = station.geometry.coordinates;
