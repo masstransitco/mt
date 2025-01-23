@@ -1,4 +1,4 @@
-// stationsSlice.ts
+// src/store/stationsSlice.ts
 
 import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import type { RootState } from './store';
@@ -105,11 +105,14 @@ const stationsSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchStations.fulfilled, (state, action: PayloadAction<{ data: StationFeature[]; timestamp: number }>) => {
-        state.loading = false;
-        state.items = action.payload.data;
-        state.lastFetched = action.payload.timestamp;
-      })
+      .addCase(
+        fetchStations.fulfilled,
+        (state, action: PayloadAction<{ data: StationFeature[]; timestamp: number }>) => {
+          state.loading = false;
+          state.items = action.payload.data;
+          state.lastFetched = action.payload.timestamp;
+        }
+      )
       .addCase(fetchStations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
