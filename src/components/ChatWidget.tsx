@@ -12,7 +12,7 @@ import { selectSelectedCarId, selectSelectedStationId } from '@/store/userSlice'
 import { selectBookingStep, selectDepartureDate } from '@/store/bookingSlice';
 import { selectViewState } from '@/store/uiSlice';
 
-import { Message } from '@/types/booking';
+import { Message } from '@/types/chat';
 import { X } from 'lucide-react';
 
 export default function ChatWidget() {
@@ -29,30 +29,40 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
 
-  // Build a function to generate a “context message” describing the current app state
+  /**
+   * Build a “system” context message to provide domain/policy info to Claude.
+   * You can tailor this to be more or less verbose depending on your needs.
+   */
   const buildContextMessage = useCallback((): Message => {
-    // You can shape this however you want. The goal is for Claude to see your app's context.
-    // E.g., if the user is at booking step=2, or they selected a certain car, etc.
     let contextContent = `
-System Context:
-- Current view: ${viewState}
-- Selected Car: ${selectedCarId ?? 'None'}
-- Selected Station: ${selectedStationId ?? 'None'}
+You are Claude, a helpful car rental assistant with knowledge of our internal booking flow.
+
+Key points of context:
+- Current UI view: ${viewState}
+- Selected Car ID: ${selectedCarId ?? 'None'}
+- Selected Station ID: ${selectedStationId ?? 'None'}
 - Booking Step: ${bookingStep}
 - Departure Date: ${departureDate ? departureDate.toString() : 'Not set'}
 
-Company Policies:
-1. We allow users to pick any available station or car.
-2. ID verification is required before payment step.
-3. If user asks about insurance coverage, we follow standard liability policy of up to 1M USD coverage.
-4. ... (Include any other policies you want to be enforced)
-`;
+**Company Policies**:
+1) Users can pick any available car and station.
+2) ID/license verification is required before proceeding to payment.
+3) Standard liability insurance coverage up to $1M is included.
+4) (Add any other relevant disclaimers or policies here).
+5) Keep answers helpful, concise, and consistent with these policies.
 
-    // Return as a special “system” role (or “assistant” with system content).
-    // The "id" can be random or a fixed placeholder.
+**Your Objective**:
+- Respond to user queries about car availability, station selection, ID verification, insurance coverage, etc.
+- If the user requests something outside policy bounds, politely clarify constraints.
+- If uncertain about real-time data, disclaim that you have limited info.
+
+Remember: Always adopt a friendly, professional tone and keep responses short unless more detail is requested.
+    `;
+
+    // Return as a special “system” role message
     return {
-      id: 'system-context-' + Date.now(),
-      role: 'system',    // or 'assistant' if your Anthropic integration expects that
+      id: `system-context-${Date.now()}`,
+      role: 'system',
       content: contextContent,
       timestamp: new Date(),
       reactions: [],
@@ -66,6 +76,9 @@ Company Policies:
     departureDate,
   ]);
 
+  /**
+   * Handle sending user message plus system context to the LLM.
+   */
   const handleSend = async () => {
     if (!inputText.trim()) return;
 
@@ -79,10 +92,10 @@ Company Policies:
       attachments: [],
     };
 
-    // Generate a dynamic context message
+    // Build a dynamic "system" context message
     const contextMessage = buildContextMessage();
 
-    // Dispatch an action that includes both the user's message and our context
+    // Dispatch an action with both userMessage & contextMessage
     dispatch(sendMessageToClaude({ userMessage, contextMessage }));
 
     setInputText('');
@@ -100,16 +113,16 @@ Company Policies:
             </button>
           </div>
 
-          {/* Messages */}
+          {/* Messages List */}
           <div className="flex-1 p-2 overflow-y-auto space-y-2">
-            {messages.map((msg) => (
+            {messages.map((msg: Message) => (
               <div key={msg.id} className="text-sm whitespace-pre-wrap">
                 <strong>{msg.role}:</strong> {msg.content}
               </div>
             ))}
           </div>
 
-          {/* Input */}
+          {/* Input Box */}
           <div className="p-2 border-t border-border flex gap-2">
             <input
               className="flex-1 p-2 border border-border rounded"
