@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 import { Message } from '@/types/booking';
-import { addMessage, clearChat } from './chatSlice'; // We'll define addMessage below
 
 /**
  * Thunk action for sending a message to Claude,
@@ -9,7 +8,7 @@ import { addMessage, clearChat } from './chatSlice'; // We'll define addMessage 
  */
 export const sendMessageToClaude = createAsyncThunk<
   { assistantMessage: Message },
-  { userMessage: Message; contextMessage?: Message },  // <-- updated to accept contextMessage
+  { userMessage: Message; contextMessage?: Message },
   { state: RootState }
 >(
   'chat/sendMessageToClaude',
@@ -18,10 +17,10 @@ export const sendMessageToClaude = createAsyncThunk<
       const state = getState();
       const existingMessages = state.chat.messages;
 
-      // 1) Construct the conversation array from existing messages.
+      // 1) Construct the conversation from existing messages
       const conversation = [...existingMessages];
 
-      // 2) If we have a context/system message, prepend it before the user message
+      // 2) If we have a context/system message, prepend it
       if (contextMessage) {
         conversation.push(contextMessage);
       }
@@ -29,11 +28,10 @@ export const sendMessageToClaude = createAsyncThunk<
       // 3) Append the new user message
       conversation.push(userMessage);
 
-      // 4) Immediately store the user message in Redux so we can see it in the UI
+      // 4) Immediately store the user message in Redux
       dispatch(addMessage(userMessage));
 
-      // (Optional) Example logic retrieving extra data from the store
-      // e.g., selected car and current booking step
+      // Example data from user/booking slices
       const selectedCar = state.user.selectedCarId
         ? {
             id: 1,
@@ -50,7 +48,7 @@ export const sendMessageToClaude = createAsyncThunk<
 
       const currentBookingStep = state.booking.stepName;
 
-      // 5) Send the conversation, selectedCar, and booking info to your backend
+      // 5) Send conversation + store data to /api/chat
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,7 +63,7 @@ export const sendMessageToClaude = createAsyncThunk<
         throw new Error(`API returned status ${response.status}`);
       }
 
-      // 6) Parse the assistant's reply
+      // 6) Parse the LLM's assistant message
       const data = await response.json();
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
@@ -79,6 +77,7 @@ export const sendMessageToClaude = createAsyncThunk<
       // Return the new assistant message
       return { assistantMessage };
     } catch (error: any) {
+      // Pass the error message back to the reducer
       return rejectWithValue(error.message ?? 'Unknown error occurred');
     }
   }
@@ -96,15 +95,11 @@ const initialState: ChatState = {
   error: null,
 };
 
-/**
- * chatSlice: Stores an array of messages (both user & assistant).
- * A thunk, `sendMessageToClaude`, calls your API for the next assistant reply.
- */
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
-    // Add any message (user or assistant) to Redux state
+    // Add any message (user or assistant) to Redux
     addMessage: (state, action: PayloadAction<Message>) => {
       state.messages.push(action.payload);
     },
@@ -122,7 +117,7 @@ const chatSlice = createSlice({
       })
       .addCase(sendMessageToClaude.fulfilled, (state, action) => {
         state.loading = false;
-        // The new assistant message is returned from the thunk
+        // LLM's response from the thunk
         state.messages.push(action.payload.assistantMessage);
       })
       .addCase(sendMessageToClaude.rejected, (state, action) => {
