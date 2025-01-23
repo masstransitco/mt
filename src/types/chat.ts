@@ -1,20 +1,22 @@
+// src/types/chat.ts
+
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface Message {
   id: string;
   role: MessageRole;
   content: string;
-  timestamp: Date;  // or Date | undefined, depending on your usage
+  timestamp: Date; // or Date | undefined if you truly need it optional
   reactions: Reaction[];
   attachments: Attachment[];
 }
 
-interface Reaction {
+export interface Reaction {
   type: string;
   timestamp: Date;
 }
 
-interface Attachment {
+export interface Attachment {
   name: string;
   type: string;
   url: string;
