@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './store';
-import { BookingMessage } from '@/types/booking';
 import { Message as ChatMessage } from '@/types/chat';
 /**
  * Thunk action for sending a message to Claude,
