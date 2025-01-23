@@ -9,7 +9,7 @@ export interface StationFeature {
   id: number;
   geometry: {
     type: 'Point';
-    coordinates: [number, number];
+    coordinates: [number, number]; // [longitude, latitude]
   };
   properties: {
     Place: string;
@@ -54,7 +54,7 @@ export const fetchStations = createAsyncThunk<
       const cached = localStorage.getItem('stations');
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        // Cache validity: 1 hour
+        // Cache validity: 1 hour (3600000 ms)
         if (Date.now() - timestamp < 3600000) {
           return { data, timestamp };
         }
