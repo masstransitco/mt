@@ -3,10 +3,16 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 
+/**
+ * The userSlice tracks user-specific choices or data:
+ * - Which car the user selected
+ * - Which station the user selected
+ * - The user's current geolocation
+ */
 interface UserState {
-  selectedCarId: number | null;              // The car the user selected
-  selectedStationId: number | null;          // The station the user selected
-  userLocation: google.maps.LatLngLiteral | null; // The user's current location
+  selectedCarId: number | null;
+  selectedStationId: number | null;
+  userLocation: google.maps.LatLngLiteral | null;
 }
 
 const initialState: UserState = {
@@ -19,19 +25,23 @@ const userSlice = createSlice({
   name: 'user',
   initialState,
   reducers: {
+    // The user chooses a car by ID
     selectCar: (state, action: PayloadAction<number>) => {
       state.selectedCarId = action.payload;
     },
+    // The user chooses a station by ID
     selectStation: (state, action: PayloadAction<number>) => {
       state.selectedStationId = action.payload;
     },
+    // Geolocation from the browser or other source
     setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
       state.userLocation = action.payload;
     },
-    resetBooking: (state) => {
+    // Clear out any user-specific selections
+    resetUserSelections: (state) => {
       state.selectedCarId = null;
       state.selectedStationId = null;
-      // userLocation remains, but you could reset it here if desired
+      // userLocation remains, or reset here if you'd like
     },
   },
 });
@@ -40,7 +50,7 @@ export const {
   selectCar,
   selectStation,
   setUserLocation,
-  resetBooking,
+  resetUserSelections,
 } = userSlice.actions;
 
 export default userSlice.reducer;
