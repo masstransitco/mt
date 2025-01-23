@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useEffect, useCallback, useRef, memo } from 'react';
+import React, { useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { 
   selectStation, 
   selectViewState 
 } from '@/store/userSlice';
 import { 
-  selectAllStations, 
+  selectStationsWithDistance, // Updated selector using reselect
   selectStationsLoading,
   selectStationsError,
   selectUserLocation,
@@ -15,7 +15,6 @@ import {
   fetchStations,
   setUserLocation,
   toggleSheet,
-  updateDistances
 } from '@/store/stationsSlice';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
@@ -105,11 +104,14 @@ function GMap({ googleApiKey }: GMapProps) {
   
   // Redux state selectors
   const viewState = useAppSelector(selectViewState);
-  const stations = useAppSelector(selectAllStations);
+  const stations = useAppSelector(selectStationsWithDistance); // Using memoized selector
   const isLoading = useAppSelector(selectStationsLoading);
   const error = useAppSelector(selectStationsError);
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
+
+  // Memoize stations to prevent unnecessary re-renders of FixedSizeList
+  const memoizedStations = useMemo(() => stations, [stations]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -126,7 +128,7 @@ function GMap({ googleApiKey }: GMapProps) {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         }));
-        dispatch(updateDistances());
+        // Distance calculations are handled by the selector, no need to dispatch updateDistances
       },
       (err) => {
         console.error('Geolocation error:', err);
@@ -136,8 +138,15 @@ function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch]);
 
   useEffect(() => {
-    dispatch(fetchStations());
-    getUserLocation();
+    const initialize = async () => {
+      try {
+        await dispatch(fetchStations()).unwrap(); // Ensure stations are fetched
+        getUserLocation(); // Then get user location and update distances via selector
+      } catch (err) {
+        console.error('Error fetching stations:', err);
+      }
+    };
+    initialize();
   }, [dispatch, getUserLocation]);
 
   const handleMarkerClick = useCallback(
@@ -156,14 +165,17 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  if (!isLoaded || !google?.maps) {
+  if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
+
+  // Memoize GoogleMap to prevent unnecessary re-renders
+  const MemoizedGoogleMap = memo(GoogleMap);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
-        <GoogleMap
+        <MemoizedGoogleMap
           mapContainerStyle={CONTAINER_STYLE}
           center={userLocation || DEFAULT_CENTER}
           zoom={14}
@@ -207,7 +219,7 @@ function GMap({ googleApiKey }: GMapProps) {
               />
             );
           })}
-        </GoogleMap>
+        </MemoizedGoogleMap>
       </div>
 
       {viewState === 'showMap' && (
@@ -227,7 +239,7 @@ function GMap({ googleApiKey }: GMapProps) {
               width="100%"
               itemCount={stations.length}
               itemSize={80}
-              itemData={stations}
+              itemData={memoizedStations}
             >
               {StationListItem}
             </FixedSizeList>
