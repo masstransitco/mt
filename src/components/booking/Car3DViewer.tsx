@@ -5,6 +5,7 @@ import React, {
   useRef,
   useEffect,
   useMemo,
+  memo
 } from 'react';
 import Image from 'next/image';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
@@ -23,11 +24,12 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
+
 import LoadingOverlay from '@/components/ui/loading-overlay';
 
 interface Car3DViewerProps {
   modelUrl: string;
-  imageUrl: string;  // Add imageUrl prop for the placeholder
+  imageUrl: string; // for fallback or reference
   width?: string | number;
   height?: string | number;
   selected?: boolean;
@@ -50,8 +52,8 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const { scene: originalScene } = useGLTF(url, '/draco/', true) as any;
   const scene = useMemo(() => originalScene.clone(), [originalScene]);
 
-  // If not interactive, rotate the model slowly
   useFrame(() => {
+    // If not interactive, rotate the model slowly
     if (!interactive && groupRef.current) {
       groupRef.current.rotation.y += 0.002;
     }
@@ -60,6 +62,7 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   useEffect(() => {
     if (!scene) return;
 
+    // Rotate model initially
     scene.rotation.y = Math.PI / 2;
 
     scene.traverse((child: THREE.Object3D) => {
@@ -99,7 +102,11 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
     const fovRad = (perspectiveCam.fov * Math.PI) / 180;
     const distance = Math.abs(maxDim / Math.sin(fovRad / 2)) * 0.4;
 
-    perspectiveCam.position.set(center.x, center.y + maxDim * 0.5, center.z + distance);
+    perspectiveCam.position.set(
+      center.x,
+      center.y + maxDim * 0.5,
+      center.z + distance
+    );
     perspectiveCam.lookAt(center);
     perspectiveCam.updateProjectionMatrix();
 
@@ -132,8 +139,16 @@ function SceneLighting() {
         castShadow
         shadow-mapSize={[1024, 1024]}
       />
-      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
-      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
+      <directionalLight
+        position={[-5, 5, -5]}
+        intensity={0.25}
+        color="#FFE4B5"
+      />
+      <directionalLight
+        position={[0, -5, 0]}
+        intensity={0.15}
+        color="#4169E1"
+      />
     </>
   );
 }
@@ -159,9 +174,10 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-const modelsCache = new Map<string, any>();
+// Use a simple cache to avoid reloading the same model
+const modelsCache = new Map<string, boolean>();
 
-export default function Car3DViewer({
+function Car3DViewer({
   modelUrl,
   imageUrl,
   width = '100%',
@@ -170,7 +186,8 @@ export default function Car3DViewer({
   isVisible = true,
 }: Car3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
+  // WebGL settings
   const glSettings = useMemo(
     () => ({
       antialias: true,
@@ -182,7 +199,7 @@ export default function Car3DViewer({
     []
   );
 
-  // Only preload model when selected
+  // Preload the model if selected
   useEffect(() => {
     if (selected && !modelsCache.has(modelUrl)) {
       useGLTF.preload(modelUrl);
@@ -190,6 +207,7 @@ export default function Car3DViewer({
     }
   }, [modelUrl, selected]);
 
+  // Container styling
   const containerStyles = useMemo<React.CSSProperties>(
     () => ({
       width,
@@ -202,12 +220,12 @@ export default function Car3DViewer({
     [width, height, selected, isVisible]
   );
 
-  // Don't render anything if not visible
+  // If not visible, render nothing
   if (!isVisible) {
     return null;
   }
 
-  // Show image placeholder when not selected
+  // If not selected, show fallback image
   if (!selected) {
     return (
       <div style={containerStyles}>
@@ -217,13 +235,13 @@ export default function Car3DViewer({
           fill
           className="object-cover rounded-lg"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          priority={!selected} // Prioritize loading of placeholder images
+          priority={!selected}
         />
       </div>
     );
   }
 
-  // Show 3D viewer when selected
+  // Otherwise, show the 3D viewer
   return (
     <div style={containerStyles}>
       <Canvas
@@ -252,6 +270,9 @@ export default function Car3DViewer({
   );
 }
 
+export default memo(Car3DViewer);
+
+// Helper if you want to preload multiple URLs in a batch
 export function preloadCarModels(urls: string[]) {
   urls.forEach((url) => {
     if (!modelsCache.has(url)) {
