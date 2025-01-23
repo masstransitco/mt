@@ -4,20 +4,25 @@ import { configureStore } from '@reduxjs/toolkit';
 import uiReducer from './uiSlice';
 import userReducer from './userSlice';
 import stationsReducer from './stationsSlice';
+import carReducer from './carSlice';
+import bookingReducer from './bookingSlice';
 
+// Combine into a single store
 export const store = configureStore({
   reducer: {
     ui: uiReducer,
     user: userReducer,
     stations: stationsReducer,
+    car: carReducer,
+    booking: bookingReducer,
   },
 });
 
-// Types for use in components and hooks
+// 3) Types for use in components and hooks
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-// Optional: typed hooks if you're using React Redux
+
 import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 
 export const useAppDispatch = () => useDispatch<AppDispatch>();
