@@ -1,9 +1,10 @@
+// src/components/GMap.tsx
+
 'use client';
 
 import React, { useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { 
-  selectStation, 
   selectViewState 
 } from '@/store/userSlice';
 import { 
@@ -97,6 +98,11 @@ const StationListItem = memo(({ data, index, style }: StationListItemProps) => {
 
 StationListItem.displayName = 'StationListItem';
 
+/* ---------------------- Memoized GoogleMap ---------------------- */
+
+// Memoize the GoogleMap component to prevent unnecessary re-renders
+const MemoizedGoogleMap = memo(GoogleMap);
+
 /* -------------------------- Main GMap ---------------------------- */
 function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
@@ -174,9 +180,6 @@ function GMap({ googleApiKey }: GMapProps) {
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
-
-  // Memoize GoogleMap to prevent unnecessary re-renders
-  const MemoizedGoogleMap = useMemo(() => memo(GoogleMap), []);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
