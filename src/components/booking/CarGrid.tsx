@@ -1,13 +1,18 @@
-// CarGrid.tsx
 'use client';
-import React, { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectCar, selectViewState } from '@/store/userSlice';
+
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter } from 'lucide-react';
+
+import { useAppDispatch, useAppSelector } from '@/store/store';
+import { selectCar } from '@/store/userSlice';
+import { selectAllCars, fetchCars } from '@/store/carSlice'; // <-- from your new Redux carSlice
+import { selectViewState } from '@/store/uiSlice';
+
 import CarCard from './CarCard';
-import { Car as CarType } from '@/types/cars';
-import { SAMPLE_CARS } from '@/constants/cars';
+
+// Example local fallback if you have constants
+// import { SAMPLE_CARS } from '@/constants/cars';
 
 interface CarGridProps {
   className?: string;
@@ -15,48 +20,70 @@ interface CarGridProps {
 
 export default function CarGrid({ className = '' }: CarGridProps) {
   const dispatch = useAppDispatch();
+
+  // We fetch cars from Redux store (carSlice)
+  const allCars = useAppSelector(selectAllCars);
+
+  // Which car is currently selected? (userSlice)
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
+
+  // UI: which screen are we on? (uiSlice)
   const viewState = useAppSelector(selectViewState);
-  const [filterType, setFilterType] = React.useState('all');
-  const [showFilters, setShowFilters] = React.useState(false);
 
-  // Set car1 as selected on initial load
+  const [filterType, setFilterType] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // On mount, fetch cars from server (if needed)
   useEffect(() => {
-    if (!selectedCarId) {
-      dispatch(selectCar(1));
+    dispatch(fetchCars());
+  }, [dispatch]);
+
+  // If no car is selected, default to first car (id=1) or any logic you prefer
+  useEffect(() => {
+    if (!selectedCarId && allCars.length > 0) {
+      dispatch(selectCar(allCars[0].id));
     }
-  }, [dispatch, selectedCarId]);
+  }, [allCars, dispatch, selectedCarId]);
 
-  const { selectedCar, otherCars } = React.useMemo(() => {
-    const filtered = filterType === 'all' 
-      ? SAMPLE_CARS 
-      : SAMPLE_CARS.filter(car => 
-          car.type.toLowerCase() === filterType.toLowerCase()
-        );
-    
+  // Filter logic for the car list
+  const { selectedCar, otherCars } = useMemo(() => {
+    // If your store is empty, optionally fallback to SAMPLE_CARS or handle gracefully
+    const carData = allCars /*.length === 0 ? SAMPLE_CARS : allCars*/;
+
+    const filtered =
+      filterType === 'all'
+        ? carData
+        : carData.filter(
+            (car) => car.type.toLowerCase() === filterType.toLowerCase()
+          );
+
     return {
-      selectedCar: filtered.find(car => car.id === selectedCarId),
-      otherCars: filtered.filter(car => car.id !== selectedCarId)
+      selectedCar: filtered.find((car) => car.id === selectedCarId),
+      otherCars: filtered.filter((car) => car.id !== selectedCarId),
     };
-  }, [filterType, selectedCarId]);
+  }, [allCars, filterType, selectedCarId]);
 
-  const handleSelectCar = (car: CarType) => {
-    dispatch(selectCar(car.id));
+  const handleSelectCar = (carId: number) => {
+    dispatch(selectCar(carId));
   };
 
+  // Example filter options
   const filterOptions = [
     { value: 'all', label: 'All Types' },
     { value: 'electric', label: 'Electric' },
     { value: 'hybrid', label: 'Hybrid' },
-    { value: 'lpg', label: 'LPG' }
+    { value: 'lpg', label: 'LPG' },
   ];
 
+  // Hide/show this grid based on `viewState`
+  const isVisible = viewState === 'showCar';
+
   return (
-    <div 
+    <div
       className={`space-y-6 ${className} transition-all duration-300`}
       style={{
-        display: viewState === 'showCar' ? 'block' : 'none',
-        visibility: viewState === 'showCar' ? 'visible' : 'hidden'
+        display: isVisible ? 'block' : 'none',
+        visibility: isVisible ? 'visible' : 'hidden',
       }}
     >
       {/* Header with filters */}
@@ -67,14 +94,14 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           </h2>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full 
-                     bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full
+                       bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
           >
             <Filter size={16} />
             <span>
               {filterType === 'all'
                 ? 'Filters'
-                : filterOptions.find(opt => opt.value === filterType)?.label}
+                : filterOptions.find((opt) => opt.value === filterType)?.label}
             </span>
           </button>
         </div>
@@ -97,9 +124,11 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                       setShowFilters(false);
                     }}
                     className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors
-                              ${filterType === option.value 
-                                ? 'bg-accent text-white' 
-                                : 'bg-muted hover:bg-muted/80 text-foreground'}`}
+                                ${
+                                  filterType === option.value
+                                    ? 'bg-accent text-white'
+                                    : 'bg-muted hover:bg-muted/80 text-foreground'
+                                }`}
                   >
                     {option.label}
                   </button>
@@ -123,8 +152,8 @@ export default function CarGrid({ className = '' }: CarGridProps) {
             <CarCard
               car={selectedCar}
               selected={true}
-              onClick={() => {}} // No action needed when clicking selected car
-              isVisible={viewState === 'showCar'}
+              onClick={() => {}}
+              isVisible={isVisible}
               size="large"
             />
           </motion.div>
@@ -145,8 +174,8 @@ export default function CarGrid({ className = '' }: CarGridProps) {
                 <CarCard
                   car={car}
                   selected={false}
-                  onClick={() => handleSelectCar(car)}
-                  isVisible={viewState === 'showCar'}
+                  onClick={() => handleSelectCar(car.id)}
+                  isVisible={isVisible}
                   size="small"
                 />
               </motion.div>
@@ -154,7 +183,8 @@ export default function CarGrid({ className = '' }: CarGridProps) {
           </AnimatePresence>
         </div>
 
-        {otherCars.length === 0 && !selectedCar && (
+        {/* If no cars found (filtered out) */}
+        {!selectedCar && otherCars.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
