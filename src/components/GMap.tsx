@@ -204,7 +204,7 @@ function GMap({ googleApiKey }: GMapProps) {
               }}
               clickable={false}
             />
-          }
+          )}
 
           {stations.map((station: StationFeature) => {
             const [lng, lat] = station.geometry.coordinates;
