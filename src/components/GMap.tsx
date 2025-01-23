@@ -69,7 +69,7 @@ const StationListItem = memo(({ data, index, style }: StationListItemProps) => {
   const dispatch = useAppDispatch();
 
   const handleClick = useCallback(() => {
-    dispatch(selectStation(station.id));
+    dispatch(selectStationsWithDistance(station.id));
   }, [dispatch, station.id]);
 
   return (
