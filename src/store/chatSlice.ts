@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 import { Message } from '@/types/booking';
-
+import { Message } from '@/types/chat'; 
 /**
  * Thunk action for sending a message to Claude,
  * optionally including a `contextMessage` from the ChatWidget.
@@ -90,7 +90,7 @@ interface ChatState {
 }
 
 const initialState: ChatState = {
-  messages: [],
+  messages: [] as Message[],
   loading: false,
   error: null,
 };
