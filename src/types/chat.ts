@@ -7,8 +7,8 @@ export interface Message {
   role: MessageRole;
   content: string;
   timestamp: Date; // or `Date | undefined` if needed
-  reactions: Reaction[];
-  attachments: Attachment[];
+  reactions: any[];
+  attachments: any[];
 }
 
 export interface Reaction {
