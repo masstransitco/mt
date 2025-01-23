@@ -1,14 +1,16 @@
-// src/components/GMap.tsx
-
 'use client';
 
-import React, { useEffect, useCallback, useRef, memo, useMemo } from 'react';
+import React, {
+  useEffect,
+  useCallback,
+  useRef,
+  memo,
+  useMemo,
+  CSSProperties,
+} from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { 
-  selectViewState 
-} from '@/store/userSlice';
-import { 
-  selectStationsWithDistance, // Updated selector using reselect
+import {
+  selectStationsWithDistance,
   selectStationsLoading,
   selectStationsError,
   selectUserLocation,
@@ -16,15 +18,17 @@ import {
   fetchStations,
   setUserLocation,
   toggleSheet,
+  selectStation, // <-- Make sure to import
 } from '@/store/stationsSlice';
+import { selectViewState } from '@/store/userSlice'; // If you're actually using it
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
-import { FixedSizeList } from 'react-window';
+import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import Sheet from '@/components/ui/sheet';
-import type { StationFeature } from '@/types/stations';
+import type { StationFeature } from '@/store/stationsSlice';
 
 /* --------------------------- Constants --------------------------- */
-const LIBRARIES: ("geometry")[] = ['geometry'];
+const LIBRARIES: ('geometry')[] = ['geometry'];
 
 const MAP_OPTIONS: google.maps.MapOptions = {
   mapId: '94527c02bbb6243',
@@ -57,30 +61,32 @@ interface GMapProps {
   googleApiKey: string;
 }
 
-interface StationListItemProps {
+interface StationListItemProps extends ListChildComponentProps {
   data: StationFeature[];
-  index: number;
-  style: React.CSSProperties;
 }
 
 /* ----------------------- Station List Item ------------------------ */
-const StationListItem = memo(({ data, index, style }: StationListItemProps) => {
+const StationListItem = memo<StationListItemProps>((props) => {
+  const { index, style, data } = props;
   const station = data[index];
   const dispatch = useAppDispatch();
 
   const handleClick = useCallback(() => {
-    dispatch(selectStationsWithDistance(station.id));
+    // Dispatch our newly added 'selectStation' action
+    dispatch(selectStation(station.id));
   }, [dispatch, station.id]);
 
   return (
     <div
-      style={style}
+      style={style as CSSProperties}
       className="px-4 py-3 hover:bg-muted/20 cursor-pointer"
       onClick={handleClick}
     >
       <div className="flex justify-between items-start">
         <div className="space-y-2">
-          <h3 className="font-medium text-foreground">{station.properties.Place}</h3>
+          <h3 className="font-medium text-foreground">
+            {station.properties.Place}
+          </h3>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Zap className="w-4 h-4" />
             <span>{station.properties.maxPower} kW max</span>
@@ -99,18 +105,16 @@ const StationListItem = memo(({ data, index, style }: StationListItemProps) => {
 StationListItem.displayName = 'StationListItem';
 
 /* ---------------------- Memoized GoogleMap ---------------------- */
-
-// Memoize the GoogleMap component to prevent unnecessary re-renders
 const MemoizedGoogleMap = memo(GoogleMap);
 
 /* -------------------------- Main GMap ---------------------------- */
 function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
-  
+
   // Redux state selectors
-  const viewState = useAppSelector(selectViewState);
-  const stations = useAppSelector(selectStationsWithDistance); // Using memoized selector
+  const viewState = useAppSelector(selectViewState); // from userSlice
+  const stations = useAppSelector(selectStationsWithDistance);
   const isLoading = useAppSelector(selectStationsLoading);
   const error = useAppSelector(selectStationsError);
   const userLocation = useAppSelector(selectUserLocation);
@@ -125,35 +129,37 @@ function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Memoize the onLoad function to prevent re-renders
+  // Memoized map load
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
+  // Request user location
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
-
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        dispatch(setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        }));
-        // Distance calculations are handled by the selector, no need to dispatch updateDistances
+        dispatch(
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+        );
       },
       (err) => {
         console.error('Geolocation error:', err);
-        // Optionally, set a default location or notify the user
+        // Optionally handle location error
       },
       { timeout: 10000, maximumAge: 60000 }
     );
   }, [dispatch]);
 
+  // Fetch stations and user location on mount
   useEffect(() => {
     const initialize = async () => {
       try {
-        await dispatch(fetchStations()).unwrap(); // Ensure stations are fetched
-        getUserLocation(); // Then get user location and update distances via selector
+        await dispatch(fetchStations()).unwrap();
+        getUserLocation();
       } catch (err) {
         console.error('Error fetching stations:', err);
       }
@@ -161,6 +167,7 @@ function GMap({ googleApiKey }: GMapProps) {
     initialize();
   }, [dispatch, getUserLocation]);
 
+  // When marker is clicked, select station and toggle sheet
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
@@ -169,6 +176,7 @@ function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
+  // Error or map load failure
   if (error || loadError) {
     return (
       <div className="text-destructive">
@@ -177,10 +185,12 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
+  // Map not yet loaded
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
+  // Render the map + stations list
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
@@ -189,7 +199,7 @@ function GMap({ googleApiKey }: GMapProps) {
           center={userLocation || DEFAULT_CENTER}
           zoom={14}
           options={MAP_OPTIONS}
-          onLoad={handleMapLoad} // Use the memoized onLoad function
+          onLoad={handleMapLoad}
         >
           {userLocation && (
             <Marker
@@ -206,7 +216,7 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {stations.map((station: StationFeature) => {
+          {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
@@ -287,6 +297,7 @@ class MapErrorBoundary extends React.Component<
   }
 }
 
+/* ------------------ Main Export with Error Boundary ------------------ */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
