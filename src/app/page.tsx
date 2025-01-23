@@ -1,37 +1,50 @@
 'use client';
-import { useState, useCallback } from 'react';
+
+import React, { useState, useCallback } from 'react';
 import Image from 'next/image';
-import { useDispatch, useSelector } from 'react-redux';
-import { setViewState, selectViewState } from '@/store/userSlice';
+import { useAppDispatch, useAppSelector } from '@/store/store';
+
+// Import from uiSlice (instead of userSlice) for UI view toggles
+import { setViewState, selectViewState } from '@/store/uiSlice';
+
+// Other icons
 import { Car, Map, Menu as MenuIcon, QrCode } from 'lucide-react';
+
+// Components
 import CarGrid from '@/components/booking/CarGrid';
-import GMap from '@/components/GMap';
+import GMapWithErrorBoundary from '@/components/GMap';  // if using the error boundary version
 import BookingDialog from '@/components/booking/BookingDialog';
 import SideSheet from '@/components/ui/SideSheet';
 import AppMenu from '@/components/ui/AppMenu';
 import QrScannerOverlay from '@/components/ui/QrScannerOverlay';
 
-export default function HomePage() {
-  const dispatch = useDispatch();
-  const viewState = useSelector(selectViewState);
+export default function Page() {
+  const dispatch = useAppDispatch();
+
+  // Get the current view from uiSlice
+  const viewState = useAppSelector(selectViewState);
+
+  // Local UI states for menu and QR scanner
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
+  // Toggle between showCar / showMap
   const toggleView = useCallback(() => {
     dispatch(setViewState(viewState === 'showMap' ? 'showCar' : 'showMap'));
   }, [dispatch, viewState]);
 
+  // Menu toggles
+  const toggleMenu = useCallback(() => {
+    setIsMenuOpen((prev) => !prev);
+  }, []);
   const handleMenuClose = useCallback(() => {
     setIsMenuOpen(false);
   }, []);
 
-  const toggleMenu = useCallback(() => {
-    setIsMenuOpen((prev) => !prev);
-  }, []);
-
+  // Render
   return (
     <main className="min-h-screen bg-background flex flex-col">
-      {/* Header - height: 57px (14px + 29px + 14px) */}
+      {/* Header */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-[57px]">
         <div className="h-full px-4 flex items-center justify-between">
           <Image
@@ -42,16 +55,24 @@ export default function HomePage() {
             priority
             className="h-8 w-auto"
           />
+
           <div className="flex items-center gap-2">
+            {/* QR Scanner Button */}
             <button
               onClick={() => setIsScannerOpen(true)}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
+              className="flex items-center justify-center w-10 h-10 rounded-full
+                         text-gray-400 hover:text-gray-200 hover:bg-gray-700
+                         active:bg-gray-600 transition-colors"
             >
               <QrCode className="w-5 h-5" />
             </button>
+
+            {/* Toggle Car / Map View */}
             <button
               onClick={toggleView}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
+              className="flex items-center justify-center w-10 h-10 rounded-full
+                         text-gray-400 hover:text-gray-200 hover:bg-gray-700
+                         active:bg-gray-600 transition-colors"
             >
               {viewState === 'showMap' ? (
                 <Car className="w-5 h-5" />
@@ -59,9 +80,13 @@ export default function HomePage() {
                 <Map className="w-5 h-5" />
               )}
             </button>
+
+            {/* Menu Button */}
             <button
               onClick={toggleMenu}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
+              className="flex items-center justify-center w-10 h-10 rounded-full
+                         text-gray-400 hover:text-gray-200 hover:bg-gray-700
+                         active:bg-gray-600 transition-colors"
             >
               <MenuIcon className="w-5 h-5" />
             </button>
@@ -71,10 +96,12 @@ export default function HomePage() {
 
       {/* Main content area */}
       <div className="flex-1 relative">
-        {/* Cars Grid */}
-        <div 
+        {/* CarGrid */}
+        <div
           className={`px-4 transition-opacity duration-300 ${
-            viewState === 'showMap' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            viewState === 'showMap'
+              ? 'opacity-0 pointer-events-none'
+              : 'opacity-100'
           }`}
         >
           <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
@@ -83,23 +110,22 @@ export default function HomePage() {
         {/* Map */}
         {viewState === 'showMap' && (
           <div className="absolute inset-0">
-            <GMap 
+            <GMapWithErrorBoundary
               googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
             />
           </div>
         )}
       </div>
 
+      {/* Booking steps (dialog) */}
       <BookingDialog />
-      
-      <SideSheet 
-        isOpen={isMenuOpen} 
-        onClose={handleMenuClose}
-        size="full"
-      >
+
+      {/* Side Sheet Menu */}
+      <SideSheet isOpen={isMenuOpen} onClose={handleMenuClose} size="full">
         <AppMenu onClose={handleMenuClose} />
       </SideSheet>
 
+      {/* QR Scanner */}
       {isScannerOpen && (
         <QrScannerOverlay
           isOpen={isScannerOpen}
