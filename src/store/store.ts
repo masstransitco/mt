@@ -1,6 +1,7 @@
 // src/store/store.ts
 
 import { configureStore } from '@reduxjs/toolkit';
+import chatReducer from './chatSlice';
 import uiReducer from './uiSlice';
 import userReducer from './userSlice';
 import stationsReducer from './stationsSlice';
@@ -10,6 +11,7 @@ import bookingReducer from './bookingSlice';
 // Combine into a single store
 export const store = configureStore({
   reducer: {
+    chat: chatReducer,
     ui: uiReducer,
     user: userReducer,
     stations: stationsReducer,
