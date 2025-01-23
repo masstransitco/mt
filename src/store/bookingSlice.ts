@@ -1,16 +1,30 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { RootState } from './store';
+// src/store/bookingSlice.ts
 
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { RootState } from './store';
+
+/**
+ * The bookingSlice orchestrates a multi-step flow:
+ * 1) User picks car & station
+ * 2) ID verification
+ * 3) Payment
+ * 4) Finalizing
+ * ... etc.
+ * 
+ * We store which step the user is on, plus relevant data
+ * like departure dates or scanning a QR code if needed.
+ */
 interface BookingState {
   step: number;
-  stepName: string; // Optional helper for Chat's context
+  stepName: string;
   departureDate: Date | null;
+  // Could store additional fields, e.g. arrivalStationId, paymentMethod, etc.
 }
 
 const initialState: BookingState = {
   step: 1,
-  stepName: 'select_departure_time',
-  departureDate: null
+  stepName: 'select_car_and_station',
+  departureDate: null,
 };
 
 const bookingSlice = createSlice({
@@ -20,41 +34,44 @@ const bookingSlice = createSlice({
     setDepartureDate: (state, action: PayloadAction<Date>) => {
       state.departureDate = action.payload;
     },
-    confirmBookingStep: (state, action: PayloadAction<number>) => {
+    // Advance to a specified step in the flow
+    advanceBookingStep: (state, action: PayloadAction<number>) => {
       state.step = action.payload;
       switch (action.payload) {
         case 1:
-          state.stepName = 'select_departure_time';
+          state.stepName = 'select_car_and_station';
           break;
         case 2:
-          state.stepName = 'confirm_details';
-          break;
-        case 3:
           state.stepName = 'verify_id';
           break;
-        case 4:
+        case 3:
           state.stepName = 'payment';
           break;
-        case 5:
+        case 4:
           state.stepName = 'finalizing';
           break;
         default:
-          state.stepName = 'select_departure_time';
+          state.stepName = 'select_car_and_station';
           break;
       }
     },
-    resetBookingState: (state) => {
+    resetBookingFlow: (state) => {
       state.step = 1;
-      state.stepName = 'select_departure_time';
+      state.stepName = 'select_car_and_station';
       state.departureDate = null;
-    }
-  }
+    },
+  },
 });
 
-export const { setDepartureDate, confirmBookingStep, resetBookingState } = bookingSlice.actions;
+export const {
+  setDepartureDate,
+  advanceBookingStep,
+  resetBookingFlow,
+} = bookingSlice.actions;
+
 export default bookingSlice.reducer;
 
-// Selectors
+/* --------------------------- Selectors --------------------------- */
 export const selectBookingStep = (state: RootState) => state.booking.step;
-export const selectStepName = (state: RootState) => state.booking.stepName;
+export const selectBookingStepName = (state: RootState) => state.booking.stepName;
 export const selectDepartureDate = (state: RootState) => state.booking.departureDate;
