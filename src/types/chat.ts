@@ -6,7 +6,7 @@ export interface Message {
   id: string;
   role: MessageRole;
   content: string;
-  timestamp: Date; // or Date | undefined if you truly need it optional
+  timestamp: Date; // or `Date | undefined` if needed
   reactions: Reaction[];
   attachments: Attachment[];
 }
