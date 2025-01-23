@@ -2,8 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '@/store/store';
-import { resetBooking } from '@/store/userSlice';
-import { confirmBookingStep, selectBookingStep, selectDepartureDate, setDepartureDate } from '@/store/bookingSlice';
+
+// ----- userSlice (manages selected car/station) -----
+import { resetUserSelections } from '@/store/userSlice';
+
+// ----- bookingSlice (manages step flow, departure date, etc.) -----
+import {
+  advanceBookingStep,        // previously confirmBookingStep
+  selectBookingStep,
+  selectDepartureDate,
+  setDepartureDate,
+  resetBookingFlow,
+} from '@/store/bookingSlice';
+
 import { format } from 'date-fns';
 import {
   AlertDialog,
@@ -15,121 +26,142 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
+
 import IDVerificationStep from './IDVerificationStep';
 import PaymentStep from './PaymentStep';
 
 export default function BookingDialog() {
   const dispatch = useAppDispatch();
+
+  // userSlice state
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   const selectedStationId = useAppSelector((state) => state.user.selectedStationId);
+
+  // bookingSlice state
   const bookingStep = useAppSelector(selectBookingStep);
   const departureDate = useAppSelector(selectDepartureDate);
 
+  // local UI state: whether the dialog is open
   const [open, setOpen] = useState<boolean>(false);
 
-  // If user selected both car and station, open the dialog
+  // If user selected both car and station, open the dialog automatically
   useEffect(() => {
     if (selectedCarId && selectedStationId) {
       setOpen(true);
     }
   }, [selectedCarId, selectedStationId]);
 
-  // Closes the dialog and resets everything
+  /* -------------- CANCEL / CLOSE -------------- */
   const handleCancel = () => {
     setOpen(false);
-    dispatch(resetBooking());
+    // Clear out user selections + booking flow
+    dispatch(resetUserSelections());
+    dispatch(resetBookingFlow());
   };
 
-  // Step: 1 -> Set date/time, then proceed
+  /* -------------- STEP 1: Set departure date/time -------------- */
   const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     dispatch(setDepartureDate(new Date(e.target.value)));
-    dispatch(confirmBookingStep(2));
+    dispatch(advanceBookingStep(2));
   };
 
-  // Step: 2 -> Confirm booking
+  /* -------------- STEP 2: Confirm booking details -------------- */
   const handleConfirmBookingDetails = () => {
-    dispatch(confirmBookingStep(3));
+    dispatch(advanceBookingStep(3)); // Next step: ID verification
   };
 
-  // Step: 3 -> ID Verification step handled in IDVerificationStep
+  /* -------------- STEP 3: ID Verification -------------- */
   const handleIDVerified = () => {
-    dispatch(confirmBookingStep(4));
+    dispatch(advanceBookingStep(4)); // Next step: Payment
   };
 
-  // Step: 4 -> Payment step handled in PaymentStep
+  /* -------------- STEP 4: Payment -------------- */
   const handlePaymentComplete = () => {
     // Payment done -> finalize booking
-    dispatch(confirmBookingStep(5));
+    dispatch(advanceBookingStep(5));
   };
 
-  // Once bookingStep === 5, we finalize
+  /* -------------- STEP 5: Finalizing booking -------------- */
   useEffect(() => {
     if (bookingStep === 5) {
-      // Submit to /api/bookings
+      // Build payload
       const bookingPayload = {
         carId: selectedCarId,
         stationId: selectedStationId,
-        departureDate
-        // plus ID docs, payment method, etc.
+        departureDate,
+        // e.g. ID docs, payment method, etc. if stored in bookingSlice
       };
+
+      // Example POST to your bookings endpoint
       fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bookingPayload)
+        body: JSON.stringify(bookingPayload),
       })
         .then((res) => res.json())
         .then((data) => {
           console.log('Booking created:', data);
-          // Possibly show success message or route to success page
+          // Show success message or navigate
         })
         .catch((err) => {
           console.error('Booking creation error:', err);
         })
         .finally(() => {
+          // Close dialog & reset
           setOpen(false);
-          dispatch(resetBooking());
+          dispatch(resetUserSelections());
+          dispatch(resetBookingFlow());
         });
     }
   }, [bookingStep, selectedCarId, selectedStationId, departureDate, dispatch]);
 
+  /* -------------- RENDER UI PER STEP -------------- */
   const renderStepContent = () => {
     switch (bookingStep) {
       case 1:
         return (
           <div className="space-y-4">
             <h3 className="font-medium">Select Departure Time</h3>
-            <input 
+            <input
               type="datetime-local"
               className="w-full p-2 rounded border border-border bg-background text-foreground"
               onChange={handleDateSelect}
+              // Disallow selecting a time in the past
               min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
             />
           </div>
         );
       case 2:
-        return departureDate && (
-          <div className="space-y-4">
-            <h3 className="font-medium">Confirm Booking Details</h3>
-            <div className="bg-accent/10 p-4 rounded space-y-2">
-              <p className="text-foreground">Vehicle: Car #{selectedCarId}</p>
-              <p className="text-foreground">Station: Station #{selectedStationId}</p>
-              <p className="text-foreground">Departure: {format(departureDate, 'PPpp')}</p>
+        return (
+          departureDate && (
+            <div className="space-y-4">
+              <h3 className="font-medium">Confirm Booking Details</h3>
+              <div className="bg-accent/10 p-4 rounded space-y-2">
+                <p className="text-foreground">Vehicle: Car #{selectedCarId}</p>
+                <p className="text-foreground">Station: Station #{selectedStationId}</p>
+                <p className="text-foreground">
+                  Departure: {format(departureDate, 'PPpp')}
+                </p>
+              </div>
             </div>
-          </div>
+          )
         );
       case 3:
+        // ID Verification step content
         return <IDVerificationStep onVerified={handleIDVerified} />;
       case 4:
+        // Payment step content
         return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
       default:
         return null;
     }
   };
 
+  /* -------------- RENDER FOOTER BUTTONS -------------- */
   const renderFooterButtons = () => {
     switch (bookingStep) {
       case 1:
-        // The user will proceed automatically to step 2 once they pick a date
+        // Step 1 auto-advances to step 2 once user selects a time
         return null;
       case 2:
         return (
@@ -142,7 +174,7 @@ export default function BookingDialog() {
         );
       case 3:
       case 4:
-        // Buttons are handled within the step components
+        // Steps 3 & 4 have next-step actions within their components
         return null;
       default:
         return null;
@@ -158,7 +190,7 @@ export default function BookingDialog() {
             {renderStepContent()}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        
+
         <AlertDialogFooter>
           <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
           {renderFooterButtons()}
