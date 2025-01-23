@@ -8,22 +8,34 @@ import React, {
   useMemo,
   CSSProperties,
 } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store/store';
-import {
-  selectStationsWithDistance,
-  selectStationsLoading,
-  selectStationsError,
-  selectUserLocation,
-  selectIsSheetMinimized,
-  fetchStations,
-  setUserLocation,
-  toggleSheet,
-  selectStation, // <-- Make sure to import
-} from '@/store/stationsSlice';
-import { selectViewState } from '@/store/userSlice'; // If you're actually using it
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { Zap } from 'lucide-react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
+
+import { useAppDispatch, useAppSelector } from '@/store/store';
+
+// ---- Import from stationsSlice (fetch & station data) ----
+import {
+  fetchStations,
+  selectStationsWithDistance,
+  selectStationsLoading,
+  selectStationsError,
+} from '@/store/stationsSlice';
+
+// ---- Import from userSlice (user location & selected station) ----
+import {
+  setUserLocation,
+  selectUserLocation,
+  selectStation,
+} from '@/store/userSlice';
+
+// ---- Import from uiSlice (UI states) ----
+import {
+  selectViewState,
+  selectIsSheetMinimized,
+  toggleSheet,
+} from '@/store/uiSlice';
+
 import Sheet from '@/components/ui/sheet';
 import type { StationFeature } from '@/store/stationsSlice';
 
@@ -72,7 +84,7 @@ const StationListItem = memo<StationListItemProps>((props) => {
   const dispatch = useAppDispatch();
 
   const handleClick = useCallback(() => {
-    // Dispatch our newly added 'selectStation' action
+    // Select the station in userSlice
     dispatch(selectStation(station.id));
   }, [dispatch, station.id]);
 
@@ -112,24 +124,27 @@ function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Redux state selectors
-  const viewState = useAppSelector(selectViewState); // from userSlice
+  // ---- Selectors from each slice ----
   const stations = useAppSelector(selectStationsWithDistance);
   const isLoading = useAppSelector(selectStationsLoading);
   const error = useAppSelector(selectStationsError);
+
   const userLocation = useAppSelector(selectUserLocation);
+
+  const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Memoize stations to prevent unnecessary re-renders of FixedSizeList
+  // Memoize stations for the list
   const memoizedStations = useMemo(() => stations, [stations]);
 
+  // Load Google Maps script
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Memoized map load
+  // Keep reference to the map instance
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
@@ -148,13 +163,13 @@ function GMap({ googleApiKey }: GMapProps) {
       },
       (err) => {
         console.error('Geolocation error:', err);
-        // Optionally handle location error
+        // Optionally handle location error or fallback
       },
       { timeout: 10000, maximumAge: 60000 }
     );
   }, [dispatch]);
 
-  // Fetch stations and user location on mount
+  // On mount, fetch stations and get user location
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -167,16 +182,16 @@ function GMap({ googleApiKey }: GMapProps) {
     initialize();
   }, [dispatch, getUserLocation]);
 
-  // When marker is clicked, select station and toggle sheet
+  // When a station marker is clicked, select it and toggle the sheet
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
-      dispatch(toggleSheet());
+      dispatch(toggleSheet()); // from uiSlice
     },
     [dispatch]
   );
 
-  // Error or map load failure
+  // Error handling
   if (error || loadError) {
     return (
       <div className="text-destructive">
@@ -185,12 +200,12 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Map not yet loaded
+  // If Google Maps script isn’t loaded yet
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
-  // Render the map + stations list
+  // ---- Render the Google Map plus the sheet/list ----
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
