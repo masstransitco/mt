@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
   sendMessageToClaude,
@@ -12,7 +12,9 @@ import { selectSelectedCarId, selectSelectedStationId } from '@/store/userSlice'
 import { selectBookingStep, selectDepartureDate } from '@/store/bookingSlice';
 import { selectViewState } from '@/store/uiSlice';
 
+// IMPORTANT: Use the unified Message type from src/types/chat
 import { Message } from '@/types/chat';
+
 import { X } from 'lucide-react';
 
 export default function ChatWidget() {
@@ -68,13 +70,7 @@ Remember: Always adopt a friendly, professional tone and keep responses short un
       reactions: [],
       attachments: [],
     };
-  }, [
-    viewState,
-    selectedCarId,
-    selectedStationId,
-    bookingStep,
-    departureDate,
-  ]);
+  }, [viewState, selectedCarId, selectedStationId, bookingStep, departureDate]);
 
   /**
    * Handle sending user message plus system context to the LLM.
