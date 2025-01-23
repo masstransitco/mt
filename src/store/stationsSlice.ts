@@ -1,7 +1,13 @@
 // src/store/stationsSlice.ts
 
-import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createSelector,
+} from '@reduxjs/toolkit';
 import type { RootState } from './store';
+import { selectUserLocation } from './userSlice';
 
 /* --------------------------- Interfaces --------------------------- */
 export interface StationFeature {
@@ -19,7 +25,7 @@ export interface StationFeature {
     availableSpots: number;
     waitTime?: number;
   };
-  distance?: number; // Distance in kilometers from the user's location
+  distance?: number; // Distance (in km) from the user's location, if computed
 }
 
 interface StationsState {
@@ -27,8 +33,6 @@ interface StationsState {
   loading: boolean;
   error: string | null;
   lastFetched: number | null;
-  userLocation: google.maps.LatLngLiteral | null;
-  isSheetMinimized: boolean;
 }
 
 const initialState: StationsState = {
@@ -36,69 +40,54 @@ const initialState: StationsState = {
   loading: false,
   error: null,
   lastFetched: null,
-  userLocation: null,
-  isSheetMinimized: false,
 };
 
 /* --------------------------- Thunks --------------------------- */
-
-// Async thunk to fetch stations data with caching to localStorage
+/**
+ * 1. Checks localStorage for a cached stations list.
+ * 2. If it's older than 1 hour or not present, fetches from /stations.geojson.
+ * 3. Dispatches either fulfilled or rejected depending on success.
+ */
 export const fetchStations = createAsyncThunk<
   { data: StationFeature[]; timestamp: number },
   void,
   { rejectValue: string }
->(
-  'stations/fetchStations',
-  async (_, { rejectWithValue }) => {
-    try {
-      const cached = localStorage.getItem('stations');
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        // Cache validity: 1 hour (3600000 ms)
-        if (Date.now() - timestamp < 3600000) {
-          return { data, timestamp };
-        }
+>('stations/fetchStations', async (_, { rejectWithValue }) => {
+  try {
+    const cached = localStorage.getItem('stations');
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      // Cache valid for 1 hour
+      if (Date.now() - timestamp < 3600000) {
+        return { data, timestamp };
       }
-
-      const response = await fetch('/stations.geojson'); // Replace with your actual API endpoint
-      if (!response.ok) {
-        throw new Error('Failed to fetch stations');
-      }
-      const data = await response.json();
-
-      if (data.type === 'FeatureCollection') {
-        const features: StationFeature[] = data.features;
-        localStorage.setItem(
-          'stations',
-          JSON.stringify({
-            data: features,
-            timestamp: Date.now(),
-          })
-        );
-        return { data: features, timestamp: Date.now() };
-      }
-      throw new Error('Invalid data format');
-    } catch (error: any) {
-      return rejectWithValue(error.message);
     }
+
+    // Not cached or expired, fetch fresh
+    const response = await fetch('/stations.geojson');
+    if (!response.ok) {
+      throw new Error('Failed to fetch stations');
+    }
+    const data = await response.json();
+    if (data.type === 'FeatureCollection') {
+      const features: StationFeature[] = data.features;
+      localStorage.setItem(
+        'stations',
+        JSON.stringify({ data: features, timestamp: Date.now() })
+      );
+      return { data: features, timestamp: Date.now() };
+    }
+    throw new Error('Invalid data format');
+  } catch (error: any) {
+    return rejectWithValue(error.message);
   }
-);
+});
 
 /* --------------------------- Slice --------------------------- */
 const stationsSlice = createSlice({
   name: 'stations',
   initialState,
-  reducers: {
-    // Set the user's current location
-    setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
-      state.userLocation = action.payload;
-    },
-    // Toggle the minimization state of the sheet
-    toggleSheet: (state) => {
-      state.isSheetMinimized = !state.isSheetMinimized;
-    },
-    // Note: The `updateDistances` reducer has been removed to maintain reducer purity
-  },
+  reducers: {},
   extraReducers: (builder) => {
     builder
       .addCase(fetchStations.pending, (state) => {
@@ -120,65 +109,48 @@ const stationsSlice = createSlice({
   },
 });
 
-export const { setUserLocation, toggleSheet } = stationsSlice.actions;
-
 export default stationsSlice.reducer;
 
 /* --------------------------- Selectors --------------------------- */
 
-// Basic selectors
-export const selectAllStations = (state: RootState) => state.stations.items;
 export const selectStationsLoading = (state: RootState) => state.stations.loading;
 export const selectStationsError = (state: RootState) => state.stations.error;
-export const selectUserLocation = (state: RootState) => state.stations.userLocation;
-export const selectIsSheetMinimized = (state: RootState) => state.stations.isSheetMinimized;
+export const selectAllStations = (state: RootState) => state.stations.items;
 
-/* ----------------------- Haversine Formula ----------------------- */
+/* --------------------- Distance Calculation ---------------------- */
 
-// Define an interface for coordinates
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
-// Haversine formula to calculate distance between two coordinates in kilometers
-const calculateDistance = (coord1: Coordinates, coord2: Coordinates): number => {
+// Simple Haversine formula for distance in kilometers
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (value: number) => (value * Math.PI) / 180;
-
-  const R = 6371; // Earth's radius in kilometers
-  const dLat = toRad(coord2.lat - coord1.lat);
-  const dLng = toRad(coord2.lng - coord1.lng);
+  const R = 6371; // Earth's radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(coord1.lat)) *
-      Math.cos(toRad(coord2.lat)) *
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
       Math.sin(dLng / 2) *
       Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c;
-  return distance;
-};
-
-/* ----------------- Memoized Selector with Reselect ----------------- */
+  return R * c;
+}
 
 /**
- * Selector to get all stations with calculated distances from the user's location.
- * This selector is memoized and will only recompute when `items` or `userLocation` change.
+ * Memoized selector that calculates distance from the user's location
+ * for each station, returning a sorted list (nearest first).
  */
 export const selectStationsWithDistance = createSelector(
   [selectAllStations, selectUserLocation],
   (stations, userLocation) => {
     if (!userLocation) return stations;
-
-    const userCoord: Coordinates = { lat: userLocation.lat, lng: userLocation.lng };
+    const { lat: userLat, lng: userLng } = userLocation;
 
     return stations
       .map((station) => {
         const [lng, lat] = station.geometry.coordinates;
-        const stationCoord: Coordinates = { lat, lng };
-        const distance = calculateDistance(userCoord, stationCoord);
+        const distance = calculateDistance(userLat, userLng, lat, lng);
         return { ...station, distance };
       })
-      .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
 );
