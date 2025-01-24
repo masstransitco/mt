@@ -1,19 +1,18 @@
 /**
  * src/lib/cartrack.ts
  *
- * Combines:
+ * Demonstrates:
  * 1) Basic Auth Setup
  * 2) Local Asset Mapping
- * 3) Fetch Vehicle List (with optional filters)
- * 4) Fetch Nearest Vehicles (with 50km default radius)
- * 5) Example Orchestration
+ * 3) Fetch Vehicle Status (with location) from Cartrack
+ * 4) (Optional) Retrieve Plus Code if needed
  */
 
 // -----------------------------------------------------------------------------
 // 1. Basic Auth Setup
 // -----------------------------------------------------------------------------
 
-// Demo credentials (store securely in production!)
+// Demo credentials (store securely in production)
 const USERNAME = 'URBA00001';
 const API_PASSWORD = 'fd58cd26fefc8c2b2ba1f7f52b33221a65f645790a43ff9b8da35db7da6e1f33';
 
@@ -21,9 +20,9 @@ const API_PASSWORD = 'fd58cd26fefc8c2b2ba1f7f52b33221a65f645790a43ff9b8da35db7da
 const base64Auth = btoa(`${USERNAME}:${API_PASSWORD}`);
 
 /**
- * Helper to create Fetch options with Basic Auth headers
+ * Create Fetch options with Basic Auth headers
  */
-function getFetchOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): RequestInit {
+function getRequestOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): RequestInit {
   const headers = new Headers();
   headers.append('Authorization', `Basic ${base64Auth}`);
   headers.append('Content-Type', 'application/json');
@@ -31,7 +30,7 @@ function getFetchOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): Req
   return {
     method,
     headers,
-    redirect: 'manual', // or 'follow'
+    redirect: 'manual',
   };
 }
 
@@ -44,7 +43,6 @@ function getFetchOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): Req
  * Adjust or add more as needed.
  */
 const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
-  // Example: If Cartrack vehicle has registration "ABC123", it uses local assets
   ABC123: {
     modelUrl: '/cars/car1.glb',
     image: '/cars/car1.png',
@@ -53,7 +51,7 @@ const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
 
 /**
  * Return local asset paths for a given registration.
- * If not found, fallback to defaultModel.glb / defaultImage.png
+ * Fallback to default if not found.
  */
 function getLocalAssetsForRegistration(
   registration: string | undefined
@@ -64,12 +62,10 @@ function getLocalAssetsForRegistration(
       image: '/cars/defaultImage.png',
     };
   }
-
   const assets = LOCAL_ASSETS_MAP[registration];
   if (assets) {
     return assets;
   }
-  // Fallback
   return {
     modelUrl: '/cars/defaultModel.glb',
     image: '/cars/defaultImage.png',
@@ -77,168 +73,115 @@ function getLocalAssetsForRegistration(
 }
 
 // -----------------------------------------------------------------------------
-// 3. Fetch Vehicle List with Optional Filters
+// 3. Fetch Vehicle Status (Location via /vehicles/status)
 // -----------------------------------------------------------------------------
 
 /**
- * Possible query filters for GET /vehicles
- * (e.g. filter[colour], filter[chassis_number], page, limit, etc. as needed)
- */
-export interface FetchVehicleListParams {
-  vehicle_id?: number;
-  registration?: string;
-  manufacturer?: string;
-  model_year?: number;
-  // Add page, limit, etc. if needed
-}
-
-/**
- * Fetches a list of vehicles from Cartrack.
- * Endpoint: GET /vehicles?filter[vehicle_id]=...&filter[registration]=... etc.
+ * This function calls Cartrack's /vehicles/status endpoint.
+ * If `registration` is specified, it adds `?filter[registration]=...`.
  *
- * 1) Applies optional filters to the query
- * 2) Enriches each vehicle with local model/image
- * 3) Extracts lat/long from last_position if available
- * @returns Array of transformed vehicles
+ * The response typically includes `location.latitude` and `location.longitude`.
+ * We'll parse them into `lat` / `lng`, plus map to local modelUrl/image if needed.
  */
-export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Promise<any[]> {
-  const baseUrl = 'https://fleetapi-hk.cartrack.com/rest/vehicles';
-  const params = new URLSearchParams();
-
-  // Build Cartrack filters if provided
-  if (filters.vehicle_id !== undefined) {
-    params.set('filter[vehicle_id]', filters.vehicle_id.toString());
-  }
-  if (filters.registration) {
-    params.set('filter[registration]', filters.registration);
-  }
-  if (filters.manufacturer) {
-    params.set('filter[manufacturer]', filters.manufacturer);
-  }
-  if (filters.model_year !== undefined) {
-    params.set('filter[model_year]', filters.model_year.toString());
-  }
-
-  // Construct final URL
-  const finalUrl = params.toString() ? `${baseUrl}?${params}` : baseUrl;
-
-  // Fetch with Basic Auth
-  const response = await fetch(finalUrl, getFetchOptions('GET'));
-  if (!response.ok) {
-    throw new Error(`fetchVehicleList failed: ${response.status} ${response.statusText}`);
-  }
-
-  // Cartrack typically returns { data: [...], meta: {...} }
-  const result = await response.json();
-  const rawVehicles = result.data || [];
-
-  // Extract lat/long + local assets
-  return rawVehicles.map((vehicle: any) => {
-    const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
-    const lat = vehicle.last_position?.lat ?? 0;
-    const lng = vehicle.last_position?.lng ?? 0;
-
-    return {
-      ...vehicle,
-      modelUrl,
-      image,
-      lat,
-      lng,
-    };
-  });
-}
-
-// -----------------------------------------------------------------------------
-// 4. Fetch Nearest Vehicles (default 50km radius)
-// -----------------------------------------------------------------------------
-
-/**
- * Fetches vehicles nearest to a given lat/long
- * Endpoint: GET /vehicles/nearest?longitude=...&latitude=...
- *
- * By default, we set filter[max_distance] to 50000 (50km).
- * Adjust as needed to encompass your entire region.
- */
-export async function fetchVehiclesNearestToPoint(
-  longitude: number,
-  latitude: number,
-  maxDistance = 50000, // 50km radius
-  includeRegistrations?: string,
-  excludeRegistrations?: string
-): Promise<any[]> {
-  const baseUrl = 'https://fleetapi-hk.cartrack.com/rest/vehicles/nearest';
-  const params = new URLSearchParams();
-
-  // Required lat/lng
-  params.set('longitude', longitude.toString());
-  params.set('latitude', latitude.toString());
-
-  // Optional radius in meters
-  params.set('filter[max_distance]', maxDistance.toString());
-
-  // Optionally include or exclude certain registrations
-  if (includeRegistrations) {
-    params.set('filter[include_many_registrations]', includeRegistrations);
-  }
-  if (excludeRegistrations) {
-    params.set('filter[exclude_many_registrations]', excludeRegistrations);
-  }
-
-  const finalUrl = `${baseUrl}?${params.toString()}`;
-  const response = await fetch(finalUrl, getFetchOptions('GET'));
-  if (!response.ok) {
-    throw new Error(
-      `fetchVehiclesNearestToPoint failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const result = await response.json();
-  const rawVehicles = result.data || [];
-
-  // Extract lat/long + local assets
-  return rawVehicles.map((vehicle: any) => {
-    const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
-    const lat = vehicle.last_position?.lat ?? 0;
-    const lng = vehicle.last_position?.lng ?? 0;
-
-    return {
-      ...vehicle,
-      modelUrl,
-      image,
-      lat,
-      lng,
-    };
-  });
-}
-
-// -----------------------------------------------------------------------------
-// 5. Example: Orchestrate Both Calls
-// -----------------------------------------------------------------------------
-
-/**
- * Example function demonstrating:
- * 1) Fetch the full vehicle list (no or minimal filters)
- * 2) Fetch vehicles nearest to a lat/long with a large radius
- * 3) Combine or process the results
- *
- * If your vehicles truly have positions in Cartrack, and
- * they're within 50km of (114.0, 22.3), you'll see lat/lng > 0.
- */
-export async function getVehiclesAndLocations() {
+export async function fetchVehicleStatus(
+  registration?: string,
+  retrievePlusCode?: boolean
+): Promise<any> {
   try {
-    // 1) Get the full vehicle list
-    const allVehicles = await fetchVehicleList();
+    // 1) Construct the URL (e.g. '.../vehicles/status?filter[registration]=ABC123')
+    let url = `https://fleetapi-hk.cartrack.com/rest/vehicles/status`;
+    if (registration) {
+      url += `?filter[registration]=${registration}`;
+    }
 
-    // 2) Get the nearest vehicles to lat=22.3, lng=114.0 within 50km
-    const nearestVehicles = await fetchVehiclesNearestToPoint(114.0, 22.3, 50000);
+    // 2) Make the request
+    let response = await fetch(url, getRequestOptions('GET'));
+    if (!response.ok) {
+      throw new Error(`fetchVehicleStatus failed: ${response.status} ${response.statusText}`);
+    }
+    response = await response.json();
 
-    // Return them for further use
-    return {
-      allVehicles,
-      nearestVehicles,
-    };
+    // 3) Optionally filter if 'registration' was provided
+    if (registration && response?.data?.length) {
+      response.data = response.data.filter((item: any) => item.registration === registration);
+    }
+
+    // 4) Map each vehicle's location to lat/lng & handle local assets
+    if (response?.data?.length) {
+      response.data = response.data.map((vehicle: any) => {
+        // local asset map
+        const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+        // parse lat/lng from vehicle.location
+        const lat = vehicle?.location?.latitude ?? 0;
+        const lng = vehicle?.location?.longitude ?? 0;
+
+        return {
+          ...vehicle,
+          modelUrl,
+          image,
+          lat,
+          lng,
+        };
+      });
+    }
+
+    // 5) If we want to retrieve a "plus code" for the first vehicle
+    //    We can call 'retrievePlusCode(lat, lng)' here if needed
+    if (
+      retrievePlusCode &&
+      response?.data?.length &&
+      response.data[0].location
+    ) {
+      const plusCodeResult = await retrievePlusCode(
+        response.data[0].location.latitude,
+        response.data[0].location.longitude
+      );
+      if (plusCodeResult && plusCodeResult.status === 'OK' && plusCodeResult.plus_code) {
+        // Attach plus code to first vehicle
+        response.data[0].plus_code = plusCodeResult.plus_code;
+      }
+    }
+
+    return response;
+  } catch (error) {
+    console.error('fetchVehicleStatus error:', error);
+    throw error;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 4. Example: Orchestration
+// -----------------------------------------------------------------------------
+
+/**
+ * Example function that retrieves status for a specific vehicle or all vehicles,
+ * then logs or returns the response. Adjust as needed for your use case.
+ */
+export async function getVehicleStatusOrAll(registration?: string) {
+  try {
+    // If registration is provided, fetch that specific vehicle's status
+    // Otherwise, fetch all vehicles' status
+    const result = await fetchVehicleStatus(registration);
+    return result;
   } catch (err) {
-    console.error('getVehiclesAndLocations error:', err);
+    console.error('getVehicleStatusOrAll error:', err);
     throw err;
   }
+}
+
+// -----------------------------------------------------------------------------
+// 5. (Optional) retrievePlusCode Helper
+// -----------------------------------------------------------------------------
+
+/**
+ * Example function that calls some external API to get a Plus Code
+ * for the given lat/lng. If you don't need plus codes, you can remove this.
+ */
+async function retrievePlusCode(latitude: number, longitude: number): Promise<any> {
+  // For demonstration only. Replace with your actual plus code / geocoding API call.
+  // e.g. https://maps.googleapis.com/maps/api/geocode/json?latlng=lat,lng&key=YOUR_KEY
+  return {
+    status: 'OK',
+    plus_code: '8Q7X+FQ Hong Kong',
+  };
 }
