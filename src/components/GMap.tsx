@@ -36,6 +36,14 @@ import {
   toggleSheet,
 } from '@/store/uiSlice';
 
+// -- carSlice: fetch + car data
+import {
+  fetchCars,
+  selectAllCars,
+  selectCarsLoading,
+  selectCarsError,
+} from '@/store/carSlice';
+
 import Sheet from '@/components/ui/sheet';
 import type { StationFeature } from '@/store/stationsSlice';
 
@@ -125,8 +133,13 @@ function GMap({ googleApiKey }: GMapProps) {
 
   // -- Station data
   const stations = useAppSelector(selectStationsWithDistance);
-  const isLoading = useAppSelector(selectStationsLoading);
-  const error = useAppSelector(selectStationsError);
+  const stationsLoading = useAppSelector(selectStationsLoading);
+  const stationsError = useAppSelector(selectStationsError);
+
+  // -- Car data
+  const cars = useAppSelector(selectAllCars);
+  const carsLoading = useAppSelector(selectCarsLoading);
+  const carsError = useAppSelector(selectCarsError);
 
   // -- User location
   const userLocation = useAppSelector(selectUserLocation);
@@ -170,14 +183,18 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, [dispatch]);
 
-  // On mount, fetch stations and user location
+  // On mount, fetch stations + cars + user location
   useEffect(() => {
     const initialize = async () => {
       try {
+        // 1) Fetch stations
         await dispatch(fetchStations()).unwrap();
+        // 2) Fetch cars
+        await dispatch(fetchCars()).unwrap();
+        // 3) Get user location
         getUserLocation();
       } catch (err) {
-        console.error('Error fetching stations:', err);
+        console.error('Error fetching data:', err);
       }
     };
     initialize();
@@ -192,11 +209,14 @@ function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  // Error handling
-  if (error || loadError) {
+  // Handle potential errors from stations, cars, or Google Maps load
+  const combinedError = stationsError || carsError || loadError;
+  if (combinedError) {
     return (
       <div className="text-destructive">
-        {error || `Error loading Google Maps: ${loadError?.message}`}
+        {combinedError instanceof Error
+          ? `Error loading Google Maps: ${combinedError.message}`
+          : combinedError}
       </div>
     );
   }
@@ -204,6 +224,15 @@ function GMap({ googleApiKey }: GMapProps) {
   // If Google Maps script isn’t loaded yet
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
+  }
+
+  // If either stations or cars are still loading, show a combined loading state
+  if (stationsLoading || carsLoading) {
+    return (
+      <div className="text-muted-foreground">
+        Loading {stationsLoading ? 'stations' : 'cars'}...
+      </div>
+    );
   }
 
   // Render the map + bottom sheet
@@ -217,6 +246,7 @@ function GMap({ googleApiKey }: GMapProps) {
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
+          {/* Marker: User location */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -232,6 +262,7 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
+          {/* Markers: Stations */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -252,10 +283,27 @@ function GMap({ googleApiKey }: GMapProps) {
               />
             );
           })}
+
+          {/* Markers: Cars */}
+          {cars.map((car) => (
+            <Marker
+              key={car.id}
+              position={{ lat: car.lat, lng: car.lng }}
+              title={car.name}
+              icon={{
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 8,
+                fillColor: '#1CBB13', // a distinct color for cars
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: '#FFFFFF',
+              }}
+            />
+          ))}
         </MemoizedGoogleMap>
       </div>
 
-      {/* If the UI is in "showMap" mode, display the bottom sheet */}
+      {/* If the UI is in "showMap" mode, display the bottom sheet (still listing stations) */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
@@ -263,7 +311,7 @@ function GMap({ googleApiKey }: GMapProps) {
           title="Nearby Stations"
           count={stations.length}
         >
-          {isLoading ? (
+          {stationsLoading ? (
             <div className="p-4 text-center text-muted-foreground">
               Loading stations...
             </div>
