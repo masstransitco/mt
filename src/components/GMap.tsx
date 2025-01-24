@@ -234,6 +234,11 @@ function GMap({ googleApiKey }: GMapProps) {
       </div>
     );
   }
+  
+console.log(
+  'Cars:',
+  cars.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng }))
+);
 
   // Render the map + bottom sheet
   return (
