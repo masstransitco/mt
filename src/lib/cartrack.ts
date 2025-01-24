@@ -5,7 +5,7 @@
  * 1) Basic Auth Setup
  * 2) Local Asset Mapping
  * 3) Fetch Vehicle List (with optional filters)
- * 4) Fetch Nearest Vehicles
+ * 4) Fetch Nearest Vehicles (with 50km default radius)
  * 5) Example Orchestration
  */
 
@@ -13,7 +13,7 @@
 // 1. Basic Auth Setup
 // -----------------------------------------------------------------------------
 
-// Demo credentials (store securely in production)
+// Demo credentials (store securely in production!)
 const USERNAME = 'URBA00001';
 const API_PASSWORD = 'fd58cd26fefc8c2b2ba1f7f52b33221a65f645790a43ff9b8da35db7da6e1f33';
 
@@ -39,8 +39,12 @@ function getFetchOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): Req
 // 2. Local Asset Mapping (registration -> modelUrl, image)
 // -----------------------------------------------------------------------------
 
+/**
+ * Map of registrations to local .glb/.png files.
+ * Adjust or add more as needed.
+ */
 const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
-  // Example: If Cartrack vehicle has registration "ABC123", show these local assets
+  // Example: If Cartrack vehicle has registration "ABC123", it uses local assets
   ABC123: {
     modelUrl: '/cars/car1.glb',
     image: '/cars/car1.png',
@@ -48,8 +52,8 @@ const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
 };
 
 /**
- * Return local asset paths for a given registration
- * If not found, fallback to some default
+ * Return local asset paths for a given registration.
+ * If not found, fallback to defaultModel.glb / defaultImage.png
  */
 function getLocalAssetsForRegistration(
   registration: string | undefined
@@ -65,6 +69,7 @@ function getLocalAssetsForRegistration(
   if (assets) {
     return assets;
   }
+  // Fallback
   return {
     modelUrl: '/cars/defaultModel.glb',
     image: '/cars/defaultImage.png',
@@ -77,7 +82,7 @@ function getLocalAssetsForRegistration(
 
 /**
  * Possible query filters for GET /vehicles
- * (Adjust to match Cartrack docs: filter[colour], filter[chassis_number], etc.)
+ * (e.g. filter[colour], filter[chassis_number], page, limit, etc. as needed)
  */
 export interface FetchVehicleListParams {
   vehicle_id?: number;
@@ -88,12 +93,12 @@ export interface FetchVehicleListParams {
 }
 
 /**
- * Fetches a list of vehicles from Cartrack
+ * Fetches a list of vehicles from Cartrack.
  * Endpoint: GET /vehicles?filter[vehicle_id]=...&filter[registration]=... etc.
  *
  * 1) Applies optional filters to the query
- * 2) Maps each vehicle to local assets
- * 3) Extracts lat/long from last_position
+ * 2) Enriches each vehicle with local model/image
+ * 3) Extracts lat/long from last_position if available
  * @returns Array of transformed vehicles
  */
 export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Promise<any[]> {
@@ -114,8 +119,6 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
     params.set('filter[model_year]', filters.model_year.toString());
   }
 
-  // e.g., if you want filter[colour], filter[chassis_number], page, limit, etc., add them here
-
   // Construct final URL
   const finalUrl = params.toString() ? `${baseUrl}?${params}` : baseUrl;
 
@@ -132,8 +135,6 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
   // Extract lat/long + local assets
   return rawVehicles.map((vehicle: any) => {
     const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
-
-    // If Cartrack has last_position, parse lat/lng
     const lat = vehicle.last_position?.lat ?? 0;
     const lng = vehicle.last_position?.lng ?? 0;
 
@@ -148,20 +149,20 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
 }
 
 // -----------------------------------------------------------------------------
-// 4. Fetch Nearest Vehicles with a Larger Radius
+// 4. Fetch Nearest Vehicles (default 50km radius)
 // -----------------------------------------------------------------------------
 
 /**
  * Fetches vehicles nearest to a given lat/long
  * Endpoint: GET /vehicles/nearest?longitude=...&latitude=...
  *
- * By default, we set filter[max_distance] to 20000 (20km).
- * Adjust as needed to encompass your entire map region.
+ * By default, we set filter[max_distance] to 50000 (50km).
+ * Adjust as needed to encompass your entire region.
  */
 export async function fetchVehiclesNearestToPoint(
   longitude: number,
   latitude: number,
-  maxDistance = 50000, // 20,000 meters (20km) - adjust if needed
+  maxDistance = 50000, // 50km radius
   includeRegistrations?: string,
   excludeRegistrations?: string
 ): Promise<any[]> {
@@ -197,7 +198,6 @@ export async function fetchVehiclesNearestToPoint(
   // Extract lat/long + local assets
   return rawVehicles.map((vehicle: any) => {
     const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
-
     const lat = vehicle.last_position?.lat ?? 0;
     const lng = vehicle.last_position?.lng ?? 0;
 
@@ -214,25 +214,25 @@ export async function fetchVehiclesNearestToPoint(
 // -----------------------------------------------------------------------------
 // 5. Example: Orchestrate Both Calls
 // -----------------------------------------------------------------------------
+
 /**
  * Example function demonstrating:
  * 1) Fetch the full vehicle list (no or minimal filters)
  * 2) Fetch vehicles nearest to a lat/long with a large radius
  * 3) Combine or process the results
+ *
+ * If your vehicles truly have positions in Cartrack, and
+ * they're within 50km of (114.0, 22.3), you'll see lat/lng > 0.
  */
 export async function getVehiclesAndLocations() {
   try {
     // 1) Get the full vehicle list
     const allVehicles = await fetchVehicleList();
-    // or pass filters: fetchVehicleList({ registration: 'GRG123' })
 
-    // 2) Get the nearest vehicles to some point
-    // Provide a large radius to capture all vehicles in your region
+    // 2) Get the nearest vehicles to lat=22.3, lng=114.0 within 50km
     const nearestVehicles = await fetchVehiclesNearestToPoint(114.0, 22.3, 50000);
 
-    // For instance, if your map is in Hong Kong, 50km might cover the area
-    // Adjust the lat/lng to the center of your map
-
+    // Return them for further use
     return {
       allVehicles,
       nearestVehicles,
