@@ -1,12 +1,10 @@
-// src/store/carSlice.ts
-
 import {
   createSlice,
   createAsyncThunk,
   PayloadAction,
 } from '@reduxjs/toolkit';
 import type { RootState } from './store';
-import { fetchVehicleList } from '@/lib/cartrack'; // <-- from your updated cartrack.ts
+import { fetchVehicleList } from '@/lib/cartrack'; // your updated cartrack.ts
 import type { Car } from '@/types/cars';
 
 /**
@@ -26,30 +24,31 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   async (_, { rejectWithValue }) => {
     try {
       // 1) Fetch the raw Cartrack data
-      //    e.g., each vehicle might be: { id, model, registration, last_position: { lat, lng }, ... }
+      //    e.g., each vehicle is: { id, model, registration, lat, lng, ... }
+      //    because we extracted lat/lng in cartrack.ts
       const rawVehicles = await fetchVehicleList();
 
       // 2) Transform raw Cartrack data to our Car interface
       const transformed: Car[] = rawVehicles.map((v: any) => {
-        // Use v.model as the name if present, fallback to registration, else 'Unknown Vehicle'
+        // Use v.model if present, or fallback to registration, etc.
         const displayName = v.model ?? v.registration ?? 'Unknown Vehicle';
 
         return {
           id: v.id,
           name: displayName,
-          type: 'Electric', // if you want all vehicles to be "Electric"
-          price: 600,       // default or parse from Cartrack if available
-          modelUrl: v.modelUrl, // local .glb from the transform
-          image: v.image,       // local .png from the transform
-          available: true,      // WIP: adjust logic for availability
+          type: 'Electric',       // or parse from Cartrack if available
+          price: 600,            // sample default
+          modelUrl: v.modelUrl,  // .glb from local mapping
+          image: v.image,        // .png from local mapping
+          available: true,       // WIP: logic for availability
           features: {
             range: 0,
             charging: '',
-            acceleration: '',  // default
+            acceleration: '',
           },
-          // lat/long from the vehicle’s last known position
-          lat: v?.last_position?.lat ?? 0,
-          lng: v?.last_position?.lng ?? 0,
+          // lat/long already attached from the transform in cartrack.ts
+          lat: v.lat,
+          lng: v.lng,
         };
       });
 
