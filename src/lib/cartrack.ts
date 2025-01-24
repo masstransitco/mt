@@ -81,9 +81,9 @@ function getLocalAssetsForRegistration(
  */
 export interface FetchVehicleListParams {
   vehicle_id?: number;
-  registration?: string; 
-  manufacturer?: string; 
-  model_year?: number; 
+  registration?: string;
+  manufacturer?: string;
+  model_year?: number;
   // Add page, limit, etc. if needed
 }
 
@@ -113,6 +113,7 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
   if (filters.model_year !== undefined) {
     params.set('filter[model_year]', filters.model_year.toString());
   }
+
   // e.g., if you want filter[colour], filter[chassis_number], page, limit, etc., add them here
 
   // Construct final URL
@@ -132,7 +133,7 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
   return rawVehicles.map((vehicle: any) => {
     const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
 
-    // If Cartrack has last_position, we parse lat/lng from it
+    // If Cartrack has last_position, parse lat/lng
     const lat = vehicle.last_position?.lat ?? 0;
     const lng = vehicle.last_position?.lng ?? 0;
 
@@ -147,17 +148,20 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
 }
 
 // -----------------------------------------------------------------------------
-// 4. Fetch Nearest Vehicles
+// 4. Fetch Nearest Vehicles with a Larger Radius
 // -----------------------------------------------------------------------------
 
 /**
  * Fetches vehicles nearest to a given lat/long
  * Endpoint: GET /vehicles/nearest?longitude=...&latitude=...
+ *
+ * By default, we set filter[max_distance] to 20000 (20km).
+ * Adjust as needed to encompass your entire map region.
  */
 export async function fetchVehiclesNearestToPoint(
   longitude: number,
   latitude: number,
-  maxDistance?: number,
+  maxDistance = 20000, // 20,000 meters (20km) - adjust if needed
   includeRegistrations?: string,
   excludeRegistrations?: string
 ): Promise<any[]> {
@@ -169,9 +173,8 @@ export async function fetchVehiclesNearestToPoint(
   params.set('latitude', latitude.toString());
 
   // Optional radius in meters
-  if (maxDistance !== undefined) {
-    params.set('filter[max_distance]', maxDistance.toString());
-  }
+  params.set('filter[max_distance]', maxDistance.toString());
+
   // Optionally include or exclude certain registrations
   if (includeRegistrations) {
     params.set('filter[include_many_registrations]', includeRegistrations);
@@ -214,19 +217,22 @@ export async function fetchVehiclesNearestToPoint(
 /**
  * Example function demonstrating:
  * 1) Fetch the full vehicle list (no or minimal filters)
- * 2) Fetch vehicles nearest to a lat/long
+ * 2) Fetch vehicles nearest to a lat/long with a large radius
  * 3) Combine or process the results
  */
 export async function getVehiclesAndLocations() {
   try {
     // 1) Get the full vehicle list
-    const allVehicles = await fetchVehicleList(); 
+    const allVehicles = await fetchVehicleList();
     // or pass filters: fetchVehicleList({ registration: 'GRG123' })
 
     // 2) Get the nearest vehicles to some point
-    const nearestVehicles = await fetchVehiclesNearestToPoint(103.123456, 1.345877);
+    // Provide a large radius to capture all vehicles in your region
+    const nearestVehicles = await fetchVehiclesNearestToPoint(114.0, 22.3, 50000);
 
-    // 3) For example, we can just return them both if you want to do more logic in your app
+    // For instance, if your map is in Hong Kong, 50km might cover the area
+    // Adjust the lat/lng to the center of your map
+
     return {
       allVehicles,
       nearestVehicles,
