@@ -6,13 +6,10 @@ import { Filter } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectCar } from '@/store/userSlice';
-import { selectAllCars, fetchCars } from '@/store/carSlice'; // <-- from your new Redux carSlice
+import { selectAllCars, fetchCars } from '@/store/carSlice'; 
 import { selectViewState } from '@/store/uiSlice';
 
-import CarCard from './CarCard';
-
-// Example local fallback if you have constants
-// import { SAMPLE_CARS } from '@/constants/cars';
+import CarCard from './CarCard'; // The CarCard component above
 
 interface CarGridProps {
   className?: string;
@@ -33,12 +30,12 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   const [filterType, setFilterType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // On mount, fetch cars from server (if needed)
+  // On mount, fetch cars from server (Cartrack) if needed
   useEffect(() => {
     dispatch(fetchCars());
   }, [dispatch]);
 
-  // If no car is selected, default to first car (id=1) or any logic you prefer
+  // If no car is selected, default to the first available car
   useEffect(() => {
     if (!selectedCarId && allCars.length > 0) {
       dispatch(selectCar(allCars[0].id));
@@ -47,8 +44,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
 
   // Filter logic for the car list
   const { selectedCar, otherCars } = useMemo(() => {
-    // If your store is empty, optionally fallback to SAMPLE_CARS or handle gracefully
-    const carData = allCars /*.length === 0 ? SAMPLE_CARS : allCars*/;
+    const carData = allCars;
 
     const filtered =
       filterType === 'all'
