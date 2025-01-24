@@ -38,6 +38,7 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
           features: {
             range: 0,                // Fill in from v if available
             charging: '',
+            acceleration: '', // Supply a default
           },
           // The key part: lat/long from the vehicle’s last known position
           lat: v?.last_position?.lat ?? 0,
