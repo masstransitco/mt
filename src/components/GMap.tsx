@@ -209,7 +209,7 @@ function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  // Handle potential errors from stations, cars, or Google Maps load
+  // Combine any errors from stations, cars, or Google Maps
   const combinedError = stationsError || carsError || loadError;
   if (combinedError) {
     return (
@@ -262,7 +262,7 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Markers: Stations */}
+          {/* Markers: Stations (Light gray square w/ white border) */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -271,12 +271,13 @@ function GMap({ googleApiKey }: GMapProps) {
                 position={{ lat, lng }}
                 onClick={() => handleMarkerClick(station)}
                 icon={{
-                  path: google.maps.SymbolPath.CIRCLE,
-                  scale: 8,
-                  fillColor: '#FF4136',
+                  // Use a custom path for a square
+                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z',
+                  scale: 4,             // Adjust scale as needed
+                  fillColor: '#D3D3D3', // Light gray fill
                   fillOpacity: 1,
                   strokeWeight: 2,
-                  strokeColor: '#FFFFFF',
+                  strokeColor: '#FFFFFF', // White border
                 }}
                 clickable={true}
                 visible={true}
@@ -284,7 +285,7 @@ function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {/* Markers: Cars */}
+          {/* Markers: Cars (dark gray circle w/ blue border) */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -293,10 +294,10 @@ function GMap({ googleApiKey }: GMapProps) {
               icon={{
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 8,
-                fillColor: '#1CBB13', // a distinct color for cars
+                fillColor: '#333333',    // Dark gray
                 fillOpacity: 1,
                 strokeWeight: 2,
-                strokeColor: '#FFFFFF',
+                strokeColor: '#0000FF', // Blue border
               }}
             />
           ))}
