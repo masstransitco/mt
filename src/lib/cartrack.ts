@@ -1,21 +1,21 @@
 /**
  * src/lib/cartrack.ts
- *
+ * 
  * Demonstrates:
- * 1) Fetching the vehicle list
- * 2) Fetching vehicles nearest to a point (latitude/longitude)
- * 3) Optionally merging the data to extract lat/long
+ * 1) Fetching the vehicle list from Cartrack
+ * 2) Optionally mapping each vehicle to local .glb/.png assets
+ * 3) (Optional) Fetching nearest vehicles
+ * 
+ * Adjust to your actual needs.
  */
 
 // -----------------------------------------------------------------------------
 // 1. Basic Auth Setup
 // -----------------------------------------------------------------------------
 
-// Hardcoded credentials for demonstration. Store them securely in production!
 const USERNAME = 'URBA00001';
 const API_PASSWORD = 'fd58cd26fefc8c2b2ba1f7f52b33221a65f645790a43ff9b8da35db7da6e1f33';
 
-// Encode username:password in Base64
 const base64Auth = btoa(`${USERNAME}:${API_PASSWORD}`);
 
 /** Shared function to build fetch options with Basic Auth headers */
@@ -32,13 +32,50 @@ function getFetchOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): Req
 }
 
 // -----------------------------------------------------------------------------
-// 2. Fetch Vehicle List
+// 2. OPTIONAL: MAPPING CARTRACK VEHICLE TO LOCAL ASSETS
+// -----------------------------------------------------------------------------
+
+// Example map: registration => local .glb/.png
+const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
+  // e.g., Cartrack vehicle with registration "ABC123" uses local "car1" 
+  // Adjust or add more as needed
+  ABC123: {
+    modelUrl: '/cars/car1.glb',
+    image: '/cars/car1.png',
+  },
+};
+
+/**
+ * Returns local asset paths for a given vehicle registration.
+ * Fallback to some default if not found.
+ */
+function getLocalAssetsForRegistration(
+  registration: string | undefined
+): { modelUrl: string; image: string } {
+  if (!registration) {
+    return {
+      modelUrl: '/cars/defaultModel.glb',
+      image: '/cars/defaultImage.png',
+    };
+  }
+  const assets = LOCAL_ASSETS_MAP[registration];
+  if (assets) {
+    return assets;
+  }
+  return {
+    modelUrl: '/cars/defaultModel.glb',
+    image: '/cars/defaultImage.png',
+  };
+}
+
+// -----------------------------------------------------------------------------
+// 3. Fetch Vehicle List (with optional transform to local assets)
 // -----------------------------------------------------------------------------
 /**
  * Fetches a list of vehicles from Cartrack.
  * Endpoint: GET /vehicles
  *
- * @returns An array of vehicle objects (raw from Cartrack).
+ * @returns An array of objects with local modelUrl & image
  */
 export async function fetchVehicleList(): Promise<any[]> {
   const url = 'https://fleetapi-hk.cartrack.com/rest/vehicles';
@@ -50,22 +87,29 @@ export async function fetchVehicleList(): Promise<any[]> {
 
   // Cartrack typically returns { data: [...], meta: {...} }
   const result = await response.json();
-  return result.data || [];
+  const rawVehicles = result.data || [];
+
+  // OPTIONAL: Transform raw Cartrack vehicles to include local modelUrl/image
+  // e.g., map registration => local .glb / .png
+  const transformed = rawVehicles.map((vehicle: any) => {
+    const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+
+    return {
+      ...vehicle,
+      modelUrl, // from local assets
+      image,    // from local assets
+    };
+  });
+
+  return transformed;
 }
 
 // -----------------------------------------------------------------------------
-// 3. Fetch Nearest Vehicles
+// 4. Fetch Nearest Vehicles
 // -----------------------------------------------------------------------------
 /**
  * Fetches vehicles nearest to a given lat/long within an optional max distance.
  * Endpoint: GET /vehicles/nearest?longitude=...&latitude=...
- *
- * @param longitude   The longitude
- * @param latitude    The latitude
- * @param maxDistance Optional radius in meters (default = 100)
- * @param includeRegistrations  Comma-separated registrations to include
- * @param excludeRegistrations  Comma-separated registrations to exclude
- * @returns An array of vehicle objects near the specified point.
  */
 export async function fetchVehiclesNearestToPoint(
   longitude: number,
@@ -74,7 +118,6 @@ export async function fetchVehiclesNearestToPoint(
   includeRegistrations?: string,
   excludeRegistrations?: string
 ): Promise<any[]> {
-  // Build query params
   const baseUrl = 'https://fleetapi-hk.cartrack.com/rest/vehicles/nearest';
   const params = new URLSearchParams();
   params.set('longitude', longitude.toString());
@@ -97,21 +140,30 @@ export async function fetchVehiclesNearestToPoint(
     throw new Error(`fetchVehiclesNearestToPoint failed: ${response.status} ${response.statusText}`);
   }
 
-  // Cartrack might return { data: [...], meta: {...} }
   const result = await response.json();
-  return result.data || [];
+  const rawVehicles = result.data || [];
+
+  // OPTIONAL: incorporate local assets
+  const transformed = rawVehicles.map((vehicle: any) => {
+    const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+
+    return {
+      ...vehicle,
+      modelUrl,
+      image,
+    };
+  });
+  return transformed;
 }
 
 // -----------------------------------------------------------------------------
-// 4. Example: Orchestrate Both Calls
+// 5. Example: Orchestrate Both Calls
 // -----------------------------------------------------------------------------
 /**
  * Example function to:
  *  1) Fetch the full vehicle list
  *  2) Fetch vehicles nearest a given lat/long
- *  3) Combine or process the data as needed (e.g., extracting lat/long)
- *
- * Adjust to your specific logic or needs.
+ *  3) Combine or process the data as needed
  */
 export async function getVehiclesAndLocations() {
   try {
@@ -119,29 +171,16 @@ export async function getVehiclesAndLocations() {
     const allVehicles = await fetchVehicleList();
 
     // 2) Get the nearest vehicles to some point
-    //    Hard-coded example lat/long from doc snippet: lat=1.345877, lng=103.123456
     const nearestVehicles = await fetchVehiclesNearestToPoint(103.123456, 1.345877);
 
-    // If you want to see just lat/long from the "nearest" call:
-    // The doc's sample data may look like:
-    //    {
-    //       id: 12345,
-    //       registration: 'ABC123',
-    //       last_position: { lat: 1.345877, lng: 103.123456 },
-    //       ...
-    //    }
-    // Adjust parsing as needed.
-    const positions = nearestVehicles.map((vehicle: any) => {
-      return {
-        id: vehicle.id,
-        registration: vehicle.registration,
-        // e.g., if Cartrack returns last known position in .last_position
-        lat: vehicle.last_position?.lat ?? 0,
-        lng: vehicle.last_position?.lng ?? 0,
-      };
-    });
+    // 3) Optionally parse out positions
+    const positions = nearestVehicles.map((vehicle: any) => ({
+      id: vehicle.id,
+      registration: vehicle.registration,
+      lat: vehicle.last_position?.lat ?? 0,
+      lng: vehicle.last_position?.lng ?? 0,
+    }));
 
-    // Combine data or return it
     return {
       allVehicles,
       nearestVehicles,
