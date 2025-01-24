@@ -6,44 +6,45 @@ import {
   PayloadAction,
 } from '@reduxjs/toolkit';
 import type { RootState } from './store';
+import { fetchVehicleList } from '@/lib/cartrack'; // <-- from your cartrack.ts
+import type { Car } from './carSlice'; // or from '@/types/cars'
 
-/**
- * Represents a car object.
- */
-export interface Car {
-  id: number;
-  name: string;
-  type: string;      // e.g. "electric", "hybrid", ...
-  price: number;
-  image: string;     // URL to car image
-  modelUrl?: string; // 3D model if available
-  features?: {
-    range?: number;
-    charging?: string;
-  };
-}
-
+// Car slice state
 interface CarState {
   cars: Car[];
   loading: boolean;
   error: string | null;
 }
 
-/* --------------------------- Thunk --------------------------- */
-/**
- * Example of fetching a list of cars from an API endpoint.
- * Adjust the URL or logic to your actual needs.
- */
+// Thunk: fetch cars from Cartrack
 export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   'car/fetchCars',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/cars');
-      if (!response.ok) {
-        throw new Error('Failed to fetch cars');
-      }
-      const data = await response.json();
-      return data as Car[];
+      // 1) Fetch the raw Cartrack data
+      //    e.g., each vehicle might be: { id, registration, last_position: { lat, lng }, ... }
+      const rawVehicles = await fetchVehicleList();
+
+      // 2) Transform raw Cartrack data to our Car interface
+      const transformed: Car[] = rawVehicles.map((v: any) => {
+        return {
+          id: v.id,
+          name: v.registration ?? 'Unknown Vehicle',
+          type: v.type ?? 'unknown', // If Cartrack has a "type" field; else hardcode or parse
+          price: 0,                  // If not provided by Cartrack, default to 0 or parse
+          image: '',                 // If not provided, default or parse from v
+          modelUrl: undefined,       // If not provided, set undefined
+          features: {
+            range: 0,                // Fill in from v if available
+            charging: '',
+          },
+          // The key part: lat/long from the vehicle’s last known position
+          lat: v?.last_position?.lat ?? 0,
+          lng: v?.last_position?.lng ?? 0,
+        };
+      });
+
+      return transformed;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
