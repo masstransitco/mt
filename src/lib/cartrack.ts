@@ -161,7 +161,7 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
 export async function fetchVehiclesNearestToPoint(
   longitude: number,
   latitude: number,
-  maxDistance = 20000, // 20,000 meters (20km) - adjust if needed
+  maxDistance = 50000, // 20,000 meters (20km) - adjust if needed
   includeRegistrations?: string,
   excludeRegistrations?: string
 ): Promise<any[]> {
