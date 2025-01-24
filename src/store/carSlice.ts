@@ -33,8 +33,8 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
           type: v.type ?? 'unknown', // If Cartrack has a "type" field; else hardcode or parse
           price: 0,                  // If not provided by Cartrack, default to 0 or parse
           image: '',                 // If not provided, default or parse from v
-          modelUrl: undefined,       // If not provided, set undefined
-          available: true,
+          modelUrl: v.modelUrl, // local .glb from the transform
+          image: v.image,       // local .png from the transform
           features: {
             range: 0,                // Fill in from v if available
             charging: '',
