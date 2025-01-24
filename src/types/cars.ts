@@ -1,6 +1,8 @@
 // src/types/cars.ts
 
-// Core interfaces for car data
+/**
+ * Core interfaces for car data
+ */
 export interface CarFeatures {
   range: number;
   charging: string;
@@ -16,10 +18,16 @@ export interface Car {
   modelUrl: string;
   available: boolean;
   features: CarFeatures;
+
+  // New fields for mapping / geolocation
+  lat: number;
+  lng: number;
 }
 
-// Note: We remove the following as they're now defined in constants:
-// - CAR_TYPES constant
-// - CarType type definition
-// - CarId type definition
-// These should be imported from '@/constants/cars' when needed
+/**
+ * Note: We remove the following as they're now defined in constants:
+ * - CAR_TYPES constant
+ * - CarType type definition
+ * - CarId type definition
+ * These should be imported from '@/constants/cars' when needed
+ */
