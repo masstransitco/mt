@@ -7,7 +7,7 @@ import {
 } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 import { fetchVehicleList } from '@/lib/cartrack'; // <-- from your cartrack.ts
-import type { Car } from './carSlice'; // or from '@/types/cars'
+import type { Car } from '@/types/cars'
 
 // Car slice state
 interface CarState {
