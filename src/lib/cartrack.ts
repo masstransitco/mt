@@ -93,6 +93,7 @@ export interface FetchVehicleListParams {
  *
  * 1) Applies optional filters to the query
  * 2) Maps each vehicle to local assets
+ * 3) Extracts lat/long from last_position
  * @returns Array of transformed vehicles
  */
 export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Promise<any[]> {
@@ -127,13 +128,20 @@ export async function fetchVehicleList(filters: FetchVehicleListParams = {}): Pr
   const result = await response.json();
   const rawVehicles = result.data || [];
 
-  // OPTIONAL: Transform raw Cartrack vehicles to include local modelUrl/image
+  // Extract lat/long + local assets
   return rawVehicles.map((vehicle: any) => {
     const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+
+    // If Cartrack has last_position, we parse lat/lng from it
+    const lat = vehicle.last_position?.lat ?? 0;
+    const lng = vehicle.last_position?.lng ?? 0;
+
     return {
       ...vehicle,
       modelUrl,
       image,
+      lat,
+      lng,
     };
   });
 }
@@ -183,13 +191,19 @@ export async function fetchVehiclesNearestToPoint(
   const result = await response.json();
   const rawVehicles = result.data || [];
 
-  // OPTIONAL: incorporate local assets
+  // Extract lat/long + local assets
   return rawVehicles.map((vehicle: any) => {
     const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+
+    const lat = vehicle.last_position?.lat ?? 0;
+    const lng = vehicle.last_position?.lng ?? 0;
+
     return {
       ...vehicle,
       modelUrl,
       image,
+      lat,
+      lng,
     };
   });
 }
@@ -212,18 +226,10 @@ export async function getVehiclesAndLocations() {
     // 2) Get the nearest vehicles to some point
     const nearestVehicles = await fetchVehiclesNearestToPoint(103.123456, 1.345877);
 
-    // 3) Example parse: extract IDs, positions, etc.
-    const positions = nearestVehicles.map((v: any) => ({
-      id: v.id,
-      registration: v.registration,
-      lat: v.last_position?.lat ?? 0,
-      lng: v.last_position?.lng ?? 0,
-    }));
-
+    // 3) For example, we can just return them both if you want to do more logic in your app
     return {
       allVehicles,
       nearestVehicles,
-      positions,
     };
   } catch (err) {
     console.error('getVehiclesAndLocations error:', err);
