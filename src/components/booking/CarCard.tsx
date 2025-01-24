@@ -1,11 +1,12 @@
 'use client';
+
 import React, { useState, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 
 import { Battery, Gauge, Check } from 'lucide-react';
-import type { Car } from '@/store/carSlice'; // Import Car type from your carSlice
+import type { Car } from '@/store/carSlice'; // Ensure this matches where your Car type is exported
 
 // Dynamically load the 3D viewer for performance
 const Car3DViewer = dynamic(() => import('./Car3DViewer'), {
