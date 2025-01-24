@@ -34,6 +34,7 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
           price: 600,                  // If not provided by Cartrack, default to 0 or parse
           modelUrl: v.modelUrl, // local .glb from the transform
           image: v.image,       // local .png from the transform
+          available: true, // WIP integrate with cartrack.ts to fetch availability based on tbd calculations
           features: {
             range: 0,                // Fill in from v if available
             charging: '',
