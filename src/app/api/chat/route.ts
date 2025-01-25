@@ -8,32 +8,43 @@ const anthropic = new Anthropic({
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    console.log('Received body:', body);
-
-    const response = await anthropic.messages.create({
-      model: 'claude-3-opus-20240229',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: 'Hello' }], // Test with minimal message
-      system: "You are a car rental assistant"
-    });
-
-    console.log('Anthropic response:', response);
-
-    return NextResponse.json({
-      message: response.content[0].text,
-      role: 'assistant'
-    });
-
-  } catch (error: any) {
-    console.error('Detailed error:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
     
-    return NextResponse.json(
-      { error: `API Error: ${error.message}` },
-      { status: 500 }
+    const response = await anthropic.messages.create({
+      messages: [{
+        role: 'user',
+        content: body.messages[body.messages.length - 1].content
+      }],
+      model: 'claude-3-sonnet-20240229',
+      max_tokens: 1024
+    });
+
+    if (!response.content?.[0]?.text) {
+      throw new Error('No response content');
+    }
+
+    return new NextResponse(
+      JSON.stringify({
+        message: response.content[0].text,
+        role: 'assistant'
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+  } catch (error) {
+    console.error('API Error:', error);
+    return new NextResponse(
+      JSON.stringify({ error: 'Chat processing failed' }),
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }
     );
   }
 }
