@@ -5,7 +5,7 @@ import React, {
   useRef,
   useEffect,
   useMemo,
-  memo
+  memo,
 } from 'react';
 import Image from 'next/image';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
@@ -17,7 +17,6 @@ import {
   Preload,
   AdaptiveDpr,
   AdaptiveEvents,
-  BakeShadows,
   useProgress,
 } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -47,7 +46,13 @@ function LoadingScreen() {
 }
 
 /* -------------- Car Model -------------- */
-function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
+function CarModel({
+  url,
+  interactive,
+}: {
+  url: string;
+  interactive: boolean;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene: originalScene } = useGLTF(url, '/draco/', true) as any;
   const scene = useMemo(() => originalScene.clone(), [originalScene]);
@@ -132,39 +137,51 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
 function SceneLighting() {
   return (
     <>
-      <ambientLight intensity={0.5} />
+      {/* Primary Directional Light with Shadows */}
       <directionalLight
         position={[5, 5, 5]}
         intensity={1.0}
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize-width={512} // Reduced from 1024
+        shadow-mapSize-height={512} // Reduced from 1024
+        shadow-camera-near={0.5}
+        shadow-camera-far={500}
+        shadow-camera-left={-10}
+        shadow-camera-right={10}
+        shadow-camera-top={10}
+        shadow-camera-bottom={-10}
       />
+      {/* Secondary Directional Lights without Shadows */}
       <directionalLight
         position={[-5, 5, -5]}
         intensity={0.25}
         color="#FFE4B5"
+        castShadow={false} // Disabled shadows
       />
       <directionalLight
         position={[0, -5, 0]}
         intensity={0.15}
         color="#4169E1"
+        castShadow={false} // Disabled shadows
       />
+      {/* Ambient Light */}
+      <ambientLight intensity={0.3} />
     </>
   );
 }
 
+/* -------------- Post Processing with SSAO -------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
-     <EffectComposer 
-      multisampling={interactive ? 8 : 0} 
+    <EffectComposer
+      multisampling={interactive ? 4 : 0} // Reduced from 8 to 4
       enabled={interactive}
-      enableNormalPass
     >
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
-        samples={interactive ? 31 : 0}
-        radius={5}
-        intensity={30}
+        samples={interactive ? 16 : 0} // Reduced from 31 to 16
+        radius={3} // Reduced from 5 to 3
+        intensity={20} // Reduced from 30 to 20
         luminanceInfluence={0.5}
         color={new THREE.Color(0x000000)}
         distanceScaling
@@ -254,14 +271,14 @@ function Car3DViewer({
         gl={glSettings}
         orthographic={false}
         camera={{ position: [0, 2, 5], fov: 45 }}
-        dpr={[1, 1.5]}
+        dpr={[1, 1.2]} // Reduced from [1, 1.5] to [1, 1.2]
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
-        <BakeShadows />
+        {/* BakeShadows removed as shadows are handled by the primary directional light */}
         <SceneLighting />
         <PostProcessing interactive={true} />
-        <Environment preset="studio" background={false} />
+        <Environment preset="sunset" background={false} /> {/* Changed to a lighter preset */}
         <color attach="background" args={['#1a1a1a']} />
 
         <Suspense fallback={<LoadingScreen />}>
