@@ -101,12 +101,12 @@ and ${car.features.acceleration} acceleration.
     });
 
     // 5. The returned text is in response.data.completion
-    if (!response.data?.completion) {
+    if (!response.completion) {
       throw new Error('No completion text found in Anthropic response');
     }
 
     return NextResponse.json({
-      message: response.data.completion.trim(),
+      message: response.completion.trim(),
       role: 'assistant',
     });
   } catch (error: any) {
