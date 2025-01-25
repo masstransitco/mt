@@ -153,10 +153,13 @@ function SceneLighting() {
   );
 }
 
-/* -------------- Post Processing with SSAO -------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
-    <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
+    <EffectComposer 
+      multisampling={interactive ? 8 : 0} 
+      enabled={interactive}
+      normalPass
+    >
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
         samples={interactive ? 31 : 0}
@@ -257,7 +260,6 @@ function Car3DViewer({
         <AdaptiveEvents />
         <BakeShadows />
         <SceneLighting />
-        {/* The PostProcessing component now only includes SSAO */}
         <PostProcessing interactive={true} />
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
