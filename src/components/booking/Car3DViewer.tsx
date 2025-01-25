@@ -117,6 +117,14 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
 
     if (controlsRef.current) {
       controlsRef.current.target.copy(center);
+      
+      // Prevent zooming
+      controlsRef.current.enableZoom = false;
+      
+      // Set min/max polar angle to prevent camera going below ground
+      controlsRef.current.minPolarAngle = 0;
+      controlsRef.current.maxPolarAngle = Math.PI / 2;
+      
       controlsRef.current.update();
     }
 
@@ -129,6 +137,9 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
       enableDamping
       dampingFactor={0.05}
       enabled={interactive}
+      enableZoom={false}
+      minPolarAngle={0}
+      maxPolarAngle={Math.PI / 2}
     />
   );
 }
@@ -142,8 +153,8 @@ function SceneLighting() {
         position={[5, 5, 5]}
         intensity={1.0}
         castShadow
-        shadow-mapSize-width={512} // Reduced from 1024
-        shadow-mapSize-height={512} // Reduced from 1024
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
         shadow-camera-near={0.5}
         shadow-camera-far={500}
         shadow-camera-left={-10}
@@ -156,13 +167,13 @@ function SceneLighting() {
         position={[-5, 5, -5]}
         intensity={0.25}
         color="#FFE4B5"
-        castShadow={false} // Disabled shadows
+        castShadow={false}
       />
       <directionalLight
         position={[0, -5, 0]}
         intensity={0.15}
         color="#4169E1"
-        castShadow={false} // Disabled shadows
+        castShadow={false}
       />
       {/* Ambient Light */}
       <ambientLight intensity={0.3} />
@@ -174,15 +185,15 @@ function SceneLighting() {
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
     <EffectComposer
-      multisampling={interactive ? 4 : 0} // Reduced from 8 to 4
+      multisampling={interactive ? 4 : 0}
       enabled={interactive}
       enableNormalPass
     >
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
-        samples={interactive ? 16 : 0} // Reduced from 31 to 16
-        radius={3} // Reduced from 5 to 3
-        intensity={20} // Reduced from 30 to 20
+        samples={interactive ? 16 : 0}
+        radius={3}
+        intensity={20}
         luminanceInfluence={0.5}
         color={new THREE.Color(0x000000)}
         distanceScaling
@@ -272,14 +283,13 @@ function Car3DViewer({
         gl={glSettings}
         orthographic={false}
         camera={{ position: [0, 2, 5], fov: 45 }}
-        dpr={[1, 1.2]} // Reduced from [1, 1.5] to [1, 1.2]
+        dpr={[1, 1.2]}
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
-        {/* BakeShadows removed as shadows are handled by the primary directional light */}
         <SceneLighting />
         <PostProcessing interactive={true} />
-        <Environment preset="sunset" background={false} /> {/* Changed to a lighter preset */}
+        <Environment preset="sunset" background={false} />
         <color attach="background" args={['#1a1a1a']} />
 
         <Suspense fallback={<LoadingScreen />}>
