@@ -10,6 +10,11 @@ interface Message {
   content: string;
 }
 
+type AnthropicMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 interface RequestBody {
   messages?: Message[];
   userMessage?: Message;
@@ -21,7 +26,8 @@ export async function POST(request: Request) {
     const body: RequestBody = await request.json();
     console.log('Request body:', body);
 
-    let messages = [];
+    let messages: AnthropicMessage[] = [];
+    
     if (body.userMessage) {
       if (body.contextMessage) {
         messages = [
@@ -32,8 +38,8 @@ export async function POST(request: Request) {
         messages = [{ role: 'user', content: body.userMessage.content }];
       }
     } else if (body.messages) {
-      messages = body.messages.map((msg: Message) => ({
-        role: msg.role === 'system' ? 'user' : msg.role,
+      messages = body.messages.map((msg: Message): AnthropicMessage => ({
+        role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
         content: msg.content
       }));
     }
