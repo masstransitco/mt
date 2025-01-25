@@ -1,26 +1,34 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
+import { Message } from '@/types/chat';
 
 const anthropic = new Anthropic({
   apiKey: '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'
 });
 
+interface ChatRequestBody {
+  userMessage: Message;
+  contextMessage: Message;
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const { userMessage, contextMessage }: ChatRequestBody = await request.json();
     
     const response = await anthropic.messages.create({
-      messages: [{
-        role: 'user',
-        content: body.messages[body.messages.length - 1].content
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: contextMessage.content
+        },
+        {
+          role: 'user',
+          content: userMessage.content
+        }
+      ],
       model: 'claude-3-sonnet-20240229',
       max_tokens: 1024
     });
-
-    if (!response.content?.[0]?.text) {
-      throw new Error('No response content');
-    }
 
     return new NextResponse(
       JSON.stringify({
