@@ -36,25 +36,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid messages array' }, { status: 400 });
     }
 
-    // Build the system message
-    const systemMessage = {
-      role: 'system',
-      content: `You are a helpful car-rental assistant. The user can select a vehicle, pick a station, confirm a date/time, then must verify ID/license and pay to finalize the booking. Keep a friendly, concise tone.
-      ${body.selectedCar ? `The user is viewing the ${body.selectedCar.name}, which is ${body.selectedCar.type} at $${body.selectedCar.price}/day, featuring ${body.selectedCar.features.range} range, ${body.selectedCar.features.charging} charging, and ${body.selectedCar.features.acceleration} acceleration.` : ''}
-      ${body.currentBookingStep ? `The user is at booking step: ${body.currentBookingStep}.` : ''}`
-    };
+    // Convert system message to a user message since API doesn't accept system role
+    const systemContext = `Context: ${body.selectedCar ? 
+      `Viewing ${body.selectedCar.name}, ${body.selectedCar.type} at $${body.selectedCar.price}/day, with ${body.selectedCar.features.range} range.` : ''
+    } ${body.currentBookingStep ? `Current booking step: ${body.currentBookingStep}` : ''}`;
 
-    // Take recent messages and format for the API
-    const recentMessages = body.messages.slice(-6).map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
+    // Filter out system messages and convert roles to acceptable types
+    const recentMessages = body.messages
+      .slice(-6)
+      .filter(msg => msg.role !== 'system')
+      .map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content
+      }));
 
     const response = await anthropic.messages.create({
       model: 'claude-3-opus-20240229',
       max_tokens: 1024,
       temperature: 0.7,
-      messages: [systemMessage, ...recentMessages]
+      messages: [
+        { role: 'user', content: systemContext },
+        ...recentMessages
+      ]
     });
 
     if (!response.content[0].text) {
