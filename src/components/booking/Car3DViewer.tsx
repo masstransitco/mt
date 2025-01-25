@@ -158,7 +158,7 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
     <EffectComposer 
       multisampling={interactive ? 8 : 0} 
       enabled={interactive}
-      normalPass
+      disableNormalPass={false}
     >
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
