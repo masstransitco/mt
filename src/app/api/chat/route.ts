@@ -2,7 +2,7 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 
 const anthropic = new Anthropic({
-  apiKey: process.env.CLAUDE_API_KEY || 'your-key-here',
+  apiKey: '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',
 });
 
 interface ChatMessage {
