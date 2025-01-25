@@ -22,7 +22,7 @@ import {
 } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
-import { EffectComposer, SSAO } from '@react-three/postprocessing';
+import { EffectComposer, SSAO, NormalPass } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
 
 import LoadingOverlay from '@/components/ui/loading-overlay';
@@ -153,10 +153,19 @@ function SceneLighting() {
   );
 }
 
+/* -------------- Post Processing with NormalPass + SSAO -------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
+  // Create a ref for the NormalPass, then feed it to SSAO for better results
+  const normalPass = useRef<any>(null);
+
   return (
     <EffectComposer multisampling={interactive ? 8 : 0} enabled={interactive}>
+      {/* NormalPass first */}
+      <NormalPass ref={normalPass} />
+
+      {/* Then your SSAO, using the normal pass */}
       <SSAO
+        normalPass={normalPass}
         blendFunction={BlendFunction.MULTIPLY}
         samples={interactive ? 31 : 0}
         radius={5}
@@ -256,6 +265,7 @@ function Car3DViewer({
         <AdaptiveEvents />
         <BakeShadows />
         <SceneLighting />
+        {/* The updated PostProcessing component now uses NormalPass */}
         <PostProcessing interactive={true} />
         <Environment preset="studio" background={false} />
         <color attach="background" args={['#1a1a1a']} />
