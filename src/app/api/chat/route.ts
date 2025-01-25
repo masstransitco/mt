@@ -5,8 +5,10 @@ const anthropic = new Anthropic({
   apiKey: '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'
 });
 
-type Role = 'user' | 'assistant';
-interface Message { role: Role; content: string }
+interface Message {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
 
 export async function POST(request: Request) {
   try {
@@ -14,9 +16,9 @@ export async function POST(request: Request) {
     
     const messages = body.messages
       .slice(-6)
-      .filter((msg: Message) => msg.role !== 'system')
+      .filter((msg: Message) => ['user', 'assistant'].includes(msg.role))
       .map((msg: Message) => ({
-        role: msg.role,
+        role: msg.role as 'user' | 'assistant',
         content: msg.content
       }));
 
@@ -43,9 +45,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Error:', error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
