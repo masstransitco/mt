@@ -1,26 +1,22 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
-import { Message, Car } from '@/types/booking';
 
 const anthropic = new Anthropic({
   apiKey: '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'
 });
 
-interface ChatRequestBody {
-  messages: Message[];
-  selectedCar?: Car;
-  currentBookingStep?: string;
-}
+type Role = 'user' | 'assistant';
+interface Message { role: Role; content: string }
 
 export async function POST(request: Request) {
   try {
-    const body: ChatRequestBody = await request.json();
+    const body = await request.json();
     
     const messages = body.messages
       .slice(-6)
-      .filter(msg => msg.role !== 'system')
-      .map(msg => ({
-        role: msg.role as 'user' | 'assistant',
+      .filter((msg: Message) => msg.role !== 'system')
+      .map((msg: Message) => ({
+        role: msg.role,
         content: msg.content
       }));
 
@@ -47,6 +43,9 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
   }
 }
