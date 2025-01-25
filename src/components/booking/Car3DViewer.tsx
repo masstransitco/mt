@@ -155,10 +155,10 @@ function SceneLighting() {
 
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
-    <EffectComposer 
+     <EffectComposer 
       multisampling={interactive ? 8 : 0} 
       enabled={interactive}
-      disableNormalPass={false}
+      enableNormalPass
     >
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
