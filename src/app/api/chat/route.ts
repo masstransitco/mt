@@ -2,7 +2,7 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 
 const anthropic = new Anthropic({
-  apiKey: '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'
+  apiKey: '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'
 });
 
 interface Message {
