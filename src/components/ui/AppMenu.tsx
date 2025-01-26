@@ -4,7 +4,6 @@ import Image from 'next/image';
 import { 
   LogOut, 
   Car, 
-  Zap, 
   ChevronRight, 
   ChevronLeft,
   Route,
@@ -17,7 +16,6 @@ import { User } from 'firebase/auth';
 import SignInModal from './SignInModal';
 
 export default function AppMenu({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -27,7 +25,6 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
       setUser(user);
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -45,131 +42,114 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-background z-50 flex flex-col min-h-screen w-full">
-      {/* Header */}
-      <header className="bg-background">
-        <div className="flex items-center h-14 px-4">
-          <button 
-            onClick={onClose}
-            className="p-2 -ml-2 hover:bg-accent/10 rounded-full transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <h2 className="text-xl font-medium ml-2">Menu</h2>
-        </div>
+    <div className="fixed inset-0 bg-background z-50 flex flex-col h-screen">
+      {/* Header - Fixed height */}
+      <header className="h-14 px-4 flex items-center border-b border-border/40">
+        <button 
+          onClick={onClose}
+          className="p-2 -ml-2 hover:bg-accent/10 rounded-full"
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
+        <h2 className="text-xl font-medium ml-2">Menu</h2>
       </header>
 
-      {/* Main Content - Scrollable */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Profile/Sign In Section */}
-        {!loading && (
-          <div className="px-4 py-3 border-y border-border/40">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-full overflow-hidden bg-card flex-shrink-0">
-                  <Image
-                    src="/brand/profile.png"
-                    alt="Profile"
-                    width={64}
-                    height={64}
-                    className="w-full h-full object-cover"
-                    priority
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium text-lg truncate">
-                        {user.phoneNumber || '+85254491874'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {user.phoneNumber || '+85254491874'}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+      {/* Main Content - Flex grow with no scroll */}
+      <div className="flex-1 flex flex-col justify-between py-4">
+        {/* Top Section */}
+        <div>
+          {/* Profile/Sign In */}
+          {!loading && (
+            <div className="px-4 mb-4">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-card flex-shrink-0">
+                    <Image
+                      src="/brand/profile.png"
+                      alt="Profile"
+                      width={48}
+                      height={48}
+                      className="w-full h-full object-cover"
+                      priority
+                    />
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium truncate">
+                      {user.phoneNumber || '+85254491874'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {user.phoneNumber || '+85254491874'}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowSignInModal(true)}
-                className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
-              >
-                Sign In
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Menu Items */}
-        <nav className="py-1">
-          {/* Quick Actions */}
-{user && (
-  <>
-    <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
-      <div className="flex items-center gap-3">
-        {/* Replace Zap with Timer for Trips - represents journey/time tracking */}
-        <Route className="w-5 h-5" />
-        <span className="font-medium">Trips</span>
-      </div>
-      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-    </button>
-
-    <button className="flex items-center justify-between w-full px-4 py-3 hover:bg-accent/10 transition-colors">
-      <div className="flex items-center gap-3">
-        {/* Replace Car with Wallet for Payments - better represents financial transactions */}
-        <Wallet className="w-5 h-5" />
-        <span className="font-medium">Fare Payments</span>
-      </div>
-      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-    </button>
-            </>
+              ) : (
+                <button
+                  onClick={() => setShowSignInModal(true)}
+                  className="w-full bg-primary text-primary-foreground px-6 py-2.5 rounded-lg font-medium"
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
           )}
 
-          {/* Featured Sections */}
-          <div className="mt-4">
-            <button 
-              onClick={handleDiscoverClick}
-              className="flex items-center gap-4 w-full px-4 py-3 hover:bg-accent/10 transition-colors"
-            >
-              <div className="w-14 h-14 rounded overflow-hidden bg-card">
-                <Image
-                  src="/brand/discover.gif"
-                  alt="Discover"
-                  width={56}
-                  height={56}
-                  className="w-full h-full object-cover"
-                  priority
-                />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-medium">Discover</h3>
-                <p className="text-sm text-muted-foreground">
-                  Our Research, Technologies and Products
-                </p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-            </button>
+          {/* Quick Actions */}
+          {user && (
+            <div className="px-4 space-y-2">
+              <button className="flex items-center justify-between w-full py-2 hover:bg-accent/10 rounded-lg px-3">
+                <div className="flex items-center gap-3">
+                  <Route className="w-5 h-5" />
+                  <span className="font-medium">Trips</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
+              <button className="flex items-center justify-between w-full py-2 hover:bg-accent/10 rounded-lg px-3">
+                <div className="flex items-center gap-3">
+                  <Wallet className="w-5 h-5" />
+                  <span className="font-medium">Fare Payments</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+          )}
+        </div>
 
-            <button className="flex items-center gap-4 w-full px-4 py-3 hover:bg-accent/10 transition-colors">
-              <div className="w-14 h-14 rounded-lg bg-card flex items-center justify-center">
-                <Car className="w-8 h-8" />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-medium">Commute With Us</h3>
-                <p className="text-sm text-muted-foreground">
-                  Transit anywhere across Hong Kong's largest EV network
-                </p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-            </button>
-          </div>
-        </nav>
-      </div>
+        {/* Middle Section - Featured */}
+        <div className="px-4 space-y-3">
+          <button 
+            onClick={handleDiscoverClick}
+            className="flex items-center gap-3 w-full p-3 hover:bg-accent/10 rounded-lg"
+          >
+            <Image
+              src="/brand/discover.gif"
+              alt="Discover"
+              width={48}
+              height={48}
+              className="rounded"
+              priority
+            />
+            <div className="flex-1 text-left">
+              <h3 className="font-medium">Discover</h3>
+              <p className="text-sm text-muted-foreground">Research & Tech</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
 
-      {/* Footer */}
-      <footer className="mt-auto bg-background border-t border-border/40">
-        <div className="px-4 py-3">
+          <button className="flex items-center gap-3 w-full p-3 hover:bg-accent/10 rounded-lg">
+            <div className="w-12 h-12 rounded-lg bg-card flex items-center justify-center">
+              <Car className="w-6 h-6" />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-medium">Commute With Us</h3>
+              <p className="text-sm text-muted-foreground">EV Transit Network</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="px-4 mt-4">
           {user && (
             <button 
               onClick={handleSignOut}
@@ -182,21 +162,18 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
           
           <div className="flex items-center justify-between">
             <div className="flex gap-4">
-              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground">
                 Privacy
               </Link>
-              <Link href="/legal" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <Link href="/legal" className="text-sm text-muted-foreground hover:text-foreground">
                 Legal
               </Link>
             </div>
-            <span className="text-sm text-muted-foreground">
-              v4.40.1
-            </span>
+            <span className="text-sm text-muted-foreground">v4.40.1</span>
           </div>
         </div>
-      </footer>
+      </div>
 
-      {/* Sign In Modal */}
       <SignInModal 
         isOpen={showSignInModal} 
         onClose={() => setShowSignInModal(false)} 
