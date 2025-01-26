@@ -9,7 +9,6 @@ import {
   Route,
   Wallet
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { User } from 'firebase/auth';
@@ -42,9 +41,9 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-background z-50 flex flex-col h-screen">
-      {/* Header - Fixed height */}
-      <header className="h-14 px-4 flex items-center border-b border-border/40">
+    <div className="fixed inset-0 bg-background z-50 flex flex-col h-[100dvh] pb-safe">
+      {/* Header */}
+      <header className="safe-top h-14 px-4 flex items-center border-b border-border/40">
         <button 
           onClick={onClose}
           className="p-2 -ml-2 hover:bg-accent/10 rounded-full"
@@ -54,13 +53,13 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
         <h2 className="text-xl font-medium ml-2">Menu</h2>
       </header>
 
-      {/* Main Content - Flex grow with no scroll */}
-      <div className="flex-1 flex flex-col justify-between py-4">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Top Section */}
-        <div>
+        <div className="px-4 py-4">
           {/* Profile/Sign In */}
           {!loading && (
-            <div className="px-4 mb-4">
+            <div className="mb-4">
               {user ? (
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-card flex-shrink-0">
@@ -86,7 +85,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
               ) : (
                 <button
                   onClick={() => setShowSignInModal(true)}
-                  className="w-full bg-primary text-primary-foreground px-6 py-2.5 rounded-lg font-medium"
+                  className="w-full bg-primary text-primary-foreground px-6 py-3.5 rounded-lg font-medium"
                 >
                   Sign In
                 </button>
@@ -96,7 +95,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
 
           {/* Quick Actions */}
           {user && (
-            <div className="px-4 space-y-2">
+            <div className="space-y-2">
               <button className="flex items-center justify-between w-full py-2 hover:bg-accent/10 rounded-lg px-3">
                 <div className="flex items-center gap-3">
                   <Route className="w-5 h-5" />
@@ -116,7 +115,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Middle Section - Featured */}
-        <div className="px-4 space-y-3">
+        <div className="px-4 space-y-3 mt-auto">
           <button 
             onClick={handleDiscoverClick}
             className="flex items-center gap-3 w-full p-3 hover:bg-accent/10 rounded-lg"
@@ -149,7 +148,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Bottom Section */}
-        <div className="px-4 mt-4">
+        <div className="px-4 py-8 mt-auto">
           {user && (
             <button 
               onClick={handleSignOut}
