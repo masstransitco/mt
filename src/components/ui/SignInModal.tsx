@@ -134,62 +134,61 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   const renderWelcomeContent = () => (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Top Banner with GIF */}
-      <div className="relative w-full h-[28vh] shrink-0">
-        <Image
-          src="/brand/drive.gif"
-          alt="Welcome Banner"
-          fill
-          unoptimized  // Ensures .gif remains unchanged for mobile playback
-          className="object-cover"
-          priority
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)'
-          }}
-        />
-        <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
-          <h2 className="text-[28px] font-semibold text-white leading-tight mb-2">
-            Welcome to Mass Transit
-          </h2>
-        </div>
-      </div>
-
-      {/* Body Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 text-white/80">
-        {/* Unified bullet list for clarity */}
-        <div className="space-y-2 text-[15px] leading-snug">
-          <p>• Drive the MG4 Electric, Toyota Vellfire, Maxus MIFA7, and Cyberquad.</p>
-          <p>• Access 150+ stations with seamless entry and exit</p>
-          <p>• No deposits. Daily fares capped at $400</p>
-        </div>
-
-        <p className="text-[13px] text-white/60 leading-relaxed">
-          By clicking "Continue," you confirm you're 18 or older with a valid 
-          driver's license or permit. Trip and driving data may be collected 
-          to improve services. See our{' '}
-          <a href="/privacy" className="text-[#0080ff]">
-            Privacy Policy
-          </a>{' '}
-          for details.
-        </p>
-
-        <button
-          onClick={() => setSelectedMethod('phone')}
-          disabled={loading}
-          className="w-full py-3.5 mt-1 rounded-xl bg-[#0080ff] 
-                     text-white text-[15px] font-medium 
-                     active:opacity-90 disabled:opacity-50"
-        >
-          Continue
-        </button>
+  <div className="flex flex-col h-full overflow-hidden">
+    {/* Top Banner with Video */}
+    <div className="relative w-full h-[28vh] shrink-0">
+      <video
+        src="/brand/drive.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)'
+        }}
+      />
+      <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
+        <h2 className="text-[28px] font-semibold text-white leading-tight mb-2">
+          Welcome to Mass Transit
+        </h2>
       </div>
     </div>
-  );
+
+    {/* Rest of the content remains unchanged */}
+    <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 text-white/80">
+      <div className="space-y-2 text-[15px] leading-snug">
+        <p>• Drive the MG4 Electric, Maxus MIFA7, and the Cyberquad.</p>
+        <p>• Access 150+ stations with seamless entry and exit</p>
+        <p>• No deposits. Daily fares capped at $400</p>
+      </div>
+
+      <p className="text-[13px] text-white/60 leading-relaxed">
+        By clicking "Continue," you confirm you're 18 or older with a valid 
+        driver's license or permit. Trip and driving data may be collected 
+        to improve services. See our{' '}
+        <a href="/privacy" className="text-[#0080ff]">
+          Privacy Policy
+        </a>{' '}
+        for details.
+      </p>
+
+      <button
+        onClick={() => setSelectedMethod('phone')}
+        disabled={loading}
+        className="w-full py-3.5 mt-1 rounded-xl bg-[#0080ff] 
+                   text-white text-[15px] font-medium 
+                   active:opacity-90 disabled:opacity-50"
+      >
+        Continue
+      </button>
+    </div>
+  </div>
+);
 
   const renderPhoneInput = () => (
     <div className="flex flex-col h-full">
