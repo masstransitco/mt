@@ -18,3 +18,9 @@ const app = initializeApp(firebaseConfig);
 
 // Export the Auth instance to be used throughout your app
 export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+// Optional: Add initialization status check
+export const isInitialized = () => {
+  return !!app && !!auth && !!db;
+};
