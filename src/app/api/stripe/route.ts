@@ -1,16 +1,19 @@
 // src/app/api/stripe/route.ts
 
+/**
+ * Force this route to run on the Node.js runtime (rather than the Edge runtime),
+ * which supports the firebase-admin SDK.
+ */
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
 import { headers } from 'next/headers';
+import Stripe from 'stripe';
 import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
 
-// Initialize Firebase Admin and get instances
+// Initialize Firebase Admin and get Firestore/Auth
 const { db, auth } = initializeFirebaseAdmin();
 
-// Type definitions
 interface PaymentMethod {
   id: string;
   brand: string;
@@ -27,7 +30,7 @@ interface CreatePaymentIntentData {
   userId: string;
 }
 
-// Auth middleware
+// Auth middleware to verify the user’s Firebase ID token
 async function verifyAuth(req: NextRequest) {
   const headersList = headers();
   const authHeader = headersList.get('Authorization');
@@ -36,14 +39,9 @@ async function verifyAuth(req: NextRequest) {
     throw new Error('Missing or invalid authorization token');
   }
 
-  try {
-    const token = authHeader.split('Bearer ')[1];
-    const decodedToken = await auth.verifyIdToken(token);
-    return decodedToken.uid;
-  } catch (error) {
-    console.error('Auth error:', error);
-    throw new Error('Invalid authorization token');
-  }
+  const token = authHeader.split('Bearer ')[1];
+  const decodedToken = await auth.verifyIdToken(token);
+  return decodedToken.uid;
 }
 
 // Initialize Stripe
@@ -53,40 +51,39 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 
 // Helper for error responses
 const errorResponse = (message: string, status: number = 400) => {
-  return NextResponse.json(
-    { success: false, error: message }, 
-    { status }
-  );
+  return NextResponse.json({ success: false, error: message }, { status });
 };
 
 // Helper for success responses
 const successResponse = (data: any) => {
-  return NextResponse.json({
-    success: true,
-    ...data
-  });
+  return NextResponse.json({ success: true, ...data });
 };
 
-// POST route handler
+// POST /api/stripe
 export async function POST(request: NextRequest) {
   try {
+    // Verify the user’s Firebase token
     const authenticatedUserId = await verifyAuth(request);
+
+    // Expect a JSON body with { action, userId, ...data }
     const { action, userId, ...data } = await request.json();
 
+    // Check for ownership
     if (authenticatedUserId !== userId) {
       return errorResponse('Unauthorized access', 403);
     }
 
+    // Handle various actions
     switch (action) {
       case 'save-payment-method':
-        return handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
+        return await handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
       case 'create-payment-intent':
-        return handleCreatePaymentIntent({ ...data, userId });
+        return await handleCreatePaymentIntent({ ...data, userId });
       default:
         return errorResponse('Invalid action');
     }
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('POST /api/stripe Error:', error);
     if (error instanceof Error && error.message.includes('auth')) {
       return errorResponse(error.message, 401);
     }
@@ -97,7 +94,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET route handler
+// GET /api/stripe
 export async function GET(request: NextRequest) {
   try {
     const authenticatedUserId = await verifyAuth(request);
@@ -108,19 +105,18 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return errorResponse('User ID is required');
     }
-
     if (authenticatedUserId !== userId) {
       return errorResponse('Unauthorized access', 403);
     }
 
     switch (action) {
       case 'get-payment-methods':
-        return handleGetPaymentMethods(userId);
+        return await handleGetPaymentMethods(userId);
       default:
         return errorResponse('Invalid action');
     }
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('GET /api/stripe Error:', error);
     if (error instanceof Error && error.message.includes('auth')) {
       return errorResponse(error.message, 401);
     }
@@ -131,12 +127,12 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Handler Functions
-async function handleSavePaymentMethod({ 
-  userId, 
-  paymentMethod 
-}: { 
-  userId: string; 
+// Helper function: Save Payment Method
+async function handleSavePaymentMethod({
+  userId,
+  paymentMethod,
+}: {
+  userId: string;
   paymentMethod: PaymentMethod;
 }) {
   if (!userId || !paymentMethod) {
@@ -146,15 +142,11 @@ async function handleSavePaymentMethod({
   try {
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.get();
-    const isDefault = snapshot.empty;
+    const isDefault = snapshot.empty; // Mark the first as default
 
     const newPaymentMethodRef = paymentMethodsRef.doc();
     await newPaymentMethodRef.set({
-      id: paymentMethod.id,
-      brand: paymentMethod.brand,
-      last4: paymentMethod.last4,
-      expMonth: paymentMethod.expMonth,
-      expYear: paymentMethod.expYear,
+      ...paymentMethod,
       isDefault,
       createdAt: new Date().toISOString(),
     });
@@ -166,14 +158,14 @@ async function handleSavePaymentMethod({
   }
 }
 
+// Helper function: Get Payment Methods
 async function handleGetPaymentMethods(userId: string) {
   try {
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
-
     const paymentMethods = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
+      docId: doc.id,
+      ...doc.data(),
     }));
 
     return successResponse({ paymentMethods });
@@ -183,9 +175,13 @@ async function handleGetPaymentMethods(userId: string) {
   }
 }
 
-async function handleCreatePaymentIntent(
-  { amount, currency = 'hkd', paymentMethodId, userId }: CreatePaymentIntentData
-) {
+// Helper function: Create Payment Intent
+async function handleCreatePaymentIntent({
+  amount,
+  currency = 'hkd',
+  paymentMethodId,
+  userId,
+}: CreatePaymentIntentData) {
   if (!amount || !paymentMethodId || !userId) {
     return errorResponse('Amount, payment method, and user ID are required');
   }
@@ -196,6 +192,7 @@ async function handleCreatePaymentIntent(
   }
 
   try {
+    // Search for an existing Stripe Customer for this user
     const customerSearchResult = await stripe.customers.search({
       query: `metadata['userId']:'${userId}'`,
     });
@@ -210,6 +207,7 @@ async function handleCreatePaymentIntent(
       customerId = customer.id;
     }
 
+    // Create PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
@@ -219,13 +217,13 @@ async function handleCreatePaymentIntent(
       confirm: true,
       return_url: `${appUrl}/booking/confirmation`,
       metadata: {
-        userId
-      }
+        userId,
+      },
     });
 
     return successResponse({
       clientSecret: paymentIntent.client_secret,
-      paymentIntentId: paymentIntent.id
+      paymentIntentId: paymentIntent.id,
     });
   } catch (error) {
     if (error instanceof Stripe.errors.StripeError) {
