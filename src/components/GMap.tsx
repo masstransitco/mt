@@ -31,8 +31,8 @@ import {
 } from '@/store/carSlice';
 import {
   selectUserLocation,
-  selectStation,       // Import the selectStation action
-  selectSelectedStationId, // We'll need this to know which station is selected
+  selectStation, // The selectStation action
+  selectSelectedStationId, // The selector for current station
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -51,8 +51,39 @@ import Sheet from '@/components/ui/sheet';
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ('geometry')[] = ['geometry'];
-const MAP_OPTIONS: google.maps.MapOptions = { /* ... */ };
-const CONTAINER_STYLE = { /* ... */ };
+
+/**
+ * Ensure this container has a valid height & width
+ * so the map can actually render.
+ */
+const CONTAINER_STYLE: React.CSSProperties = {
+  width: '100%',
+  height: '100%', // Fill the parent container
+};
+
+/**
+ * Some sample MapOptions. Customize as needed.
+ */
+const MAP_OPTIONS: google.maps.MapOptions = {
+  disableDefaultUI: true,
+  zoomControl: true,
+  gestureHandling: 'greedy',
+  backgroundColor: '#111111',
+  maxZoom: 18,
+  minZoom: 8,
+  clickableIcons: false,
+  // You can optionally add:
+  // restriction: {
+  //   latLngBounds: {
+  //     north: 22.6,
+  //     south: 22.1,
+  //     east: 114.4,
+  //     west: 113.8,
+  //   },
+  //   strictBounds: true,
+  // },
+};
+
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 
 interface GMapProps {
@@ -150,7 +181,11 @@ function GMap({ googleApiKey }: GMapProps) {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        // dispatch user location
+        // If you want to set user location here, do:
+        // dispatch(setUserLocation({
+        //   lat: position.coords.latitude,
+        //   lng: position.coords.longitude,
+        // }));
       },
       (err) => {
         console.error('Geolocation error:', err);
@@ -194,10 +229,12 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
+  // If still loading the script
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
+  // If stations or cars are still loading
   if (stationsLoading || carsLoading) {
     return (
       <div className="text-muted-foreground">
