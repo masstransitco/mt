@@ -12,14 +12,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Loader2, X, CreditCard, Plus, Trash2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
-import { 
-  getStripe, 
-  SavedPaymentMethod, 
+import {
+  getStripe,
+  SavedPaymentMethod,
   getSavedPaymentMethods,
   savePaymentMethod,
-  deletePaymentMethod 
+  deletePaymentMethod
 } from '@/lib/stripe';
 import { CardElement, Elements, useStripe, useElements } from '@stripe/react-stripe-js';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // Card input styles with theme variables
 const cardStyle = {
@@ -63,7 +64,14 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
   };
 
   return (
-    <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-card">
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      transition={{ type: 'tween', duration: 0.2 }}
+      className="flex items-center justify-between p-4 border border-border rounded-lg bg-card"
+    >
       <div className="flex items-center gap-3">
         <CreditCard className="w-5 h-5 text-muted-foreground" />
         <div>
@@ -89,7 +97,7 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
         )}
         <span className="sr-only">Delete payment method</span>
       </Button>
-    </div>
+    </motion.div>
   );
 };
 
@@ -145,14 +153,28 @@ const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <motion.form
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ type: 'tween', duration: 0.2 }}
+      onSubmit={handleSubmit}
+      className="space-y-4"
+    >
       <div className="p-4 border border-border rounded-lg bg-card">
         <CardElement options={cardStyle} />
       </div>
       {error && (
-        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.3 }}
+          className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg"
+        >
           {error}
-        </div>
+        </motion.div>
       )}
       <Button
         type="submit"
@@ -165,7 +187,7 @@ const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
           'Add Payment Method'
         )}
       </Button>
-    </form>
+    </motion.form>
   );
 };
 
@@ -182,11 +204,14 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const stripePromise = getStripe();
 
   const loadPaymentMethods = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      setLoading(false);
+      return;
+    }
     
     setLoading(true);
     setError(null);
-    
+
     try {
       const result = await getSavedPaymentMethods(auth.currentUser.uid);
       if (!result.success) {
@@ -233,54 +258,73 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             Manage your saved payment methods for bookings and payments.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="mt-4 space-y-4">
+
+        <div className="relative mt-4">
           {error && (
-            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="p-3 mb-3 text-sm text-destructive bg-destructive/10 rounded-lg"
+            >
               {error}
-            </div>
+            </motion.div>
           )}
 
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : showAddCard ? (
-            <Elements stripe={stripePromise}>
-              <AddPaymentMethodForm 
-                onSuccess={() => {
-                  setShowAddCard(false);
-                  loadPaymentMethods();
-                }} 
-              />
-            </Elements>
           ) : (
-            <>
-              {paymentMethods.length > 0 ? (
-                <div className="space-y-3">
-                  {paymentMethods.map((method) => (
-                    <PaymentMethodCard 
-                      key={method.id} 
-                      method={method}
-                      onDelete={handleDeletePaymentMethod}
-                    />
-                  ))}
-                </div>
+            <AnimatePresence mode="wait">
+              {showAddCard ? (
+                <Elements stripe={stripePromise} key="addCardForm">
+                  <AddPaymentMethodForm
+                    onSuccess={() => {
+                      setShowAddCard(false);
+                      loadPaymentMethods();
+                    }}
+                  />
+                </Elements>
               ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No payment methods saved yet
-                </p>
+                <motion.div
+                  key="paymentMethods"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4"
+                >
+                  {paymentMethods.length > 0 ? (
+                    <div className="space-y-3">
+                      <AnimatePresence>
+                        {paymentMethods.map((method) => (
+                          <PaymentMethodCard
+                            key={method.id}
+                            method={method}
+                            onDelete={handleDeletePaymentMethod}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  ) : (
+                    <p className="text-center text-muted-foreground py-8">
+                      No payment methods saved yet
+                    </p>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAddCard(true)}
+                    className="w-full border-2 border-dashed"
+                  >
+                    <Plus className="mr-2 h-5 w-5" />
+                    Add Payment Method
+                  </Button>
+                </motion.div>
               )}
-              
-              <Button
-                variant="outline"
-                onClick={() => setShowAddCard(true)}
-                className="w-full border-2 border-dashed"
-              >
-                <Plus className="mr-2 h-5 w-5" />
-                Add Payment Method
-              </Button>
-            </>
+            </AnimatePresence>
           )}
         </div>
 
