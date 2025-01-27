@@ -13,10 +13,12 @@ import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
 import { User } from 'firebase/auth';
 import SignInModal from './SignInModal';
+import WalletModal from './WalletModal';
 
 export default function AppMenu({ onClose }: { onClose: () => void }) {
   const [user, setUser] = useState<User | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,6 +40,14 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
 
   const handleDiscoverClick = () => {
     window.open('https://home-nine-indol.vercel.app', '_blank');
+  };
+
+  const handleWalletClick = () => {
+    if (!user) {
+      setShowSignInModal(true);
+      return;
+    }
+    setShowWalletModal(true);
   };
 
   return (
@@ -103,10 +113,13 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </button>
-              <button className="flex items-center justify-between w-full py-2 hover:bg-accent/10 rounded-lg px-3">
+              <button 
+                onClick={handleWalletClick}
+                className="flex items-center justify-between w-full py-2 hover:bg-accent/10 rounded-lg px-3"
+              >
                 <div className="flex items-center gap-3">
                   <Wallet className="w-5 h-5" />
-                  <span className="font-medium">Fare Payments</span>
+                  <span className="font-medium">Wallet</span>
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </button>
@@ -176,6 +189,11 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
       <SignInModal 
         isOpen={showSignInModal} 
         onClose={() => setShowSignInModal(false)} 
+      />
+
+      <WalletModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
       />
     </div>
   );
