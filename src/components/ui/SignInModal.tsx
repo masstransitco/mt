@@ -9,12 +9,11 @@ import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   onAuthStateChanged,
-  ConfirmationResult
+  ConfirmationResult,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import Image from 'next/image';
-
-import PhoneInput from './PhoneInput';
+import PhoneInput from './PhoneInput'; // Ensure this component exists or replace with your own phone input
 
 type AuthStep = 'welcome' | 'phone' | 'verify';
 
@@ -30,11 +29,17 @@ declare global {
   }
 }
 
-/** 
- * StepIndicator Component 
- * Simple visual indicator to show which step is active.
- */
-function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
+/* -------------------------------------
+ * StepIndicator
+ * A simple visual indicator for step progress
+ * ------------------------------------- */
+function StepIndicator({
+  currentStep,
+  totalSteps,
+}: {
+  currentStep: number;
+  totalSteps: number;
+}) {
   return (
     <div className="flex items-center space-x-2 justify-center py-2">
       {Array.from({ length: totalSteps }, (_, index) => {
@@ -42,8 +47,9 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
         return (
           <div
             key={index}
-            className={`h-2 w-2 rounded-full transition-colors
-              ${isActive ? 'bg-blue-500 scale-110' : 'bg-gray-500'}`}
+            className={`h-2 w-2 rounded-full transition-colors ${
+              isActive ? 'bg-blue-500 scale-110' : 'bg-gray-500'
+            }`}
           />
         );
       })}
@@ -51,15 +57,15 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
   );
 }
 
-/** 
- * PinInput Component 
- * A 6-digit input for the verification code.
- * Automatically advances focus as users type.
- */
+/* -------------------------------------
+ * PinInput
+ * A 6-digit input for verification codes.
+ * Automatically advances focus.
+ * ------------------------------------- */
 function PinInput({
   length,
   loading,
-  onChange
+  onChange,
 }: {
   length: number;
   loading: boolean;
@@ -77,20 +83,23 @@ function PinInput({
     setValues(newValues);
     onChange(newValues.join(''));
 
+    // Move to next input if user typed a digit
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
     if (e.key === 'Backspace' && !values[index] && index > 0) {
       // Move focus backward if current is empty
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  // Reset local pin state if loading changes to false
-  // e.g. when user returns to phone step
+  // Reset local pin state if we exit or re-enter verification
   useEffect(() => {
     if (!loading) {
       setValues(Array(length).fill(''));
@@ -127,10 +136,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Timer for "Resend Code" functionality
+  // Timer for "Resend Code"
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
+  /* -------------------------------------
+   * Handle countdown for re-sending code
+   * ------------------------------------- */
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
     if (!canResend && step === 'verify') {
@@ -145,20 +157,21 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         });
       }, 1000);
     }
-
     return () => {
       if (timerId) clearInterval(timerId);
     };
   }, [canResend, step]);
 
+  /* -------------------------------------
+   * If user is already signed in, close
+   * the modal
+   * ------------------------------------- */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // If user is already signed in or sign-in is successful
         handleClose();
       }
     });
-
     return () => {
       unsubscribe();
       if (window.recaptchaVerifier) {
@@ -180,6 +193,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
+  /* -------------------------------------
+   * Step: Phone Number -> Send SMS
+   * ------------------------------------- */
   const handlePhoneSignIn = async () => {
     try {
       setLoading(true);
@@ -196,12 +212,12 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         {
           size: 'invisible',
           callback: () => {
-            // reCAPTCHA solved, allow signInWithPhoneNumber.
+            // reCAPTCHA solved, proceed
           },
           'expired-callback': () => {
             setError('reCAPTCHA expired. Please try again.');
             setLoading(false);
-          }
+          },
         }
       );
 
@@ -211,7 +227,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         phoneNumber,
         window.recaptchaVerifier
       );
-
       window.confirmationResult = confirmationResult;
 
       // Move to verify step
@@ -220,20 +235,23 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setCanResend(false);
     } catch (err: any) {
       console.error('Phone sign-in error:', err);
-      let errorMessage = 'We could not send the verification code. Please check your number and try again.';
+      let errorMessage =
+        'We could not send the verification code. Please check your number and try again.';
 
       if (err.code === 'auth/invalid-phone-number') {
         errorMessage = 'Invalid phone number. Please enter a valid number.';
       } else if (err.code === 'auth/too-many-requests') {
         errorMessage = 'Too many attempts. Please try again later.';
       }
-
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  /* -------------------------------------
+   * Step: Verify code
+   * ------------------------------------- */
   const handleVerifyCode = async () => {
     try {
       setLoading(true);
@@ -254,24 +272,29 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       } else if (err.code === 'auth/code-expired') {
         errorMessage = 'Code expired. Please request a new one.';
       }
-
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  /* -------------------------------------
+   * Step: Resend Code
+   * ------------------------------------- */
   const handleResendCode = () => {
-    // Resend the code by going back to phone step then forward
     setVerificationCode('');
     setStep('phone');
   };
 
+  /* -------------------------------------
+   * Step indicators
+   * ------------------------------------- */
   const currentStepNumber = step === 'welcome' ? 1 : step === 'phone' ? 1 : 2;
-  const totalSteps = 2; // "Enter number" and "Verify code"
+  const totalSteps = 2; // phone + verify
 
-  // ---------------- RENDER HELPERS ----------------
-
+  /* -------------------------------------
+   * RENDER: Welcome Step
+   * ------------------------------------- */
   const renderWelcomeContent = () => (
     <div
       key="welcome"
@@ -290,7 +313,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)'
+              'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)',
           }}
         />
         <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
@@ -308,9 +331,14 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         </div>
         <p className="text-[13px] text-white/60 leading-relaxed">
           By clicking "Continue," you confirm you're 18 or older with a valid
-          driver's license or permit. Trip and driving data may be collected
+          driver’s license or permit. Trip and driving data may be collected
           to improve services. See our{' '}
-          <a href="/privacy" className="text-[#0080ff] underline">
+          <a
+            href="/privacy"
+            className="text-[#0080ff] underline"
+            target="_blank"
+            rel="noreferrer"
+          >
             Privacy Policy
           </a>{' '}
           for details.
@@ -328,6 +356,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
+  /* -------------------------------------
+   * RENDER: Phone Input Step
+   * ------------------------------------- */
   const renderPhoneInput = () => (
     <div
       key="phone-input"
@@ -351,6 +382,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         )}
         <div id="recaptcha-container" />
       </div>
+
       <div className="p-6 pt-0 space-y-3">
         <button
           onClick={handlePhoneSignIn}
@@ -378,6 +410,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
+  /* -------------------------------------
+   * RENDER: Code Verification Step
+   * ------------------------------------- */
   const renderVerification = () => (
     <div
       key="verification"
@@ -387,7 +422,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         <h3 className="text-xl font-semibold text-white">Verify Your Number</h3>
         <StepIndicator currentStep={currentStepNumber} totalSteps={totalSteps} />
         <p className="text-sm text-gray-300">
-          Enter the 6-digit code we sent to <span className="font-medium">{phoneNumber}</span>.
+          Enter the 6-digit code we sent to{' '}
+          <span className="font-medium">{phoneNumber}</span>.
         </p>
 
         <PinInput
@@ -444,6 +480,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
+  /* -------------------------------------
+   * FINAL RENDER
+   * ------------------------------------- */
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent
@@ -457,8 +496,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <button
             aria-label="Close sign-in modal"
             onClick={handleClose}
-            className="rounded-full p-2 bg-black/20 backdrop-blur-sm
-                       hover:bg-black/30 transition-colors"
+            className="
+              rounded-full p-2 bg-black/20 backdrop-blur-sm
+              hover:bg-black/30 transition-colors
+            "
           >
             <X className="w-4 h-4 text-white" />
           </button>
