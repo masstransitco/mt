@@ -12,7 +12,7 @@ import {
   query, 
   orderBy,
   getDoc 
-} from 'firebase-admin/firestore';
+} from 'firebase/firestore';
 
 // Type definitions
 interface PaymentMethod {
