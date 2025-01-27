@@ -11,7 +11,7 @@ import type { RootState } from './store';
  */
 interface UserState {
   selectedCarId: number | null;
-  selectedStationId: number | null;
+  selectedStationId: number | null; // allow null to clear the selection
   userLocation: google.maps.LatLngLiteral | null;
 }
 
@@ -21,31 +21,49 @@ const initialState: UserState = {
   userLocation: null,
 };
 
-const userSlice = createSlice({
+export const userSlice = createSlice({
   name: 'user',
   initialState,
   reducers: {
-    // The user chooses a car by ID
+    /**
+     * The user chooses a car by ID.
+     * If you need to allow clearing a car selection,
+     * you can also accept number | null here.
+     */
     selectCar: (state, action: PayloadAction<number>) => {
       state.selectedCarId = action.payload;
     },
-    // The user chooses a station by ID
-    selectStation: (state, action: PayloadAction<number>) => {
+
+    /**
+     * The user chooses a station by ID or clears it (by passing null).
+     */
+    selectStation: (state, action: PayloadAction<number | null>) => {
       state.selectedStationId = action.payload;
     },
-    // Geolocation from the browser or other source
-    setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
+
+    /**
+     * Updates the user's geolocation (from the browser or any other source).
+     */
+    setUserLocation: (
+      state,
+      action: PayloadAction<google.maps.LatLngLiteral>
+    ) => {
       state.userLocation = action.payload;
     },
-    // Clear out any user-specific selections
+
+    /**
+     * Clears user selections of car and station.
+     * (But leaves userLocation intact, or you can reset it if needed.)
+     */
     resetUserSelections: (state) => {
       state.selectedCarId = null;
       state.selectedStationId = null;
-      // userLocation remains, or reset here if you'd like
+      // state.userLocation = null; // Uncomment if you also want to clear location
     },
   },
 });
 
+// Export the actions
 export const {
   selectCar,
   selectStation,
@@ -53,9 +71,15 @@ export const {
   resetUserSelections,
 } = userSlice.actions;
 
+// Export the reducer for the store
 export default userSlice.reducer;
 
 /* --------------------------- Selectors --------------------------- */
-export const selectSelectedCarId = (state: RootState) => state.user.selectedCarId;
-export const selectSelectedStationId = (state: RootState) => state.user.selectedStationId;
-export const selectUserLocation = (state: RootState) => state.user.userLocation;
+export const selectSelectedCarId = (state: RootState) =>
+  state.user.selectedCarId;
+
+export const selectSelectedStationId = (state: RootState) =>
+  state.user.selectedStationId;
+
+export const selectUserLocation = (state: RootState) =>
+  state.user.userLocation;
