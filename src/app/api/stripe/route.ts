@@ -8,7 +8,8 @@ import {
   getDocs, 
   deleteDoc, 
   query, 
-  orderBy 
+  orderBy,
+  getDoc 
 } from 'firebase/firestore';
 
 // Type definitions
@@ -18,6 +19,7 @@ interface PaymentMethod {
   last4: string;
   expMonth: number;
   expYear: number;
+  isDefault?: boolean;
 }
 
 interface CreatePaymentIntentData {
@@ -54,7 +56,18 @@ try {
 
 // Helper for error responses
 const errorResponse = (message: string, status: number = 400) => {
-  return NextResponse.json({ error: message }, { status });
+  return NextResponse.json(
+    { success: false, error: message }, 
+    { status }
+  );
+};
+
+// Helper for success responses
+const successResponse = (data: any) => {
+  return NextResponse.json({
+    success: true,
+    ...data
+  });
 };
 
 // Middleware to check Stripe initialization
@@ -65,24 +78,48 @@ const checkStripe = () => {
   return stripeInstance;
 };
 
+// Middleware to verify user exists
+const verifyUser = async (userId: string, createIfNotExists: boolean = false) => {
+  const userDoc = await getDoc(doc(db, 'users', userId));
+  
+  if (!userDoc.exists() && createIfNotExists) {
+    await setDoc(doc(db, 'users', userId), {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    return true;
+  }
+  
+  return userDoc.exists();
+};
+
 // POST route handler
 export async function POST(request: NextRequest) {
   try {
     const stripe = checkStripe();
-    const { action, ...data } = await request.json();
+    const { action, userId, ...data } = await request.json();
+
+    if (!userId) {
+      return errorResponse('User ID is required');
+    }
+
+    // Create user document if it doesn't exist
+    await verifyUser(userId, true);
 
     switch (action) {
       case 'save-payment-method':
-        return handleSavePaymentMethod(data);
+        return handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
       case 'create-payment-intent':
-        return handleCreatePaymentIntent(data, stripe);
+        return handleCreatePaymentIntent({ ...data, userId }, stripe);
       default:
         return errorResponse('Invalid action');
     }
   } catch (error) {
     console.error('API Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return errorResponse(message, 500);
+    return errorResponse(
+      error instanceof Error ? error.message : 'Internal server error',
+      500
+    );
   }
 }
 
@@ -97,6 +134,12 @@ export async function GET(request: NextRequest) {
       return errorResponse('User ID is required');
     }
 
+    // Verify user exists
+    const userExists = await verifyUser(userId);
+    if (!userExists) {
+      return errorResponse('User not found', 404);
+    }
+
     switch (action) {
       case 'get-payment-methods':
         return handleGetPaymentMethods(userId);
@@ -105,7 +148,10 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error('API Error:', error);
-    return errorResponse('Internal server error', 500);
+    return errorResponse(
+      error instanceof Error ? error.message : 'Internal server error',
+      500
+    );
   }
 }
 
@@ -114,28 +160,48 @@ export async function DELETE(request: NextRequest) {
   try {
     const { action, userId, paymentMethodId } = await request.json();
 
-    if (action !== 'delete-payment-method') {
-      return errorResponse('Invalid action');
-    }
-
     if (!userId || !paymentMethodId) {
       return errorResponse('Missing required fields');
     }
 
-    return handleDeletePaymentMethod(userId, paymentMethodId);
+    // Verify user exists
+    const userExists = await verifyUser(userId);
+    if (!userExists) {
+      return errorResponse('User not found', 404);
+    }
+
+    switch (action) {
+      case 'delete-payment-method':
+        return handleDeletePaymentMethod(userId, paymentMethodId);
+      default:
+        return errorResponse('Invalid action');
+    }
   } catch (error) {
     console.error('API Error:', error);
-    return errorResponse('Internal server error', 500);
+    return errorResponse(
+      error instanceof Error ? error.message : 'Internal server error',
+      500
+    );
   }
 }
 
 // Handler Functions
-async function handleSavePaymentMethod({ userId, paymentMethod }: { userId: string; paymentMethod: PaymentMethod }) {
+async function handleSavePaymentMethod({ 
+  userId, 
+  paymentMethod 
+}: { 
+  userId: string; 
+  paymentMethod: PaymentMethod;
+}) {
   if (!userId || !paymentMethod) {
     return errorResponse('Missing required fields');
   }
 
   try {
+    // Check if this is the first payment method (make it default)
+    const existingMethods = await getDocs(collection(db, 'users', userId, 'paymentMethods'));
+    const isDefault = existingMethods.empty;
+
     const paymentMethodRef = doc(collection(db, 'users', userId, 'paymentMethods'));
     await setDoc(paymentMethodRef, {
       id: paymentMethod.id,
@@ -143,13 +209,11 @@ async function handleSavePaymentMethod({ userId, paymentMethod }: { userId: stri
       last4: paymentMethod.last4,
       expMonth: paymentMethod.expMonth,
       expYear: paymentMethod.expYear,
+      isDefault,
       createdAt: new Date().toISOString(),
     });
 
-    return NextResponse.json({
-      success: true,
-      paymentMethod
-    });
+    return successResponse({ paymentMethod: { ...paymentMethod, isDefault } });
   } catch (error) {
     console.error('Error saving payment method:', error);
     return errorResponse('Failed to save payment method', 500);
@@ -167,10 +231,7 @@ async function handleGetPaymentMethods(userId: string) {
       ...doc.data()
     }));
 
-    return NextResponse.json({
-      success: true,
-      paymentMethods
-    });
+    return successResponse({ paymentMethods });
   } catch (error) {
     console.error('Error getting payment methods:', error);
     return errorResponse('Failed to get payment methods', 500);
@@ -179,17 +240,42 @@ async function handleGetPaymentMethods(userId: string) {
 
 async function handleDeletePaymentMethod(userId: string, paymentMethodId: string) {
   try {
-    // Delete from Firebase
+    const stripe = checkStripe();
     const paymentMethodRef = doc(db, 'users', userId, 'paymentMethods', paymentMethodId);
+    
+    // Get the payment method before deleting
+    const paymentMethodDoc = await getDoc(paymentMethodRef);
+    if (!paymentMethodDoc.exists()) {
+      return errorResponse('Payment method not found', 404);
+    }
+
+    // Delete from Firebase
     await deleteDoc(paymentMethodRef);
 
-    // If you also want to delete from Stripe, uncomment and modify below
-    // const stripe = checkStripe();
-    // await stripe.paymentMethods.detach(paymentMethodId);
+    // Delete from Stripe
+    await stripe.paymentMethods.detach(paymentMethodId);
 
-    return NextResponse.json({
-      success: true
-    });
+    // If this was the default method, make another one default
+    const paymentMethodData = paymentMethodDoc.data();
+    if (paymentMethodData?.isDefault) {
+      const remainingMethods = await getDocs(
+        query(
+          collection(db, 'users', userId, 'paymentMethods'),
+          orderBy('createdAt', 'desc')
+        )
+      );
+
+      if (!remainingMethods.empty) {
+        const newDefaultMethod = remainingMethods.docs[0];
+        await setDoc(
+          doc(db, 'users', userId, 'paymentMethods', newDefaultMethod.id),
+          { ...newDefaultMethod.data(), isDefault: true },
+          { merge: true }
+        );
+      }
+    }
+
+    return successResponse({ message: 'Payment method deleted successfully' });
   } catch (error) {
     console.error('Error deleting payment method:', error);
     return errorResponse('Failed to delete payment method', 500);
@@ -210,27 +296,41 @@ async function handleCreatePaymentIntent(
   }
 
   try {
+    // Create or get Stripe customer
+    const customerSearchResult = await stripe.customers.search({
+      query: `metadata['userId']:'${userId}'`,
+    });
+
+    let customerId: string;
+    if (customerSearchResult.data.length > 0) {
+      customerId = customerSearchResult.data[0].id;
+    } else {
+      const customer = await stripe.customers.create({
+        metadata: { userId },
+      });
+      customerId = customer.id;
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
+      customer: customerId,
       payment_method: paymentMethodId,
-      customer: userId, // Assuming userId is also the Stripe customer ID
       confirmation_method: 'manual',
       confirm: true,
       return_url: `${appUrl}/booking/confirmation`,
       metadata: {
-        userId // Store user ID in metadata for reference
+        userId
       }
     });
 
-    return NextResponse.json({
-      success: true,
+    return successResponse({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id
     });
   } catch (error) {
     if (error instanceof Stripe.errors.StripeError) {
-      return errorResponse(error.message, 402); // 402 Payment Required
+      return errorResponse(error.message, 402);
     }
     console.error('Payment intent creation error:', error);
     return errorResponse('Failed to create payment intent', 500);
