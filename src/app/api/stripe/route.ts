@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { db } from '@/lib/firebase-admin';
-import { auth } from '@/lib/firebase-admin';
+import { db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { headers } from 'next/headers';
 import { 
   doc, 
