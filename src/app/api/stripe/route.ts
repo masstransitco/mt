@@ -1,18 +1,14 @@
+// src/app/api/stripe/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { db } from '@/lib/firebase-admin';
-import { auth } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import { headers } from 'next/headers';
-import { 
-  doc, 
-  setDoc, 
-  collection, 
-  getDocs, 
-  deleteDoc, 
-  query, 
-  orderBy,
-  getDoc 
-} from 'firebase/firestore';
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
+
+// Initialize Firebase Admin and get instances
+const { db, auth } = initializeFirebaseAdmin();
 
 // Type definitions
 interface PaymentMethod {
@@ -50,30 +46,10 @@ async function verifyAuth(req: NextRequest) {
   }
 }
 
-// Verify environment variables
-const validateEnvVariables = () => {
-  const required = [
-    'STRIPE_SECRET_KEY',
-    'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
-    'NEXT_PUBLIC_APP_URL'
-  ];
-
-  const missing = required.filter(key => !process.env[key]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
-  }
-};
-
-// Initialize Stripe with validation
-let stripeInstance: Stripe | null = null;
-try {
-  validateEnvVariables();
-  stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2023-10-16',
-  });
-} catch (error) {
-  console.error('Stripe initialization error:', error);
-}
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2023-10-16',
+});
 
 // Helper for error responses
 const errorResponse = (message: string, status: number = 400) => {
@@ -91,22 +67,12 @@ const successResponse = (data: any) => {
   });
 };
 
-// Middleware to check Stripe initialization
-const checkStripe = () => {
-  if (!stripeInstance) {
-    throw new Error('Stripe is not properly initialized');
-  }
-  return stripeInstance;
-};
-
 // POST route handler
 export async function POST(request: NextRequest) {
   try {
     const authenticatedUserId = await verifyAuth(request);
-    const stripe = checkStripe();
     const { action, userId, ...data } = await request.json();
 
-    // Verify authenticated user matches requested userId
     if (authenticatedUserId !== userId) {
       return errorResponse('Unauthorized access', 403);
     }
@@ -115,7 +81,7 @@ export async function POST(request: NextRequest) {
       case 'save-payment-method':
         return handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
       case 'create-payment-intent':
-        return handleCreatePaymentIntent({ ...data, userId }, stripe);
+        return handleCreatePaymentIntent({ ...data, userId });
       default:
         return errorResponse('Invalid action');
     }
@@ -143,7 +109,6 @@ export async function GET(request: NextRequest) {
       return errorResponse('User ID is required');
     }
 
-    // Verify authenticated user matches requested userId
     if (authenticatedUserId !== userId) {
       return errorResponse('Unauthorized access', 403);
     }
@@ -151,39 +116,6 @@ export async function GET(request: NextRequest) {
     switch (action) {
       case 'get-payment-methods':
         return handleGetPaymentMethods(userId);
-      default:
-        return errorResponse('Invalid action');
-    }
-  } catch (error) {
-    console.error('API Error:', error);
-    if (error instanceof Error && error.message.includes('auth')) {
-      return errorResponse(error.message, 401);
-    }
-    return errorResponse(
-      error instanceof Error ? error.message : 'Internal server error',
-      500
-    );
-  }
-}
-
-// DELETE route handler
-export async function DELETE(request: NextRequest) {
-  try {
-    const authenticatedUserId = await verifyAuth(request);
-    const { action, userId, paymentMethodId } = await request.json();
-
-    if (!userId || !paymentMethodId) {
-      return errorResponse('Missing required fields');
-    }
-
-    // Verify authenticated user matches requested userId
-    if (authenticatedUserId !== userId) {
-      return errorResponse('Unauthorized access', 403);
-    }
-
-    switch (action) {
-      case 'delete-payment-method':
-        return handleDeletePaymentMethod(userId, paymentMethodId);
       default:
         return errorResponse('Invalid action');
     }
@@ -212,13 +144,12 @@ async function handleSavePaymentMethod({
   }
 
   try {
-    // Check if this is the first payment method (make it default)
-    const paymentMethodsRef = collection(db, 'users', userId, 'paymentMethods');
-    const snapshot = await getDocs(paymentMethodsRef);
+    const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
+    const snapshot = await paymentMethodsRef.get();
     const isDefault = snapshot.empty;
 
-    const newPaymentMethodRef = doc(paymentMethodsRef);
-    await setDoc(newPaymentMethodRef, {
+    const newPaymentMethodRef = paymentMethodsRef.doc();
+    await newPaymentMethodRef.set({
       id: paymentMethod.id,
       brand: paymentMethod.brand,
       last4: paymentMethod.last4,
@@ -237,9 +168,8 @@ async function handleSavePaymentMethod({
 
 async function handleGetPaymentMethods(userId: string) {
   try {
-    const paymentMethodsRef = collection(db, 'users', userId, 'paymentMethods');
-    const q = query(paymentMethodsRef, orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
+    const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
+    const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
 
     const paymentMethods = snapshot.docs.map(doc => ({
       id: doc.id,
@@ -253,52 +183,8 @@ async function handleGetPaymentMethods(userId: string) {
   }
 }
 
-async function handleDeletePaymentMethod(userId: string, paymentMethodId: string) {
-  try {
-    const stripe = checkStripe();
-    const paymentMethodRef = doc(db, 'users', userId, 'paymentMethods', paymentMethodId);
-    
-    const paymentMethodDoc = await getDoc(paymentMethodRef);
-    if (!paymentMethodDoc.exists()) {
-      return errorResponse('Payment method not found', 404);
-    }
-
-    // Delete from Firebase and Stripe
-    await Promise.all([
-      deleteDoc(paymentMethodRef),
-      stripe.paymentMethods.detach(paymentMethodId)
-    ]);
-
-    // Handle default payment method update
-    const paymentMethodData = paymentMethodDoc.data();
-    if (paymentMethodData?.isDefault) {
-      const remainingMethods = await getDocs(
-        query(
-          collection(db, 'users', userId, 'paymentMethods'),
-          orderBy('createdAt', 'desc')
-        )
-      );
-
-      if (!remainingMethods.empty) {
-        const newDefaultMethod = remainingMethods.docs[0];
-        await setDoc(
-          doc(db, 'users', userId, 'paymentMethods', newDefaultMethod.id),
-          { ...newDefaultMethod.data(), isDefault: true },
-          { merge: true }
-        );
-      }
-    }
-
-    return successResponse({ message: 'Payment method deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting payment method:', error);
-    return errorResponse('Failed to delete payment method', 500);
-  }
-}
-
 async function handleCreatePaymentIntent(
-  { amount, currency = 'hkd', paymentMethodId, userId }: CreatePaymentIntentData,
-  stripe: Stripe
+  { amount, currency = 'hkd', paymentMethodId, userId }: CreatePaymentIntentData
 ) {
   if (!amount || !paymentMethodId || !userId) {
     return errorResponse('Amount, payment method, and user ID are required');
