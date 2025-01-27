@@ -1,9 +1,8 @@
-// lib/firebase.ts
-
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-// --- Your Firebase project config (use your own credentials) ---
+// Your Firebase project config
 const firebaseConfig = {
   apiKey: "AIzaSyAj46uOcP-Y4T3X2ZpdlWt4_PxUWCTFwyM",
   authDomain: "masstransitcompany.firebaseapp.com",
@@ -14,9 +13,10 @@ const firebaseConfig = {
   measurementId: "G-NMMQLPBJD1"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Export the Auth instance to be used throughout your app
+// Initialize services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
