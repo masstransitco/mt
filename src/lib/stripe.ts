@@ -1,55 +1,19 @@
-import { loadStripe, Stripe } from '@stripe/stripe-js';
-import { auth } from '@/lib/firebase';
+// src/lib/stripe.ts
+import { Stripe, loadStripe } from '@stripe/stripe-js';
+import { auth } from './firebase'; // from your existing client firebase.ts
 
-// Custom error classes
-export class FirebasePermissionError extends Error {
-  constructor(message: string = 'Permission denied') {
-    super(message);
-    this.name = 'FirebasePermissionError';
-  }
-}
-
-export class StripeConfigError extends Error {
-  constructor(message: string = 'Stripe configuration error') {
-    super(message);
-    this.name = 'StripeConfigError';
-  }
-}
-
-// Helper function to get auth token
-const getAuthHeaders = async () => {
-  const token = await auth.currentUser?.getIdToken();
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : ''
-  };
-};
-
-// Environment variable check
-const getPublishableKey = () => {
-  const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-  if (!key) {
-    throw new StripeConfigError('Stripe publishable key is not set in environment variables');
-  }
-  return key;
-};
-
+// Reuse or store the loaded Stripe instance
 let stripePromise: Promise<Stripe | null>;
-
-export const getStripe = () => {
+export function getStripe() {
   if (!stripePromise) {
-    try {
-      const publishableKey = getPublishableKey();
-      stripePromise = loadStripe(publishableKey);
-    } catch (error) {
-      console.error('Stripe initialization error:', error);
-      throw error;
-    }
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
   }
   return stripePromise;
-};
+}
 
-// Types
+/**
+ * Shape of the saved payment method data from Firestore.
+ */
 export interface SavedPaymentMethod {
   id: string;
   brand: string;
@@ -57,179 +21,104 @@ export interface SavedPaymentMethod {
   expMonth: number;
   expYear: number;
   isDefault?: boolean;
+  // docId? if needed, or other fields from Firestore
 }
 
-export interface CreatePaymentIntentParams {
-  amount: number;
-  currency?: string;
-  paymentMethodId: string;
-  userId: string;
-}
-
-export interface PaymentIntentResponse {
-  clientSecret: string;
-  paymentIntentId: string;
-}
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-// Helper function to check authentication
-const checkAuth = () => {
+/**
+ * Fetches saved payment methods for the given userId from your Next.js route.
+ */
+export async function getSavedPaymentMethods(userId: string) {
   if (!auth.currentUser) {
-    throw new FirebasePermissionError('User must be authenticated');
+    return { success: false, error: 'No user is logged in' };
   }
-  return auth.currentUser.uid;
-};
 
-// Helper function to handle API responses
-const handleApiResponse = async <T>(response: Response): Promise<ApiResponse<T>> => {
-  const data = await response.json();
-  
-  if (!response.ok) {
-    if (response.status === 403) {
-      throw new FirebasePermissionError(data.error || 'Permission denied');
+  const token = await auth.currentUser.getIdToken(/* forceRefresh */ true);
+
+  const res = await fetch(`/api/stripe?action=get-payment-methods&userId=${userId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
     }
-    throw new Error(data.error || 'API request failed');
+  });
+
+  const data = await res.json();
+  // data will have { success: boolean, paymentMethods: [...], error?: ... }
+
+  if (!data.success) {
+    return { success: false, error: data.error || 'Failed to fetch methods' };
   }
 
-  return {
-    success: true,
-    data: data.data || data
-  };
-};
+  return { success: true, data: data.paymentMethods as SavedPaymentMethod[] };
+}
 
-// Helper function to handle errors
-const handleError = (error: unknown): ApiResponse<never> => {
-  console.error('API Error:', error);
-
-  if (error instanceof FirebasePermissionError) {
-    return {
-      success: false,
-      error: 'Authentication required. Please sign in again.'
-    };
+/**
+ * Saves a new payment method in Firestore (and optionally attach to Stripe customer).
+ */
+export async function savePaymentMethod(
+  userId: string,
+  paymentMethod: Omit<SavedPaymentMethod, 'docId'>
+) {
+  if (!auth.currentUser) {
+    return { success: false, error: 'No user is logged in' };
   }
 
-  if (error instanceof StripeConfigError) {
-    return {
-      success: false,
-      error: 'Payment system configuration error. Please try again later.'
-    };
+  const token = await auth.currentUser.getIdToken(true);
+
+  const res = await fetch('/api/stripe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      action: 'save-payment-method',
+      userId,
+      paymentMethod,
+    }),
+  });
+
+  const data = await res.json();
+  // data will have { success: boolean, paymentMethod: {...}, error?: ... }
+
+  if (!data.success) {
+    return { success: false, error: data.error || 'Failed to save method' };
   }
 
-  return {
-    success: false,
-    error: error instanceof Error ? error.message : 'An unknown error occurred'
-  };
-};
+  return { success: true, paymentMethod: data.paymentMethod as SavedPaymentMethod };
+}
 
-// Function to save payment method
-export const savePaymentMethod = async (
-  userId: string, 
-  paymentMethod: SavedPaymentMethod
-): Promise<ApiResponse<SavedPaymentMethod>> => {
-  try {
-    checkAuth();
-    const headers = await getAuthHeaders();
-
-    if (!userId || !paymentMethod) {
-      throw new Error('User ID and payment method are required');
-    }
-
-    const response = await fetch('/api/stripe', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        action: 'save-payment-method',
-        userId,
-        paymentMethod,
-      }),
-    });
-    
-    return await handleApiResponse<SavedPaymentMethod>(response);
-  } catch (error) {
-    return handleError(error);
+/**
+ * Deletes a payment method by doc ID in Firestore (if you implement a "delete" action).
+ * This is *optional* if you have a `DELETE` or a `POST` with an action "delete-payment-method."
+ * 
+ * For now, let's assume you have a route or action for deletion. 
+ * If your code is different, adjust accordingly.
+ */
+export async function deletePaymentMethod(userId: string, paymentMethodId: string) {
+  if (!auth.currentUser) {
+    return { success: false, error: 'No user is logged in' };
   }
-};
 
-// Function to get saved payment methods
-export const getSavedPaymentMethods = async (
-  userId: string
-): Promise<ApiResponse<SavedPaymentMethod[]>> => {
-  try {
-    checkAuth();
-    const headers = await getAuthHeaders();
+  const token = await auth.currentUser.getIdToken(true);
 
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
+  // If you have a dedicated route or just do it in "stripe" route with a new action:
+  const res = await fetch('/api/stripe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      action: 'delete-payment-method',
+      userId,
+      paymentMethodId,
+    }),
+  });
 
-    const response = await fetch(
-      `/api/stripe?action=get-payment-methods&userId=${encodeURIComponent(userId)}`,
-      { headers }
-    );
-    
-    return await handleApiResponse<SavedPaymentMethod[]>(response);
-  } catch (error) {
-    return handleError(error);
+  const data = await res.json();
+  if (!data.success) {
+    return { success: false, error: data.error || 'Failed to delete method' };
   }
-};
 
-// Function to delete payment method
-export const deletePaymentMethod = async (
-  userId: string, 
-  paymentMethodId: string
-): Promise<ApiResponse<void>> => {
-  try {
-    checkAuth();
-    const headers = await getAuthHeaders();
-
-    if (!userId || !paymentMethodId) {
-      throw new Error('User ID and payment method ID are required');
-    }
-
-    const response = await fetch('/api/stripe', {
-      method: 'DELETE',
-      headers,
-      body: JSON.stringify({
-        action: 'delete-payment-method',
-        userId,
-        paymentMethodId,
-      }),
-    });
-
-    return await handleApiResponse<void>(response);
-  } catch (error) {
-    return handleError(error);
-  }
-};
-
-// Function to create payment intent
-export const createPaymentIntent = async (
-  params: CreatePaymentIntentParams
-): Promise<ApiResponse<PaymentIntentResponse>> => {
-  try {
-    checkAuth();
-    const headers = await getAuthHeaders();
-
-    if (!params.amount || !params.paymentMethodId || !params.userId) {
-      throw new Error('Amount, payment method, and user ID are required');
-    }
-
-    const response = await fetch('/api/stripe', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        action: 'create-payment-intent',
-        ...params,
-      }),
-    });
-
-    return await handleApiResponse<PaymentIntentResponse>(response);
-  } catch (error) {
-    return handleError(error);
-  }
-};
+  return { success: true };
+}
