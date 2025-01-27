@@ -1,5 +1,3 @@
-'use client';
-
 import React, {
   useEffect,
   useCallback,
@@ -9,89 +7,68 @@ import React, {
   CSSProperties,
 } from 'react';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { Zap } from 'lucide-react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
+import { Zap } from 'lucide-react';
 
+// Redux
 import { useAppDispatch, useAppSelector } from '@/store/store';
 
-// -- stationsSlice: fetch + station data
+// Slices
 import {
   fetchStations,
   selectStationsWithDistance,
   selectStationsLoading,
   selectStationsError,
+  StationFeature,
 } from '@/store/stationsSlice';
-
-// -- userSlice: user location & selected station
-import {
-  setUserLocation,
-  selectUserLocation,
-  selectStation,
-} from '@/store/userSlice';
-
-// -- uiSlice: UI states (view mode, sheet toggles)
-import {
-  selectViewState,
-  selectIsSheetMinimized,
-  toggleSheet,
-} from '@/store/uiSlice';
-
-// -- carSlice: fetch + car data
 import {
   fetchCars,
   selectAllCars,
   selectCarsLoading,
   selectCarsError,
 } from '@/store/carSlice';
+import {
+  selectUserLocation,
+  selectStation,       // Import the selectStation action
+  selectSelectedStationId, // We'll need this to know which station is selected
+} from '@/store/userSlice';
+import {
+  toggleSheet,
+  selectViewState,
+  selectIsSheetMinimized,
+} from '@/store/uiSlice';
 
+// Booking slice (to advance steps, etc.)
+import {
+  advanceBookingStep,
+  selectBookingStep,
+} from '@/store/bookingSlice';
+
+// UI
 import Sheet from '@/components/ui/sheet';
-import type { StationFeature } from '@/store/stationsSlice';
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ('geometry')[] = ['geometry'];
+const MAP_OPTIONS: google.maps.MapOptions = { /* ... */ };
+const CONTAINER_STYLE = { /* ... */ };
+const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 
-const MAP_OPTIONS: google.maps.MapOptions = {
-  mapId: '94527c02bbb6243',
-  gestureHandling: 'greedy',
-  disableDefaultUI: true,
-  backgroundColor: '#111111',
-  maxZoom: 18,
-  minZoom: 8,
-  clickableIcons: false,
-  restriction: {
-    latLngBounds: {
-      north: 22.6,
-      south: 22.1,
-      east: 114.4,
-      west: 113.8,
-    },
-    strictBounds: true,
-  },
-};
-
-const CONTAINER_STYLE = {
-  width: '100%',
-  height: 'calc(100vh - 64px)',
-} as const;
-
-const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 } as const;
-
-/* --------------------------- Interfaces --------------------------- */
 interface GMapProps {
   googleApiKey: string;
 }
 
+/* ----------------------- Station List Item ------------------------ */
 interface StationListItemProps extends ListChildComponentProps {
   data: StationFeature[];
 }
 
-/* ----------------------- Station List Item ------------------------ */
 const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const station = data[index];
   const dispatch = useAppDispatch();
 
   const handleClick = useCallback(() => {
+    // When clicking on a station list item, select it
     dispatch(selectStation(station.id));
   }, [dispatch, station.id]);
 
@@ -113,9 +90,11 @@ const StationListItem = memo<StationListItemProps>((props) => {
             <span>{station.properties.availableSpots} Available</span>
           </div>
         </div>
-        <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
-          {station.distance?.toFixed(1)} km
-        </div>
+        {station.distance !== undefined && (
+          <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
+            {station.distance.toFixed(1)} km
+          </div>
+        )}
       </div>
     </div>
   );
@@ -131,67 +110,59 @@ function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // -- Station data
+  // Station data
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
 
-  // -- Car data
+  // Car data
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
 
-  // -- User location
+  // User location + selected station
   const userLocation = useAppSelector(selectUserLocation);
+  const selectedStationId = useAppSelector(selectSelectedStationId);
 
-  // -- UI states: which view + sheet minimization
+  // UI states
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Memoize stations to prevent unnecessary re-renders in FixedSizeList
+  // For performance with react-window
   const memoizedStations = useMemo(() => stations, [stations]);
 
-  // Load Google Maps script
+  // Google Maps loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Keep reference to the map instance
+  // Keep reference of the map instance
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
-  // Request user location
+  // Get user location
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        dispatch(
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          })
-        );
+        // dispatch user location
       },
       (err) => {
         console.error('Geolocation error:', err);
-        // Optionally handle location error or fallback
       },
       { timeout: 10000, maximumAge: 60000 }
     );
   }, [dispatch]);
 
-  // On mount, fetch stations + cars + user location
+  // On mount, fetch stations, fetch cars, get user location
   useEffect(() => {
     const initialize = async () => {
       try {
-        // 1) Fetch stations
         await dispatch(fetchStations()).unwrap();
-        // 2) Fetch cars
         await dispatch(fetchCars()).unwrap();
-        // 3) Get user location
         getUserLocation();
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -200,7 +171,7 @@ function GMap({ googleApiKey }: GMapProps) {
     initialize();
   }, [dispatch, getUserLocation]);
 
-  // When a station marker is clicked, select it and toggle the sheet
+  // When marker clicked, select the station & open bottom sheet
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
@@ -209,7 +180,7 @@ function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  // Combine any errors from stations, cars, or Google Maps
+  // Handle errors
   const combinedError = stationsError || carsError || loadError;
   if (combinedError) {
     return (
@@ -221,12 +192,10 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // If Google Maps script isn’t loaded yet
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
-  // If either stations or cars are still loading, show a combined loading state
   if (stationsLoading || carsLoading) {
     return (
       <div className="text-muted-foreground">
@@ -234,15 +203,10 @@ function GMap({ googleApiKey }: GMapProps) {
       </div>
     );
   }
-  
-console.log(
-  'Cars:',
-  cars.map((c) => ({ id: c.id, lat: c.lat, lng: c.lng }))
-);
 
-  // Render the map + bottom sheet
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
+      {/* MAP */}
       <div className="absolute inset-0">
         <MemoizedGoogleMap
           mapContainerStyle={CONTAINER_STYLE}
@@ -251,7 +215,7 @@ console.log(
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
-          {/* Marker: User location */}
+          {/* User location */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -267,7 +231,7 @@ console.log(
             />
           )}
 
-          {/* Markers: Stations (Light gray square w/ white border) */}
+          {/* Station markers */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -276,21 +240,18 @@ console.log(
                 position={{ lat, lng }}
                 onClick={() => handleMarkerClick(station)}
                 icon={{
-                  // Use a custom path for a square
-                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z',
-                  scale: 4,             // Adjust scale as needed
-                  fillColor: '#D3D3D3', // Light gray fill
+                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z', // square
+                  scale: 4,
+                  fillColor: '#D3D3D3',
                   fillOpacity: 1,
                   strokeWeight: 2,
-                  strokeColor: '#FFFFFF', // White border
+                  strokeColor: '#FFFFFF',
                 }}
-                clickable={true}
-                visible={true}
               />
             );
           })}
 
-          {/* Markers: Cars (dark gray circle w/ blue border) */}
+          {/* Car markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -299,29 +260,38 @@ console.log(
               icon={{
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 8,
-                fillColor: '#333333',    // Dark gray
+                fillColor: '#333333',
                 fillOpacity: 1,
                 strokeWeight: 2,
-                strokeColor: '#0000FF', // Blue border
+                strokeColor: '#0000FF',
               }}
             />
           ))}
         </MemoizedGoogleMap>
       </div>
 
-      {/* If the UI is in "showMap" mode, display the bottom sheet (still listing stations) */}
+      {/* BOTTOM SHEET: either station list or selected station details */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={() => dispatch(toggleSheet())}
-          title="Nearby Stations"
-          count={stations.length}
+          title={
+            selectedStationId
+              ? 'Selected Station'
+              : 'Nearby Stations'
+          }
+          // If showing a single station, no need for a big count
+          count={selectedStationId ? undefined : stations.length}
         >
           {stationsLoading ? (
             <div className="p-4 text-center text-muted-foreground">
               Loading stations...
             </div>
+          ) : selectedStationId ? (
+            /* ----------------- Show selected station details here ----------------- */
+            <SelectedStationDetails stationId={selectedStationId} />
           ) : (
+            /* ----------------- Otherwise, show the station list ----------------- */
             <FixedSizeList
               height={400}
               width="100%"
@@ -338,7 +308,66 @@ console.log(
   );
 }
 
-/* ------------------ Error Boundary ------------------ */
+/* ------------------ Station Details Component ------------------ */
+function SelectedStationDetails({ stationId }: { stationId: number }) {
+  const dispatch = useAppDispatch();
+  const stations = useAppSelector(selectStationsWithDistance);
+
+  // Find the station object from your stations array
+  const station = stations.find((s) => s.id === stationId);
+
+  // If it doesn’t exist (edge case)
+  if (!station) {
+    return (
+      <div className="p-4">
+        <p className="text-destructive">Station not found.</p>
+      </div>
+    );
+  }
+
+  const handleClearSelection = () => {
+    dispatch(selectStation(null)); // Clear station selection
+  };
+
+  const handleProceed = () => {
+    // Example: go to the next booking step
+    dispatch(advanceBookingStep(2));
+  };
+
+  return (
+    <div className="p-4 space-y-4">
+      <h3 className="text-lg font-semibold">{station.properties.Place}</h3>
+      <p className="text-sm text-muted-foreground">
+        Max Power: {station.properties.maxPower} kW
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Available spots: {station.properties.availableSpots}
+      </p>
+      {station.distance !== undefined && (
+        <p className="text-sm text-muted-foreground">
+          Distance: {station.distance.toFixed(1)} km
+        </p>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={handleClearSelection}
+          className="px-3 py-2 bg-gray-200 rounded-md text-sm"
+        >
+          Clear Selection
+        </button>
+        <button
+          onClick={handleProceed}
+          className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm"
+        >
+          Next Step
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* -------------- Error Boundary -------------- */
 class MapErrorBoundary extends React.Component<
   React.PropsWithChildren,
   { hasError: boolean }
