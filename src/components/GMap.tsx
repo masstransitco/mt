@@ -13,7 +13,7 @@ import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import { Zap } from 'lucide-react';
 
-// Optional: if you have a toast library, e.g. react-hot-toast
+// Optional: if you have a toast library, e.g. react-hot-toast:
 import { toast } from 'react-hot-toast';
 
 // Redux
@@ -43,8 +43,6 @@ import {
   selectViewState,
   selectIsSheetMinimized,
 } from '@/store/uiSlice';
-
-// Booking slice
 import {
   advanceBookingStep,
   selectBookingStep,
@@ -74,17 +72,14 @@ const MAP_OPTIONS: google.maps.MapOptions = {
 
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 
-/** Builds the sheet title w/ step indicator. */
-function buildSheetTitle(
-  step: number,
-  departureId: number | null,
-  arrivalId: number | null
-) {
+/** Builds the bottom-sheet title based on the booking step + selected stations. */
+function buildSheetTitle(step: number, departureId: number | null, arrivalId: number | null) {
   if (step === 1) {
     return departureId
       ? 'Step 1 of 2: Departure Selected'
       : 'Step 1 of 2: Select Departure Station';
-  } else if (step === 2) {
+  }
+  if (step === 2) {
     return arrivalId
       ? 'Step 2 of 2: Arrival Selected'
       : 'Step 2 of 2: Select Arrival Station';
@@ -92,7 +87,7 @@ function buildSheetTitle(
   return 'Nearby Stations';
 }
 
-/* ----------------------- Station List Item ------------------------ */
+/* ---------------------- StationListItem ---------------------- */
 interface StationListItemProps extends ListChildComponentProps {
   data: StationFeature[];
 }
@@ -101,9 +96,10 @@ const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const station = data[index];
   const dispatch = useAppDispatch();
+
   const step = useAppSelector(selectBookingStep);
 
-  // If step=1 => set departure, step=2 => set arrival
+  // Clicking a station from the list → set departure or arrival
   const handleClick = useCallback(() => {
     if (step === 1) {
       dispatch(selectDepartureStation(station.id));
@@ -143,10 +139,10 @@ const StationListItem = memo<StationListItemProps>((props) => {
 });
 StationListItem.displayName = 'StationListItem';
 
-/* ------------------ Memoized GoogleMap Component ----------------- */
+/* ------------------ MemoizedGoogleMap ------------------ */
 const MemoizedGoogleMap = memo(GoogleMap);
 
-/* -------------------------- Main GMap ---------------------------- */
+/* ------------------------ GMap ------------------------- */
 interface GMapProps {
   googleApiKey: string;
 }
@@ -155,34 +151,32 @@ function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Stations & Cars
+  // Station & car data
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
+
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
 
-  // Step-based approach
+  // Booking step & station IDs
   const step = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // User location
+  // user location & UI states
   const userLocation = useAppSelector(selectUserLocation);
-
-  // UI states
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // local states
+  // Local: handle manual override for sheet
   const [sheetManualOverride, setSheetManualOverride] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(true);
 
-  // For react-window
   const memoizedStations = useMemo(() => stations, [stations]);
 
-  // Google Maps script
+  // Google Maps script loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -193,23 +187,21 @@ function GMap({ googleApiKey }: GMapProps) {
     mapRef.current = map;
   }, []);
 
-  // If you want to set user geolocation, do so unconditionally in the top-level
+  // Optional user geolocation
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         // dispatch(setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }));
       },
-      (err) => {
-        console.error('Geolocation error:', err);
-      },
+      (err) => console.error('Geolocation error:', err),
       { timeout: 10000, maximumAge: 60000 }
     );
   }, [dispatch]);
 
-  // On mount, fetch data
+  // On mount: fetch data
   useEffect(() => {
-    const initialize = async () => {
+    const init = async () => {
       try {
         await dispatch(fetchStations()).unwrap();
         await dispatch(fetchCars()).unwrap();
@@ -218,28 +210,28 @@ function GMap({ googleApiKey }: GMapProps) {
         console.error('Error fetching data:', err);
       }
     };
-    initialize();
+    init();
   }, [dispatch, getUserLocation]);
 
-  // Hide overlay once everything is loaded
+  // Hide overlay once script + data are loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Auto expand/collapse sheet if user hasn't overridden
+  // Auto open/close sheet if no manual override
   useEffect(() => {
     if (sheetManualOverride) return;
 
-    const needsDeparture = step === 1 && !departureStationId;
-    const needsArrival = step === 2 && !arrivalStationId;
-    const userNeedsToPick = needsDeparture || needsArrival;
+    const needDeparture = step === 1 && !departureStationId;
+    const needArrival = step === 2 && !arrivalStationId;
+    const mustPick = needDeparture || needArrival;
 
     if (viewState === 'showMap') {
-      if (userNeedsToPick && isSheetMinimized) {
+      if (mustPick && isSheetMinimized) {
         dispatch(toggleSheet());
-      } else if (!userNeedsToPick && !isSheetMinimized) {
+      } else if (!mustPick && !isSheetMinimized) {
         dispatch(toggleSheet());
       }
     }
@@ -253,6 +245,7 @@ function GMap({ googleApiKey }: GMapProps) {
     dispatch,
   ]);
 
+  // Combine errors
   const combinedError = stationsError || carsError || loadError;
   if (combinedError) {
     return (
@@ -298,29 +291,31 @@ function GMap({ googleApiKey }: GMapProps) {
   // Build sheet title
   const sheetTitle = buildSheetTitle(step, departureStationId, arrivalStationId);
 
-  // If user toggles sheet, set manual override
+  // If user toggles the sheet, mark manual override
   const handleSheetToggle = () => {
     dispatch(toggleSheet());
     setSheetManualOverride(true);
   };
 
+  // Renders either station detail or station list
   function renderSheetContent() {
-    // If user has chosen a station for the current step => show StationDetail
-    if ((step === 1 && departureStationId != null) || (step === 2 && arrivalStationId != null)) {
+    const haveDepartureSelected = step === 1 && departureStationId != null;
+    const haveArrivalSelected = step === 2 && arrivalStationId != null;
+
+    if (haveDepartureSelected || haveArrivalSelected) {
       return <StationDetail />;
     }
 
-    // Otherwise show instructions + station list
     return (
       <>
         {step === 1 && !departureStationId && (
           <div className="p-3 text-sm text-muted-foreground">
-            Select your <strong>departure station</strong> from the map or list:
+            Select your <strong>departure station</strong> below:
           </div>
         )}
         {step === 2 && !arrivalStationId && (
           <div className="p-3 text-sm text-muted-foreground">
-            Select your <strong>arrival station</strong> from the map or list:
+            Select your <strong>arrival station</strong> below:
           </div>
         )}
         <FixedSizeList
@@ -336,7 +331,7 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Marker click => set departure/arrival
+  // Marker click => set departure or arrival
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       const [lng, lat] = station.geometry.coordinates;
@@ -366,7 +361,6 @@ function GMap({ googleApiKey }: GMapProps) {
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
-          {/* User location marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -382,7 +376,6 @@ function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Station markers */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -402,7 +395,6 @@ function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {/* Car markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -421,7 +413,6 @@ function GMap({ googleApiKey }: GMapProps) {
         </MemoizedGoogleMap>
       </div>
 
-      {/* Bottom Sheet */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
@@ -436,18 +427,17 @@ function GMap({ googleApiKey }: GMapProps) {
   );
 }
 
-/* -------------------- Single Station Detail ------------------- */
+/* -------------------- StationDetail -------------------- */
 function StationDetail() {
   const dispatch = useAppDispatch();
-
-  // If step=1 => show departure station detail, step=2 => arrival
   const step = useAppSelector(selectBookingStep);
-  const departureStationId = useAppSelector(selectDepartureStationId);
-  const arrivalStationId = useAppSelector(selectArrivalStationId);
+  const departureId = useAppSelector(selectDepartureStationId);
+  const arrivalId = useAppSelector(selectArrivalStationId);
   const stations = useAppSelector(selectStationsWithDistance);
 
-  // Identify the correct station ID
-  const stationId = (step === 1) ? departureStationId : arrivalStationId;
+  // If step=1 => show departure, else arrival
+  const stationId = step === 1 ? departureId : arrivalId;
+
   if (stationId == null) {
     return <p className="p-4 text-destructive">Station not found.</p>;
   }
@@ -457,10 +447,11 @@ function StationDetail() {
     return <p className="p-4 text-destructive">Station not found.</p>;
   }
 
-  const label = (step === 1) ? 'Departure' : 'Arrival';
+  const isDeparture = (step === 1);
+  const label = isDeparture ? 'Departure' : 'Arrival';
 
   const handleClear = () => {
-    if (step === 1) {
+    if (isDeparture) {
       dispatch(selectDepartureStation(null));
     } else {
       dispatch(selectArrivalStation(null));
@@ -468,13 +459,11 @@ function StationDetail() {
   };
 
   const handleConfirm = () => {
-    // Step 1 => proceed to step 2
-    // Step 2 => proceed to step 3 or booking flow
     dispatch(advanceBookingStep(step + 1));
-    if (step === 1) {
-      toast.success('Departure confirmed. Now pick an arrival station.');
+    if (isDeparture) {
+      toast.success('Departure station confirmed. Now pick your arrival station.');
     } else {
-      toast.success('Arrival confirmed!');
+      toast.success('Arrival station confirmed!');
     }
   };
 
