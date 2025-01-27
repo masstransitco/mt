@@ -49,6 +49,7 @@ import {
 import {
   advanceBookingStep,
   selectBookingStep,
+  resetBookingFlow,
 } from '@/store/bookingSlice';
 
 // UI
@@ -58,7 +59,6 @@ import { Zap as ZapIcon } from 'lucide-react';
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ('geometry')[] = ['geometry'];
 
-/** Give the map container a real height to ensure visibility. */
 const CONTAINER_STYLE: React.CSSProperties = {
   width: '100%',
   height: '100%',
@@ -74,12 +74,11 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   clickableIcons: false,
 };
 
-/** Fallback center if user location is unavailable. */
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 
-/** Helper to build the step-based sheet title */
+/* ------------------ Helpers ------------------ */
 function buildSheetTitle(step: number, departureId: number | null, arrivalId: number | null) {
-  // Optionally, if you have more steps, you could say "Step 1 of 2", etc.
+  // Example step indicator: 2 steps total
   if (step === 1) {
     return departureId
       ? 'Step 1 of 2: Departure Station Selected'
@@ -90,33 +89,33 @@ function buildSheetTitle(step: number, departureId: number | null, arrivalId: nu
       ? 'Step 2 of 2: Arrival Station Selected'
       : 'Step 2 of 2: Select Arrival Station';
   }
+  // Fallback if needed:
   return 'Nearby Stations';
 }
 
-/** Props for the GMap component */
+/* -------------------------- GMap ---------------------------- */
 interface GMapProps {
   googleApiKey: string;
 }
 
-/* ----------------------- Station List Item ------------------------ */
+/* StationListItem (react-window) */
 interface StationListItemProps extends ListChildComponentProps {
   data: StationFeature[];
 }
-
 const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const station = data[index];
-  const dispatch = useAppDispatch();
 
-  // Check which step we're on: 1 => departure, 2 => arrival
+  const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
-  // When clicking on a station in the list, decide if it's departure or arrival
   const handleClick = useCallback(() => {
     if (step === 1) {
       dispatch(selectDepartureStation(station.id));
+      toast.success('Departure station selected!');
     } else if (step === 2) {
       dispatch(selectArrivalStation(station.id));
+      toast.success('Arrival station selected!');
     }
   }, [dispatch, station.id, step]);
 
@@ -147,7 +146,6 @@ const StationListItem = memo<StationListItemProps>((props) => {
     </div>
   );
 });
-
 StationListItem.displayName = 'StationListItem';
 
 /* ------------------ Memoized GoogleMap Component ----------------- */
@@ -158,7 +156,7 @@ function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Station & Car data
+  // Stations & Cars
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
@@ -166,42 +164,42 @@ function GMap({ googleApiKey }: GMapProps) {
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
 
-  // Booking step
+  // Two-station flow
   const step = useAppSelector(selectBookingStep);
-
-  // userSlice: departure, arrival, user location
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
+
   const userLocation = useAppSelector(selectUserLocation);
 
-  // UI states
+  // UI
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // For react-window performance
+  // Used to handle manual vs. automatic toggling of the sheet
+  const [sheetManualOverride, setSheetManualOverride] = useState(false);
+
+  // For the station list
   const memoizedStations = useMemo(() => stations, [stations]);
 
-  // Loading states
+  // Google Maps loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Manage local “is everything loaded?” quickly
+  // Overlay or spinner
   const [overlayVisible, setOverlayVisible] = useState(true);
 
-  // Keep reference to map instance
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
-  // Request geolocation (optional)
+  // Optionally request geolocation
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        // If you want to set user location, uncomment:
         // dispatch(setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }));
       },
       (err) => {
@@ -211,7 +209,7 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, [dispatch]);
 
-  // On mount, fetch stations & cars, get user location
+  // Fetch stations/cars on mount
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -225,28 +223,26 @@ function GMap({ googleApiKey }: GMapProps) {
     initialize();
   }, [dispatch, getUserLocation]);
 
-  // Once everything is loaded, hide the overlay
+  // Hide overlay once script & data are loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  /**
-   * Auto-expand or auto-collapse the sheet based on user needing to pick a station
-   * If user hasn't picked the station for the current step, we open the sheet;
-   * if they've selected, we can collapse it to give more map room.
-   */
+  // Auto-expand/collapse the sheet if the user hasn't manually overridden
   useEffect(() => {
+    if (sheetManualOverride) return; // user has manually toggled the sheet
+
     const needsDeparture = step === 1 && !departureStationId;
     const needsArrival = step === 2 && !arrivalStationId;
     const userNeedsToPick = needsDeparture || needsArrival;
 
     if (viewState === 'showMap') {
       if (userNeedsToPick && isSheetMinimized) {
-        dispatch(toggleSheet()); // open sheet
+        dispatch(toggleSheet());
       } else if (!userNeedsToPick && !isSheetMinimized) {
-        dispatch(toggleSheet()); // close sheet
+        dispatch(toggleSheet());
       }
     }
   }, [
@@ -255,35 +251,9 @@ function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId,
     viewState,
     isSheetMinimized,
+    sheetManualOverride,
     dispatch,
   ]);
-
-  /**
-   * Handle station marker click:
-   * - pan/zoom the map to that station
-   * - if step=1 => selectDepartureStation
-   * - if step=2 => selectArrivalStation
-   * - optional: toast for feedback
-   */
-  const handleMarkerClick = useCallback(
-    (station: StationFeature) => {
-      const [lng, lat] = station.geometry.coordinates;
-      // Pan the map to the station
-      if (mapRef.current) {
-        mapRef.current.panTo({ lat, lng });
-        mapRef.current.setZoom(15);
-      }
-
-      if (step === 1) {
-        dispatch(selectDepartureStation(station.id));
-        toast.success('Departure station selected!');
-      } else if (step === 2) {
-        dispatch(selectArrivalStation(station.id));
-        toast.success('Arrival station selected!');
-      }
-    },
-    [dispatch, step]
-  );
 
   // Combine any major errors
   const combinedError = stationsError || carsError || loadError;
@@ -297,12 +267,10 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // If we're still loading script or data, show an overlay
   if (overlayVisible) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background">
         <div className="flex flex-col items-center text-muted-foreground gap-2">
-          {/* Example tailwind spinner, or replace with your own spinner */}
           <svg
             className="w-6 h-6 animate-spin text-primary"
             xmlns="http://www.w3.org/2000/svg"
@@ -329,40 +297,30 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Build a dynamic sheet title (with step indicator)
   const sheetTitle = buildSheetTitle(step, departureStationId, arrivalStationId);
 
-  /**
-   * Renders either the departure or arrival detail component
-   * if they've been selected, or the station list if not.
-   */
+  // Render station list or station details
   function renderSelectedStationDetails() {
-    // If step=1 & user has selected departure => show detail
     if (step === 1 && departureStationId !== null) {
-      return <DepartureStationDetails stationId={departureStationId} />;
+      return <DepartureStationDetails />;
     }
-    // If step=2 & user selected arrival => show detail
     if (step === 2 && arrivalStationId !== null) {
-      return <ArrivalStationDetails stationId={arrivalStationId} />;
+      return <ArrivalStationDetails />;
     }
 
-    // Otherwise, show instructions + station list
+    // Else show instructions + station list
     return (
       <>
-        {/* Inline instructions for the user */}
         {step === 1 && !departureStationId && (
           <div className="p-3 text-sm text-muted-foreground">
-            Please select your <strong>departure station</strong> from the map
-            or the list below:
+            Please select your <strong>departure station</strong>.
           </div>
         )}
         {step === 2 && !arrivalStationId && (
           <div className="p-3 text-sm text-muted-foreground">
-            Please select your <strong>arrival station</strong> from the map
-            or the list below:
+            Please select your <strong>arrival station</strong>.
           </div>
         )}
-
         <FixedSizeList
           height={400}
           width="100%"
@@ -376,9 +334,15 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
+  // When the user taps the sheet toggle button themselves,
+  // we set manual override to prevent auto-toggling
+  const handleSheetToggle = () => {
+    dispatch(toggleSheet());
+    setSheetManualOverride(true);
+  };
+
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
-      {/* MAP Container */}
       <div className="absolute inset-0">
         <MemoizedGoogleMap
           mapContainerStyle={CONTAINER_STYLE}
@@ -387,7 +351,7 @@ function GMap({ googleApiKey }: GMapProps) {
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
-          {/* User location marker (if you set userLocation) */}
+          {/* User location marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -410,9 +374,23 @@ function GMap({ googleApiKey }: GMapProps) {
               <Marker
                 key={station.id}
                 position={{ lat, lng }}
-                onClick={() => handleMarkerClick(station)}
+                onClick={() => {
+                  // Pan to the station
+                  if (mapRef.current) {
+                    mapRef.current.panTo({ lat, lng });
+                    mapRef.current.setZoom(15);
+                  }
+                  // pick departure/arrival
+                  if (step === 1) {
+                    dispatch(selectDepartureStation(station.id));
+                    toast.success('Departure station selected!');
+                  } else if (step === 2) {
+                    dispatch(selectArrivalStation(station.id));
+                    toast.success('Arrival station selected!');
+                  }
+                }}
                 icon={{
-                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z', // small square
+                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z',
                   scale: 4,
                   fillColor: '#D3D3D3',
                   fillOpacity: 1,
@@ -446,7 +424,7 @@ function GMap({ googleApiKey }: GMapProps) {
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
-          onToggle={() => dispatch(toggleSheet())}
+          onToggle={handleSheetToggle}
           title={sheetTitle}
           count={stations.length}
         >
@@ -458,24 +436,36 @@ function GMap({ googleApiKey }: GMapProps) {
 }
 
 /* -------------------- Departure Station Details ------------------- */
-function DepartureStationDetails({ stationId }: { stationId: number }) {
+function DepartureStationDetails() {
   const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
+  const stationId = useAppSelector(selectDepartureStationId);
 
+  if (stationId === null) {
+    return <p className="p-4 text-destructive">No departure station set.</p>;
+  }
   const station = stations.find((s) => s.id === stationId);
   if (!station) {
     return <p className="p-4 text-destructive">Station not found.</p>;
   }
 
-  // Clear the departure station
   const handleClear = () => {
     dispatch(selectDepartureStation(null));
   };
 
-  // Confirm departure => next step is arrival (step=2)
-  const handleConfirmDeparture = () => {
+  // "Confirm" goes to step=2
+  const handleConfirm = () => {
     dispatch(advanceBookingStep(2));
     toast.success('Departure station confirmed. Now select your arrival station.');
+  };
+
+  // "Change Station" lets user pick again in step=1
+  // (set departureId=null or just keep the same step=1)
+  const handleChangeStation = () => {
+    dispatch(selectDepartureStation(null));
+    // If you want to keep step=1, do that. If you're already on step=2, do step=1 again
+    dispatch(advanceBookingStep(1));
+    toast('You can now pick a new departure station.');
   };
 
   return (
@@ -495,7 +485,7 @@ function DepartureStationDetails({ stationId }: { stationId: number }) {
         </p>
       )}
 
-      <div className="flex gap-2 mt-4">
+      <div className="flex flex-wrap gap-2 mt-4">
         <button
           onClick={handleClear}
           className="px-3 py-2 bg-gray-200 rounded-md text-sm"
@@ -503,10 +493,16 @@ function DepartureStationDetails({ stationId }: { stationId: number }) {
           Clear
         </button>
         <button
-          onClick={handleConfirmDeparture}
+          onClick={handleConfirm}
           className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm"
         >
           Confirm Departure
+        </button>
+        <button
+          onClick={handleChangeStation}
+          className="px-3 py-2 bg-gray-200 rounded-md text-sm"
+        >
+          Change Station
         </button>
       </div>
     </div>
@@ -514,24 +510,35 @@ function DepartureStationDetails({ stationId }: { stationId: number }) {
 }
 
 /* --------------------- Arrival Station Details -------------------- */
-function ArrivalStationDetails({ stationId }: { stationId: number }) {
+function ArrivalStationDetails() {
   const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
+  const stationId = useAppSelector(selectArrivalStationId);
 
+  if (stationId === null) {
+    return <p className="p-4 text-destructive">No arrival station set.</p>;
+  }
   const station = stations.find((s) => s.id === stationId);
   if (!station) {
     return <p className="p-4 text-destructive">Station not found.</p>;
   }
 
-  // Clear the arrival station
   const handleClear = () => {
     dispatch(selectArrivalStation(null));
   };
 
-  // Confirm arrival => next step is step=3 (or whichever flow)
-  const handleConfirmArrival = () => {
+  // Confirm arrival => step=3 or next flow
+  const handleConfirm = () => {
     dispatch(advanceBookingStep(3));
-    toast.success('Arrival station confirmed! Next: payment or finalizing...');
+    toast.success('Arrival station confirmed!');
+  };
+
+  // "Back to Step 1" if user wants to change departure again
+  const handleBackToDeparture = () => {
+    // Clear arrival
+    dispatch(selectArrivalStation(null));
+    // Force step=1 so user can repick departure
+    dispatch(advanceBookingStep(1));
   };
 
   return (
@@ -551,7 +558,7 @@ function ArrivalStationDetails({ stationId }: { stationId: number }) {
         </p>
       )}
 
-      <div className="flex gap-2 mt-4">
+      <div className="flex flex-wrap gap-2 mt-4">
         <button
           onClick={handleClear}
           className="px-3 py-2 bg-gray-200 rounded-md text-sm"
@@ -559,10 +566,16 @@ function ArrivalStationDetails({ stationId }: { stationId: number }) {
           Clear
         </button>
         <button
-          onClick={handleConfirmArrival}
+          onClick={handleConfirm}
           className="px-3 py-2 bg-green-600 text-white rounded-md text-sm"
         >
           Confirm Arrival
+        </button>
+        <button
+          onClick={handleBackToDeparture}
+          className="px-3 py-2 bg-gray-200 rounded-md text-sm"
+        >
+          Back to Departure
         </button>
       </div>
     </div>
@@ -596,7 +609,7 @@ class MapErrorBoundary extends React.Component<
   }
 }
 
-/* -------------- Export with Error Boundary -------------- */
+/* -------------- Export -------------- */
 export default function GMapWithErrorBoundary(props: GMapProps) {
   return (
     <MapErrorBoundary>
