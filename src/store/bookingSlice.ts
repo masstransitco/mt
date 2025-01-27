@@ -3,46 +3,45 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 
-/**
- * The bookingSlice orchestrates a multi-step flow:
- * 1) User picks car & station
- * 2) ID verification
- * 3) Payment
- * 4) Finalizing
- * ... etc.
- * 
- * We store which step the user is on, plus relevant data
- * like departure dates or scanning a QR code if needed.
- */
-interface BookingState {
+export interface BookingState {
+  /** The numerical step we’re on, e.g. 1 = select_departure_station, 2 = select_arrival_station, etc. */
   step: number;
+  /** A string name for the current step (useful for debugging or UI conditions). */
   stepName: string;
+  /** An optional date field if you want the user to pick a departure date/time. */
   departureDate: Date | null;
-  // Could store additional fields, e.g. arrivalStationId, paymentMethod, etc.
+  // Could store additional fields, e.g. arrivalDate, paymentMethod, etc.
 }
 
 const initialState: BookingState = {
   step: 1,
-  stepName: 'select_car_and_station',
+  stepName: 'select_departure_station',
   departureDate: null,
 };
 
-const bookingSlice = createSlice({
+export const bookingSlice = createSlice({
   name: 'booking',
   initialState,
   reducers: {
+    /**
+     * Example of storing a user-chosen departure date/time.
+     * If not needed, remove this action + field.
+     */
     setDepartureDate: (state, action: PayloadAction<Date>) => {
       state.departureDate = action.payload;
     },
-    // Advance to a specified step in the flow
+
+    /**
+     * Moves to a specified step in the flow, setting the matching stepName.
+     */
     advanceBookingStep: (state, action: PayloadAction<number>) => {
       state.step = action.payload;
       switch (action.payload) {
         case 1:
-          state.stepName = 'select_car_and_station';
+          state.stepName = 'select_departure_station';
           break;
         case 2:
-          state.stepName = 'verify_id';
+          state.stepName = 'select_arrival_station';
           break;
         case 3:
           state.stepName = 'payment';
@@ -51,13 +50,19 @@ const bookingSlice = createSlice({
           state.stepName = 'finalizing';
           break;
         default:
-          state.stepName = 'select_car_and_station';
+          // Fallback if an invalid step is passed
+          state.step = 1;
+          state.stepName = 'select_departure_station';
           break;
       }
     },
+
+    /**
+     * Resets the entire booking flow to the initial state.
+     */
     resetBookingFlow: (state) => {
       state.step = 1;
-      state.stepName = 'select_car_and_station';
+      state.stepName = 'select_departure_station';
       state.departureDate = null;
     },
   },
