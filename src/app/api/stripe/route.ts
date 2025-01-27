@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/firebase-admin';
+import { auth } from '@/lib/firebase-admin';
+import { headers } from 'next/headers';
 import { 
   doc, 
   setDoc, 
@@ -10,7 +12,7 @@ import {
   query, 
   orderBy,
   getDoc 
-} from 'firebase/firestore';
+} from 'firebase-admin/firestore';
 
 // Type definitions
 interface PaymentMethod {
@@ -27,6 +29,25 @@ interface CreatePaymentIntentData {
   currency?: string;
   paymentMethodId: string;
   userId: string;
+}
+
+// Auth middleware
+async function verifyAuth(req: NextRequest) {
+  const headersList = headers();
+  const authHeader = headersList.get('Authorization');
+  
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Missing or invalid authorization token');
+  }
+
+  try {
+    const token = authHeader.split('Bearer ')[1];
+    const decodedToken = await auth.verifyIdToken(token);
+    return decodedToken.uid;
+  } catch (error) {
+    console.error('Auth error:', error);
+    throw new Error('Invalid authorization token');
+  }
 }
 
 // Verify environment variables
@@ -78,33 +99,17 @@ const checkStripe = () => {
   return stripeInstance;
 };
 
-// Middleware to verify user exists
-const verifyUser = async (userId: string, createIfNotExists: boolean = false) => {
-  const userDoc = await getDoc(doc(db, 'users', userId));
-  
-  if (!userDoc.exists() && createIfNotExists) {
-    await setDoc(doc(db, 'users', userId), {
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-    return true;
-  }
-  
-  return userDoc.exists();
-};
-
 // POST route handler
 export async function POST(request: NextRequest) {
   try {
+    const authenticatedUserId = await verifyAuth(request);
     const stripe = checkStripe();
     const { action, userId, ...data } = await request.json();
 
-    if (!userId) {
-      return errorResponse('User ID is required');
+    // Verify authenticated user matches requested userId
+    if (authenticatedUserId !== userId) {
+      return errorResponse('Unauthorized access', 403);
     }
-
-    // Create user document if it doesn't exist
-    await verifyUser(userId, true);
 
     switch (action) {
       case 'save-payment-method':
@@ -116,6 +121,9 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('API Error:', error);
+    if (error instanceof Error && error.message.includes('auth')) {
+      return errorResponse(error.message, 401);
+    }
     return errorResponse(
       error instanceof Error ? error.message : 'Internal server error',
       500
@@ -126,6 +134,7 @@ export async function POST(request: NextRequest) {
 // GET route handler
 export async function GET(request: NextRequest) {
   try {
+    const authenticatedUserId = await verifyAuth(request);
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
     const userId = searchParams.get('userId');
@@ -134,10 +143,9 @@ export async function GET(request: NextRequest) {
       return errorResponse('User ID is required');
     }
 
-    // Verify user exists
-    const userExists = await verifyUser(userId);
-    if (!userExists) {
-      return errorResponse('User not found', 404);
+    // Verify authenticated user matches requested userId
+    if (authenticatedUserId !== userId) {
+      return errorResponse('Unauthorized access', 403);
     }
 
     switch (action) {
@@ -148,6 +156,9 @@ export async function GET(request: NextRequest) {
     }
   } catch (error) {
     console.error('API Error:', error);
+    if (error instanceof Error && error.message.includes('auth')) {
+      return errorResponse(error.message, 401);
+    }
     return errorResponse(
       error instanceof Error ? error.message : 'Internal server error',
       500
@@ -158,16 +169,16 @@ export async function GET(request: NextRequest) {
 // DELETE route handler
 export async function DELETE(request: NextRequest) {
   try {
+    const authenticatedUserId = await verifyAuth(request);
     const { action, userId, paymentMethodId } = await request.json();
 
     if (!userId || !paymentMethodId) {
       return errorResponse('Missing required fields');
     }
 
-    // Verify user exists
-    const userExists = await verifyUser(userId);
-    if (!userExists) {
-      return errorResponse('User not found', 404);
+    // Verify authenticated user matches requested userId
+    if (authenticatedUserId !== userId) {
+      return errorResponse('Unauthorized access', 403);
     }
 
     switch (action) {
@@ -178,6 +189,9 @@ export async function DELETE(request: NextRequest) {
     }
   } catch (error) {
     console.error('API Error:', error);
+    if (error instanceof Error && error.message.includes('auth')) {
+      return errorResponse(error.message, 401);
+    }
     return errorResponse(
       error instanceof Error ? error.message : 'Internal server error',
       500
@@ -199,11 +213,12 @@ async function handleSavePaymentMethod({
 
   try {
     // Check if this is the first payment method (make it default)
-    const existingMethods = await getDocs(collection(db, 'users', userId, 'paymentMethods'));
-    const isDefault = existingMethods.empty;
+    const paymentMethodsRef = collection(db, 'users', userId, 'paymentMethods');
+    const snapshot = await getDocs(paymentMethodsRef);
+    const isDefault = snapshot.empty;
 
-    const paymentMethodRef = doc(collection(db, 'users', userId, 'paymentMethods'));
-    await setDoc(paymentMethodRef, {
+    const newPaymentMethodRef = doc(paymentMethodsRef);
+    await setDoc(newPaymentMethodRef, {
       id: paymentMethod.id,
       brand: paymentMethod.brand,
       last4: paymentMethod.last4,
@@ -243,19 +258,18 @@ async function handleDeletePaymentMethod(userId: string, paymentMethodId: string
     const stripe = checkStripe();
     const paymentMethodRef = doc(db, 'users', userId, 'paymentMethods', paymentMethodId);
     
-    // Get the payment method before deleting
     const paymentMethodDoc = await getDoc(paymentMethodRef);
     if (!paymentMethodDoc.exists()) {
       return errorResponse('Payment method not found', 404);
     }
 
-    // Delete from Firebase
-    await deleteDoc(paymentMethodRef);
+    // Delete from Firebase and Stripe
+    await Promise.all([
+      deleteDoc(paymentMethodRef),
+      stripe.paymentMethods.detach(paymentMethodId)
+    ]);
 
-    // Delete from Stripe
-    await stripe.paymentMethods.detach(paymentMethodId);
-
-    // If this was the default method, make another one default
+    // Handle default payment method update
     const paymentMethodData = paymentMethodDoc.data();
     if (paymentMethodData?.isDefault) {
       const remainingMethods = await getDocs(
@@ -296,7 +310,6 @@ async function handleCreatePaymentIntent(
   }
 
   try {
-    // Create or get Stripe customer
     const customerSearchResult = await stripe.customers.search({
       query: `metadata['userId']:'${userId}'`,
     });
