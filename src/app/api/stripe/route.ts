@@ -14,6 +14,7 @@ import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
 // Initialize Firebase Admin and get Firestore/Auth
 const { db, auth } = initializeFirebaseAdmin();
 
+// Interfaces
 interface PaymentMethod {
   id: string;
   brand: string;
@@ -39,7 +40,9 @@ async function verifyAuth(req: NextRequest) {
     throw new Error('Missing or invalid authorization token');
   }
 
+  // Extract the token from the header
   const token = authHeader.split('Bearer ')[1];
+  // Verify with Firebase Admin
   const decodedToken = await auth.verifyIdToken(token);
   return decodedToken.uid;
 }
@@ -77,8 +80,13 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case 'save-payment-method':
         return await handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
+
       case 'create-payment-intent':
         return await handleCreatePaymentIntent({ ...data, userId });
+
+      case 'delete-payment-method':
+        return await handleDeletePaymentMethod(userId, data.paymentMethodId);
+
       default:
         return errorResponse('Invalid action');
     }
@@ -97,7 +105,9 @@ export async function POST(request: NextRequest) {
 // GET /api/stripe
 export async function GET(request: NextRequest) {
   try {
+    // Verify the user’s Firebase token
     const authenticatedUserId = await verifyAuth(request);
+
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
     const userId = searchParams.get('userId');
@@ -109,9 +119,11 @@ export async function GET(request: NextRequest) {
       return errorResponse('Unauthorized access', 403);
     }
 
+    // Handle GET actions
     switch (action) {
       case 'get-payment-methods':
         return await handleGetPaymentMethods(userId);
+
       default:
         return errorResponse('Invalid action');
     }
@@ -127,7 +139,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper function: Save Payment Method
+// ----------- ACTION HANDLERS -----------
+
+/**
+ * Save a payment method to Firestore for the user.
+ */
 async function handleSavePaymentMethod({
   userId,
   paymentMethod,
@@ -142,7 +158,8 @@ async function handleSavePaymentMethod({
   try {
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.get();
-    const isDefault = snapshot.empty; // Mark the first as default
+    // Mark this one as default if it's the first
+    const isDefault = snapshot.empty;
 
     const newPaymentMethodRef = paymentMethodsRef.doc();
     await newPaymentMethodRef.set({
@@ -158,12 +175,14 @@ async function handleSavePaymentMethod({
   }
 }
 
-// Helper function: Get Payment Methods
+/**
+ * Get all payment methods from Firestore for the user.
+ */
 async function handleGetPaymentMethods(userId: string) {
   try {
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
-    const paymentMethods = snapshot.docs.map(doc => ({
+    const paymentMethods = snapshot.docs.map((doc) => ({
       docId: doc.id,
       ...doc.data(),
     }));
@@ -175,7 +194,9 @@ async function handleGetPaymentMethods(userId: string) {
   }
 }
 
-// Helper function: Create Payment Intent
+/**
+ * Create a Payment Intent with Stripe.
+ */
 async function handleCreatePaymentIntent({
   amount,
   currency = 'hkd',
@@ -216,9 +237,7 @@ async function handleCreatePaymentIntent({
       confirmation_method: 'manual',
       confirm: true,
       return_url: `${appUrl}/booking/confirmation`,
-      metadata: {
-        userId,
-      },
+      metadata: { userId },
     });
 
     return successResponse({
@@ -227,9 +246,26 @@ async function handleCreatePaymentIntent({
     });
   } catch (error) {
     if (error instanceof Stripe.errors.StripeError) {
+      // Return a 402 for Stripe card/validation errors
       return errorResponse(error.message, 402);
     }
     console.error('Payment intent creation error:', error);
     return errorResponse('Failed to create payment intent', 500);
+  }
+}
+
+/**
+ * Delete a payment method doc from Firestore for the user.
+ */
+async function handleDeletePaymentMethod(userId: string, paymentMethodId: string) {
+  if (!paymentMethodId) {
+    return errorResponse('Payment method ID is required');
+  }
+  try {
+    await db.collection(`users/${userId}/paymentMethods`).doc(paymentMethodId).delete();
+    return successResponse({ message: 'Payment method deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting payment method:', error);
+    return errorResponse('Failed to delete payment method', 500);
   }
 }
