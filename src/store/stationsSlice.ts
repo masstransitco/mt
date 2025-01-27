@@ -1,5 +1,3 @@
-// src/store/stationsSlice.ts
-
 import {
   createSlice,
   createAsyncThunk,
@@ -10,8 +8,8 @@ import type { RootState } from './store';
 import { selectUserLocation } from './userSlice';
 
 /**
- * Station feature as returned by your /stations.geojson,
- * possibly extended with a computed distance.
+ * A single station feature from /stations.geojson
+ * (optionally extended with a 'distance' property later).
  */
 export interface StationFeature {
   type: 'Feature';
@@ -28,7 +26,7 @@ export interface StationFeature {
     availableSpots: number;
     waitTime?: number;
   };
-  distance?: number; // Distance from user's location
+  distance?: number; // Distance from user's location, computed later
 }
 
 interface StationsState {
@@ -120,26 +118,26 @@ export const selectAllStations = (state: RootState) => state.stations.items;
 export const selectStationsLoading = (state: RootState) => state.stations.loading;
 export const selectStationsError = (state: RootState) => state.stations.error;
 
+/**
+ * Basic Haversine formula to compute distance between two lat/lng points.
+ */
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
-  // Basic Haversine formula
   const toRad = (val: number) => (val * Math.PI) / 180;
   const R = 6371; // Earth radius in km
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) *
       Math.cos(toRad(lat2)) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
+      Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 /**
- * Memoized selector to return stations sorted by distance
- * from the user's location. If userLocation is null, returns
- * stations unsorted.
+ * Memoized selector:
+ * Sorts stations by distance from the user's location if available.
  */
 export const selectStationsWithDistance = createSelector(
   [selectAllStations, selectUserLocation],
