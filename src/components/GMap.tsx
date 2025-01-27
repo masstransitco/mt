@@ -30,9 +30,10 @@ import {
   selectCarsError,
 } from '@/store/carSlice';
 import {
+  // These should be in your userSlice
   selectUserLocation,
-  selectStation, // The selectStation action
-  selectSelectedStationId, // The selector for current station
+  selectStation,              // Action: selectStation(number | null)
+  selectSelectedStationId,    // Selector: returns number | null
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -52,18 +53,12 @@ import Sheet from '@/components/ui/sheet';
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ('geometry')[] = ['geometry'];
 
-/**
- * Ensure this container has a valid height & width
- * so the map can actually render.
- */
+/** Give the map container a real height to ensure visibility. */
 const CONTAINER_STYLE: React.CSSProperties = {
   width: '100%',
-  height: '100%', // Fill the parent container
+  height: '100%',
 };
 
-/**
- * Some sample MapOptions. Customize as needed.
- */
 const MAP_OPTIONS: google.maps.MapOptions = {
   disableDefaultUI: true,
   zoomControl: true,
@@ -72,20 +67,12 @@ const MAP_OPTIONS: google.maps.MapOptions = {
   maxZoom: 18,
   minZoom: 8,
   clickableIcons: false,
-  // You can optionally add:
-  // restriction: {
-  //   latLngBounds: {
-  //     north: 22.6,
-  //     south: 22.1,
-  //     east: 114.4,
-  //     west: 113.8,
-  //   },
-  //   strictBounds: true,
-  // },
 };
 
+/** Fallback center if user location is unavailable. */
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 
+/** Props for the GMap component */
 interface GMapProps {
   googleApiKey: string;
 }
@@ -100,8 +87,8 @@ const StationListItem = memo<StationListItemProps>((props) => {
   const station = data[index];
   const dispatch = useAppDispatch();
 
+  // When clicking on a station from the list, select it
   const handleClick = useCallback(() => {
-    // When clicking on a station list item, select it
     dispatch(selectStation(station.id));
   }, [dispatch, station.id]);
 
@@ -135,7 +122,7 @@ const StationListItem = memo<StationListItemProps>((props) => {
 
 StationListItem.displayName = 'StationListItem';
 
-/* ---------------------- Memoized GoogleMap ---------------------- */
+/* ------------------ Memoized GoogleMap Component ----------------- */
 const MemoizedGoogleMap = memo(GoogleMap);
 
 /* -------------------------- Main GMap ---------------------------- */
@@ -171,17 +158,16 @@ function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Keep reference of the map instance
+  // Keep a reference to the map instance
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
 
-  // Get user location
+  // Request user location (if you'd like to automatically get it)
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        // If you want to set user location here, do:
         // dispatch(setUserLocation({
         //   lat: position.coords.latitude,
         //   lng: position.coords.longitude,
@@ -194,7 +180,7 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, [dispatch]);
 
-  // On mount, fetch stations, fetch cars, get user location
+  // On mount, fetch stations/cars, then get user location
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -208,7 +194,7 @@ function GMap({ googleApiKey }: GMapProps) {
     initialize();
   }, [dispatch, getUserLocation]);
 
-  // When marker clicked, select the station & open bottom sheet
+  // Handle marker click: select station & toggle the bottom sheet
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
       dispatch(selectStation(station.id));
@@ -217,7 +203,7 @@ function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  // Handle errors
+  // Combine any errors
   const combinedError = stationsError || carsError || loadError;
   if (combinedError) {
     return (
@@ -229,7 +215,7 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // If still loading the script
+  // If the Google Maps script is not loaded yet
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
@@ -254,7 +240,7 @@ function GMap({ googleApiKey }: GMapProps) {
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
-          {/* User location */}
+          {/* User location marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -279,7 +265,7 @@ function GMap({ googleApiKey }: GMapProps) {
                 position={{ lat, lng }}
                 onClick={() => handleMarkerClick(station)}
                 icon={{
-                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z', // square
+                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z', // a small square
                   scale: 4,
                   fillColor: '#D3D3D3',
                   fillOpacity: 1,
@@ -309,17 +295,12 @@ function GMap({ googleApiKey }: GMapProps) {
         </MemoizedGoogleMap>
       </div>
 
-      {/* BOTTOM SHEET: either station list or selected station details */}
+      {/* BOTTOM SHEET (station list or selected station details) */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={() => dispatch(toggleSheet())}
-          title={
-            selectedStationId
-              ? 'Selected Station'
-              : 'Nearby Stations'
-          }
-          // If showing a single station, no need for a big count
+          title={selectedStationId ? 'Selected Station' : 'Nearby Stations'}
           count={selectedStationId ? undefined : stations.length}
         >
           {stationsLoading ? (
@@ -327,10 +308,8 @@ function GMap({ googleApiKey }: GMapProps) {
               Loading stations...
             </div>
           ) : selectedStationId ? (
-            /* ----------------- Show selected station details here ----------------- */
             <SelectedStationDetails stationId={selectedStationId} />
           ) : (
-            /* ----------------- Otherwise, show the station list ----------------- */
             <FixedSizeList
               height={400}
               width="100%"
@@ -352,10 +331,8 @@ function SelectedStationDetails({ stationId }: { stationId: number }) {
   const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
 
-  // Find the station object from your stations array
+  // Find the station from the store
   const station = stations.find((s) => s.id === stationId);
-
-  // If it doesn’t exist (edge case)
   if (!station) {
     return (
       <div className="p-4">
@@ -365,11 +342,12 @@ function SelectedStationDetails({ stationId }: { stationId: number }) {
   }
 
   const handleClearSelection = () => {
-    dispatch(selectStation(null)); // Clear station selection
+    // Clear the selected station
+    dispatch(selectStation(null));
   };
 
   const handleProceed = () => {
-    // Example: go to the next booking step
+    // Example: go to the next booking step (2 = maybe 'verify_id' or next flow)
     dispatch(advanceBookingStep(2));
   };
 
