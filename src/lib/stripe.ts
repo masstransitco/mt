@@ -1,11 +1,25 @@
 import { loadStripe, Stripe } from '@stripe/stripe-js';
 
+// Custom error classes
+export class FirebasePermissionError extends Error {
+  constructor(message: string = 'Permission denied') {
+    super(message);
+    this.name = 'FirebasePermissionError';
+  }
+}
+
+export class StripeConfigError extends Error {
+  constructor(message: string = 'Stripe configuration error') {
+    super(message);
+    this.name = 'StripeConfigError';
+  }
+}
+
 // Environment variable check
 const getPublishableKey = () => {
   const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   if (!key) {
-    console.error('Stripe publishable key is not set in environment variables');
-    return '';
+    throw new StripeConfigError('Stripe publishable key is not set in environment variables');
   }
   return key;
 };
@@ -14,16 +28,18 @@ let stripePromise: Promise<Stripe | null>;
 
 export const getStripe = () => {
   if (!stripePromise) {
-    const publishableKey = getPublishableKey();
-    if (!publishableKey) {
-      throw new Error('Stripe publishable key is required');
+    try {
+      const publishableKey = getPublishableKey();
+      stripePromise = loadStripe(publishableKey);
+    } catch (error) {
+      console.error('Stripe initialization error:', error);
+      throw error;
     }
-    stripePromise = loadStripe(publishableKey);
   }
   return stripePromise;
 };
 
-// Types for payment methods
+// Types
 export interface SavedPaymentMethod {
   id: string;
   brand: string;
@@ -33,7 +49,6 @@ export interface SavedPaymentMethod {
   isDefault?: boolean;
 }
 
-// Payment Intent types
 export interface CreatePaymentIntentParams {
   amount: number;
   currency?: string;
@@ -46,24 +61,66 @@ export interface PaymentIntentResponse {
   paymentIntentId: string;
 }
 
-// API response types
 interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-// Function to save payment method to Firebase/Backend
+// Helper function to handle API responses
+const handleApiResponse = async <T>(response: Response): Promise<ApiResponse<T>> => {
+  const data = await response.json();
+  
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new FirebasePermissionError(data.error || 'Permission denied');
+    }
+    throw new Error(data.error || 'API request failed');
+  }
+
+  return {
+    success: true,
+    data: data.data || data
+  };
+};
+
+// Helper function to handle errors
+const handleError = (error: unknown): ApiResponse<never> => {
+  console.error('API Error:', error);
+
+  if (error instanceof FirebasePermissionError) {
+    return {
+      success: false,
+      error: 'Authentication required. Please sign in again.'
+    };
+  }
+
+  if (error instanceof StripeConfigError) {
+    return {
+      success: false,
+      error: 'Payment system configuration error. Please try again later.'
+    };
+  }
+
+  return {
+    success: false,
+    error: error instanceof Error ? error.message : 'An unknown error occurred'
+  };
+};
+
+// Function to save payment method
 export const savePaymentMethod = async (
   userId: string, 
   paymentMethod: SavedPaymentMethod
 ): Promise<ApiResponse<SavedPaymentMethod>> => {
   try {
+    if (!userId || !paymentMethod) {
+      throw new Error('User ID and payment method are required');
+    }
+
     const response = await fetch('/api/stripe', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'save-payment-method',
         userId,
@@ -71,22 +128,9 @@ export const savePaymentMethod = async (
       }),
     });
     
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to save payment method');
-    }
-    
-    return {
-      success: true,
-      data: data.paymentMethod,
-    };
+    return await handleApiResponse<SavedPaymentMethod>(response);
   } catch (error) {
-    console.error('Error saving payment method:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'An unknown error occurred',
-    };
+    return handleError(error);
   }
 };
 
@@ -95,37 +139,33 @@ export const getSavedPaymentMethods = async (
   userId: string
 ): Promise<ApiResponse<SavedPaymentMethod[]>> => {
   try {
-    const response = await fetch(`/api/stripe?action=get-payment-methods&userId=${userId}`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to get payment methods');
+    if (!userId) {
+      throw new Error('User ID is required');
     }
 
-    return {
-      success: true,
-      data: data.paymentMethods,
-    };
+    const response = await fetch(
+      `/api/stripe?action=get-payment-methods&userId=${encodeURIComponent(userId)}`
+    );
+    
+    return await handleApiResponse<SavedPaymentMethod[]>(response);
   } catch (error) {
-    console.error('Error getting payment methods:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'An unknown error occurred',
-    };
+    return handleError(error);
   }
 };
 
-// Function to delete a payment method
+// Function to delete payment method
 export const deletePaymentMethod = async (
   userId: string, 
   paymentMethodId: string
 ): Promise<ApiResponse<void>> => {
   try {
+    if (!userId || !paymentMethodId) {
+      throw new Error('User ID and payment method ID are required');
+    }
+
     const response = await fetch('/api/stripe', {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'delete-payment-method',
         userId,
@@ -133,58 +173,32 @@ export const deletePaymentMethod = async (
       }),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to delete payment method');
-    }
-
-    return {
-      success: true,
-    };
+    return await handleApiResponse<void>(response);
   } catch (error) {
-    console.error('Error deleting payment method:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'An unknown error occurred',
-    };
+    return handleError(error);
   }
 };
 
-// Function to create a payment intent
+// Function to create payment intent
 export const createPaymentIntent = async (
   params: CreatePaymentIntentParams
 ): Promise<ApiResponse<PaymentIntentResponse>> => {
   try {
+    if (!params.amount || !params.paymentMethodId || !params.userId) {
+      throw new Error('Amount, payment method, and user ID are required');
+    }
+
     const response = await fetch('/api/stripe', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'create-payment-intent',
         ...params,
       }),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to create payment intent');
-    }
-
-    return {
-      success: true,
-      data: {
-        clientSecret: data.clientSecret,
-        paymentIntentId: data.paymentIntentId,
-      },
-    };
+    return await handleApiResponse<PaymentIntentResponse>(response);
   } catch (error) {
-    console.error('Error creating payment intent:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'An unknown error occurred',
-    };
+    return handleError(error);
   }
 };
