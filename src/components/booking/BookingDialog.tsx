@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '@/store/store';
 
-// ----- userSlice (manages selected car/station) -----
+// userSlice: we assume you have two station IDs now
 import { resetUserSelections } from '@/store/userSlice';
+import { selectDepartureStationId, selectArrivalStationId } from '@/store/userSlice';
 
-// ----- bookingSlice (manages step flow, departure date, etc.) -----
+// bookingSlice: step flow, departure date, etc.
 import {
-  advanceBookingStep,        // previously confirmBookingStep
+  advanceBookingStep,
   selectBookingStep,
   selectDepartureDate,
   setDepartureDate,
@@ -27,15 +28,19 @@ import {
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 
+// Example: Additional step components for ID verification + payment
 import IDVerificationStep from './IDVerificationStep';
 import PaymentStep from './PaymentStep';
 
 export default function BookingDialog() {
   const dispatch = useAppDispatch();
 
-  // userSlice state
+  // If you store selectedCarId in userSlice
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
-  const selectedStationId = useAppSelector((state) => state.user.selectedStationId);
+
+  // The two-station approach: departure + arrival
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
 
   // bookingSlice state
   const bookingStep = useAppSelector(selectBookingStep);
@@ -44,12 +49,18 @@ export default function BookingDialog() {
   // local UI state: whether the dialog is open
   const [open, setOpen] = useState<boolean>(false);
 
-  // If user selected both car and station, open the dialog automatically
+  /**
+   * When the user has:
+   * - selected a car
+   * - selected a departure station
+   * - selected an arrival station
+   * We automatically open the booking dialog.
+   */
   useEffect(() => {
-    if (selectedCarId && selectedStationId) {
+    if (selectedCarId && departureStationId && arrivalStationId) {
       setOpen(true);
     }
-  }, [selectedCarId, selectedStationId]);
+  }, [selectedCarId, departureStationId, arrivalStationId]);
 
   /* -------------- CANCEL / CLOSE -------------- */
   const handleCancel = () => {
@@ -81,18 +92,22 @@ export default function BookingDialog() {
     dispatch(advanceBookingStep(5));
   };
 
-  /* -------------- STEP 5: Finalizing booking -------------- */
+  /**
+   * STEP 5: Finalizing the booking
+   * If bookingStep=5, we create the booking in an effect
+   * so it runs once.
+   */
   useEffect(() => {
     if (bookingStep === 5) {
-      // Build payload
       const bookingPayload = {
         carId: selectedCarId,
-        stationId: selectedStationId,
+        departureStationId,
+        arrivalStationId,
         departureDate,
-        // e.g. ID docs, payment method, etc. if stored in bookingSlice
+        // e.g. ID docs, payment method, etc. if in bookingSlice
       };
 
-      // Example POST to your bookings endpoint
+      // Example POST to your /api/bookings endpoint
       fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,7 +116,7 @@ export default function BookingDialog() {
         .then((res) => res.json())
         .then((data) => {
           console.log('Booking created:', data);
-          // Show success message or navigate
+          // Show success message or route user
         })
         .catch((err) => {
           console.error('Booking creation error:', err);
@@ -113,7 +128,14 @@ export default function BookingDialog() {
           dispatch(resetBookingFlow());
         });
     }
-  }, [bookingStep, selectedCarId, selectedStationId, departureDate, dispatch]);
+  }, [
+    bookingStep,
+    selectedCarId,
+    departureStationId,
+    arrivalStationId,
+    departureDate,
+    dispatch,
+  ]);
 
   /* -------------- RENDER UI PER STEP -------------- */
   const renderStepContent = () => {
@@ -126,19 +148,22 @@ export default function BookingDialog() {
               type="datetime-local"
               className="w-full p-2 rounded border border-border bg-background text-foreground"
               onChange={handleDateSelect}
-              // Disallow selecting a time in the past
               min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
             />
           </div>
         );
       case 2:
+        // Show summary of car & stations & date
         return (
           departureDate && (
             <div className="space-y-4">
               <h3 className="font-medium">Confirm Booking Details</h3>
               <div className="bg-accent/10 p-4 rounded space-y-2">
                 <p className="text-foreground">Vehicle: Car #{selectedCarId}</p>
-                <p className="text-foreground">Station: Station #{selectedStationId}</p>
+                <p className="text-foreground">
+                  Departure Station: #{departureStationId}
+                </p>
+                <p className="text-foreground">Arrival Station: #{arrivalStationId}</p>
                 <p className="text-foreground">
                   Departure: {format(departureDate, 'PPpp')}
                 </p>
@@ -147,10 +172,10 @@ export default function BookingDialog() {
           )
         );
       case 3:
-        // ID Verification step content
+        // ID Verification step
         return <IDVerificationStep onVerified={handleIDVerified} />;
       case 4:
-        // Payment step content
+        // Payment step
         return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
       default:
         return null;
@@ -161,7 +186,7 @@ export default function BookingDialog() {
   const renderFooterButtons = () => {
     switch (bookingStep) {
       case 1:
-        // Step 1 auto-advances to step 2 once user selects a time
+        // Step 1 auto-advances after user picks date/time
         return null;
       case 2:
         return (
@@ -174,7 +199,7 @@ export default function BookingDialog() {
         );
       case 3:
       case 4:
-        // Steps 3 & 4 have next-step actions within their components
+        // Steps 3 & 4 have their own internal flows
         return null;
       default:
         return null;
