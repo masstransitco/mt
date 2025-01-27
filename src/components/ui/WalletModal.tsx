@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Loader2, X, CreditCard, Plus, Trash2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { 
@@ -13,7 +21,7 @@ import {
 } from '@/lib/stripe';
 import { CardElement, Elements, useStripe, useElements } from '@stripe/react-stripe-js';
 
-// Card input styles
+// Card input styles with theme variables
 const cardStyle = {
   style: {
     base: {
@@ -32,14 +40,12 @@ const cardStyle = {
   }
 };
 
-// Payment Method Card Component
-const PaymentMethodCard = ({ 
-  method, 
-  onDelete 
-}: { 
+interface PaymentMethodCardProps {
   method: SavedPaymentMethod;
   onDelete: (id: string) => Promise<void>;
-}) => {
+}
+
+const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -57,35 +63,41 @@ const PaymentMethodCard = ({
   };
 
   return (
-    <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+    <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-card">
       <div className="flex items-center gap-3">
-        <CreditCard className="w-5 h-5" />
+        <CreditCard className="w-5 h-5 text-muted-foreground" />
         <div>
-          <p className="font-medium">{method.brand.toUpperCase()} •••• {method.last4}</p>
+          <p className="font-medium text-card-foreground">
+            {method.brand.toUpperCase()} •••• {method.last4}
+          </p>
           <p className="text-sm text-muted-foreground">
             Expires {method.expMonth}/{method.expYear}
           </p>
         </div>
       </div>
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={handleDelete}
         disabled={isDeleting}
-        className="p-2 text-muted-foreground hover:text-destructive 
-                   rounded-full hover:bg-destructive/10 transition-colors
-                   disabled:opacity-50 disabled:cursor-not-allowed"
+        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
       >
         {isDeleting ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="h-4 w-4" />
         )}
-      </button>
+        <span className="sr-only">Delete payment method</span>
+      </Button>
     </div>
   );
 };
 
-// Add Payment Method Form
-const AddPaymentMethodForm = ({ onSuccess }: { onSuccess: () => void }) => {
+interface AddPaymentMethodFormProps {
+  onSuccess: () => void;
+}
+
+const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -116,11 +128,11 @@ const AddPaymentMethodForm = ({ onSuccess }: { onSuccess: () => void }) => {
           last4: paymentMethod.card!.last4,
           expMonth: paymentMethod.card!.exp_month,
           expYear: paymentMethod.card!.exp_year,
-          isDefault: true // Make first card default
+          isDefault: true
         });
 
         if (!result.success) {
-          throw new Error(result.error || 'Failed to save payment method');
+          throw new Error(result.error);
         }
 
         onSuccess();
@@ -134,36 +146,35 @@ const AddPaymentMethodForm = ({ onSuccess }: { onSuccess: () => void }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="p-4 border border-border rounded-lg">
+      <div className="p-4 border border-border rounded-lg bg-card">
         <CardElement options={cardStyle} />
       </div>
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
+          {error}
+        </div>
       )}
-      <button
+      <Button
         type="submit"
         disabled={!stripe || loading}
-        className="w-full bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium
-                 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full"
       >
         {loading ? (
-          <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+          <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
           'Add Payment Method'
         )}
-      </button>
+      </Button>
     </form>
   );
 };
 
-// Main Wallet Modal Component
-export default function WalletModal({ 
-  isOpen, 
-  onClose 
-}: { 
-  isOpen: boolean; 
+interface WalletModalProps {
+  isOpen: boolean;
   onClose: () => void;
-}) {
+}
+
+export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -179,7 +190,7 @@ export default function WalletModal({
     try {
       const result = await getSavedPaymentMethods(auth.currentUser.uid);
       if (!result.success) {
-        throw new Error(result.error || 'Failed to load payment methods');
+        throw new Error(result.error);
       }
       setPaymentMethods(result.data || []);
     } catch (error) {
@@ -193,6 +204,8 @@ export default function WalletModal({
   useEffect(() => {
     if (isOpen && auth.currentUser) {
       loadPaymentMethods();
+    } else {
+      setShowAddCard(false);
     }
   }, [isOpen]);
 
@@ -202,7 +215,7 @@ export default function WalletModal({
     try {
       const result = await deletePaymentMethod(auth.currentUser.uid, paymentMethodId);
       if (!result.success) {
-        throw new Error(result.error || 'Failed to delete payment method');
+        throw new Error(result.error);
       }
       await loadPaymentMethods();
     } catch (error) {
@@ -211,38 +224,35 @@ export default function WalletModal({
     }
   };
 
-  const handleSuccess = () => {
-    setShowAddCard(false);
-    loadPaymentMethods();
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader className="flex flex-row items-center justify-between">
-          <h2 className="text-xl font-semibold">Wallet</h2>
-          <button
-            onClick={onClose}
-            className="rounded-full p-2 hover:bg-accent/10"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        <DialogHeader>
+          <DialogTitle>Payment Methods</DialogTitle>
+          <DialogDescription>
+            Manage your saved payment methods for bookings and payments.
+          </DialogDescription>
         </DialogHeader>
-
+        
         <div className="mt-4 space-y-4">
           {error && (
-            <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
+            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
               {error}
-            </p>
+            </div>
           )}
 
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : showAddCard ? (
             <Elements stripe={stripePromise}>
-              <AddPaymentMethodForm onSuccess={handleSuccess} />
+              <AddPaymentMethodForm 
+                onSuccess={() => {
+                  setShowAddCard(false);
+                  loadPaymentMethods();
+                }} 
+              />
             </Elements>
           ) : (
             <>
@@ -262,19 +272,28 @@ export default function WalletModal({
                 </p>
               )}
               
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowAddCard(true)}
-                className="flex items-center justify-center gap-2 w-full py-2 
-                         border-2 border-dashed border-border rounded-lg
-                         text-muted-foreground hover:text-foreground
-                         hover:border-accent transition-colors"
+                className="w-full border-2 border-dashed"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="mr-2 h-5 w-5" />
                 Add Payment Method
-              </button>
+              </Button>
             </>
           )}
         </div>
+
+        <DialogClose asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-4 top-4"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </DialogClose>
       </DialogContent>
     </Dialog>
   );
