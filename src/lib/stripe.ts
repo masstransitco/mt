@@ -1,4 +1,5 @@
 import { loadStripe, Stripe } from '@stripe/stripe-js';
+import { auth } from '@/lib/firebase';
 
 // Custom error classes
 export class FirebasePermissionError extends Error {
@@ -14,6 +15,15 @@ export class StripeConfigError extends Error {
     this.name = 'StripeConfigError';
   }
 }
+
+// Helper function to get auth token
+const getAuthHeaders = async () => {
+  const token = await auth.currentUser?.getIdToken();
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': token ? `Bearer ${token}` : ''
+  };
+};
 
 // Environment variable check
 const getPublishableKey = () => {
@@ -67,6 +77,14 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+// Helper function to check authentication
+const checkAuth = () => {
+  if (!auth.currentUser) {
+    throw new FirebasePermissionError('User must be authenticated');
+  }
+  return auth.currentUser.uid;
+};
+
 // Helper function to handle API responses
 const handleApiResponse = async <T>(response: Response): Promise<ApiResponse<T>> => {
   const data = await response.json();
@@ -114,13 +132,16 @@ export const savePaymentMethod = async (
   paymentMethod: SavedPaymentMethod
 ): Promise<ApiResponse<SavedPaymentMethod>> => {
   try {
+    checkAuth();
+    const headers = await getAuthHeaders();
+
     if (!userId || !paymentMethod) {
       throw new Error('User ID and payment method are required');
     }
 
     const response = await fetch('/api/stripe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action: 'save-payment-method',
         userId,
@@ -139,12 +160,16 @@ export const getSavedPaymentMethods = async (
   userId: string
 ): Promise<ApiResponse<SavedPaymentMethod[]>> => {
   try {
+    checkAuth();
+    const headers = await getAuthHeaders();
+
     if (!userId) {
       throw new Error('User ID is required');
     }
 
     const response = await fetch(
-      `/api/stripe?action=get-payment-methods&userId=${encodeURIComponent(userId)}`
+      `/api/stripe?action=get-payment-methods&userId=${encodeURIComponent(userId)}`,
+      { headers }
     );
     
     return await handleApiResponse<SavedPaymentMethod[]>(response);
@@ -159,13 +184,16 @@ export const deletePaymentMethod = async (
   paymentMethodId: string
 ): Promise<ApiResponse<void>> => {
   try {
+    checkAuth();
+    const headers = await getAuthHeaders();
+
     if (!userId || !paymentMethodId) {
       throw new Error('User ID and payment method ID are required');
     }
 
     const response = await fetch('/api/stripe', {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action: 'delete-payment-method',
         userId,
@@ -184,13 +212,16 @@ export const createPaymentIntent = async (
   params: CreatePaymentIntentParams
 ): Promise<ApiResponse<PaymentIntentResponse>> => {
   try {
+    checkAuth();
+    const headers = await getAuthHeaders();
+
     if (!params.amount || !params.paymentMethodId || !params.userId) {
       throw new Error('Amount, payment method, and user ID are required');
     }
 
     const response = await fetch('/api/stripe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         action: 'create-payment-intent',
         ...params,
