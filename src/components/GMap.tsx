@@ -30,10 +30,12 @@ import {
   selectCarsError,
 } from '@/store/carSlice';
 import {
-  // These should be in your userSlice
+  // userSlice: departure/arrival
+  selectDepartureStationId,
+  selectArrivalStationId,
+  selectDepartureStation,
+  selectArrivalStation,
   selectUserLocation,
-  selectStation,              // Action: selectStation(number | null)
-  selectSelectedStationId,    // Selector: returns number | null
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -41,7 +43,7 @@ import {
   selectIsSheetMinimized,
 } from '@/store/uiSlice';
 
-// Booking slice (to advance steps, etc.)
+// Booking slice (tracks step=1 => departure, step=2 => arrival)
 import {
   advanceBookingStep,
   selectBookingStep,
@@ -49,6 +51,7 @@ import {
 
 // UI
 import Sheet from '@/components/ui/sheet';
+import { Zap as ZapIcon } from 'lucide-react';
 
 /* --------------------------- Constants --------------------------- */
 const LIBRARIES: ('geometry')[] = ['geometry'];
@@ -87,10 +90,17 @@ const StationListItem = memo<StationListItemProps>((props) => {
   const station = data[index];
   const dispatch = useAppDispatch();
 
-  // When clicking on a station from the list, select it
+  // Check which step we're on: 1 => departure, 2 => arrival
+  const step = useAppSelector(selectBookingStep);
+
+  // When clicking on a station in the list, decide if it's departure or arrival
   const handleClick = useCallback(() => {
-    dispatch(selectStation(station.id));
-  }, [dispatch, station.id]);
+    if (step === 1) {
+      dispatch(selectDepartureStation(station.id));
+    } else if (step === 2) {
+      dispatch(selectArrivalStation(station.id));
+    }
+  }, [dispatch, station.id, step]);
 
   return (
     <div
@@ -104,7 +114,7 @@ const StationListItem = memo<StationListItemProps>((props) => {
             {station.properties.Place}
           </h3>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Zap className="w-4 h-4" />
+            <ZapIcon className="w-4 h-4" />
             <span>{station.properties.maxPower} kW max</span>
             <span className="px-1">·</span>
             <span>{station.properties.availableSpots} Available</span>
@@ -140,9 +150,15 @@ function GMap({ googleApiKey }: GMapProps) {
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
 
-  // User location + selected station
+  // Booking step: 1 => departure, 2 => arrival
+  const step = useAppSelector(selectBookingStep);
+
+  // userSlice: track departure & arrival IDs
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
+
+  // Current user location
   const userLocation = useAppSelector(selectUserLocation);
-  const selectedStationId = useAppSelector(selectSelectedStationId);
 
   // UI states
   const viewState = useAppSelector(selectViewState);
@@ -163,11 +179,12 @@ function GMap({ googleApiKey }: GMapProps) {
     mapRef.current = map;
   }, []);
 
-  // Request user location (if you'd like to automatically get it)
+  // Request user location (optional)
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        // Example:
         // dispatch(setUserLocation({
         //   lat: position.coords.latitude,
         //   lng: position.coords.longitude,
@@ -180,7 +197,7 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, [dispatch]);
 
-  // On mount, fetch stations/cars, then get user location
+  // On mount, fetch stations + cars, then get user location
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -194,16 +211,20 @@ function GMap({ googleApiKey }: GMapProps) {
     initialize();
   }, [dispatch, getUserLocation]);
 
-  // Handle marker click: select station & toggle the bottom sheet
+  // Marker click -> pick departure if step=1, arrival if step=2
   const handleMarkerClick = useCallback(
     (station: StationFeature) => {
-      dispatch(selectStation(station.id));
+      if (step === 1) {
+        dispatch(selectDepartureStation(station.id));
+      } else if (step === 2) {
+        dispatch(selectArrivalStation(station.id));
+      }
       dispatch(toggleSheet());
     },
-    [dispatch]
+    [dispatch, step]
   );
 
-  // Combine any errors
+  // Check for errors
   const combinedError = stationsError || carsError || loadError;
   if (combinedError) {
     return (
@@ -215,18 +236,54 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // If the Google Maps script is not loaded yet
   if (!isLoaded) {
     return <div className="text-muted-foreground">Loading Google Map...</div>;
   }
 
-  // If stations or cars are still loading
   if (stationsLoading || carsLoading) {
     return (
       <div className="text-muted-foreground">
         Loading {stationsLoading ? 'stations' : 'cars'}...
       </div>
     );
+  }
+
+  /**
+   * We decide which "detail" component to show based on:
+   * - current step
+   * - whether departure or arrival station is selected
+   */
+  function renderSelectedStationDetails() {
+    if (step === 1 && departureStationId !== null) {
+      return <DepartureStationDetails stationId={departureStationId} />;
+    }
+    if (step === 2 && arrivalStationId !== null) {
+      return <ArrivalStationDetails stationId={arrivalStationId} />;
+    }
+    // No station selected
+    return (
+      <FixedSizeList
+        height={400}
+        width="100%"
+        itemCount={memoizedStations.length}
+        itemSize={80}
+        itemData={memoizedStations}
+      >
+        {StationListItem}
+      </FixedSizeList>
+    );
+  }
+
+  // Show different title in the sheet depending on step
+  let sheetTitle = 'Nearby Stations';
+  if (step === 1 && departureStationId) {
+    sheetTitle = 'Departure Station';
+  } else if (step === 1) {
+    sheetTitle = 'Select Departure Station';
+  } else if (step === 2 && arrivalStationId) {
+    sheetTitle = 'Arrival Station';
+  } else if (step === 2) {
+    sheetTitle = 'Select Arrival Station';
   }
 
   return (
@@ -295,30 +352,20 @@ function GMap({ googleApiKey }: GMapProps) {
         </MemoizedGoogleMap>
       </div>
 
-      {/* BOTTOM SHEET (station list or selected station details) */}
+      {/* BOTTOM SHEET */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={() => dispatch(toggleSheet())}
-          title={selectedStationId ? 'Selected Station' : 'Nearby Stations'}
-          count={selectedStationId ? undefined : stations.length}
+          title={sheetTitle}
+          count={stations.length}
         >
           {stationsLoading ? (
             <div className="p-4 text-center text-muted-foreground">
               Loading stations...
             </div>
-          ) : selectedStationId ? (
-            <SelectedStationDetails stationId={selectedStationId} />
           ) : (
-            <FixedSizeList
-              height={400}
-              width="100%"
-              itemCount={stations.length}
-              itemSize={80}
-              itemData={memoizedStations}
-            >
-              {StationListItem}
-            </FixedSizeList>
+            renderSelectedStationDetails()
           )}
         </Sheet>
       )}
@@ -326,34 +373,32 @@ function GMap({ googleApiKey }: GMapProps) {
   );
 }
 
-/* ------------------ Station Details Component ------------------ */
-function SelectedStationDetails({ stationId }: { stationId: number }) {
+/* -------------------- Departure Station Details ------------------- */
+function DepartureStationDetails({ stationId }: { stationId: number }) {
   const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
 
   // Find the station from the store
   const station = stations.find((s) => s.id === stationId);
   if (!station) {
-    return (
-      <div className="p-4">
-        <p className="text-destructive">Station not found.</p>
-      </div>
-    );
+    return <p className="p-4 text-destructive">Station not found.</p>;
   }
 
-  const handleClearSelection = () => {
-    // Clear the selected station
-    dispatch(selectStation(null));
+  // Clear the departure station
+  const handleClear = () => {
+    dispatch(selectDepartureStation(null));
   };
 
-  const handleProceed = () => {
-    // Example: go to the next booking step (2 = maybe 'verify_id' or next flow)
+  // Confirm departure => next step is arrival (step=2)
+  const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(2));
   };
 
   return (
     <div className="p-4 space-y-4">
-      <h3 className="text-lg font-semibold">{station.properties.Place}</h3>
+      <h3 className="text-lg font-semibold">
+        {station.properties.Place} (Departure)
+      </h3>
       <p className="text-sm text-muted-foreground">
         Max Power: {station.properties.maxPower} kW
       </p>
@@ -368,16 +413,72 @@ function SelectedStationDetails({ stationId }: { stationId: number }) {
 
       <div className="flex gap-2 mt-4">
         <button
-          onClick={handleClearSelection}
+          onClick={handleClear}
           className="px-3 py-2 bg-gray-200 rounded-md text-sm"
         >
-          Clear Selection
+          Clear
         </button>
         <button
-          onClick={handleProceed}
+          onClick={handleConfirmDeparture}
           className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm"
         >
-          Next Step
+          Confirm Departure
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------- Arrival Station Details -------------------- */
+function ArrivalStationDetails({ stationId }: { stationId: number }) {
+  const dispatch = useAppDispatch();
+  const stations = useAppSelector(selectStationsWithDistance);
+
+  // Find the station from the store
+  const station = stations.find((s) => s.id === stationId);
+  if (!station) {
+    return <p className="p-4 text-destructive">Station not found.</p>;
+  }
+
+  // Clear the arrival station
+  const handleClear = () => {
+    dispatch(selectArrivalStation(null));
+  };
+
+  // Confirm arrival => next step is step=3 (e.g. payment)
+  const handleConfirmArrival = () => {
+    dispatch(advanceBookingStep(3));
+  };
+
+  return (
+    <div className="p-4 space-y-4">
+      <h3 className="text-lg font-semibold">
+        {station.properties.Place} (Arrival)
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        Max Power: {station.properties.maxPower} kW
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Available spots: {station.properties.availableSpots}
+      </p>
+      {station.distance !== undefined && (
+        <p className="text-sm text-muted-foreground">
+          Distance: {station.distance.toFixed(1)} km
+        </p>
+      )}
+
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={handleClear}
+          className="px-3 py-2 bg-gray-200 rounded-md text-sm"
+        >
+          Clear
+        </button>
+        <button
+          onClick={handleConfirmArrival}
+          className="px-3 py-2 bg-green-600 text-white rounded-md text-sm"
+        >
+          Confirm Arrival
         </button>
       </div>
     </div>
