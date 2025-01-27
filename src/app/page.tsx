@@ -12,7 +12,7 @@ import { Car, Map, Menu as MenuIcon, QrCode } from 'lucide-react';
 
 // Components
 import CarGrid from '@/components/booking/CarGrid';
-import GMapWithErrorBoundary from '@/components/GMap';  // if using the error boundary version
+import GMapWithErrorBoundary from '@/components/GMap'; // if using the error boundary version
 import BookingDialog from '@/components/booking/BookingDialog';
 import SideSheet from '@/components/ui/SideSheet';
 import AppMenu from '@/components/ui/AppMenu';
@@ -47,6 +47,18 @@ export default function Page() {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-[57px]">
         <div className="h-full px-4 flex items-center justify-between">
+          
+          {/* Menu Button on the Left */}
+          <button
+            onClick={toggleMenu}
+            className="flex items-center justify-center w-10 h-10 rounded-full
+                       text-gray-400 hover:text-gray-200 hover:bg-gray-700
+                       active:bg-gray-600 transition-colors"
+          >
+            <MenuIcon className="w-5 h-5" />
+          </button>
+
+          {/* Commented-out Logo
           <Image
             src="/brand/logo.png"
             alt="MTC Logo"
@@ -55,6 +67,7 @@ export default function Page() {
             priority
             className="h-8 w-auto"
           />
+          */}
 
           <div className="flex items-center gap-2">
             {/* QR Scanner Button */}
@@ -66,6 +79,9 @@ export default function Page() {
             >
               <QrCode className="w-5 h-5" />
             </button>
+
+            {/* Subtle separator */}
+            <div className="h-6 w-px bg-gray-700 mx-1" />
 
             {/* Toggle Car / Map View */}
             <button
@@ -79,16 +95,6 @@ export default function Page() {
               ) : (
                 <Map className="w-5 h-5" />
               )}
-            </button>
-
-            {/* Menu Button */}
-            <button
-              onClick={toggleMenu}
-              className="flex items-center justify-center w-10 h-10 rounded-full
-                         text-gray-400 hover:text-gray-200 hover:bg-gray-700
-                         active:bg-gray-600 transition-colors"
-            >
-              <MenuIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
