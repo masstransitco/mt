@@ -39,7 +39,7 @@ import { StationDetail } from './StationDetail';
 import { LoadingSpinner } from './LoadingSpinner';
 import StationSelector from './StationSelector';
 
-const LIBRARIES: ('geometry')[] = ['geometry'];
+const LIBRARIES: ("geometry" | "places")[] = ['geometry', 'places'];
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 const DEFAULT_ZOOM = 14;
