@@ -153,24 +153,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, []);
 
   const selectStation = useCallback((station: StationFeature) => {
-    const [lng, lat] = station.geometry.coordinates;
-    
-    if (step === 1) {
-      if (station.id === arrivalStationId) {
-        toast.error('Cannot use same station for departure and arrival');
-        return;
-      }
-      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-      toast.success('Departure station selected');
-    } else if (step === 2) {
-      if (station.id === departureStationId) {
-        toast.error('Cannot use same station for departure and arrival');
-        return;
-      }
-      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-      toast.success('Arrival station selected');
+  if (step === 1) {
+    if (station.id === arrivalStationId) {
+      toast.error('Cannot use same station for departure and arrival');
+      return;
     }
-  }, [dispatch, step, departureStationId, arrivalStationId]);
+    dispatch(selectDepartureStation(station.id));
+    toast.success('Departure station selected');
+  } else if (step === 2) {
+    if (station.id === departureStationId) {
+      toast.error('Cannot use same station for departure and arrival');
+      return;
+    }
+    dispatch(selectArrivalStation(station.id));
+    toast.success('Arrival station selected');
+  }
+}, [dispatch, step, departureStationId, arrivalStationId]);
 
   const handleMarkerClick = useCallback((station: StationFeature) => {
     const [lng, lat] = station.geometry.coordinates;
