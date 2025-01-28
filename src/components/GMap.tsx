@@ -251,7 +251,7 @@ function GMap({ googleApiKey }: GMapProps) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
         {combinedError instanceof Error
-          ? Error loading data: ${combinedError.message}
+          ? `Error loading data: ${combinedError.message}`
           : combinedError}
       </div>
     );
