@@ -1,3 +1,5 @@
+'use client';
+
 import React, { memo, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -11,7 +13,7 @@ import {
   selectArrivalStation,
 } from '@/store/userSlice';
 
-export const StationDetail = memo(() => {
+const StationDetail = memo(() => {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -84,3 +86,5 @@ export const StationDetail = memo(() => {
 });
 
 StationDetail.displayName = 'StationDetail';
+
+export default StationDetail;
