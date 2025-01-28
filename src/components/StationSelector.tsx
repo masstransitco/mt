@@ -143,8 +143,8 @@ export default function StationSelector() {
   const departureStation = stations.find(s => s.id === departureId);
   const arrivalStation = stations.find(s => s.id === arrivalId);
 
-  const handleAddressSelect = (location: google.maps.LatLngLiteral) => {
-    // Dispatch action to pan map - this will be handled in GMap component
+const handleAddressSelect = (location: google.maps.LatLngLiteral) => {
+    onAddressSearch(location);
     dispatch({ type: 'map/panToLocation', payload: location });
   };
 
