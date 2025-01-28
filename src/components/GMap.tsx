@@ -14,7 +14,7 @@ import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import { Zap } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-// Redux
+// Redux imports
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
   fetchStations,
@@ -48,18 +48,13 @@ import {
 
 // UI Components
 import Sheet from '@/components/ui/sheet';
-import { Card } from '@/components/ui/card';
 
-/* --------------------------- Types --------------------------- */
+// Types
 interface GMapProps {
   googleApiKey: string;
 }
 
-interface StationListItemProps extends ListChildComponentProps {
-  data: StationFeature[];
-}
-
-/* --------------------------- Constants --------------------------- */
+// Constants
 const LIBRARIES: ('geometry')[] = ['geometry'];
 
 const CONTAINER_STYLE: React.CSSProperties = {
@@ -79,8 +74,8 @@ const MAP_OPTIONS: google.maps.MapOptions = {
 
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
 
-/* --------------------------- Helper Functions --------------------------- */
-function buildSheetTitle(step: number, departureId: number | null, arrivalId: number | null) {
+// Helper function
+const buildSheetTitle = (step: number, departureId: number | null, arrivalId: number | null): string => {
   if (step === 1) {
     return departureId
       ? 'Step 1 of 2: Departure Selected'
@@ -92,10 +87,10 @@ function buildSheetTitle(step: number, departureId: number | null, arrivalId: nu
       : 'Step 2 of 2: Select Arrival Station';
   }
   return 'Nearby Stations';
-}
+};
 
-/* --------------------------- Components --------------------------- */
-const StationListItem = memo<StationListItemProps>((props) => {
+// StationListItem Component
+const StationListItem = memo<ListChildComponentProps<StationFeature[]>>((props) => {
   const { index, style, data } = props;
   const station = data[index];
   const dispatch = useAppDispatch();
@@ -140,6 +135,7 @@ const StationListItem = memo<StationListItemProps>((props) => {
 });
 StationListItem.displayName = 'StationListItem';
 
+// StationDetail Component
 const StationDetail = memo(() => {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -148,17 +144,12 @@ const StationDetail = memo(() => {
   const stations = useAppSelector(selectStationsWithDistance);
 
   const stationId = step === 1 ? departureId : arrivalId;
-
-  if (stationId == null) {
-    return <p className="p-4 text-destructive">Station not found.</p>;
-  }
+  if (!stationId) return <p className="p-4 text-destructive">Station not found.</p>;
 
   const station = stations.find((s) => s.id === stationId);
-  if (!station) {
-    return <p className="p-4 text-destructive">Station not found.</p>;
-  }
+  if (!station) return <p className="p-4 text-destructive">Station not found.</p>;
 
-  const isDeparture = (step === 1);
+  const isDeparture = step === 1;
   const label = isDeparture ? 'Departure' : 'Arrival';
 
   const handleClear = useCallback(() => {
@@ -194,7 +185,6 @@ const StationDetail = memo(() => {
           Distance: {station.distance.toFixed(1)} km
         </p>
       )}
-
       <div className="flex gap-2 mt-4">
         <button
           onClick={handleClear}
@@ -214,14 +204,11 @@ const StationDetail = memo(() => {
 });
 StationDetail.displayName = 'StationDetail';
 
-const MemoizedGoogleMap = memo(GoogleMap);
-
-/* --------------------------- Main Component --------------------------- */
+// Main GMap Component
 function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // States
   const [sheetManualOverride, setSheetManualOverride] = useState(false);
   const [overlayVisible, setOverlayVisible] = useState(true);
 
@@ -229,33 +216,48 @@ function GMap({ googleApiKey }: GMapProps) {
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
-
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
-
   const step = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
-
   const userLocation = useAppSelector(selectUserLocation);
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Memoized values
-  const memoizedStations = useMemo(() => stations, [stations]);
-
-  // Google Maps loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Callbacks
+  const memoizedStations = useMemo(() => stations, [stations]);
+
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
+
+  const handleMarkerClick = useCallback((station: StationFeature) => {
+    const [lng, lat] = station.geometry.coordinates;
+    if (mapRef.current) {
+      mapRef.current.panTo({ lat, lng });
+      mapRef.current.setZoom(15);
+    }
+
+    if (step === 1) {
+      dispatch(selectDepartureStation(station.id));
+      toast.success('Departure station selected!');
+    } else if (step === 2) {
+      dispatch(selectArrivalStation(station.id));
+      toast.success('Arrival station selected!');
+    }
+  }, [dispatch, step]);
+
+  const handleSheetToggle = useCallback(() => {
+    dispatch(toggleSheet());
+    setSheetManualOverride(true);
+  }, [dispatch]);
 
   const getUserLocation = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -268,31 +270,6 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }, []);
 
-  const handleMarkerClick = useCallback(
-    (station: StationFeature) => {
-      const [lng, lat] = station.geometry.coordinates;
-      if (mapRef.current) {
-        mapRef.current.panTo({ lat, lng });
-        mapRef.current.setZoom(15);
-      }
-
-      if (step === 1) {
-        dispatch(selectDepartureStation(station.id));
-        toast.success('Departure station selected!');
-      } else if (step === 2) {
-        dispatch(selectArrivalStation(station.id));
-        toast.success('Arrival station selected!');
-      }
-    },
-    [dispatch, step]
-  );
-
-  const handleSheetToggle = useCallback(() => {
-    dispatch(toggleSheet());
-    setSheetManualOverride(true);
-  }, [dispatch]);
-
-  // Effects
   useEffect(() => {
     const init = async () => {
       try {
@@ -336,7 +313,6 @@ function GMap({ googleApiKey }: GMapProps) {
     dispatch,
   ]);
 
-  // Render methods
   const renderSheetContent = useCallback(() => {
     const haveDepartureSelected = step === 1 && departureStationId != null;
     const haveArrivalSelected = step === 2 && arrivalStationId != null;
@@ -413,12 +389,10 @@ function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  const sheetTitle = buildSheetTitle(step, departureStationId, arrivalStationId);
-
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
-        <MemoizedGoogleMap
+        <GoogleMap
           mapContainerStyle={CONTAINER_STYLE}
           center={userLocation || DEFAULT_CENTER}
           zoom={14}
@@ -434,4 +408,20 @@ function GMap({ googleApiKey }: GMapProps) {
                 fillColor: '#4285F4',
                 fillOpacity: 1,
                 strokeWeight: 2,
-                strokeColor: '#
+                strokeColor: '#FFFFFF',
+              }}
+              clickable={false}
+            />
+          )}
+
+          {stations.map((station) => {
+            const [lng, lat] = station.geometry.coordinates;
+            return (
+              <Marker
+                key={station.id}
+                position={{ lat, lng }}
+                onClick={() => handleMarkerClick(station)}
+                icon={{
+                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z',
+                  scale: 4,
+                  fillColor: '#D3D3D3',
