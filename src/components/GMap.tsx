@@ -23,6 +23,8 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
+  selectDepartureStation,
+  selectArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -73,9 +75,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
   
-  // Local state
+  // Local state - moved to top level
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
+  const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
 
   // Redux state
   const dispatch = useAppDispatch();
@@ -112,48 +115,53 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [stations]);
 
-  // Station selection logic - separated from marker click
-  const handleStationSelect = useCallback((station: StationFeature) => {
+  // Effect to handle station selection
+  useEffect(() => {
+    if (selectedStationId === null) return;
+
+    const station = stations.find(s => s.id === selectedStationId);
+    if (!station) return;
+
+    const isValidSelection = (
+      (step === 1 && station.id !== arrivalStationId) ||
+      (step === 2 && station.id !== departureStationId)
+    );
+
+    if (!isValidSelection) {
+      toast.error('Cannot use same station for departure and arrival');
+      setSelectedStationId(null);
+      return;
+    }
+
     if (step === 1) {
-      if (station.id === arrivalStationId) {
-        toast.error('Cannot use same station for departure and arrival');
-        return false;
-      }
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
       toast.success('Departure station selected');
-      return true;
     } else if (step === 2) {
-      if (station.id === departureStationId) {
-        toast.error('Cannot use same station for departure and arrival');
-        return false;
-      }
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       toast.success('Arrival station selected');
-      return true;
-    }
-    return false;
-  }, [dispatch, step, departureStationId, arrivalStationId]);
-
-  // Map interaction handlers - updated to avoid conditional hook calls
-  const handleMarkerClick = useCallback((station: StationFeature) => {
-    // Always update map position
-    if (mapRef.current) {
-      const [lng, lat] = station.geometry.coordinates;
-      mapRef.current.panTo({ lat, lng });
-      mapRef.current.setZoom(15);
     }
 
-    // Always update active station
-    setActiveStation(station);
-
-    // Attempt selection
-    const selected = handleStationSelect(station);
-
-    // Update sheet state if needed
-    if (selected && isSheetMinimized) {
+    if (isSheetMinimized) {
       dispatch(toggleSheet());
     }
-  }, [handleStationSelect, isSheetMinimized, dispatch]);
+
+    setSelectedStationId(null);
+  }, [selectedStationId, stations, step, departureStationId, arrivalStationId, dispatch, isSheetMinimized]);
+
+  // Map interaction handlers - simplified to avoid hook calls
+  const handleMarkerClick = useCallback((station: StationFeature) => {
+    if (!mapRef.current) return;
+
+    const [lng, lat] = station.geometry.coordinates;
+    mapRef.current.panTo({ lat, lng });
+    mapRef.current.setZoom(15);
+
+    // Update active station first
+    setActiveStation(station);
+    
+    // Queue selection for the effect to handle
+    setSelectedStationId(station.id);
+  }, []);
 
   const handleMarkerHover = useCallback((station: StationFeature | null) => {
     setActiveStation(station);
