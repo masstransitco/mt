@@ -35,6 +35,7 @@ import Sheet from '@/components/ui/sheet';
 import { StationListItem } from './StationListItem';
 import { StationDetail } from './StationDetail';
 import { LoadingSpinner } from './LoadingSpinner';
+import StationSelector from './StationSelector';
 
 const LIBRARIES: ('geometry')[] = ['geometry'];
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -54,18 +55,10 @@ interface GMapProps {
   googleApiKey: string;
 }
 
-function buildSheetTitle(step: number, departureId: number | null, arrivalId: number | null): string {
-  if (step === 1) {
-    return departureId
-      ? 'Step 1 of 2: Departure Selected'
-      : 'Step 1 of 2: Select Departure Station';
-  }
-  if (step === 2) {
-    return arrivalId
-      ? 'Step 2 of 2: Arrival Selected'
-      : 'Step 2 of 2: Select Arrival Station';
-  }
-  return 'Nearby Stations';
+function buildSheetTitle(step: number): string {
+  return step === 1 
+    ? 'Select Departure Station' 
+    : 'Select Arrival Station';
 }
 
 export default function GMap({ googleApiKey }: GMapProps) {
@@ -95,6 +88,37 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
+  const getMarkerIcon = useCallback((station: StationFeature) => {
+    if (station.id === departureStationId) {
+      return {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: '#22C55E', // Green for departure
+        fillOpacity: 1,
+        strokeWeight: 2,
+        strokeColor: '#FFFFFF',
+      };
+    }
+    if (station.id === arrivalStationId) {
+      return {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: '#EF4444', // Red for arrival
+        fillOpacity: 1,
+        strokeWeight: 2,
+        strokeColor: '#FFFFFF',
+      };
+    }
+    return {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 6,
+      fillColor: '#6B7280', // Gray for unselected
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#FFFFFF',
+    };
+  }, [departureStationId, arrivalStationId]);
+
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
@@ -105,7 +129,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
       mapRef.current.panTo({ lat, lng });
       mapRef.current.setZoom(15);
     }
-  }, []);
+    
+    // Show station details in sheet
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  }, [dispatch, isSheetMinimized]);
 
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
@@ -130,71 +159,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  useEffect(() => {
-    if (sheetManualOverride) return;
-
-    const needDeparture = step === 1 && !departureStationId;
-    const needArrival = step === 2 && !arrivalStationId;
-    const mustPick = needDeparture || needArrival;
-
-    if (viewState === 'showMap') {
-      if (mustPick && isSheetMinimized) {
-        dispatch(toggleSheet());
-      } else if (!mustPick && !isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    }
-  }, [
-    sheetManualOverride,
-    step,
-    departureStationId,
-    arrivalStationId,
-    viewState,
-    isSheetMinimized,
-    dispatch,
-  ]);
-
-  const renderSheetContent = useCallback(() => {
-    const haveDepartureSelected = step === 1 && departureStationId != null;
-    const haveArrivalSelected = step === 2 && arrivalStationId != null;
-
-    if (haveDepartureSelected || haveArrivalSelected) {
-      return <StationDetail />;
-    }
-
-    return (
-      <>
-        {step === 1 && !departureStationId && (
-          <div className="p-3 text-sm text-muted-foreground">
-            Select your <strong>departure station</strong> below:
-          </div>
-        )}
-        {step === 2 && !arrivalStationId && (
-          <div className="p-3 text-sm text-muted-foreground">
-            Select your <strong>arrival station</strong> below:
-          </div>
-        )}
-        <FixedSizeList
-          height={400}
-          width="100%"
-          itemCount={stations.length}
-          itemSize={80}
-          itemData={stations}
-        >
-          {StationListItem}
-        </FixedSizeList>
-      </>
-    );
-  }, [step, departureStationId, arrivalStationId, stations]);
-
   // Handle errors
-  const combinedError = stationsError || carsError || loadError;
-  if (combinedError) {
+  if (stationsError || carsError || loadError) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
-        {combinedError instanceof Error
-          ? `Error loading data: ${combinedError.message}`
-          : combinedError}
+        Error loading map data
       </div>
     );
   }
@@ -203,8 +172,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
-
-  const sheetTitle = buildSheetTitle(step, departureStationId, arrivalStationId);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -216,6 +183,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
+          {/* User Location Marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -231,6 +199,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
+          {/* Station Markers */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -238,18 +207,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 key={station.id}
                 position={{ lat, lng }}
                 onClick={() => handleMarkerClick(station)}
-                icon={{
-                  path: 'M -2 -2 L 2 -2 L 2 2 L -2 2 z',
-                  scale: 4,
-                  fillColor: '#D3D3D3',
-                  fillOpacity: 1,
-                  strokeWeight: 2,
-                  strokeColor: '#FFFFFF',
-                }}
+                icon={getMarkerIcon(station)}
               />
             );
           })}
 
+          {/* Car Markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -268,14 +231,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
+      {/* Station Selector UI */}
+      <StationSelector />
+
+      {/* Bottom Sheet */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={handleSheetToggle}
-          title={sheetTitle}
+          title={buildSheetTitle(step)}
           count={stations.length}
         >
-          {renderSheetContent()}
+          <StationDetail />
         </Sheet>
       )}
     </div>
