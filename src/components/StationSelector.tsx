@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useRef, useEffect } from 'react';
 import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -11,6 +13,10 @@ import {
 } from '@/store/userSlice';
 import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
 import debounce from 'lodash/debounce';
+
+interface StationSelectorProps {
+  onAddressSearch: (location: google.maps.LatLngLiteral) => void;
+}
 
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
@@ -93,8 +99,7 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
           onBlur={() => setTimeout(() => setShowResults(false), 200)}
           disabled={disabled}
           placeholder={placeholder}
-          className="w-full bg-transparent border-none focus:outline-none 
-                   disabled:cursor-not-allowed placeholder:text-muted-foreground/60"
+          className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60"
         />
         {searchText && (
           <button
@@ -102,8 +107,7 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
               setSearchText('');
               setPredictions([]);
             }}
-            className="absolute right-0 top-1/2 -translate-y-1/2 p-1 
-                     hover:bg-muted rounded-full transition-colors"
+            className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -111,8 +115,7 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
       </div>
 
       {showResults && predictions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-background 
-                      border border-border rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-lg z-50">
           {predictions.map((prediction) => (
             <button
               key={prediction.place_id}
@@ -133,7 +136,7 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
   );
 };
 
-export default function StationSelector() {
+export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -143,14 +146,8 @@ export default function StationSelector() {
   const departureStation = stations.find(s => s.id === departureId);
   const arrivalStation = stations.find(s => s.id === arrivalId);
 
-const handleAddressSelect = (location: google.maps.LatLngLiteral) => {
-    onAddressSearch(location);
-    dispatch({ type: 'map/panToLocation', payload: location });
-  };
-
   return (
-    <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 
-                    backdrop-blur-sm rounded-lg shadow-lg">
+    <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg">
       <div className="p-4 space-y-3">
         {/* Departure Input */}
         <div className={`
@@ -158,11 +155,9 @@ const handleAddressSelect = (location: google.maps.LatLngLiteral) => {
           ${step === 1 ? 'ring-2 ring-primary bg-background' : ''}
           ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
         `}>
-          <MapPin className={`w-5 h-5 flex-shrink-0 
-            ${step === 1 ? 'text-primary' : 'text-muted-foreground'}`} 
-          />
+          <MapPin className={`w-5 h-5 flex-shrink-0 ${step === 1 ? 'text-primary' : 'text-muted-foreground'}`} />
           <AddressSearch
-            onAddressSelect={handleAddressSelect}
+            onAddressSelect={onAddressSearch}
             disabled={step !== 1}
             placeholder="Search or choose departure station"
             selectedStation={departureStation}
@@ -186,11 +181,9 @@ const handleAddressSelect = (location: google.maps.LatLngLiteral) => {
           ${step === 2 ? 'ring-2 ring-primary bg-background' : ''}
           ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
         `}>
-          <Navigation className={`w-5 h-5 flex-shrink-0
-            ${step === 2 ? 'text-primary' : 'text-muted-foreground'}`}
-          />
+          <Navigation className={`w-5 h-5 flex-shrink-0 ${step === 2 ? 'text-primary' : 'text-muted-foreground'}`} />
           <AddressSearch
-            onAddressSelect={handleAddressSelect}
+            onAddressSelect={onAddressSearch}
             disabled={step !== 2}
             placeholder="Search or choose arrival station"
             selectedStation={arrivalStation}
