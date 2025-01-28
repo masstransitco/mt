@@ -94,6 +94,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+  mapRef.current = map;
+  
+  // If we have stations loaded, fit bounds
+  if (stations.length > 0) {
+    const bounds = new google.maps.LatLngBounds();
+    stations.forEach(station => {
+      const [lng, lat] = station.geometry.coordinates;
+      bounds.extend({ lat, lng });
+    });
+    map.fitBounds(bounds, 50); // 50px padding
+  }
+}, [stations]);
+
   const getMarkerIcon = useCallback((station: StationFeature) => {
     const isHighlighted = (step === 1 && !departureStationId) || 
                          (step === 2 && !arrivalStationId);
