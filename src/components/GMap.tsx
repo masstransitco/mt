@@ -67,18 +67,16 @@ interface GMapProps {
   googleApiKey: string;
 }
 
-function buildSheetTitle(step: number): string {
-  return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
-}
-
 export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
   
-  // Local state - moved to top level
+  // Local state
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
+  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
 
   // Redux state
   const dispatch = useAppDispatch();
@@ -101,6 +99,43 @@ export default function GMap({ googleApiKey }: GMapProps) {
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
+
+  // Sort stations by distance to a point
+  const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+    if (!google?.maps?.geometry?.spherical) return stationsToSort;
+
+    return [...stationsToSort].sort((a, b) => {
+      const [lngA, latA] = a.geometry.coordinates;
+      const [lngB, latB] = b.geometry.coordinates;
+      
+      const distA = google.maps.geometry.spherical.computeDistanceBetween(
+        new google.maps.LatLng(latA, lngA),
+        new google.maps.LatLng(point.lat, point.lng)
+      );
+      const distB = google.maps.geometry.spherical.computeDistanceBetween(
+        new google.maps.LatLng(latB, lngB),
+        new google.maps.LatLng(point.lat, point.lng)
+      );
+      
+      return distA - distB;
+    });
+  }, []);
+
+  // Handle address search from StationSelector
+  const handleAddressSearch = useCallback((location: google.maps.LatLngLiteral) => {
+    if (!mapRef.current) return;
+
+    setSearchLocation(location);
+    mapRef.current.panTo(location);
+    mapRef.current.setZoom(15);
+
+    const sorted = sortStationsByDistanceToPoint(location, stations);
+    setSortedStations(sorted);
+
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  }, [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]);
 
   // Map initialization
   const handleMapLoad = useCallback((map: google.maps.Map) => {
@@ -148,7 +183,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setSelectedStationId(null);
   }, [selectedStationId, stations, step, departureStationId, arrivalStationId, dispatch, isSheetMinimized]);
 
-  // Map interaction handlers - simplified to avoid hook calls
+  // Map interaction handlers
   const handleMarkerClick = useCallback((station: StationFeature) => {
     if (!mapRef.current) return;
 
@@ -156,10 +191,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     mapRef.current.panTo({ lat, lng });
     mapRef.current.setZoom(15);
 
-    // Update active station first
     setActiveStation(station);
-    
-    // Queue selection for the effect to handle
     setSelectedStationId(station.id);
   }, []);
 
@@ -171,6 +203,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
+
+  // Dynamic sheet title
+  const getSheetTitle = useCallback(() => {
+    if (searchLocation) return "Nearby Stations";
+    if (activeStation) return "Station Details";
+    return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
+  }, [searchLocation, activeStation, step]);
 
   // Marker styling
   const getMarkerIcon = useCallback((station: StationFeature) => {
@@ -277,7 +316,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {stations.map((station) => {
+          {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
@@ -309,16 +348,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      <StationSelector />
+      <StationSelector onAddressSearch={handleAddressSearch} />
 
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={handleSheetToggle}
-          title={buildSheetTitle(step)}
-          count={stations.length}
+          title={getSheetTitle()}
+          count={(searchLocation ? sortedStations : stations).length}
         >
-          <StationDetail />
+          <StationDetail 
+            stations={searchLocation ? sortedStations : stations}
+            activeStation={activeStation}
+          />
         </Sheet>
       )}
     </div>
