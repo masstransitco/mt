@@ -25,8 +25,6 @@ import {
   selectUserLocation,
   selectDepartureStation,
   selectArrivalStation,
-  setDepartureStation,
-  setArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -158,14 +156,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast.error('Cannot use same station for departure and arrival');
         return;
       }
-      dispatch(setDepartureStation(station.id));
+      dispatch(selectDepartureStation(station.id));
       toast.success('Departure station selected');
     } else if (step === 2) {
       if (station.id === departureStationId) {
         toast.error('Cannot use same station for departure and arrival');
         return;
       }
-      dispatch(setArrivalStation(station.id));
+      dispatch(selectArrivalStation(station.id));
       toast.success('Arrival station selected');
     }
     
