@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import React, { memo, useCallback, CSSProperties } from 'react';
 import { ListChildComponentProps } from 'react-window';
@@ -14,7 +14,7 @@ interface StationListItemProps extends ListChildComponentProps {
   data: StationFeature[];
 }
 
-export const StationListItem = memo<StationListItemProps>((props) => {
+const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const station = data[index];
   const dispatch = useAppDispatch();
@@ -59,3 +59,5 @@ export const StationListItem = memo<StationListItemProps>((props) => {
 });
 
 StationListItem.displayName = 'StationListItem';
+
+export default StationListItem;
