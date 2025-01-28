@@ -23,9 +23,6 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
-  selectDepartureStation,
-  selectArrivalStation,
-  setViewState,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -43,6 +40,7 @@ import StationSelector from './StationSelector';
 const LIBRARIES: ('geometry')[] = ['geometry'];
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
+const DEFAULT_ZOOM = 14;
 
 const MAP_OPTIONS: google.maps.MapOptions = {
   disableDefaultUI: true,
@@ -72,12 +70,15 @@ function buildSheetTitle(step: number): string {
 }
 
 export default function GMap({ googleApiKey }: GMapProps) {
-  const dispatch = useAppDispatch();
+  // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
+  
+  // Local state
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
 
-  // Selectors
+  // Redux state
+  const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
@@ -91,26 +92,75 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
+  // Maps API loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
+  // Map initialization
   const handleMapLoad = useCallback((map: google.maps.Map) => {
-  mapRef.current = map;
-  
-  // If we have stations loaded, fit bounds
-  if (stations.length > 0) {
-    const bounds = new google.maps.LatLngBounds();
-    stations.forEach(station => {
-      const [lng, lat] = station.geometry.coordinates;
-      bounds.extend({ lat, lng });
-    });
-    map.fitBounds(bounds, 50); // 50px padding
-  }
-}, [stations]);
+    mapRef.current = map;
+    if (stations.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      stations.forEach(station => {
+        const [lng, lat] = station.geometry.coordinates;
+        bounds.extend({ lat, lng });
+      });
+      map.fitBounds(bounds, 50);
+    }
+  }, [stations]);
 
+  // Station selection logic
+  const handleStationSelect = useCallback((station: StationFeature) => {
+    if (step === 1) {
+      if (station.id === arrivalStationId) {
+        toast.error('Cannot use same station for departure and arrival');
+        return false;
+      }
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+      toast.success('Departure station selected');
+      return true;
+    } else if (step === 2) {
+      if (station.id === departureStationId) {
+        toast.error('Cannot use same station for departure and arrival');
+        return false;
+      }
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+      toast.success('Arrival station selected');
+      return true;
+    }
+    return false;
+  }, [dispatch, step, departureStationId, arrivalStationId]);
+
+  // Map interaction handlers
+  const handleMarkerClick = useCallback((station: StationFeature) => {
+    if (!mapRef.current) return;
+
+    const [lng, lat] = station.geometry.coordinates;
+    mapRef.current.panTo({ lat, lng });
+    mapRef.current.setZoom(15);
+
+    const selected = handleStationSelect(station);
+    if (selected) {
+      setActiveStation(station);
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    }
+  }, [handleStationSelect, isSheetMinimized, dispatch]);
+
+  const handleMarkerHover = useCallback((station: StationFeature | null) => {
+    setActiveStation(station);
+  }, []);
+
+  // Sheet controls
+  const handleSheetToggle = useCallback(() => {
+    dispatch(toggleSheet());
+  }, [dispatch]);
+
+  // Marker styling
   const getMarkerIcon = useCallback((station: StationFeature) => {
     const isHighlighted = (step === 1 && !departureStationId) || 
                          (step === 2 && !arrivalStationId);
@@ -124,7 +174,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         fillOpacity: 1,
         strokeWeight: 2,
         strokeColor: '#FFFFFF',
-        animation: google.maps.Animation.DROP
       };
     }
     if (station.id === arrivalStationId) {
@@ -135,7 +184,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         fillOpacity: 1,
         strokeWeight: 2,
         strokeColor: '#FFFFFF',
-        animation: google.maps.Animation.DROP
       };
     }
     return {
@@ -148,53 +196,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, [step, departureStationId, arrivalStationId, activeStation]);
 
-  const panToStation = useCallback((lat: number, lng: number) => {
-    if (mapRef.current) {
-      mapRef.current.panTo({ lat, lng });
-      mapRef.current.setZoom(15);
-    }
-  }, []);
-
-const selectStation = useCallback((station: StationFeature) => {
-  const [lng, lat] = station.geometry.coordinates;
-  
-  if (step === 1) {
-    if (station.id === arrivalStationId) {
-      toast.error('Cannot use same station for departure and arrival');
-      return;
-    }
-    dispatch(selectDepartureStation(station.id));
-    toast.success('Departure station selected');
-  } else if (step === 2) {
-    if (station.id === departureStationId) {
-      toast.error('Cannot use same station for departure and arrival');
-      return;
-    }
-    dispatch(selectArrivalStation(station.id));
-    toast.success('Arrival station selected');
-  }
-}, [dispatch, step, departureStationId, arrivalStationId]);
-
-  const handleMarkerClick = useCallback((station: StationFeature) => {
-    const [lng, lat] = station.geometry.coordinates;
-    panToStation(lat, lng);
-    selectStation(station);
-    setActiveStation(station);
-    
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-  }, [dispatch, panToStation, selectStation, isSheetMinimized]);
-
-  const handleMarkerHover = useCallback((station: StationFeature | null) => {
-    setActiveStation(station);
-  }, []);
-
-  const handleSheetToggle = useCallback(() => {
-    dispatch(toggleSheet());
-  }, [dispatch]);
-
-  // Initialize data
+  // Data initialization
   useEffect(() => {
     const init = async () => {
       try {
@@ -210,26 +212,14 @@ const selectStation = useCallback((station: StationFeature) => {
     init();
   }, [dispatch]);
 
-  // Handle loading states
+  // Loading state management
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Fit bounds when stations load
-  useEffect(() => {
-    if (mapRef.current && stations.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      stations.forEach(station => {
-        const [lng, lat] = station.geometry.coordinates;
-        bounds.extend({ lat, lng });
-      });
-      mapRef.current.fitBounds(bounds, 50); // 50px padding
-    }
-  }, [stations]);
-
-  // Handle errors
+  // Error handling
   if (stationsError || carsError || loadError) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
@@ -246,7 +236,6 @@ const selectStation = useCallback((station: StationFeature) => {
     );
   }
 
-  // Handle loading
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
@@ -257,11 +246,10 @@ const selectStation = useCallback((station: StationFeature) => {
         <GoogleMap
           mapContainerStyle={CONTAINER_STYLE}
           center={userLocation || DEFAULT_CENTER}
-          zoom={14}
+          zoom={DEFAULT_ZOOM}
           options={MAP_OPTIONS}
           onLoad={handleMapLoad}
         >
-          {/* User Location Marker */}
           {userLocation && (
             <Marker
               position={userLocation}
@@ -277,7 +265,6 @@ const selectStation = useCallback((station: StationFeature) => {
             />
           )}
 
-          {/* Station Markers */}
           {stations.map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -292,7 +279,6 @@ const selectStation = useCallback((station: StationFeature) => {
             );
           })}
 
-          {/* Car Markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -311,10 +297,8 @@ const selectStation = useCallback((station: StationFeature) => {
         </GoogleMap>
       </div>
 
-      {/* Station Selector UI */}
       <StationSelector />
 
-      {/* Bottom Sheet */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
