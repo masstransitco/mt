@@ -7,10 +7,10 @@ import { selectBookingStep } from '@/store/bookingSlice';
 import { 
   selectDepartureStationId, 
   selectArrivalStationId,
-  selectStationsWithDistance,
   clearDepartureStation,
   clearArrivalStation
 } from '@/store/userSlice';
+import { selectStationsWithDistance } from '@/store/stationsSlice';
 
 export default function StationSelector() {
   const dispatch = useAppDispatch();
