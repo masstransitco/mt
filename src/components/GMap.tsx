@@ -39,29 +39,14 @@ import { StationDetail } from './StationDetail';
 import { LoadingSpinner } from './LoadingSpinner';
 import StationSelector from './StationSelector';
 
-const LIBRARIES: ("geometry" | "places")[] = ['geometry', 'places'];
-const CONTAINER_STYLE = { width: '100%', height: '100%' };
-const DEFAULT_CENTER = { lat: 22.3, lng: 114.0 };
-const DEFAULT_ZOOM = 14;
-
-const MAP_OPTIONS: google.maps.MapOptions = {
-  disableDefaultUI: true,
-  zoomControl: true,
-  gestureHandling: 'greedy',
-  backgroundColor: '#111111',
-  maxZoom: 18,
-  minZoom: 8,
-  clickableIcons: false,
-  restriction: {
-    latLngBounds: {
-      north: 22.6,
-      south: 22.1,
-      east: 114.4,
-      west: 113.8,
-    },
-    strictBounds: true,
-  },
-};
+import {
+  LIBRARIES,
+  MAP_CONTAINER_STYLE,
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
+  MAP_OPTIONS,
+  MARKER_ICONS,
+} from '@/constants/map';
 
 interface GMapProps {
   googleApiKey: string;
@@ -218,33 +203,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     const isActive = station.id === activeStation?.id;
                          
     if (station.id === departureStationId) {
-      return {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 8,
-        fillColor: '#22C55E',
-        fillOpacity: 1,
-        strokeWeight: 2,
-        strokeColor: '#FFFFFF',
-      };
+      return MARKER_ICONS.departureStation;
     }
     if (station.id === arrivalStationId) {
-      return {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 8,
-        fillColor: '#EF4444',
-        fillOpacity: 1,
-        strokeWeight: 2,
-        strokeColor: '#FFFFFF',
-      };
+      return MARKER_ICONS.arrivalStation;
     }
-    return {
-      path: google.maps.SymbolPath.CIRCLE,
-      scale: isActive ? 7 : (isHighlighted ? 6 : 5),
-      fillColor: '#6B7280',
-      fillOpacity: isHighlighted ? 0.8 : 0.6,
-      strokeWeight: 2,
-      strokeColor: '#FFFFFF'
-    };
+    return isActive ? MARKER_ICONS.activeStation : MARKER_ICONS.inactiveStation;
   }, [step, departureStationId, arrivalStationId, activeStation]);
 
   // Data initialization
@@ -295,7 +259,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
         <GoogleMap
-          mapContainerStyle={CONTAINER_STYLE}
+          mapContainerStyle={MAP_CONTAINER_STYLE}
           center={userLocation || DEFAULT_CENTER}
           zoom={DEFAULT_ZOOM}
           options={MAP_OPTIONS}
@@ -304,14 +268,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {userLocation && (
             <Marker
               position={userLocation}
-              icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 7,
-                fillColor: '#4285F4',
-                fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: '#FFFFFF',
-              }}
+              icon={MARKER_ICONS.user}
               clickable={false}
             />
           )}
@@ -335,14 +292,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               key={car.id}
               position={{ lat: car.lat, lng: car.lng }}
               title={car.name}
-              icon={{
-                path: google.maps.SymbolPath.CIRCLE,
-                scale: 8,
-                fillColor: '#333333',
-                fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: '#0000FF',
-              }}
+              icon={MARKER_ICONS.car}
             />
           ))}
         </GoogleMap>
