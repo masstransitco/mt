@@ -23,6 +23,10 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
+  selectViewState,
+  selectDepartureStation,
+  selectArrivalStation,
+  setViewState,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -152,7 +156,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, []);
 
-  const selectStation = useCallback((station: StationFeature) => {
+const selectStation = useCallback((station: StationFeature) => {
+  const [lng, lat] = station.geometry.coordinates;
+  
   if (step === 1) {
     if (station.id === arrivalStationId) {
       toast.error('Cannot use same station for departure and arrival');
