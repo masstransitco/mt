@@ -23,8 +23,6 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
-  selectDepartureStation,
-  selectArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -88,11 +86,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const step = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
-  const departureStation = useAppSelector(selectDepartureStation);
-  const arrivalStation = useAppSelector(selectArrivalStation);
   const userLocation = useAppSelector(selectUserLocation);
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
+
+  // Derived state
+  const departureStation = stations.find(s => s.id === departureStationId);
+  const arrivalStation = stations.find(s => s.id === arrivalStationId);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -156,14 +156,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast.error('Cannot use same station for departure and arrival');
         return;
       }
-      dispatch(selectDepartureStation(station.id));
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
       toast.success('Departure station selected');
     } else if (step === 2) {
       if (station.id === departureStationId) {
         toast.error('Cannot use same station for departure and arrival');
         return;
       }
-      dispatch(selectArrivalStation(station.id));
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       toast.success('Arrival station selected');
     }
     
