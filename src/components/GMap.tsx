@@ -112,7 +112,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [stations]);
 
-  // Station selection logic
+  // Station selection logic - separated from marker click
   const handleStationSelect = useCallback((station: StationFeature) => {
     if (step === 1) {
       if (station.id === arrivalStationId) {
@@ -134,20 +134,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return false;
   }, [dispatch, step, departureStationId, arrivalStationId]);
 
-  // Map interaction handlers
+  // Map interaction handlers - updated to avoid conditional hook calls
   const handleMarkerClick = useCallback((station: StationFeature) => {
-    if (!mapRef.current) return;
+    // Always update map position
+    if (mapRef.current) {
+      const [lng, lat] = station.geometry.coordinates;
+      mapRef.current.panTo({ lat, lng });
+      mapRef.current.setZoom(15);
+    }
 
-    const [lng, lat] = station.geometry.coordinates;
-    mapRef.current.panTo({ lat, lng });
-    mapRef.current.setZoom(15);
+    // Always update active station
+    setActiveStation(station);
 
+    // Attempt selection
     const selected = handleStationSelect(station);
-    if (selected) {
-      setActiveStation(station);
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
+
+    // Update sheet state if needed
+    if (selected && isSheetMinimized) {
+      dispatch(toggleSheet());
     }
   }, [handleStationSelect, isSheetMinimized, dispatch]);
 
