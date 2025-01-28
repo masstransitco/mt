@@ -13,7 +13,7 @@ import {
   selectArrivalStation,
 } from '@/store/userSlice';
 
-const StationDetail = memo(() => {
+export const StationDetail = memo(() => {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -86,5 +86,3 @@ const StationDetail = memo(() => {
 });
 
 StationDetail.displayName = 'StationDetail';
-
-export default StationDetail;
