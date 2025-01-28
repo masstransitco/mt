@@ -29,7 +29,7 @@ import {
   selectViewState,
   selectIsSheetMinimized,
 } from '@/store/uiSlice';
-import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
+import { selectBookingStep } from '@/store/bookingSlice';
 
 import Sheet from '@/components/ui/sheet';
 import { StationListItem } from './StationListItem';
@@ -65,9 +65,7 @@ interface GMapProps {
 }
 
 function buildSheetTitle(step: number): string {
-  return step === 1 
-    ? 'Select Departure Station' 
-    : 'Select Arrival Station';
+  return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
 }
 
 export default function GMap({ googleApiKey }: GMapProps) {
@@ -89,10 +87,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const userLocation = useAppSelector(selectUserLocation);
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
-
-  // Derived state
-  const departureStation = stations.find(s => s.id === departureStationId);
-  const arrivalStation = stations.find(s => s.id === arrivalStationId);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -137,20 +131,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, [step, departureStationId, arrivalStationId, activeStation]);
 
-  const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-  }, []);
-
-  const handleMarkerClick = useCallback((station: StationFeature) => {
-    const [lng, lat] = station.geometry.coordinates;
-    
-    // Center map on clicked station
+  const panToStation = useCallback((lat: number, lng: number) => {
     if (mapRef.current) {
       mapRef.current.panTo({ lat, lng });
       mapRef.current.setZoom(15);
     }
+  }, []);
 
-    // Handle station selection based on current step
+  const selectStation = useCallback((station: StationFeature) => {
+    const [lng, lat] = station.geometry.coordinates;
+    
     if (step === 1) {
       if (station.id === arrivalStationId) {
         toast.error('Cannot use same station for departure and arrival');
@@ -166,14 +156,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       toast.success('Arrival station selected');
     }
-    
+  }, [dispatch, step, departureStationId, arrivalStationId]);
+
+  const handleMarkerClick = useCallback((station: StationFeature) => {
+    const [lng, lat] = station.geometry.coordinates;
+    panToStation(lat, lng);
+    selectStation(station);
     setActiveStation(station);
     
-    // Show station details in sheet
     if (isSheetMinimized) {
       dispatch(toggleSheet());
     }
-  }, [dispatch, step, departureStationId, arrivalStationId, isSheetMinimized]);
+  }, [dispatch, panToStation, selectStation, isSheetMinimized]);
 
   const handleMarkerHover = useCallback((station: StationFeature | null) => {
     setActiveStation(station);
