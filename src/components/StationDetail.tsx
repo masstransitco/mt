@@ -10,8 +10,6 @@ import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-  selectDepartureStation,
-  selectArrivalStation,
   clearDepartureStation,
   clearArrivalStation,
 } from '@/store/userSlice';
@@ -56,7 +54,7 @@ export const StationDetail = memo(() => {
   
   // Calculate distance between stations if both are selected
   const otherStation = stations.find(s => s.id === otherStationId);
-  const routeDistance = otherStation && station.distance 
+  const routeDistance = otherStation && station.distance !== undefined && otherStation.distance !== undefined
     ? (station.distance + otherStation.distance).toFixed(1)
     : null;
 
@@ -122,13 +120,13 @@ export const StationDetail = memo(() => {
             <span className="font-medium">{station.properties.waitTime} min</span>
           </div>
         )}
-        {station.distance !== undefined && (
+        {(station.distance !== undefined || routeDistance) && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">
               {routeDistance ? 'Total Route Distance' : 'Distance from You'}
             </span>
             <span className="font-medium">
-              {routeDistance || station.distance.toFixed(1)} km
+              {(routeDistance || station.distance?.toFixed(1))} km
             </span>
           </div>
         )}
