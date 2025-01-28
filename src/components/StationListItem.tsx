@@ -14,7 +14,7 @@ interface StationListItemProps extends ListChildComponentProps {
   data: StationFeature[];
 }
 
-const StationListItem = memo<StationListItemProps>((props) => {
+export const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const station = data[index];
   const dispatch = useAppDispatch();
@@ -59,5 +59,3 @@ const StationListItem = memo<StationListItemProps>((props) => {
 });
 
 StationListItem.displayName = 'StationListItem';
-
-export default StationListItem;
