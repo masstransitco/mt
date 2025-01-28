@@ -44,8 +44,8 @@ import {
   MAP_CONTAINER_STYLE,
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
-  MAP_OPTIONS,
-  MARKER_ICONS,
+  createMapOptions,
+  createMarkerIcons,
 } from '@/constants/map';
 
 interface GMapProps {
@@ -62,6 +62,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
+  const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
+  const [markerIcons, setMarkerIcons] = useState<any>(null);
 
   // Redux state
   const dispatch = useAppDispatch();
@@ -84,6 +86,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
+
+  // Initialize map options and marker icons when Google Maps is loaded
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setMapOptions(createMapOptions());
+      setMarkerIcons(createMarkerIcons());
+    }
+  }, [isLoaded]);
 
   // Sort stations by distance to a point
   const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
@@ -198,18 +208,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Marker styling
   const getMarkerIcon = useCallback((station: StationFeature) => {
-    const isHighlighted = (step === 1 && !departureStationId) || 
-                         (step === 2 && !arrivalStationId);
-    const isActive = station.id === activeStation?.id;
-                         
+    if (!markerIcons) return null;
+    
     if (station.id === departureStationId) {
-      return MARKER_ICONS.departureStation;
+      return markerIcons.departureStation;
     }
     if (station.id === arrivalStationId) {
-      return MARKER_ICONS.arrivalStation;
+      return markerIcons.arrivalStation;
     }
-    return isActive ? MARKER_ICONS.activeStation : MARKER_ICONS.inactiveStation;
-  }, [step, departureStationId, arrivalStationId, activeStation]);
+    const isActive = station.id === activeStation?.id;
+    return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
+  }, [markerIcons, departureStationId, arrivalStationId, activeStation]);
 
   // Data initialization
   useEffect(() => {
@@ -262,13 +271,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
           mapContainerStyle={MAP_CONTAINER_STYLE}
           center={userLocation || DEFAULT_CENTER}
           zoom={DEFAULT_ZOOM}
-          options={MAP_OPTIONS}
+          options={mapOptions || {}}
           onLoad={handleMapLoad}
         >
-          {userLocation && (
+          {userLocation && markerIcons && (
             <Marker
               position={userLocation}
-              icon={MARKER_ICONS.user}
+              icon={markerIcons.user}
               clickable={false}
             />
           )}
@@ -292,7 +301,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               key={car.id}
               position={{ lat: car.lat, lng: car.lng }}
               title={car.name}
-              icon={MARKER_ICONS.car}
+              icon={markerIcons?.car}
             />
           ))}
         </GoogleMap>
