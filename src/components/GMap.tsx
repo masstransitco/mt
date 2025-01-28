@@ -23,7 +23,6 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
-  selectViewState,
   selectDepartureStation,
   selectArrivalStation,
   setViewState,
