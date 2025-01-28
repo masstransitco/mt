@@ -1,7 +1,30 @@
 import type { Libraries } from '@react-google-maps/api';
 
+// Base map configuration - safe for SSR
+export const MAP_CONTAINER_STYLE = {
+  width: '100%',
+  height: '100%',
+};
+
+export const DEFAULT_CENTER = { 
+  lat: 22.3, 
+  lng: 114.0 
+};
+
+export const DEFAULT_ZOOM = 14;
+
+export const LIBRARIES: Libraries = ['geometry', 'places'];
+
+// Map boundaries for Hong Kong
+export const HK_BOUNDS = {
+  north: 22.6,
+  south: 22.1,
+  east: 114.4,
+  west: 113.8,
+};
+
 // Map styling - Dark minimalist theme
-export const MAP_STYLES: google.maps.MapTypeStyle[] = [
+export const MAP_STYLES = [
   {
     featureType: 'all',
     elementType: 'labels.text.fill',
@@ -99,31 +122,8 @@ export const MAP_STYLES: google.maps.MapTypeStyle[] = [
   }
 ];
 
-// Base map configuration
-export const MAP_CONTAINER_STYLE = {
-  width: '100%',
-  height: '100%',
-};
-
-export const DEFAULT_CENTER = { 
-  lat: 22.3, 
-  lng: 114.0 
-};
-
-export const DEFAULT_ZOOM = 14;
-
-export const LIBRARIES: Libraries = ['geometry', 'places'];
-
-// Map boundaries for Hong Kong
-export const HK_BOUNDS = {
-  north: 22.6,
-  south: 22.1,
-  east: 114.4,
-  west: 113.8,
-};
-
-// Map styling options
-export const MAP_OPTIONS: google.maps.MapOptions = {
+// Map options factory - safe for SSR
+export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
   zoomControl: true,
   gestureHandling: 'greedy',
@@ -136,12 +136,12 @@ export const MAP_OPTIONS: google.maps.MapOptions = {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
   },
-};
+});
 
-// Marker icons and styling
-export const MARKER_ICONS = {
+// Marker icons factory - safe for SSR
+export const createMarkerIcons = () => ({
   user: {
-    path: google.maps.SymbolPath.CIRCLE,
+    path: google?.maps?.SymbolPath?.CIRCLE,
     scale: 7,
     fillColor: '#4285F4',
     fillOpacity: 1,
@@ -149,7 +149,7 @@ export const MARKER_ICONS = {
     strokeColor: '#FFFFFF',
   },
   departureStation: {
-    path: google.maps.SymbolPath.CIRCLE,
+    path: google?.maps?.SymbolPath?.CIRCLE,
     scale: 8,
     fillColor: '#22C55E',
     fillOpacity: 1,
@@ -157,7 +157,7 @@ export const MARKER_ICONS = {
     strokeColor: '#FFFFFF',
   },
   arrivalStation: {
-    path: google.maps.SymbolPath.CIRCLE,
+    path: google?.maps?.SymbolPath?.CIRCLE,
     scale: 8,
     fillColor: '#EF4444',
     fillOpacity: 1,
@@ -165,7 +165,7 @@ export const MARKER_ICONS = {
     strokeColor: '#FFFFFF',
   },
   activeStation: {
-    path: google.maps.SymbolPath.CIRCLE,
+    path: google?.maps?.SymbolPath?.CIRCLE,
     scale: 7,
     fillColor: '#6B7280',
     fillOpacity: 0.8,
@@ -173,7 +173,7 @@ export const MARKER_ICONS = {
     strokeColor: '#FFFFFF',
   },
   inactiveStation: {
-    path: google.maps.SymbolPath.CIRCLE,
+    path: google?.maps?.SymbolPath?.CIRCLE,
     scale: 5,
     fillColor: '#6B7280',
     fillOpacity: 0.6,
@@ -181,16 +181,16 @@ export const MARKER_ICONS = {
     strokeColor: '#FFFFFF',
   },
   car: {
-    path: google.maps.SymbolPath.CIRCLE,
+    path: google?.maps?.SymbolPath?.CIRCLE,
     scale: 8,
     fillColor: '#333333',
     fillOpacity: 1,
     strokeWeight: 2,
     strokeColor: '#0000FF',
   },
-};
+});
 
-// Places API configuration
+// Places API configuration - safe for SSR
 export const PLACES_OPTIONS = {
   componentRestrictions: { 
     country: 'HK' 
