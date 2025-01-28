@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-const LoadingSpinner = () => {
+export const LoadingSpinner = () => {
   return (
     <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background">
       <div className="flex flex-col items-center text-muted-foreground gap-2">
@@ -31,7 +31,3 @@ const LoadingSpinner = () => {
     </div>
   );
 };
-
-LoadingSpinner.displayName = 'LoadingSpinner';
-
-export default LoadingSpinner;
