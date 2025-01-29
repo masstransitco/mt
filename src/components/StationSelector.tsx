@@ -159,7 +159,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           <AddressSearch
             onAddressSelect={onAddressSearch}
             disabled={step !== 1}
-            placeholder="Search or choose departure station"
+            placeholder="Search for a station to pick-up the car"
             selectedStation={departureStation}
           />
           {departureStation && (
@@ -185,7 +185,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           <AddressSearch
             onAddressSelect={onAddressSearch}
             disabled={step !== 2}
-            placeholder="Search or choose arrival station"
+            placeholder="Search for a station to return the car"
             selectedStation={arrivalStation}
           />
           {arrivalStation && (
