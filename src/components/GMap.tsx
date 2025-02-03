@@ -51,7 +51,7 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
-  
+
   // Local state
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -83,15 +83,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Initialize map options and marker icons when Google Maps is loaded
-  useEffect(() => {
-    if (isLoaded && window.google) {
-      setMapOptions(createMapOptions());
-      setMarkerIcons(createMarkerIcons());
-    }
-  }, [isLoaded]);
-
-  // Force the bottom sheet to be minimized by default on mount
+  // --- Force the sheet to be minimized on first mount, if not already ---
   const sheetInitRef = useRef(false);
   useEffect(() => {
     if (!sheetInitRef.current) {
@@ -102,7 +94,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [dispatch, isSheetMinimized]);
 
-  // Sort stations by distance to a point
+  // --- Initialize map options/icons once Google Maps loads ---
+  useEffect(() => {
+    if (isLoaded && window.google) {
+      setMapOptions(createMapOptions());
+      setMarkerIcons(createMarkerIcons());
+    }
+  }, [isLoaded]);
+
+  // --- Sort stations by distance to an address search location ---
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -112,19 +112,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const [lngB, latB] = b.geometry.coordinates;
         const distA = google.maps.geometry.spherical.computeDistanceBetween(
           new google.maps.LatLng(latA, lngA),
-          new google.maps.LatLng(point.lat, point.lng)
+          new google.maps.LatLng(point.lat, point.lng),
         );
         const distB = google.maps.geometry.spherical.computeDistanceBetween(
           new google.maps.LatLng(latB, lngB),
-          new google.maps.LatLng(point.lat, point.lng)
+          new google.maps.LatLng(point.lat, point.lng),
         );
         return distA - distB;
       });
     },
-    []
+    [],
   );
 
-  // Handle address search from StationSelector
+  // --- Handle user address search ---
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -135,34 +135,35 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSortedStations(sorted);
-      // We leave the sheet minimized by default.
+      // Sheet remains minimized by default
     },
-    [stations, sortStationsByDistanceToPoint]
+    [stations, sortStationsByDistanceToPoint],
   );
 
-  // Map initialization
+  // --- Once the map is loaded, fit bounds to stations ---
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
-        stations.forEach(station => {
+        stations.forEach((station) => {
           const [lng, lat] = station.geometry.coordinates;
           bounds.extend({ lat, lng });
         });
         map.fitBounds(bounds, 50);
       }
     },
-    [stations]
+    [stations],
   );
 
-  // Handle station selection side-effects
+  // --- Effect to handle station selection side-effects ---
   useEffect(() => {
     if (selectedStationId === null) return;
 
     const station = stations.find(s => s.id === selectedStationId);
     if (!station) return;
 
+    // Validate not using the same station for departure and arrival
     const isValidSelection =
       (step === 1 && station.id !== arrivalStationId) ||
       (step === 2 && station.id !== departureStationId);
@@ -176,12 +177,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (step === 1) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
       toast.success('Departure station selected');
-    } else if (step === 2) {
+    } else {
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       toast.success('Arrival station selected');
     }
 
-    // If sheet is open, close it (minimize); if it's minimized, do nothing
+    // If the sheet is open, toggle it to minimize
     if (!isSheetMinimized) {
       dispatch(toggleSheet());
     }
@@ -191,13 +192,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     selectedStationId,
     stations,
     step,
-    departureStationId,
     arrivalStationId,
+    departureStationId,
     dispatch,
     isSheetMinimized,
   ]);
 
-  // Marker click / hover handlers
+  // --- Marker interactions ---
   const handleMarkerClick = useCallback((station: StationFeature) => {
     if (!mapRef.current) return;
 
@@ -213,19 +214,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setActiveStation(station);
   }, []);
 
-  // Sheet controls
+  // --- Toggling the sheet manually ---
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Dynamic sheet title
+  // --- Dynamic bottom sheet title ---
   const getSheetTitle = useCallback(() => {
     if (searchLocation) return 'Nearby Stations';
     if (activeStation) return 'Station Details';
     return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
   }, [searchLocation, activeStation, step]);
 
-  // Marker styling
+  // --- Marker icon logic ---
   const getMarkerIcon = useCallback(
     (station: StationFeature) => {
       if (!markerIcons) return null;
@@ -236,14 +237,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
       if (station.id === arrivalStationId) {
         return markerIcons.arrivalStation;
       }
-
       const isActive = station.id === activeStation?.id;
       return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
     },
-    [markerIcons, departureStationId, arrivalStationId, activeStation]
+    [markerIcons, departureStationId, arrivalStationId, activeStation],
   );
 
-  // Data initialization
+  // --- Data init effect ---
   useEffect(() => {
     const init = async () => {
       try {
@@ -259,14 +259,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Manage the initial loading overlay
+  // --- Loading state effect ---
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Error handling
+  // --- Handle top-level errors ---
   if (stationsError || carsError || loadError) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
@@ -283,17 +283,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // If still loading data, show spinner
+  // --- Show spinner while data is still loading ---
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
 
-  // Offset for the sheet so it doesn't overlap the StationSelector (which is near the top)
-  const sheetTopOffset = 150; // Adjust as needed
+  // Offset the sheet so it doesn't overlap StationSelector
+  const sheetTopOffset = 150; // Adjust as desired
 
   return (
-    <div className="relative w-full h-[calc(100vh-64px)]">
-      {/* The main Google Map */}
+    <div className="relative w-full h-[calc(100vh-64px)] overflow-hidden">
+      {/* The map behind everything, fully occupying the container */}
       <div className="absolute inset-0">
         <GoogleMap
           mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -310,7 +310,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {(searchLocation ? sortedStations : stations).map(station => {
+          {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
@@ -324,7 +324,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {cars.map(car => (
+          {cars.map((car) => (
             <Marker
               key={car.id}
               position={{ lat: car.lat, lng: car.lng }}
@@ -335,22 +335,23 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* The Station Selector at the top */}
+      {/* StationSelector pinned at the top (z-10 in your Tailwind config) */}
       <StationSelector onAddressSearch={handleAddressSearch} />
 
-      {/* The bottom sheet container, which won't scroll the entire page */}
+      {/* Show bottom sheet only if we're in 'showMap' mode */}
       {viewState === 'showMap' && (
         <div
           className="absolute left-0 right-0"
           style={{
             top: `${sheetTopOffset}px`,
             bottom: 0,
-            // pointerEvents: 'none' allows the map behind to be clickable,
-            // but we'll make the Sheet itself clickable with pointerEvents: 'auto'
+            // no overflow -> prevents browser scroll
+            // pointerEvents: none -> allows clicks on map behind
             pointerEvents: 'none',
-            zIndex: 5,
+            zIndex: 5, // put it under the StationSelector (z-10)
           }}
         >
+          {/* This inner div re-enables pointer events for the sheet itself */}
           <div
             style={{
               pointerEvents: 'auto',
@@ -362,6 +363,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
               onToggle={handleSheetToggle}
               title={getSheetTitle()}
               count={(searchLocation ? sortedStations : stations).length}
+              // The sheet content can have overflow-y: auto if needed,
+              // ensuring only the sheet scrolls, not the entire window.
             >
               <StationDetail
                 stations={searchLocation ? sortedStations : stations}
