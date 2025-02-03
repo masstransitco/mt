@@ -70,6 +70,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
   const step = useAppSelector(selectBookingStep);
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
   const userLocation = useAppSelector(selectUserLocation);
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
@@ -88,6 +90,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setMarkerIcons(createMarkerIcons());
     }
   }, [isLoaded]);
+
+  // Force the bottom sheet to be minimized by default on mount.
+  const sheetInitRef = useRef(false);
+  useEffect(() => {
+    if (!sheetInitRef.current) {
+      if (!isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+      sheetInitRef.current = true;
+    }
+  }, [dispatch, isSheetMinimized]);
 
   // Sort stations by distance to a point
   const sortStationsByDistanceToPoint = useCallback(
@@ -119,12 +132,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       mapRef.current.setZoom(15);
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSortedStations(sorted);
-      // If the sheet is minimized, expand it (toggle open)
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
+      // Leave the sheet minimized by default.
     },
-    [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
+    [dispatch, stations, sortStationsByDistanceToPoint]
   );
 
   // Map initialization
@@ -133,7 +143,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       mapRef.current = map;
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
-        stations.forEach((station) => {
+        stations.forEach(station => {
           const [lng, lat] = station.geometry.coordinates;
           bounds.extend({ lat, lng });
         });
@@ -146,9 +156,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Effect to handle station selection
   useEffect(() => {
     if (selectedStationId === null) return;
-    const station = stations.find((s) => s.id === selectedStationId);
+    const station = stations.find(s => s.id === selectedStationId);
     if (!station) return;
-    // (Assume that your logic here prevents choosing the same station for both roles)
+    const isValidSelection =
+      (step === 1 && station.id !== arrivalStationId) ||
+      (step === 2 && station.id !== departureStationId);
+    if (!isValidSelection) {
+      toast.error('Cannot use same station for departure and arrival');
+      setSelectedStationId(null);
+      return;
+    }
     if (step === 1) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
       toast.success('Departure station selected');
@@ -156,12 +173,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       toast.success('Arrival station selected');
     }
-    // If the sheet is minimized, toggle it (collapse/expand) as needed
-    if (isSheetMinimized) {
+    if (!isSheetMinimized) {
       dispatch(toggleSheet());
     }
     setSelectedStationId(null);
-  }, [selectedStationId, stations, step, dispatch, isSheetMinimized]);
+  }, [selectedStationId, stations, step, departureStationId, arrivalStationId, dispatch, isSheetMinimized]);
 
   // Map interaction handlers
   const handleMarkerClick = useCallback((station: StationFeature) => {
@@ -188,6 +204,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (activeStation) return 'Station Details';
     return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
   }, [searchLocation, activeStation, step]);
+
+  // Marker styling (using a helper function)
+  const getMarkerIcon = useCallback(
+    (station: StationFeature) => {
+      if (!markerIcons) return null;
+      if (station.id === departureStationId) {
+        return markerIcons.departureStation;
+      }
+      if (station.id === arrivalStationId) {
+        return markerIcons.arrivalStation;
+      }
+      const isActive = station.id === activeStation?.id;
+      return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
+    },
+    [markerIcons, departureStationId, arrivalStationId, activeStation]
+  );
 
   // Data initialization
   useEffect(() => {
@@ -227,6 +259,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
+  // Define a top offset (in pixels) for the sheet container so it does not overlap the StationSelector.
+  const sheetTopOffset = 250; // Adjust this value as needed
+
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
@@ -240,7 +275,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {userLocation && markerIcons && (
             <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
           )}
-
           {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -250,18 +284,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 onClick={() => handleMarkerClick(station)}
                 onMouseOver={() => handleMarkerHover(station)}
                 onMouseOut={() => handleMarkerHover(null)}
-                icon={
-                  markerIcons &&
-                  station.id === (step === 1 ? useAppSelector(selectDepartureStationId) : useAppSelector(selectArrivalStationId))
-                    ? (step === 1 ? markerIcons.departureStation : markerIcons.arrivalStation)
-                    : markerIcons && station.id === activeStation?.id
-                    ? markerIcons.activeStation
-                    : markerIcons.inactiveStation
-                }
+                icon={getMarkerIcon(station)}
               />
             );
           })}
-
           {cars.map((car) => (
             <Marker key={car.id} position={{ lat: car.lat, lng: car.lng }} title={car.name} icon={markerIcons?.car} />
           ))}
@@ -274,9 +300,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <div
           className="absolute left-0 right-0"
           style={{
-            top: '150px', // Reserve space for the StationSelector so the sheet does not overlap it
+            top: `${sheetTopOffset}px`, // Reserve space so the sheet doesn't overlap the StationSelector
             bottom: 0,
             overflowY: 'auto',
+            zIndex: 0, // Ensure the sheet is beneath the StationSelector (which has z-index 10)
           }}
         >
           <Sheet
