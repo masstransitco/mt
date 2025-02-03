@@ -12,13 +12,13 @@ type CarGridLayout = 'list' | 'grid';
 interface UIState {
   viewState: ViewState;
   isSheetMinimized: boolean;
-  carGridLayout: CarGridLayout;  // example UI state controlling how CarGrid is rendered
+  carGridLayout: CarGridLayout;
 }
 
 const initialState: UIState = {
   viewState: 'showCar',       // Default view: Car screen
-  isSheetMinimized: false,    // Whether the bottom sheet is minimized
-  carGridLayout: 'grid',      // By default, CarGrid shows a grid layout
+  isSheetMinimized: true,     // Bottom sheet is minimized by default
+  carGridLayout: 'grid',
 };
 
 const uiSlice = createSlice({
