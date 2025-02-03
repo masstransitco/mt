@@ -2,7 +2,6 @@
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { FixedSizeList } from 'react-window';
 import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
@@ -23,8 +22,6 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
-  selectDepartureStation,
-  selectArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -34,7 +31,6 @@ import {
 import { selectBookingStep } from '@/store/bookingSlice';
 
 import Sheet from '@/components/ui/sheet';
-import { StationListItem } from './StationListItem';
 import { StationDetail } from './StationDetail';
 import { LoadingSpinner } from './LoadingSpinner';
 import StationSelector from './StationSelector';
@@ -95,7 +91,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Force the bottom sheet to be minimized by default on mount.
+  // Force the bottom sheet to be minimized by default on mount
   const sheetInitRef = useRef(false);
   useEffect(() => {
     if (!sheetInitRef.current) {
@@ -107,66 +103,69 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch, isSheetMinimized]);
 
   // Sort stations by distance to a point
-  const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-    if (!google?.maps?.geometry?.spherical) return stationsToSort;
+  const sortStationsByDistanceToPoint = useCallback(
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+      if (!google?.maps?.geometry?.spherical) return stationsToSort;
 
-    return [...stationsToSort].sort((a, b) => {
-      const [lngA, latA] = a.geometry.coordinates;
-      const [lngB, latB] = b.geometry.coordinates;
-      
-      const distA = google.maps.geometry.spherical.computeDistanceBetween(
-        new google.maps.LatLng(latA, lngA),
-        new google.maps.LatLng(point.lat, point.lng)
-      );
-      const distB = google.maps.geometry.spherical.computeDistanceBetween(
-        new google.maps.LatLng(latB, lngB),
-        new google.maps.LatLng(point.lat, point.lng)
-      );
-      
-      return distA - distB;
-    });
-  }, []);
+      return [...stationsToSort].sort((a, b) => {
+        const [lngA, latA] = a.geometry.coordinates;
+        const [lngB, latB] = b.geometry.coordinates;
+        const distA = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(latA, lngA),
+          new google.maps.LatLng(point.lat, point.lng)
+        );
+        const distB = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(latB, lngB),
+          new google.maps.LatLng(point.lat, point.lng)
+        );
+        return distA - distB;
+      });
+    },
+    []
+  );
 
   // Handle address search from StationSelector
-  const handleAddressSearch = useCallback((location: google.maps.LatLngLiteral) => {
-    if (!mapRef.current) return;
+  const handleAddressSearch = useCallback(
+    (location: google.maps.LatLngLiteral) => {
+      if (!mapRef.current) return;
 
-    setSearchLocation(location);
-    mapRef.current.panTo(location);
-    mapRef.current.setZoom(15);
+      setSearchLocation(location);
+      mapRef.current.panTo(location);
+      mapRef.current.setZoom(15);
 
-    const sorted = sortStationsByDistanceToPoint(location, stations);
-    setSortedStations(sorted);
-
-    // If the sheet is minimized (as it is by default now), you can choose to leave it minimized
-    // or programmatically expand it here if desired.
-    // For this update we are leaving it minimized by default.
-  }, [dispatch, stations, sortStationsByDistanceToPoint]);
+      const sorted = sortStationsByDistanceToPoint(location, stations);
+      setSortedStations(sorted);
+      // We leave the sheet minimized by default.
+    },
+    [stations, sortStationsByDistanceToPoint]
+  );
 
   // Map initialization
-  const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-    if (stations.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      stations.forEach(station => {
-        const [lng, lat] = station.geometry.coordinates;
-        bounds.extend({ lat, lng });
-      });
-      map.fitBounds(bounds, 50);
-    }
-  }, [stations]);
+  const handleMapLoad = useCallback(
+    (map: google.maps.Map) => {
+      mapRef.current = map;
+      if (stations.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        stations.forEach(station => {
+          const [lng, lat] = station.geometry.coordinates;
+          bounds.extend({ lat, lng });
+        });
+        map.fitBounds(bounds, 50);
+      }
+    },
+    [stations]
+  );
 
-  // Effect to handle station selection
+  // Handle station selection side-effects
   useEffect(() => {
     if (selectedStationId === null) return;
 
     const station = stations.find(s => s.id === selectedStationId);
     if (!station) return;
 
-    const isValidSelection = (
+    const isValidSelection =
       (step === 1 && station.id !== arrivalStationId) ||
-      (step === 2 && station.id !== departureStationId)
-    );
+      (step === 2 && station.id !== departureStationId);
 
     if (!isValidSelection) {
       toast.error('Cannot use same station for departure and arrival');
@@ -182,14 +181,23 @@ export default function GMap({ googleApiKey }: GMapProps) {
       toast.success('Arrival station selected');
     }
 
+    // If sheet is open, close it (minimize); if it's minimized, do nothing
     if (!isSheetMinimized) {
       dispatch(toggleSheet());
     }
 
     setSelectedStationId(null);
-  }, [selectedStationId, stations, step, departureStationId, arrivalStationId, dispatch, isSheetMinimized]);
+  }, [
+    selectedStationId,
+    stations,
+    step,
+    departureStationId,
+    arrivalStationId,
+    dispatch,
+    isSheetMinimized,
+  ]);
 
-  // Map interaction handlers
+  // Marker click / hover handlers
   const handleMarkerClick = useCallback((station: StationFeature) => {
     if (!mapRef.current) return;
 
@@ -212,24 +220,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Dynamic sheet title
   const getSheetTitle = useCallback(() => {
-    if (searchLocation) return "Nearby Stations";
-    if (activeStation) return "Station Details";
+    if (searchLocation) return 'Nearby Stations';
+    if (activeStation) return 'Station Details';
     return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
   }, [searchLocation, activeStation, step]);
 
   // Marker styling
-  const getMarkerIcon = useCallback((station: StationFeature) => {
-    if (!markerIcons) return null;
-    
-    if (station.id === departureStationId) {
-      return markerIcons.departureStation;
-    }
-    if (station.id === arrivalStationId) {
-      return markerIcons.arrivalStation;
-    }
-    const isActive = station.id === activeStation?.id;
-    return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
-  }, [markerIcons, departureStationId, arrivalStationId, activeStation]);
+  const getMarkerIcon = useCallback(
+    (station: StationFeature) => {
+      if (!markerIcons) return null;
+
+      if (station.id === departureStationId) {
+        return markerIcons.departureStation;
+      }
+      if (station.id === arrivalStationId) {
+        return markerIcons.arrivalStation;
+      }
+
+      const isActive = station.id === activeStation?.id;
+      return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
+    },
+    [markerIcons, departureStationId, arrivalStationId, activeStation]
+  );
 
   // Data initialization
   useEffect(() => {
@@ -237,7 +249,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       try {
         await Promise.all([
           dispatch(fetchStations()).unwrap(),
-          dispatch(fetchCars()).unwrap()
+          dispatch(fetchCars()).unwrap(),
         ]);
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -247,7 +259,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Loading state management
+  // Manage the initial loading overlay
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -260,7 +272,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
         <div className="text-center space-y-2">
           <p className="font-medium">Error loading map data</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="text-sm underline hover:text-destructive/80"
           >
@@ -271,12 +283,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
+  // If still loading data, show spinner
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
 
+  // Offset for the sheet so it doesn't overlap the StationSelector (which is near the top)
+  const sheetTopOffset = 150; // Adjust as needed
+
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
+      {/* The main Google Map */}
       <div className="absolute inset-0">
         <GoogleMap
           mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -293,7 +310,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {(searchLocation ? sortedStations : stations).map((station) => {
+          {(searchLocation ? sortedStations : stations).map(station => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
@@ -307,7 +324,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {cars.map((car) => (
+          {cars.map(car => (
             <Marker
               key={car.id}
               position={{ lat: car.lat, lng: car.lng }}
@@ -318,31 +335,40 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
+      {/* The Station Selector at the top */}
       <StationSelector onAddressSearch={handleAddressSearch} />
 
-      {/* Wrap the Sheet in a container that reserves space at the top
-          so it never expands over the StationSelector */}
+      {/* The bottom sheet container, which won't scroll the entire page */}
       {viewState === 'showMap' && (
         <div
           className="absolute left-0 right-0"
           style={{
-            position: 'absolute',
-            top: '150px', // Reserve top 150px for the StationSelector
+            top: `${sheetTopOffset}px`,
             bottom: 0,
-            overflowY: 'auto',
+            // pointerEvents: 'none' allows the map behind to be clickable,
+            // but we'll make the Sheet itself clickable with pointerEvents: 'auto'
+            pointerEvents: 'none',
+            zIndex: 5,
           }}
         >
-          <Sheet
-            isOpen={!isSheetMinimized}
-            onToggle={handleSheetToggle}
-            title={getSheetTitle()}
-            count={(searchLocation ? sortedStations : stations).length}
+          <div
+            style={{
+              pointerEvents: 'auto',
+              height: '100%',
+            }}
           >
-            <StationDetail 
-              stations={searchLocation ? sortedStations : stations}
-              activeStation={activeStation}
-            />
-          </Sheet>
+            <Sheet
+              isOpen={!isSheetMinimized}
+              onToggle={handleSheetToggle}
+              title={getSheetTitle()}
+              count={(searchLocation ? sortedStations : stations).length}
+            >
+              <StationDetail
+                stations={searchLocation ? sortedStations : stations}
+                activeStation={activeStation}
+              />
+            </Sheet>
+          </div>
         </div>
       )}
     </div>
