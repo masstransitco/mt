@@ -4,7 +4,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectBookingStep } from '@/store/bookingSlice';
+// Import both the selector and the action to reset the step
+import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
@@ -165,7 +166,10 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           {departureStation && (
             <button
               onClick={() => {
+                // When clearing the departure station, clear both stations and reset to step 1.
                 dispatch(clearDepartureStation());
+                dispatch(clearArrivalStation());
+                dispatch(advanceBookingStep(1));
                 toast.success('Departure station cleared');
               }}
               className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
@@ -192,6 +196,8 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             <button
               onClick={() => {
                 dispatch(clearArrivalStation());
+                // Reset the step to 2 to allow re-entry of the arrival station.
+                dispatch(advanceBookingStep(2));
                 toast.success('Arrival station cleared');
               }}
               className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
