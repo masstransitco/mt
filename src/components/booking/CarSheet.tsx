@@ -4,7 +4,6 @@ import React from 'react';
 import { useAppSelector } from '@/store/store';
 import { selectAllCars } from '@/store/carSlice';
 import { selectSelectedCarId } from '@/store/userSlice';
-// Removed import of selectViewState since we no longer conditionally render based on it
 import Sheet from '@/components/ui/sheet';
 import CarGrid from '@/components/booking/CarGrid';
 
@@ -14,10 +13,9 @@ interface CarSheetProps {
 }
 
 export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
-  // Always call hooks at the top level
+  // Always call hooks unconditionally
   const cars = useAppSelector(selectAllCars);
   const selectedCarId = useAppSelector(selectSelectedCarId);
-  // Removed viewState check so that the CarSheet always renders
 
   return (
     <Sheet
