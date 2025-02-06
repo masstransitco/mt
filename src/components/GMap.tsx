@@ -322,20 +322,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [routeInfo, searchLocation, activeStation, step]);
 
   // Determine marker icon based on station role and activity
-  const getMarkerIcon = useCallback(
-    (station: StationFeature) => {
-      if (!markerIcons) return null;
-      if (station.id === departureStationId) {
-        return markerIcons.departureStation;
-      }
-      if (station.id === arrivalStationId) {
-        return markerIcons.arrivalStation;
-      }
-      const isActive = station.id === activeStation?.id;
-      return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
-    },
-    [markerIcons, departureStationId, arrivalStationId, activeStation]
-  );
+const getMarkerIcon = useCallback(
+  (station: StationFeature): google.maps.Symbol | undefined => {
+    if (!markerIcons) return undefined;
+    if (station.id === departureStationId) {
+      return markerIcons.departureStation;
+    }
+    if (station.id === arrivalStationId) {
+      return markerIcons.arrivalStation;
+    }
+    const isActive = station.id === activeStation?.id;
+    return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
+  },
+  [markerIcons, departureStationId, arrivalStationId, activeStation]
+);
 
   // Data initialization: fetch stations and cars
   useEffect(() => {
