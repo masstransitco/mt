@@ -38,7 +38,7 @@
     "postprocessing": "^6.34.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-hot-toast": "^2.4.1", // if you still use it elsewhere, keep; otherwise remove
+    "react-hot-toast": "^2.4.1",
     "react-redux": "^8.1.2",
     "react-window": "^1.8.10",
     "stripe": "^14.14.0",
