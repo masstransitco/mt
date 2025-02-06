@@ -502,3 +502,5 @@ function formatStationDetails(station: StationFeature) {
   };
 }
 
+
+export type { GMapProps, StationDetailProps, RouteInfo };
