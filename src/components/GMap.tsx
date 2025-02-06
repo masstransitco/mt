@@ -264,8 +264,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
-  return (
+   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
+      {/* Map Container */}
       <div className="absolute inset-0">
         <GoogleMap
           mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -274,6 +275,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           options={mapOptions || {}}
           onLoad={handleMapLoad}
         >
+          {/* User Location Marker */}
           {userLocation && markerIcons && (
             <Marker
               position={userLocation}
@@ -282,7 +284,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {(searchLocation ? sortedStations : stations).map((station) => {
+          {/* Station Markers - Only show when in map view */}
+          {viewState === 'showMap' && (searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
@@ -296,7 +299,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {cars.map((car) => (
+          {/* Car Markers - Only show when in car view */}
+          {viewState === 'showCar' && cars.map((car) => (
             <Marker
               key={car.id}
               position={{ lat: car.lat, lng: car.lng }}
@@ -307,9 +311,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      <StationSelector onAddressSearch={handleAddressSearch} />
-
+      {/* Station Search - Only show in map view */}
       {viewState === 'showMap' && (
+        <StationSelector onAddressSearch={handleAddressSearch} />
+      )}
+
+      {/* Bottom Sheets */}
+      {viewState === 'showMap' ? (
+        // Station Sheet
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={handleSheetToggle}
@@ -321,7 +330,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
             activeStation={activeStation}
           />
         </Sheet>
+      ) : (
+        // Car Sheet
+        <CarSheet
+          isOpen={!isSheetMinimized}
+          onToggle={handleSheetToggle}
+        />
       )}
+
+      {/* Loading States */}
+      {overlayVisible && <LoadingSpinner />}
     </div>
   );
 }
