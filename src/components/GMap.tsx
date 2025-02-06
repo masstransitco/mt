@@ -19,8 +19,6 @@ import {
   selectCarsError,
 } from '@/store/carSlice';
 import {
-  selectDepartureStationId,
-  selectArrivalStationId,
   selectUserLocation,
 } from '@/store/userSlice';
 import {
@@ -31,7 +29,8 @@ import {
 import Sheet from '@/components/ui/sheet';
 import StationSelector from './StationSelector';
 import { LoadingSpinner } from './LoadingSpinner';
-import CarSheet from '@/components/booking/CarSheet'; // renders the CarGrid internally
+import CarSheet from '@/components/booking/CarSheet';
+import StationDetail from './StationDetail'; // Import the StationDetail component
 
 import {
   LIBRARIES,
@@ -56,6 +55,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
+  const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
 
   // Redux state
   const dispatch = useAppDispatch();
@@ -167,7 +167,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Instead of returning early, always return the same container.
+  // Always return the same container so that hook order is preserved
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {hasError ? (
@@ -211,7 +211,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
                     key={station.id}
                     position={{ lat, lng }}
                     onClick={() => {
-                      /* Your marker click logic (if needed) */
+                      // When a station is clicked, set it as active
+                      setActiveStation(station);
+                      // Optionally, you might want to minimize the sheet before showing details
+                      if (isSheetMinimized) {
+                        dispatch(toggleSheet());
+                      }
                     }}
                     icon={markerIcons?.default}
                   />
@@ -233,11 +238,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* Optionally render StationSelector */}
           <StationSelector onAddressSearch={handleAddressSearch} />
 
-          {/* Always render the CarSheet now */}
-          <CarSheet 
-            isOpen={!isSheetMinimized}
-            onToggle={handleSheetToggle}
-          />
+          {/* Conditionally render the bottom sheet:
+              If a station is selected, show StationDetail,
+              otherwise show the CarSheet */}
+          {activeStation ? (
+            <Sheet
+              isOpen={!isSheetMinimized}
+              onToggle={handleSheetToggle}
+              title="Station Details"
+              count={(searchLocation ? sortedStations : stations).length}
+            >
+              <StationDetail 
+                stations={searchLocation ? sortedStations : stations}
+                activeStation={activeStation}
+              />
+            </Sheet>
+          ) : (
+            <CarSheet 
+              isOpen={!isSheetMinimized}
+              onToggle={handleSheetToggle}
+            />
+          )}
         </>
       )}
     </div>
