@@ -45,6 +45,7 @@ const MAP_CONTAINER_STYLE = {
 };
 const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }; // Hong Kong center
 const DEFAULT_ZOOM = 11;
+const BOUNDS_PADDING = 0.01; // For manual bounds padding
 
 interface GMapProps {
   googleApiKey: string;
@@ -90,6 +91,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
+
+  // Helper function to extend bounds with padding
+  const extendBoundsWithPadding = useCallback((bounds: google.maps.LatLngBounds) => {
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    bounds.extend(new google.maps.LatLng(ne.lat() + BOUNDS_PADDING, ne.lng() + BOUNDS_PADDING));
+    bounds.extend(new google.maps.LatLng(sw.lat() - BOUNDS_PADDING, sw.lng() - BOUNDS_PADDING));
+    return bounds;
+  }, []);
 
   // Initialize map options and services
   useEffect(() => {
@@ -199,13 +209,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
             duration: route.duration?.text || '',
           });
 
-          // Adjust map bounds
-     if (mapRef.current) {
-  const bounds = new google.maps.LatLngBounds();
-  result.routes[0].overview_path.forEach(point => bounds.extend(point));
-  mapRef.current.fitBounds(bounds, {
-    padding: { top: 50, right: 50, bottom: 50, left: 50 }
-  });
+          // Adjust map bounds with manual padding
+          if (mapRef.current) {
+            const bounds = new google.maps.LatLngBounds();
+            result.routes[0].overview_path.forEach(point => bounds.extend(point));
+            const paddedBounds = extendBoundsWithPadding(bounds);
+            mapRef.current.fitBounds(paddedBounds);
           }
         }
       } catch (error) {
@@ -217,7 +226,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
 
     calculateRoute();
-  }, [directionsService, departureStationId, arrivalStationId, stations]);
+  }, [directionsService, departureStationId, arrivalStationId, stations, extendBoundsWithPadding]);
 
   // Sort stations by distance to a point
   const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
@@ -249,9 +258,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const [lng, lat] = station.geometry.coordinates;
         bounds.extend({ lat, lng });
       });
-      map.fitBounds(bounds, 50);
+      const paddedBounds = extendBoundsWithPadding(bounds);
+      map.fitBounds(paddedBounds);
     }
-  }, [stations]);
+  }, [stations, extendBoundsWithPadding]);
 
   const handleMarkerClick = useCallback((station: StationFeature) => {
     if (!mapRef.current) return;
