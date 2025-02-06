@@ -2,7 +2,6 @@
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { FixedSizeList } from 'react-window';
 import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
@@ -23,21 +22,16 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
-  selectDepartureStation,
-  selectArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
-  selectViewState,
   selectIsSheetMinimized,
 } from '@/store/uiSlice';
-import { selectBookingStep } from '@/store/bookingSlice';
 
 import Sheet from '@/components/ui/sheet';
-import { StationListItem } from './StationListItem';
-import { StationDetail } from './StationDetail';
-import { LoadingSpinner } from './LoadingSpinner';
 import StationSelector from './StationSelector';
+import { LoadingSpinner } from './LoadingSpinner';
+import CarSheet from '@/components/booking/CarSheet'; // renders the CarGrid internally
 
 import {
   LIBRARIES,
@@ -55,11 +49,9 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
-  
+
   // Local state
-  const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
-  const [selectedStationId, setSelectedStationId] = useState<number | null>(null);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
@@ -73,21 +65,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
-  const step = useAppSelector(selectBookingStep);
-  const departureStationId = useAppSelector(selectDepartureStationId);
-  const arrivalStationId = useAppSelector(selectArrivalStationId);
   const userLocation = useAppSelector(selectUserLocation);
-  const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Maps API loader
+  // Load the Maps API
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Initialize map options and marker icons when Google Maps is loaded
+  // Initialize map options and marker icons when Maps API is ready
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -95,14 +83,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Sort stations by distance to a point
+  // Sort stations by distance to a given point
   const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
     if (!google?.maps?.geometry?.spherical) return stationsToSort;
-
     return [...stationsToSort].sort((a, b) => {
       const [lngA, latA] = a.geometry.coordinates;
       const [lngB, latB] = b.geometry.coordinates;
-      
       const distA = google.maps.geometry.spherical.computeDistanceBetween(
         new google.maps.LatLng(latA, lngA),
         new google.maps.LatLng(point.lat, point.lng)
@@ -111,7 +97,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         new google.maps.LatLng(latB, lngB),
         new google.maps.LatLng(point.lat, point.lng)
       );
-      
       return distA - distB;
     });
   }, []);
@@ -119,25 +104,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Handle address search from StationSelector
   const handleAddressSearch = useCallback((location: google.maps.LatLngLiteral) => {
     if (!mapRef.current) return;
-
     setSearchLocation(location);
     mapRef.current.panTo(location);
     mapRef.current.setZoom(15);
-
     const sorted = sortStationsByDistanceToPoint(location, stations);
     setSortedStations(sorted);
-
     if (isSheetMinimized) {
       dispatch(toggleSheet());
     }
   }, [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]);
 
-  // Map initialization
+  // Map initialization: fit bounds to stations if available
   const handleMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
     if (stations.length > 0) {
       const bounds = new google.maps.LatLngBounds();
-      stations.forEach(station => {
+      stations.forEach((station) => {
         const [lng, lat] = station.geometry.coordinates;
         bounds.extend({ lat, lng });
       });
@@ -145,88 +127,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [stations]);
 
-  // Effect to handle station selection
-  useEffect(() => {
-    if (selectedStationId === null) return;
-
-    const station = stations.find(s => s.id === selectedStationId);
-    if (!station) return;
-
-    const isValidSelection = (
-      (step === 1 && station.id !== arrivalStationId) ||
-      (step === 2 && station.id !== departureStationId)
-    );
-
-    if (!isValidSelection) {
-      toast.error('Cannot use same station for departure and arrival');
-      setSelectedStationId(null);
-      return;
-    }
-
-    if (step === 1) {
-      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-      toast.success('Departure station selected');
-    } else if (step === 2) {
-      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-      toast.success('Arrival station selected');
-    }
-
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-
-    setSelectedStationId(null);
-  }, [selectedStationId, stations, step, departureStationId, arrivalStationId, dispatch, isSheetMinimized]);
-
-  // Map interaction handlers
-  const handleMarkerClick = useCallback((station: StationFeature) => {
-    if (!mapRef.current) return;
-
-    const [lng, lat] = station.geometry.coordinates;
-    mapRef.current.panTo({ lat, lng });
-    mapRef.current.setZoom(15);
-
-    setActiveStation(station);
-    setSelectedStationId(station.id);
-  }, []);
-
-  const handleMarkerHover = useCallback((station: StationFeature | null) => {
-    setActiveStation(station);
-  }, []);
-
-  // Sheet controls
-  const handleSheetToggle = useCallback(() => {
-    dispatch(toggleSheet());
-  }, [dispatch]);
-
-  // Dynamic sheet title
-  const getSheetTitle = useCallback(() => {
-    if (searchLocation) return "Nearby Stations";
-    if (activeStation) return "Station Details";
-    return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
-  }, [searchLocation, activeStation, step]);
-
-  // Marker styling
-  const getMarkerIcon = useCallback((station: StationFeature) => {
-    if (!markerIcons) return null;
-    
-    if (station.id === departureStationId) {
-      return markerIcons.departureStation;
-    }
-    if (station.id === arrivalStationId) {
-      return markerIcons.arrivalStation;
-    }
-    const isActive = station.id === activeStation?.id;
-    return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
-  }, [markerIcons, departureStationId, arrivalStationId, activeStation]);
-
-  // Data initialization
+  // Data initialization: fetch stations and cars
   useEffect(() => {
     const init = async () => {
       try {
         await Promise.all([
           dispatch(fetchStations()).unwrap(),
-          dispatch(fetchCars()).unwrap()
+          dispatch(fetchCars()).unwrap(),
         ]);
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -236,7 +143,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Loading state management
+  // Hide overlay when data is loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -264,6 +171,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
+  // Sheet toggle control
+  const handleSheetToggle = useCallback(() => {
+    dispatch(toggleSheet());
+  }, [dispatch]);
+
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       <div className="absolute inset-0">
@@ -274,6 +186,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           options={mapOptions || {}}
           onLoad={handleMapLoad}
         >
+          {/* User Location Marker */}
           {userLocation && markerIcons && (
             <Marker
               position={userLocation}
@@ -282,20 +195,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
+          {/* Station Markers */}
           {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
               <Marker
                 key={station.id}
                 position={{ lat, lng }}
-                onClick={() => handleMarkerClick(station)}
-                onMouseOver={() => handleMarkerHover(station)}
-                onMouseOut={() => handleMarkerHover(null)}
-                icon={getMarkerIcon(station)}
+                onClick={() => {
+                  /* Your marker click logic (if needed) */
+                }}
+                icon={markerIcons?.default}
               />
             );
           })}
 
+          {/* Car Markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -307,21 +222,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
+      {/* Optionally keep the StationSelector if you still want to search/filter stations */}
       <StationSelector onAddressSearch={handleAddressSearch} />
 
-      {viewState === 'showMap' && (
-        <Sheet
-          isOpen={!isSheetMinimized}
-          onToggle={handleSheetToggle}
-          title={getSheetTitle()}
-          count={(searchLocation ? sortedStations : stations).length}
-        >
-          <StationDetail 
-            stations={searchLocation ? sortedStations : stations}
-            activeStation={activeStation}
-          />
-        </Sheet>
-      )}
+      {/* Always render the CarSheet (which contains the CarGrid) */}
+      <CarSheet 
+        isOpen={!isSheetMinimized}
+        onToggle={handleSheetToggle}
+      />
     </div>
   );
 }
