@@ -1,4 +1,3 @@
-// StationDetail.tsx
 'use client';
 
 import React, { memo } from 'react';
@@ -14,7 +13,13 @@ import {
   clearArrivalStation,
 } from '@/store/userSlice';
 import { StationFeature } from '@/store/stationsSlice';
-import type { RouteInfo, StationDetailProps } from './GMap';
+import type { RouteInfo } from './GMap';
+
+interface StationDetailProps {
+  stations: StationFeature[];
+  activeStation: StationFeature | null;
+  routeInfo: RouteInfo | null;
+}
 
 export const StationDetail = memo<StationDetailProps>(({ 
   stations, 
@@ -100,6 +105,7 @@ export const StationDetail = memo<StationDetailProps>(({
 
       {/* Station Details */}
       <div className="space-y-2 pl-8">
+        {/* Station Info */}
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Available Spots</span>
           <span className="font-medium">
@@ -119,12 +125,16 @@ export const StationDetail = memo<StationDetailProps>(({
             <span className="font-medium">{activeStation.properties.waitTime} min</span>
           </div>
         )}
+
+        {/* Distance Info */}
         {localDistance && !routeInfo && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Distance from You</span>
             <span className="font-medium">{localDistance}</span>
           </div>
         )}
+
+        {/* Route Info */}
         {routeInfo && (
           <>
             <div className="flex justify-between text-sm">
