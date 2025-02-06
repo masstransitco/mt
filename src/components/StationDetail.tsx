@@ -1,9 +1,8 @@
 'use client';
 
-import React, { memo } from 'react';
-import { MapPin, Navigation, Zap, Clock } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 import {
@@ -12,184 +11,262 @@ import {
   clearDepartureStation,
   clearArrivalStation,
 } from '@/store/userSlice';
-import { StationFeature } from '@/store/stationsSlice';
+import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
+import debounce from 'lodash/debounce';
 
-interface StationDetailProps {
-  stations: StationFeature[];
-  activeStation: StationFeature | null;
+interface StationSelectorProps {
+  onAddressSearch: (location: google.maps.LatLngLiteral) => void;
 }
 
-/**
- * Step meanings (summarized):
- *   1 = selecting_departure_station
- *   2 = selected_departure_station
- *   3 = selecting_arrival_station
- *   4 = selected_arrival_station
- */
-export const StationDetail = memo<StationDetailProps>(({ stations, activeStation }) => {
-  const dispatch = useAppDispatch();
-  const step = useAppSelector(selectBookingStep);
+interface AddressSearchProps {
+  onAddressSelect: (location: google.maps.LatLngLiteral) => void;
+  disabled?: boolean;
+  placeholder: string;
+  selectedStation?: StationFeature;
+}
 
-  // Redux user state: which station IDs are currently selected
-  const departureId = useAppSelector(selectDepartureStationId);
-  const arrivalId = useAppSelector(selectArrivalStationId);
+const AddressSearch = ({
+  onAddressSelect,
+  disabled,
+  placeholder,
+  selectedStation,
+}: AddressSearchProps) => {
+  const [searchText, setSearchText] = useState('');
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [showResults, setShowResults] = useState(false);
 
-  // Are we dealing with departure or arrival?
-  // steps 1 and 2 => departure, steps 3 and 4 => arrival
-  const isDepartureFlow = step <= 2;  
+  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+  const geocoder = useRef<google.maps.Geocoder | null>(null);
 
-  // If no station is active, show instructions
-  if (!activeStation) {
+  useEffect(() => {
+    if (window.google) {
+      autocompleteService.current = new google.maps.places.AutocompleteService();
+      geocoder.current = new google.maps.Geocoder();
+    }
+  }, []);
+
+  // If a station is already selected, show its name rather than an input
+  if (selectedStation) {
     return (
-      <div className="p-6 space-y-4">
-        <div className="text-sm text-muted-foreground">
-          {isDepartureFlow
-            ? 'Select a departure station from the map or list below.'
-            : 'Select an arrival station from the map or list below.'}
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-          <div className="p-3 rounded-lg bg-muted/10 flex items-center gap-2">
-            <Zap className="w-4 h-4" />
-            <span>View charging capacity</span>
-          </div>
-          <div className="p-3 rounded-lg bg-muted/10 flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            <span>Check availability</span>
-          </div>
-        </div>
+      <div className="flex-1 px-2 py-1.5 text-foreground font-medium">
+        {selectedStation.properties.Place}
       </div>
     );
   }
 
-  // For UI: which icon do we show?
-  const Icon = isDepartureFlow ? MapPin : Navigation;
-
-  // For computing distance, find the "other station" (either arrival if we're in departure flow or vice versa)
-  const otherStationId = isDepartureFlow ? arrivalId : departureId;
-  const otherStation = stations.find(s => s.id === otherStationId);
-
-  // If both stations are selected, we can compute total route distance
-  const routeDistance =
-    otherStation &&
-    activeStation.distance !== undefined &&
-    otherStation.distance !== undefined
-      ? (activeStation.distance + otherStation.distance).toFixed(1)
-      : null;
-
-  const handleClear = () => {
-    if (isDepartureFlow) {
-      dispatch(clearDepartureStation());
-      // Usually you'd revert to step=1 if you cleared the departure station
-      dispatch(advanceBookingStep(1));
-      toast.success('Departure station cleared');
-    } else {
-      dispatch(clearArrivalStation());
-      // Usually you'd revert to step=3 if you cleared the arrival station
-      dispatch(advanceBookingStep(3));
-      toast.success('Arrival station cleared');
+  const searchPlaces = debounce(async (input: string) => {
+    if (!input.trim() || !autocompleteService.current) return;
+    try {
+      const request: google.maps.places.AutocompleteRequest = {
+        input,
+        componentRestrictions: { country: 'HK' },
+        types: ['address'],
+      };
+      const response = await autocompleteService.current.getPlacePredictions(request);
+      setPredictions(response.predictions);
+      setShowResults(true);
+    } catch (error) {
+      console.error('Error fetching predictions:', error);
+      setPredictions([]);
     }
-  };
+  }, 300);
 
-  const handleConfirm = () => {
-    if (isDepartureFlow) {
-      // Step 1 or 2 => departure selection
-      dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
+  const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
+    if (!geocoder.current) return;
 
-      if (step === 1) {
-        // If we were in step=1 (selecting_departure_station), we now set step=2 (selected_departure_station)
-        dispatch(advanceBookingStep(2));
-        toast.success('Departure station selected.');
-      } else if (step === 2) {
-        // If user reconfirms, or you want to proceed from "selected departure" to "selecting arrival"
-        dispatch(advanceBookingStep(3));
-        toast.success('Departure station confirmed. Now select your arrival station.');
+    try {
+      const response = await geocoder.current.geocode({ placeId: prediction.place_id });
+      if (response.results[0]?.geometry?.location) {
+        const { lat, lng } = response.results[0].geometry.location;
+        onAddressSelect({ lat: lat(), lng: lng() });
+        setSearchText(prediction.structured_formatting.main_text);
+        setPredictions([]);
+        setShowResults(false);
       }
-    } else {
-      // Step 3 or 4 => arrival selection
-      dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
-
-      if (step === 3) {
-        // If we were in step=3 (selecting_arrival_station), we now set step=4 (selected_arrival_station)
-        dispatch(advanceBookingStep(4));
-        toast.success('Arrival station selected.');
-      } else if (step === 4) {
-        // If user reconfirms or you want to finalize the route
-        // Possibly proceed to step=5 => payment or finalizing
-        dispatch(advanceBookingStep(5));
-        toast.success('Route confirmed! Next: payment or finalizing.');
-      }
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      toast.error('Unable to locate address');
     }
   };
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Station Header */}
-      <div className="flex items-start gap-3">
-        <Icon className="w-5 h-5 mt-1 text-primary" />
-        <div className="flex-1">
-          <h3 className="font-medium">
-            {activeStation.properties.Place}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {isDepartureFlow ? 'Departure Station' : 'Arrival Station'}
-          </p>
-        </div>
-      </div>
-
-      {/* Station Details */}
-      <div className="space-y-2 pl-8">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Available Spots</span>
-          <span className="font-medium">
-            {activeStation.properties.availableSpots}
-            <span className="text-muted-foreground pl-1">
-              / {activeStation.properties.totalSpots}
-            </span>
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Max Power</span>
-          <span className="font-medium">{activeStation.properties.maxPower} kW</span>
-        </div>
-        {activeStation.properties.waitTime && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Est. Wait Time</span>
-            <span className="font-medium">{activeStation.properties.waitTime} min</span>
-          </div>
-        )}
-        {(activeStation.distance !== undefined || routeDistance) && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">
-              {routeDistance ? 'Total Route Distance' : 'Distance from You'}
-            </span>
-            <span className="font-medium">
-              {routeDistance || activeStation.distance?.toFixed(1)} km
-            </span>
-          </div>
+    <div className="relative flex-1">
+      <div className="relative">
+        <input
+          type="text"
+          value={searchText}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            searchPlaces(e.target.value);
+          }}
+          onFocus={() => setShowResults(true)}
+          onBlur={() => setTimeout(() => setShowResults(false), 200)}
+          disabled={disabled}
+          placeholder={placeholder}
+          className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60"
+        />
+        {searchText && (
+          <button
+            onClick={() => {
+              setSearchText('');
+              setPredictions([]);
+            }}
+            className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-2 pt-2">
-        <button
-          onClick={handleClear}
-          className="flex-1 px-4 py-2 text-sm font-medium text-muted-foreground 
-                   bg-muted hover:bg-muted/80 rounded-lg transition-colors"
+      {showResults && predictions.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-lg z-50">
+          {predictions.map((prediction) => (
+            <button
+              key={prediction.place_id}
+              onClick={() => handleSelect(prediction)}
+              className="w-full px-4 py-2 text-left hover:bg-muted/50 text-sm"
+            >
+              <div className="font-medium">
+                {prediction.structured_formatting.main_text}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {prediction.structured_formatting.secondary_text}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
+  const dispatch = useAppDispatch();
+  const step = useAppSelector(selectBookingStep);
+
+  // We find the user’s selected departure & arrival station IDs
+  const departureId = useAppSelector(selectDepartureStationId);
+  const arrivalId = useAppSelector(selectArrivalStationId);
+
+  // We find all stations (with distance) and match the selected ones
+  const stations = useAppSelector(selectStationsWithDistance);
+  const departureStation = stations.find(s => s.id === departureId);
+  const arrivalStation = stations.find(s => s.id === arrivalId);
+
+  /**
+   * For a 4-step flow:
+   *   Step 1,2 => dealing with departure
+   *   Step 3,4 => dealing with arrival
+   */
+  const isDepartureFlow = step <= 2;
+  const isArrivalFlow = step >= 3;
+
+  // We'll highlight the departure input if step=1 or step=2
+  // You may want to highlight only step=1 if you want "active selecting" vs "selected" states
+  const highlightDeparture = step === 1; 
+  // We'll highlight the arrival input if step=3
+  const highlightArrival = step === 3;
+
+  return (
+    <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg">
+      <div className="p-4 space-y-3">
+
+        {/* DEPARTURE Input */}
+        <div
+          className={`
+            flex items-center gap-2 p-3 rounded-lg transition-all duration-200
+            ${highlightDeparture ? 'ring-2 ring-primary bg-background' : ''}
+            ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
+          `}
         >
-          Clear
-        </button>
-        <button
-          onClick={handleConfirm}
-          className="flex-1 px-4 py-2 text-sm font-medium text-white 
-                   bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+          <MapPin
+            className={`
+              w-5 h-5 flex-shrink-0
+              ${highlightDeparture ? 'text-primary' : 'text-muted-foreground'}
+            `}
+          />
+          <AddressSearch
+            onAddressSelect={onAddressSearch}
+            disabled={!isDepartureFlow || step !== 1} // Only editable in step=1
+            placeholder="Search for a station to pick-up the car"
+            selectedStation={departureStation}
+          />
+          {departureStation && (
+            <button
+              onClick={() => {
+                // If user clears the departure station, revert to step=1
+                dispatch(clearDepartureStation());
+                dispatch(clearArrivalStation());
+                dispatch(advanceBookingStep(1));
+                toast.success('Departure station cleared');
+              }}
+              className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* ARRIVAL Input */}
+        <div
+          className={`
+            flex items-center gap-2 p-3 rounded-lg transition-all duration-200
+            ${highlightArrival ? 'ring-2 ring-primary bg-background' : ''}
+            ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
+          `}
         >
-          {isDepartureFlow ? 'Confirm Departure' : 'Confirm Arrival'}
-        </button>
+          <Navigation
+            className={`
+              w-5 h-5 flex-shrink-0
+              ${highlightArrival ? 'text-primary' : 'text-muted-foreground'}
+            `}
+          />
+          <AddressSearch
+            onAddressSelect={onAddressSearch}
+            disabled={!isArrivalFlow || step !== 3} // Only editable in step=3
+            placeholder="Search for a station to return the car"
+            selectedStation={arrivalStation}
+          />
+          {arrivalStation && (
+            <button
+              onClick={() => {
+                // If user clears the arrival station, revert to step=3
+                dispatch(clearArrivalStation());
+                dispatch(advanceBookingStep(3));
+                toast.success('Arrival station cleared');
+              }}
+              className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Info Bar */}
+        <div className="flex items-center justify-between px-2 py-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {/* Up to you how you show progress for 4 steps. For example: */}
+            <span>Step {step} of 4</span>
+            <span>•</span>
+            <span>
+              {step <= 2 ? 'Departure Flow' : 'Arrival Flow'}
+            </span>
+          </div>
+          {departureStation && arrivalStation && (
+            <div className="text-xs font-medium">
+              Total Route: {((departureStation.distance || 0) + (arrivalStation.distance || 0)).toFixed(1)} km
+            </div>
+          )}
+        </div>
+
+        {/* Validation Messages */}
+        {departureId && arrivalId && departureId === arrivalId && (
+          <div className="flex items-center gap-2 px-2 text-xs text-destructive">
+            <AlertCircle className="w-4 h-4" />
+            <span>Departure and arrival stations cannot be the same</span>
+          </div>
+        )}
       </div>
     </div>
   );
-});
-
-StationDetail.displayName = 'StationDetail';
-
-export default StationDetail;
+}
