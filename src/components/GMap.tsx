@@ -66,7 +66,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsError = useAppSelector(selectCarsError);
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
-  const bookingStep = useAppSelector(selectBookingStep); // Gets the current booking step
+  const bookingStep = useAppSelector(selectBookingStep); // 1 = departure selection, 2 = arrival selection, etc.
 
   // Load the Maps API
   const { isLoaded, loadError } = useJsApiLoader({
@@ -167,8 +167,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Always return the same container so that hook order is preserved.
-  // We now render the bottom sheet only when bookingStep is 1.
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {hasError ? (
@@ -239,13 +237,34 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* Render the StationSelector */}
           <StationSelector onAddressSearch={handleAddressSearch} />
 
-          {/* Conditionally render the bottom sheet only when bookingStep === 1 */}
-          {bookingStep === 1 && (
-            activeStation ? (
+          {/* Render bottom sheet if bookingStep is 1 or 2 */}
+          {(bookingStep === 1 || bookingStep === 2) && (
+            bookingStep === 1 ? (
+              // For departure selection (step 1)
+              activeStation ? (
+                <Sheet
+                  isOpen={!isSheetMinimized}
+                  onToggle={handleSheetToggle}
+                  title="Station Details"
+                  count={(searchLocation ? sortedStations : stations).length}
+                >
+                  <StationDetail 
+                    stations={searchLocation ? sortedStations : stations}
+                    activeStation={activeStation}
+                  />
+                </Sheet>
+              ) : (
+                <CarSheet 
+                  isOpen={!isSheetMinimized}
+                  onToggle={handleSheetToggle}
+                />
+              )
+            ) : (
+              // For arrival selection (step 2), always show StationDetail (empty state if activeStation is null)
               <Sheet
                 isOpen={!isSheetMinimized}
                 onToggle={handleSheetToggle}
-                title="Station Details"
+                title="Select Arrival Station"
                 count={(searchLocation ? sortedStations : stations).length}
               >
                 <StationDetail 
@@ -253,11 +272,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   activeStation={activeStation}
                 />
               </Sheet>
-            ) : (
-              <CarSheet 
-                isOpen={!isSheetMinimized}
-                onToggle={handleSheetToggle}
-              />
             )
           )}
         </>
