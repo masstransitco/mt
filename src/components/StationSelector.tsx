@@ -54,10 +54,12 @@ const AddressSearch = ({
     );
   }
 
+  // Debounced search function for Google Autocomplete
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
     try {
-      const request: google.maps.places.AutocompleteRequest = {
+      // Cast to any to avoid TS error about 'componentRestrictions'
+      const request: any = {
         input,
         componentRestrictions: { country: 'HK' },
         types: ['address'],
@@ -71,6 +73,7 @@ const AddressSearch = ({
     }
   }, 300);
 
+  // Handle the user selecting a prediction from the list
   const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
 
@@ -144,34 +147,25 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
-  // We find the user’s selected departure & arrival station IDs
+  // IDs of the selected departure & arrival stations
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // We find all stations (with distance) and match the selected ones
+  // All stations + distance
   const stations = useAppSelector(selectStationsWithDistance);
-  const departureStation = stations.find(s => s.id === departureId);
-  const arrivalStation = stations.find(s => s.id === arrivalId);
+  const departureStation = stations.find((s) => s.id === departureId);
+  const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  /**
-   * For a 4-step flow:
-   *   Step 1,2 => dealing with departure
-   *   Step 3,4 => dealing with arrival
-   */
-  const isDepartureFlow = step <= 2;
-  const isArrivalFlow = step >= 3;
-
-  // We'll highlight the departure input if step=1 or step=2
-  // You may want to highlight only step=1 if you want "active selecting" vs "selected" states
-  const highlightDeparture = step === 1; 
-  // We'll highlight the arrival input if step=3
-  const highlightArrival = step === 3;
+  // Basic 2-step approach:
+  // Step 1 => highlight departure
+  // Step 2 => highlight arrival
+  const highlightDeparture = step === 1;
+  const highlightArrival = step === 2;
 
   return (
     <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg">
       <div className="p-4 space-y-3">
-
-        {/* DEPARTURE Input */}
+        {/* Departure Input */}
         <div
           className={`
             flex items-center gap-2 p-3 rounded-lg transition-all duration-200
@@ -187,14 +181,14 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={!isDepartureFlow || step !== 1} // Only editable in step=1
-            placeholder="Search for a station to pick-up the car"
+            disabled={step !== 1}
+            placeholder="Search for departure station"
             selectedStation={departureStation}
           />
           {departureStation && (
             <button
               onClick={() => {
-                // If user clears the departure station, revert to step=1
+                // Clear departure
                 dispatch(clearDepartureStation());
                 dispatch(clearArrivalStation());
                 dispatch(advanceBookingStep(1));
@@ -207,7 +201,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           )}
         </div>
 
-        {/* ARRIVAL Input */}
+        {/* Arrival Input */}
         <div
           className={`
             flex items-center gap-2 p-3 rounded-lg transition-all duration-200
@@ -223,16 +217,16 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={!isArrivalFlow || step !== 3} // Only editable in step=3
-            placeholder="Search for a station to return the car"
+            disabled={step !== 2}
+            placeholder="Search for arrival station"
             selectedStation={arrivalStation}
           />
           {arrivalStation && (
             <button
               onClick={() => {
-                // If user clears the arrival station, revert to step=3
+                // Clear arrival
                 dispatch(clearArrivalStation());
-                dispatch(advanceBookingStep(3));
+                dispatch(advanceBookingStep(2));
                 toast.success('Arrival station cleared');
               }}
               className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
@@ -245,12 +239,9 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
         {/* Info Bar */}
         <div className="flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {/* Up to you how you show progress for 4 steps. For example: */}
-            <span>Step {step} of 4</span>
+            <span>Step {step} of 2</span>
             <span>•</span>
-            <span>
-              {step <= 2 ? 'Departure Flow' : 'Arrival Flow'}
-            </span>
+            <span>{step === 1 ? 'Select departure station' : 'Select arrival station'}</span>
           </div>
           {departureStation && arrivalStation && (
             <div className="text-xs font-medium">
