@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-// Import both the selector and the action to reset the step
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
@@ -26,10 +25,16 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
-const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation }: AddressSearchProps) => {
+const AddressSearch = ({
+  onAddressSelect,
+  disabled,
+  placeholder,
+  selectedStation,
+}: AddressSearchProps) => {
   const [searchText, setSearchText] = useState('');
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showResults, setShowResults] = useState(false);
+
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const geocoder = useRef<google.maps.Geocoder | null>(null);
 
@@ -40,7 +45,7 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
     }
   }, []);
 
-  // Don't render input if station is selected
+  // If a station is already selected, show its name rather than an input
   if (selectedStation) {
     return (
       <div className="flex-1 px-2 py-1.5 text-foreground font-medium">
@@ -51,14 +56,12 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
 
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
-
-    const request = {
-      input,
-      componentRestrictions: { country: 'HK' },
-      types: ['address']
-    };
-
     try {
+      const request: google.maps.places.AutocompleteRequest = {
+        input,
+        componentRestrictions: { country: 'HK' },
+        types: ['address'],
+      };
       const response = await autocompleteService.current.getPlacePredictions(request);
       setPredictions(response.predictions);
       setShowResults(true);
@@ -140,33 +143,58 @@ const AddressSearch = ({ onAddressSelect, disabled, placeholder, selectedStation
 export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
+
+  // We find the user’s selected departure & arrival station IDs
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
-  const stations = useAppSelector(selectStationsWithDistance);
 
+  // We find all stations (with distance) and match the selected ones
+  const stations = useAppSelector(selectStationsWithDistance);
   const departureStation = stations.find(s => s.id === departureId);
   const arrivalStation = stations.find(s => s.id === arrivalId);
+
+  /**
+   * For a 4-step flow:
+   *   Step 1,2 => dealing with departure
+   *   Step 3,4 => dealing with arrival
+   */
+  const isDepartureFlow = step <= 2;
+  const isArrivalFlow = step >= 3;
+
+  // We'll highlight the departure input if step=1 or step=2
+  // You may want to highlight only step=1 if you want "active selecting" vs "selected" states
+  const highlightDeparture = step === 1; 
+  // We'll highlight the arrival input if step=3
+  const highlightArrival = step === 3;
 
   return (
     <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg">
       <div className="p-4 space-y-3">
-        {/* Departure Input */}
-        <div className={`
-          flex items-center gap-2 p-3 rounded-lg transition-all duration-200
-          ${step === 1 ? 'ring-2 ring-primary bg-background' : ''}
-          ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
-        `}>
-          <MapPin className={`w-5 h-5 flex-shrink-0 ${step === 1 ? 'text-primary' : 'text-muted-foreground'}`} />
+
+        {/* DEPARTURE Input */}
+        <div
+          className={`
+            flex items-center gap-2 p-3 rounded-lg transition-all duration-200
+            ${highlightDeparture ? 'ring-2 ring-primary bg-background' : ''}
+            ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
+          `}
+        >
+          <MapPin
+            className={`
+              w-5 h-5 flex-shrink-0
+              ${highlightDeparture ? 'text-primary' : 'text-muted-foreground'}
+            `}
+          />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step !== 1}
+            disabled={!isDepartureFlow || step !== 1} // Only editable in step=1
             placeholder="Search for a station to pick-up the car"
             selectedStation={departureStation}
           />
           {departureStation && (
             <button
               onClick={() => {
-                // When clearing the departure station, clear both stations and reset to step 1.
+                // If user clears the departure station, revert to step=1
                 dispatch(clearDepartureStation());
                 dispatch(clearArrivalStation());
                 dispatch(advanceBookingStep(1));
@@ -179,25 +207,32 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           )}
         </div>
 
-        {/* Arrival Input */}
-        <div className={`
-          flex items-center gap-2 p-3 rounded-lg transition-all duration-200
-          ${step === 2 ? 'ring-2 ring-primary bg-background' : ''}
-          ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
-        `}>
-          <Navigation className={`w-5 h-5 flex-shrink-0 ${step === 2 ? 'text-primary' : 'text-muted-foreground'}`} />
+        {/* ARRIVAL Input */}
+        <div
+          className={`
+            flex items-center gap-2 p-3 rounded-lg transition-all duration-200
+            ${highlightArrival ? 'ring-2 ring-primary bg-background' : ''}
+            ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
+          `}
+        >
+          <Navigation
+            className={`
+              w-5 h-5 flex-shrink-0
+              ${highlightArrival ? 'text-primary' : 'text-muted-foreground'}
+            `}
+          />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step !== 2}
+            disabled={!isArrivalFlow || step !== 3} // Only editable in step=3
             placeholder="Search for a station to return the car"
             selectedStation={arrivalStation}
           />
           {arrivalStation && (
             <button
               onClick={() => {
+                // If user clears the arrival station, revert to step=3
                 dispatch(clearArrivalStation());
-                // Reset the step to 2 to allow re-entry of the arrival station.
-                dispatch(advanceBookingStep(2));
+                dispatch(advanceBookingStep(3));
                 toast.success('Arrival station cleared');
               }}
               className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
@@ -210,10 +245,11 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
         {/* Info Bar */}
         <div className="flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Step {step} of 2</span>
+            {/* Up to you how you show progress for 4 steps. For example: */}
+            <span>Step {step} of 4</span>
             <span>•</span>
             <span>
-              {step === 1 ? 'Select departure station' : 'Select arrival station'}
+              {step <= 2 ? 'Departure Flow' : 'Arrival Flow'}
             </span>
           </div>
           {departureStation && arrivalStation && (
