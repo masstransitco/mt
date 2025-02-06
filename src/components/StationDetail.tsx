@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
-import { 
+import {
   selectDepartureStationId,
   selectArrivalStationId,
   clearDepartureStation,
@@ -25,7 +25,7 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // Show empty state with instructions if no station selected
+  // Show instructions if no station is active
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -52,7 +52,7 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
   const Icon = isDeparture ? MapPin : Navigation;
   const otherStationId = isDeparture ? arrivalId : departureId;
   
-  // Calculate distance between stations if both are selected
+  // Calculate route distance if both stations are available
   const otherStation = stations.find(s => s.id === otherStationId);
   const routeDistance = otherStation && activeStation.distance !== undefined && otherStation.distance !== undefined
     ? (activeStation.distance + otherStation.distance).toFixed(1)
@@ -72,11 +72,13 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
 
   const handleConfirm = () => {
     if (isDeparture) {
+      // Dispatch action to set the departure station ID
+      dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
       dispatch(advanceBookingStep(2));
       toast.success('Departure station confirmed. Now select your arrival station.');
     } else {
-      if (!departureId || !arrivalId) return;
-      
+      // Dispatch action to set the arrival station ID
+      dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
       dispatch(advanceBookingStep(3));
       toast.success('Route confirmed! Select your vehicle.');
     }
