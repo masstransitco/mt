@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleMap, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api';
-import { FixedSizeList } from 'react-window'; // (Optional: if you later want to virtualize lists)
+import { FixedSizeList } from 'react-window';
 import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
@@ -46,6 +46,22 @@ const MAP_CONTAINER_STYLE = {
 const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }; // Hong Kong center
 const DEFAULT_ZOOM = 11;
 const BOUNDS_PADDING = 0.01; // For manual bounds padding
+
+// Props and interfaces
+interface GMapProps {
+  googleApiKey: string;
+}
+
+interface RouteInfo {
+  distance: string;
+  duration: string;
+}
+
+interface StationDetailProps {
+  stations: StationFeature[];
+  activeStation: StationFeature | null;
+  routeInfo: RouteInfo | null;
+}
 
 // Props and interfaces
 export interface GMapProps {
@@ -486,5 +502,3 @@ function formatStationDetails(station: StationFeature) {
   };
 }
 
-// Export types for external use
-export type { GMapProps, StationDetailProps, RouteInfo };
