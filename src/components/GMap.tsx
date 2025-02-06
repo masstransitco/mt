@@ -264,9 +264,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
-   return (
+  return (
     <div className="relative w-full h-[calc(100vh-64px)]">
-      {/* Map Container */}
       <div className="absolute inset-0">
         <GoogleMap
           mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -284,7 +283,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Station Markers - Only show when in map view */}
+          {/* Station Markers */}
           {viewState === 'showMap' && (searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -299,7 +298,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {/* Car Markers - Only show when in car view */}
+          {/* Car Markers */}
           {viewState === 'showCar' && cars.map((car) => (
             <Marker
               key={car.id}
@@ -311,34 +310,29 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* Station Search - Only show in map view */}
+      {/* Station Search */}
       {viewState === 'showMap' && (
         <StationSelector onAddressSearch={handleAddressSearch} />
       )}
 
-      {/* Bottom Sheets */}
-      {viewState === 'showMap' ? (
-        // Station Sheet
-        <Sheet
-          isOpen={!isSheetMinimized}
-          onToggle={handleSheetToggle}
-          title={getSheetTitle()}
-          count={(searchLocation ? sortedStations : stations).length}
-        >
-          <StationDetail 
-            stations={searchLocation ? sortedStations : stations}
-            activeStation={activeStation}
-          />
-        </Sheet>
-      ) : (
-        // Car Sheet
-        <CarSheet
-          isOpen={!isSheetMinimized}
-          onToggle={handleSheetToggle}
+      {/* Both sheets are always rendered, let them handle their own visibility */}
+      <Sheet
+        isOpen={!isSheetMinimized && viewState === 'showMap'}
+        onToggle={handleSheetToggle}
+        title={getSheetTitle()}
+        count={(searchLocation ? sortedStations : stations).length}
+      >
+        <StationDetail 
+          stations={searchLocation ? sortedStations : stations}
+          activeStation={activeStation}
         />
-      )}
+      </Sheet>
 
-      {/* Loading States */}
+      <CarSheet
+        isOpen={!isSheetMinimized}
+        onToggle={handleSheetToggle}
+      />
+
       {overlayVisible && <LoadingSpinner />}
     </div>
   );
