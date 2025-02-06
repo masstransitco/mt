@@ -14,34 +14,34 @@ interface CarSheetProps {
 }
 
 export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
+  // Always call hooks at the top level
   const cars = useAppSelector(selectAllCars);
   const selectedCarId = useAppSelector(selectSelectedCarId);
   const viewState = useAppSelector(selectViewState);
 
-  // Only show when in car view
-  if (viewState !== 'showCar') {
-    return null;
-  }
-
   return (
-    <Sheet
-      isOpen={isOpen}
-      onToggle={onToggle}
-      title="Available Cars"
-      count={cars.length}
-    >
-      <div className="px-4 py-2">
-        {selectedCarId ? (
-          <p className="text-sm text-muted-foreground mb-4">
-            Selected car #{selectedCarId}. Select a charging station to continue.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground mb-4">
-            Select a car to begin booking.
-          </p>
-        )}
-        <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
-      </div>
-    </Sheet>
+    <>
+      {viewState === 'showCar' && (
+        <Sheet
+          isOpen={isOpen}
+          onToggle={onToggle}
+          title="Available Cars"
+          count={cars.length}
+        >
+          <div className="px-4 py-2">
+            {selectedCarId ? (
+              <p className="text-sm text-muted-foreground mb-4">
+                Selected car #{selectedCarId}. Select a charging station to continue.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-4">
+                Select a car to begin booking.
+              </p>
+            )}
+            <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
+          </div>
+        </Sheet>
+      )}
+    </>
   );
 }
