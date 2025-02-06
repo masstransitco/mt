@@ -1,6 +1,6 @@
 {
-  "name": "car-rental-app",
-  "version": "0.1.0",
+  "name": "Aircity-MTC-APP",
+  "version": "0.2.13",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.14.1",
+    "@googlemaps/three": "^0.55.0", // Added for the Three.js Overlay
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-popover": "^1.0.7",
@@ -17,11 +18,10 @@
     "@react-google-maps/api": "^2.18.1",
     "@react-three/drei": "^9.92.7",
     "@react-three/fiber": "^8.15.12",
-    "react-hot-toast": "^2.4.1",
     "@react-three/postprocessing": "^2.15.1",
     "@reduxjs/toolkit": "^1.9.5",
-    "@stripe/stripe-js": "^2.4.0",
     "@stripe/react-stripe-js": "^2.4.0",
+    "@stripe/stripe-js": "^2.4.0",
     "@swc/core": "^1.4.2",
     "@swc/helpers": "^0.5.6",
     "@yudiel/react-qr-scanner": "^2.0.1",
@@ -38,6 +38,7 @@
     "postprocessing": "^6.34.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1", // if you still use it elsewhere, keep; otherwise remove
     "react-redux": "^8.1.2",
     "react-window": "^1.8.10",
     "stripe": "^14.14.0",
