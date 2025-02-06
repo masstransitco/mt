@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { MapPin, Navigation, Zap, Clock, Route } from 'lucide-react';
+import { MapPin, Navigation, Zap, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
@@ -13,19 +13,13 @@ import {
   clearArrivalStation,
 } from '@/store/userSlice';
 import { StationFeature } from '@/store/stationsSlice';
-import type { RouteInfo } from './GMap';
 
 interface StationDetailProps {
   stations: StationFeature[];
   activeStation: StationFeature | null;
-  routeInfo: RouteInfo | null;
 }
 
-export const StationDetail = memo<StationDetailProps>(({ 
-  stations, 
-  activeStation, 
-  routeInfo 
-}) => {
+export const StationDetail = memo<StationDetailProps>(({ stations, activeStation }) => {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -60,10 +54,10 @@ export const StationDetail = memo<StationDetailProps>(({
   
   // Calculate distance between stations if both are selected
   const otherStation = stations.find(s => s.id === otherStationId);
-  const localDistance = activeStation.distance !== undefined 
-    ? `${activeStation.distance.toFixed(1)} km` 
+  const routeDistance = otherStation && activeStation.distance !== undefined && otherStation.distance !== undefined
+    ? (activeStation.distance + otherStation.distance).toFixed(1)
     : null;
-  
+
   const handleClear = () => {
     if (isDeparture) {
       dispatch(clearDepartureStation());
@@ -105,7 +99,6 @@ export const StationDetail = memo<StationDetailProps>(({
 
       {/* Station Details */}
       <div className="space-y-2 pl-8">
-        {/* Station Info */}
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Available Spots</span>
           <span className="font-medium">
@@ -125,27 +118,15 @@ export const StationDetail = memo<StationDetailProps>(({
             <span className="font-medium">{activeStation.properties.waitTime} min</span>
           </div>
         )}
-
-        {/* Distance Info */}
-        {localDistance && !routeInfo && (
+        {(activeStation.distance !== undefined || routeDistance) && (
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Distance from You</span>
-            <span className="font-medium">{localDistance}</span>
+            <span className="text-muted-foreground">
+              {routeDistance ? 'Total Route Distance' : 'Distance from You'}
+            </span>
+            <span className="font-medium">
+              {(routeDistance || activeStation.distance?.toFixed(1))} km
+            </span>
           </div>
-        )}
-
-        {/* Route Info */}
-        {routeInfo && (
-          <>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Route Distance</span>
-              <span className="font-medium">{routeInfo.distance}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Est. Travel Time</span>
-              <span className="font-medium">{routeInfo.duration}</span>
-            </div>
-          </>
         )}
       </div>
 

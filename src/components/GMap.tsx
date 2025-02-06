@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GoogleMap, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
+import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { FixedSizeList } from 'react-window';
 import { toast } from 'react-hot-toast';
 
@@ -23,10 +23,12 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
   selectUserLocation,
-  selectViewState,
+  selectDepartureStation,
+  selectArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
+  selectViewState,
   selectIsSheetMinimized,
 } from '@/store/uiSlice';
 import { selectBookingStep } from '@/store/bookingSlice';
@@ -37,35 +39,23 @@ import { StationDetail } from './StationDetail';
 import { LoadingSpinner } from './LoadingSpinner';
 import StationSelector from './StationSelector';
 
-// Constants
-const LIBRARIES: ("geometry" | "places")[] = ["geometry", "places"];
-const MAP_CONTAINER_STYLE = {
-  width: '100%',
-  height: 'calc(100vh - 64px)',
-};
-const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }; // Hong Kong center
-const DEFAULT_ZOOM = 11;
-const BOUNDS_PADDING = 0.01; // For manual bounds padding
-
-interface RouteInfo {
-  distance: string;
-  duration: string;
-}
+import {
+  LIBRARIES,
+  MAP_CONTAINER_STYLE,
+  DEFAULT_CENTER,
+  DEFAULT_ZOOM,
+  createMapOptions,
+  createMarkerIcons,
+} from '@/constants/map';
 
 interface GMapProps {
   googleApiKey: string;
 }
 
-interface StationDetailProps {
-  stations: StationFeature[];
-  activeStation: StationFeature | null;
-  routeInfo: RouteInfo | null;
-}
-
 export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
-
+  
   // Local state
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -73,10 +63,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
-  const [markerIcons, setMarkerIcons] = useState<Record<string, google.maps.Symbol> | null>(null);
-  const [routePath, setRoutePath] = useState<google.maps.LatLng[]>([]);
-  const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
-  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
+  const [markerIcons, setMarkerIcons] = useState<any>(null);
 
   // Redux state
   const dispatch = useAppDispatch();
@@ -93,192 +80,112 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Load Google Maps API
+  // Maps API loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Helper: Extend bounds with padding
-  const extendBoundsWithPadding = useCallback((bounds: google.maps.LatLngBounds) => {
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    bounds.extend(new google.maps.LatLng(ne.lat() + BOUNDS_PADDING, ne.lng() + BOUNDS_PADDING));
-    bounds.extend(new google.maps.LatLng(sw.lat() - BOUNDS_PADDING, sw.lng() - BOUNDS_PADDING));
-    return bounds;
-  }, []);
-
-  // Initialize map options and services
+  // Initialize map options and marker icons when Google Maps is loaded
   useEffect(() => {
     if (isLoaded && window.google) {
-      setDirectionsService(new google.maps.DirectionsService());
-      setMapOptions({
-        mapId: 'ev_station_map',
-        gestureHandling: 'greedy',
-        disableDefaultUI: true,
-        clickableIcons: false,
-        backgroundColor: '#f8fafc',
-        restriction: {
-          latLngBounds: {
-            north: 22.6,
-            south: 22.1,
-            east: 114.4,
-            west: 113.8,
-          },
-          strictBounds: true,
-        },
-      });
-      setMarkerIcons({
-        user: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 7,
-          fillColor: '#4285F4',
-          fillOpacity: 1,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-        },
-        departureStation: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: '#34D399',
-          fillOpacity: 1,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-        },
-        arrivalStation: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: '#F87171',
-          fillOpacity: 1,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-        },
-        activeStation: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: '#6366F1',
-          fillOpacity: 1,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-        },
-        inactiveStation: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 6,
-          fillColor: '#6B7280',
-          fillOpacity: 0.8,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-        },
-        car: {
-          path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-          scale: 5,
-          fillColor: '#8B5CF6',
-          fillOpacity: 0.8,
-          strokeWeight: 2,
-          strokeColor: '#FFFFFF',
-        },
-      });
+      setMapOptions(createMapOptions());
+      setMarkerIcons(createMarkerIcons());
     }
   }, [isLoaded]);
 
-  // Calculate and draw route when stations change
-  useEffect(() => {
-    const calculateRoute = async () => {
-      if (!directionsService || !departureStationId || !arrivalStationId) {
-        setRoutePath([]);
-        setRouteInfo(null);
-        return;
-      }
-
-      const departureStation = stations.find(s => s.id === departureStationId);
-      const arrivalStation = stations.find(s => s.id === arrivalStationId);
-      if (!departureStation || !arrivalStation) return;
-
-      const [departureLng, departureLat] = departureStation.geometry.coordinates;
-      const [arrivalLng, arrivalLat] = arrivalStation.geometry.coordinates;
-
-      try {
-        const result = await directionsService.route({
-          origin: { lat: departureLat, lng: departureLng },
-          destination: { lat: arrivalLat, lng: arrivalLng },
-          travelMode: google.maps.TravelMode.DRIVING,
-          optimizeWaypoints: true,
-        });
-
-        if (result.routes.length > 0 && result.routes[0].overview_path) {
-          setRoutePath(result.routes[0].overview_path);
-          
-          const route = result.routes[0].legs[0];
-          setRouteInfo({
-            distance: route.distance?.text || '',
-            duration: route.duration?.text || '',
-          });
-
-          if (mapRef.current) {
-            const bounds = new google.maps.LatLngBounds();
-            result.routes[0].overview_path.forEach(point => bounds.extend(point));
-            const paddedBounds = extendBoundsWithPadding(bounds);
-            mapRef.current.fitBounds(paddedBounds);
-          }
-        }
-      } catch (error) {
-        console.error('Error calculating route:', error);
-        toast.error('Failed to calculate route');
-        setRoutePath([]);
-        setRouteInfo(null);
-      }
-    };
-
-    calculateRoute();
-  }, [directionsService, departureStationId, arrivalStationId, stations, extendBoundsWithPadding]);
-
   // Sort stations by distance to a point
-  const sortStationsByDistanceToPoint = useCallback(
-    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-      if (!google?.maps?.geometry?.spherical) return stationsToSort;
+  const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+    if (!google?.maps?.geometry?.spherical) return stationsToSort;
 
-      return [...stationsToSort].sort((a, b) => {
-        const [lngA, latA] = a.geometry.coordinates;
-        const [lngB, latB] = b.geometry.coordinates;
-        
-        const distA = google.maps.geometry.spherical.computeDistanceBetween(
-          new google.maps.LatLng(latA, lngA),
-          new google.maps.LatLng(point.lat, point.lng)
-        );
-        const distB = google.maps.geometry.spherical.computeDistanceBetween(
-          new google.maps.LatLng(latB, lngB),
-          new google.maps.LatLng(point.lat, point.lng)
-        );
-        
-        return distA - distB;
+    return [...stationsToSort].sort((a, b) => {
+      const [lngA, latA] = a.geometry.coordinates;
+      const [lngB, latB] = b.geometry.coordinates;
+      
+      const distA = google.maps.geometry.spherical.computeDistanceBetween(
+        new google.maps.LatLng(latA, lngA),
+        new google.maps.LatLng(point.lat, point.lng)
+      );
+      const distB = google.maps.geometry.spherical.computeDistanceBetween(
+        new google.maps.LatLng(latB, lngB),
+        new google.maps.LatLng(point.lat, point.lng)
+      );
+      
+      return distA - distB;
+    });
+  }, []);
+
+  // Handle address search from StationSelector
+  const handleAddressSearch = useCallback((location: google.maps.LatLngLiteral) => {
+    if (!mapRef.current) return;
+
+    setSearchLocation(location);
+    mapRef.current.panTo(location);
+    mapRef.current.setZoom(15);
+
+    const sorted = sortStationsByDistanceToPoint(location, stations);
+    setSortedStations(sorted);
+
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  }, [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]);
+
+  // Map initialization
+  const handleMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
+    if (stations.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      stations.forEach(station => {
+        const [lng, lat] = station.geometry.coordinates;
+        bounds.extend({ lat, lng });
       });
-    },
-    []
-  );
+      map.fitBounds(bounds, 50);
+    }
+  }, [stations]);
 
-  // Map event handlers
-  const handleMapLoad = useCallback(
-    (map: google.maps.Map) => {
-      mapRef.current = map;
-      if (stations.length > 0) {
-        const bounds = new google.maps.LatLngBounds();
-        stations.forEach(station => {
-          const [lng, lat] = station.geometry.coordinates;
-          bounds.extend({ lat, lng });
-        });
-        const paddedBounds = extendBoundsWithPadding(bounds);
-        map.fitBounds(paddedBounds);
-      }
-    },
-    [stations, extendBoundsWithPadding]
-  );
+  // Effect to handle station selection
+  useEffect(() => {
+    if (selectedStationId === null) return;
 
+    const station = stations.find(s => s.id === selectedStationId);
+    if (!station) return;
+
+    const isValidSelection = (
+      (step === 1 && station.id !== arrivalStationId) ||
+      (step === 2 && station.id !== departureStationId)
+    );
+
+    if (!isValidSelection) {
+      toast.error('Cannot use same station for departure and arrival');
+      setSelectedStationId(null);
+      return;
+    }
+
+    if (step === 1) {
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+      toast.success('Departure station selected');
+    } else if (step === 2) {
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+      toast.success('Arrival station selected');
+    }
+
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+
+    setSelectedStationId(null);
+  }, [selectedStationId, stations, step, departureStationId, arrivalStationId, dispatch, isSheetMinimized]);
+
+  // Map interaction handlers
   const handleMarkerClick = useCallback((station: StationFeature) => {
     if (!mapRef.current) return;
+
     const [lng, lat] = station.geometry.coordinates;
     mapRef.current.panTo({ lat, lng });
     mapRef.current.setZoom(15);
+
     setActiveStation(station);
     setSelectedStationId(station.id);
   }, []);
@@ -287,52 +194,31 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setActiveStation(station);
   }, []);
 
-  const handleAddressSearch = useCallback(
-    (location: google.maps.LatLngLiteral) => {
-      if (!mapRef.current) return;
-      setSearchLocation(location);
-      mapRef.current.panTo(location);
-      mapRef.current.setZoom(15);
-
-      const sorted = sortStationsByDistanceToPoint(location, stations);
-      setSortedStations(sorted);
-
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
-  );
-
   // Sheet controls
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
+  // Dynamic sheet title
   const getSheetTitle = useCallback(() => {
-    if (routeInfo) {
-      return `Route: ${routeInfo.distance} (${routeInfo.duration})`;
-    }
-    if (searchLocation) return 'Nearby Stations';
-    if (activeStation) return 'Station Details';
+    if (searchLocation) return "Nearby Stations";
+    if (activeStation) return "Station Details";
     return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
-  }, [routeInfo, searchLocation, activeStation, step]);
+  }, [searchLocation, activeStation, step]);
 
   // Marker styling
-  const getMarkerIcon = useCallback(
-    (station: StationFeature): google.maps.Symbol | undefined => {
-      if (!markerIcons) return undefined;
-      if (station.id === departureStationId) {
-        return markerIcons.departureStation;
-      }
-      if (station.id === arrivalStationId) {
-        return markerIcons.arrivalStation;
-      }
-      const isActive = station.id === activeStation?.id;
-      return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
-    },
-    [markerIcons, departureStationId, arrivalStationId, activeStation]
-  );
+  const getMarkerIcon = useCallback((station: StationFeature) => {
+    if (!markerIcons) return null;
+    
+    if (station.id === departureStationId) {
+      return markerIcons.departureStation;
+    }
+    if (station.id === arrivalStationId) {
+      return markerIcons.arrivalStation;
+    }
+    const isActive = station.id === activeStation?.id;
+    return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
+  }, [markerIcons, departureStationId, arrivalStationId, activeStation]);
 
   // Data initialization
   useEffect(() => {
@@ -342,7 +228,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           dispatch(fetchStations()).unwrap(),
           dispatch(fetchCars()).unwrap()
         ]);
-        setOverlayVisible(false);
       } catch (err) {
         console.error('Error fetching data:', err);
         toast.error('Failed to load map data');
@@ -351,13 +236,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
+  // Loading state management
+  useEffect(() => {
+    if (isLoaded && !stationsLoading && !carsLoading) {
+      setOverlayVisible(false);
+    }
+  }, [isLoaded, stationsLoading, carsLoading]);
+
   // Error handling
-  if (loadError || stationsError || carsError) {
+  if (stationsError || carsError || loadError) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
         <div className="text-center space-y-2">
           <p className="font-medium">Error loading map data</p>
-          <button
+          <button 
             onClick={() => window.location.reload()}
             className="text-sm underline hover:text-destructive/80"
           >
@@ -368,8 +260,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Loading state
-  if (!isLoaded || overlayVisible) {
+  if (overlayVisible) {
     return <LoadingSpinner />;
   }
 
@@ -383,12 +274,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
           options={mapOptions || {}}
           onLoad={handleMapLoad}
         >
-          {/* User location marker */}
           {userLocation && markerIcons && (
-            <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
+            <Marker
+              position={userLocation}
+              icon={markerIcons.user}
+              clickable={false}
+            />
           )}
 
-          {/* Station markers */}
           {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -403,7 +296,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {/* Car markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -412,34 +304,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
               icon={markerIcons?.car}
             />
           ))}
-
-          {/* Route polyline */}
-          {routePath.length > 0 && (
-            <Polyline
-              path={routePath}
-              options={{
-                strokeColor: '#4285F4',
-                strokeWeight: 4,
-                strokeOpacity: 0.8,
-                geodesic: true,
-                icons: [{
-                  icon: {
-                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                    scale: 3,
-                  },
-                  offset: '50%',
-                  repeat: '100px',
-                }],
-              }}
-            />
-          )}
         </GoogleMap>
       </div>
 
-      {/* Station address search component */}
       <StationSelector onAddressSearch={handleAddressSearch} />
 
-      {/* Sheet with station details / list */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
@@ -448,40 +317,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
           count={(searchLocation ? sortedStations : stations).length}
         >
           <StationDetail 
-            stations={searchLocation ? sortedStations : stations} 
-            activeStation={activeStation} 
-            routeInfo={routeInfo}
+            stations={searchLocation ? sortedStations : stations}
+            activeStation={activeStation}
           />
         </Sheet>
-      )}
-
-      {/* Route information overlay */}
-      {routeInfo && (
-        <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-lg border border-border">
-          <div className="space-y-2">
-            <h3 className="font-medium text-sm text-foreground">Route Details</h3>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Distance: {routeInfo.distance}</p>
-              <p className="text-sm text-muted-foreground">Duration: {routeInfo.duration}</p>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
 }
-
-// Helper function to format station details
-function formatStationDetails(station: StationFeature) {
-  return {
-    title: station.properties.Place,
-    address: station.properties.Address,
-    stats: [
-      { label: 'Max Power', value: `${station.properties.maxPower} kW` },
-      { label: 'Available', value: `${station.properties.availableSpots}/${station.properties.totalSpots}` },
-      station.properties.waitTime ? { label: 'Wait Time', value: `${station.properties.waitTime} min` } : null,
-    ].filter(Boolean),
-  };
-}
-
-export type { RouteInfo, StationDetailProps, GMapProps };
