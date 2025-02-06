@@ -23,7 +23,7 @@ const Sheet = ({
     <div 
       className={cn(
         'fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm transition-all duration-300 ease-in-out',
-        isOpen ? 'h-[70vh]' : 'h-[25vh]',
+        isOpen ? 'h-[50vh]' : 'h-[25vh]',
         className
       )}
     >
