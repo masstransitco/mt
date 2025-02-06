@@ -200,10 +200,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
           });
 
           // Adjust map bounds
-          if (mapRef.current) {
-            const bounds = new google.maps.LatLngBounds();
-            result.routes[0].overview_path.forEach(point => bounds.extend(point));
-            mapRef.current.fitBounds(bounds, { padding: 50 });
+     if (mapRef.current) {
+  const bounds = new google.maps.LatLngBounds();
+  result.routes[0].overview_path.forEach(point => bounds.extend(point));
+  mapRef.current.fitBounds(bounds, {
+    padding: { top: 50, right: 50, bottom: 50, left: 50 }
+  });
           }
         }
       } catch (error) {
