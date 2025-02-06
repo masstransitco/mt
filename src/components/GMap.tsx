@@ -18,19 +18,18 @@ import {
   selectCarsLoading,
   selectCarsError,
 } from '@/store/carSlice';
-import {
-  selectUserLocation,
-} from '@/store/userSlice';
+import { selectUserLocation } from '@/store/userSlice';
 import {
   toggleSheet,
   selectIsSheetMinimized,
 } from '@/store/uiSlice';
+import { selectBookingStep } from '@/store/bookingSlice';
 
 import Sheet from '@/components/ui/sheet';
 import StationSelector from './StationSelector';
 import { LoadingSpinner } from './LoadingSpinner';
 import CarSheet from '@/components/booking/CarSheet';
-import StationDetail from './StationDetail'; // Import the StationDetail component
+import StationDetail from './StationDetail';
 
 import {
   LIBRARIES,
@@ -67,6 +66,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsError = useAppSelector(selectCarsError);
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
+  const bookingStep = useAppSelector(selectBookingStep); // Gets the current booking step
 
   // Load the Maps API
   const { isLoaded, loadError } = useJsApiLoader({
@@ -162,12 +162,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Determine if an error exists
   const hasError = stationsError || carsError || loadError;
 
-  // Sheet toggle control (always defined)
+  // Sheet toggle control
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Always return the same container so that hook order is preserved
+  // Always return the same container so that hook order is preserved.
+  // We now render the bottom sheet only when bookingStep is 1.
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {hasError ? (
@@ -211,9 +212,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
                     key={station.id}
                     position={{ lat, lng }}
                     onClick={() => {
-                      // When a station is clicked, set it as active
+                      // When a station marker is clicked, set it as active.
                       setActiveStation(station);
-                      // Optionally, you might want to minimize the sheet before showing details
+                      // Optionally, if the sheet is minimized, open it.
                       if (isSheetMinimized) {
                         dispatch(toggleSheet());
                       }
@@ -235,29 +236,29 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </GoogleMap>
           </div>
 
-          {/* Optionally render StationSelector */}
+          {/* Render the StationSelector */}
           <StationSelector onAddressSearch={handleAddressSearch} />
 
-          {/* Conditionally render the bottom sheet:
-              If a station is selected, show StationDetail,
-              otherwise show the CarSheet */}
-          {activeStation ? (
-            <Sheet
-              isOpen={!isSheetMinimized}
-              onToggle={handleSheetToggle}
-              title="Station Details"
-              count={(searchLocation ? sortedStations : stations).length}
-            >
-              <StationDetail 
-                stations={searchLocation ? sortedStations : stations}
-                activeStation={activeStation}
+          {/* Conditionally render the bottom sheet only when bookingStep === 1 */}
+          {bookingStep === 1 && (
+            activeStation ? (
+              <Sheet
+                isOpen={!isSheetMinimized}
+                onToggle={handleSheetToggle}
+                title="Station Details"
+                count={(searchLocation ? sortedStations : stations).length}
+              >
+                <StationDetail 
+                  stations={searchLocation ? sortedStations : stations}
+                  activeStation={activeStation}
+                />
+              </Sheet>
+            ) : (
+              <CarSheet 
+                isOpen={!isSheetMinimized}
+                onToggle={handleSheetToggle}
               />
-            </Sheet>
-          ) : (
-            <CarSheet 
-              isOpen={!isSheetMinimized}
-              onToggle={handleSheetToggle}
-            />
+            )
           )}
         </>
       )}
