@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleMap, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api';
-import { FixedSizeList } from 'react-window';
+import { FixedSizeList } from 'react-window'; // (Optional: if you later want to virtualize lists)
 import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
@@ -47,14 +47,26 @@ const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }; // Hong Kong center
 const DEFAULT_ZOOM = 11;
 const BOUNDS_PADDING = 0.01; // For manual bounds padding
 
+// Props and interfaces
 interface GMapProps {
   googleApiKey: string;
+}
+
+export interface RouteInfo {
+  distance: string;
+  duration: string;
+}
+
+export interface StationDetailProps {
+  stations: StationFeature[];
+  activeStation: StationFeature | null;
+  routeInfo?: RouteInfo | null;
 }
 
 export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
-  
+
   // Local state
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -62,13 +74,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
-  const [markerIcons, setMarkerIcons] = useState<any>(null);
+  const [markerIcons, setMarkerIcons] = useState<Record<string, google.maps.Symbol> | null>(null);
   const [routePath, setRoutePath] = useState<google.maps.LatLng[]>([]);
   const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
-  const [routeInfo, setRouteInfo] = useState<{
-    distance: string;
-    duration: string;
-  } | null>(null);
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
 
   // Redux state
   const dispatch = useAppDispatch();
@@ -85,14 +94,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const viewState = useAppSelector(selectViewState);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Maps API loader
+  // Load the Google Maps API
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Helper function to extend bounds with padding
+  // Helper: Extend bounds with padding
   const extendBoundsWithPadding = useCallback((bounds: google.maps.LatLngBounds) => {
     const ne = bounds.getNorthEast();
     const sw = bounds.getSouthWest();
@@ -101,7 +110,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return bounds;
   }, []);
 
-  // Initialize map options and services
+  // Initialize map options, directions service, and marker icons when API is loaded
   useEffect(() => {
     if (isLoaded && window.google) {
       setDirectionsService(new google.maps.DirectionsService());
@@ -174,7 +183,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Calculate and draw route when stations change
+  // Calculate and draw route when departure/arrival stations change
   useEffect(() => {
     const calculateRoute = async () => {
       if (!directionsService || !departureStationId || !arrivalStationId) {
@@ -183,9 +192,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
         return;
       }
 
-      const departureStation = stations.find(s => s.id === departureStationId);
-      const arrivalStation = stations.find(s => s.id === arrivalStationId);
-
+      const departureStation = stations.find((s) => s.id === departureStationId);
+      const arrivalStation = stations.find((s) => s.id === arrivalStationId);
       if (!departureStation || !arrivalStation) return;
 
       const [departureLng, departureLat] = departureStation.geometry.coordinates;
@@ -201,18 +209,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
         if (result.routes.length > 0 && result.routes[0].overview_path) {
           setRoutePath(result.routes[0].overview_path);
-          
+
           // Update route info
-          const route = result.routes[0].legs[0];
+          const routeLeg = result.routes[0].legs[0];
           setRouteInfo({
-            distance: route.distance?.text || '',
-            duration: route.duration?.text || '',
+            distance: routeLeg.distance?.text || '',
+            duration: routeLeg.duration?.text || '',
           });
 
           // Adjust map bounds with manual padding
           if (mapRef.current) {
             const bounds = new google.maps.LatLngBounds();
-            result.routes[0].overview_path.forEach(point => bounds.extend(point));
+            result.routes[0].overview_path.forEach((point) => bounds.extend(point));
             const paddedBounds = extendBoundsWithPadding(bounds);
             mapRef.current.fitBounds(paddedBounds);
           }
@@ -228,48 +236,52 @@ export default function GMap({ googleApiKey }: GMapProps) {
     calculateRoute();
   }, [directionsService, departureStationId, arrivalStationId, stations, extendBoundsWithPadding]);
 
-  // Sort stations by distance to a point
-  const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-    if (!google?.maps?.geometry?.spherical) return stationsToSort;
+  // Sort stations by distance to a given point
+  const sortStationsByDistanceToPoint = useCallback(
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+      if (!google?.maps?.geometry?.spherical) return stationsToSort;
 
-    return [...stationsToSort].sort((a, b) => {
-      const [lngA, latA] = a.geometry.coordinates;
-      const [lngB, latB] = b.geometry.coordinates;
-      
-      const distA = google.maps.geometry.spherical.computeDistanceBetween(
-        new google.maps.LatLng(latA, lngA),
-        new google.maps.LatLng(point.lat, point.lng)
-      );
-      const distB = google.maps.geometry.spherical.computeDistanceBetween(
-        new google.maps.LatLng(latB, lngB),
-        new google.maps.LatLng(point.lat, point.lng)
-      );
-      
-      return distA - distB;
-    });
-  }, []);
+      return [...stationsToSort].sort((a, b) => {
+        const [lngA, latA] = a.geometry.coordinates;
+        const [lngB, latB] = b.geometry.coordinates;
 
-  // Map interaction handlers
-  const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-    if (stations.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      stations.forEach(station => {
-        const [lng, lat] = station.geometry.coordinates;
-        bounds.extend({ lat, lng });
+        const distA = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(latA, lngA),
+          new google.maps.LatLng(point.lat, point.lng)
+        );
+        const distB = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(latB, lngB),
+          new google.maps.LatLng(point.lat, point.lng)
+        );
+
+        return distA - distB;
       });
-      const paddedBounds = extendBoundsWithPadding(bounds);
-      map.fitBounds(paddedBounds);
-    }
-  }, [stations, extendBoundsWithPadding]);
+    },
+    []
+  );
+
+  // Map event handlers
+  const handleMapLoad = useCallback(
+    (map: google.maps.Map) => {
+      mapRef.current = map;
+      if (stations.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        stations.forEach((station) => {
+          const [lng, lat] = station.geometry.coordinates;
+          bounds.extend({ lat, lng });
+        });
+        const paddedBounds = extendBoundsWithPadding(bounds);
+        map.fitBounds(paddedBounds);
+      }
+    },
+    [stations, extendBoundsWithPadding]
+  );
 
   const handleMarkerClick = useCallback((station: StationFeature) => {
     if (!mapRef.current) return;
-
     const [lng, lat] = station.geometry.coordinates;
     mapRef.current.panTo({ lat, lng });
     mapRef.current.setZoom(15);
-
     setActiveStation(station);
     setSelectedStationId(station.id);
   }, []);
@@ -278,20 +290,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setActiveStation(station);
   }, []);
 
-  const handleAddressSearch = useCallback((location: google.maps.LatLngLiteral) => {
-    if (!mapRef.current) return;
+  const handleAddressSearch = useCallback(
+    (location: google.maps.LatLngLiteral) => {
+      if (!mapRef.current) return;
+      setSearchLocation(location);
+      mapRef.current.panTo(location);
+      mapRef.current.setZoom(15);
 
-    setSearchLocation(location);
-    mapRef.current.panTo(location);
-    mapRef.current.setZoom(15);
+      const sorted = sortStationsByDistanceToPoint(location, stations);
+      setSortedStations(sorted);
 
-    const sorted = sortStationsByDistanceToPoint(location, stations);
-    setSortedStations(sorted);
-
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-  }, [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]);
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    },
+    [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
+  );
 
   // Sheet controls
   const handleSheetToggle = useCallback(() => {
@@ -302,32 +316,48 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (routeInfo) {
       return `Route: ${routeInfo.distance} (${routeInfo.duration})`;
     }
-    if (searchLocation) return "Nearby Stations";
-    if (activeStation) return "Station Details";
+    if (searchLocation) return 'Nearby Stations';
+    if (activeStation) return 'Station Details';
     return step === 1 ? 'Select Departure Station' : 'Select Arrival Station';
   }, [routeInfo, searchLocation, activeStation, step]);
 
-  // Marker styling
-  const getMarkerIcon = useCallback((station: StationFeature) => {
-    if (!markerIcons) return null;
-    
-    if (station.id === departureStationId) {
-      return markerIcons.departureStation;
-    }
-    if (station.id === arrivalStationId) {
-      return markerIcons.arrivalStation;
-    }
-    const isActive = station.id === activeStation?.id;
-    return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
-  }, [markerIcons, departureStationId, arrivalStationId, activeStation]);
+  // Determine marker icon based on station role and activity
+  const getMarkerIcon = useCallback(
+    (station: StationFeature) => {
+      if (!markerIcons) return null;
+      if (station.id === departureStationId) {
+        return markerIcons.departureStation;
+      }
+      if (station.id === arrivalStationId) {
+        return markerIcons.arrivalStation;
+      }
+      const isActive = station.id === activeStation?.id;
+      return isActive ? markerIcons.activeStation : markerIcons.inactiveStation;
+    },
+    [markerIcons, departureStationId, arrivalStationId, activeStation]
+  );
 
-  // Error handling
+  // Data initialization: fetch stations and cars
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await Promise.all([dispatch(fetchStations()).unwrap(), dispatch(fetchCars()).unwrap()]);
+        setOverlayVisible(false);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        toast.error('Failed to load map data');
+      }
+    };
+    init();
+  }, [dispatch]);
+
+  // Error state
   if (loadError || stationsError || carsError) {
     return (
       <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
         <div className="text-center space-y-2">
           <p className="font-medium">Error loading map data</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="text-sm underline hover:text-destructive/80"
           >
@@ -338,7 +368,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Loading state
+  // Show a loading spinner while data or the API is loading
   if (!isLoaded || overlayVisible) {
     return <LoadingSpinner />;
   }
@@ -355,11 +385,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         >
           {/* User location marker */}
           {userLocation && markerIcons && (
-            <Marker
-              position={userLocation}
-              icon={markerIcons.user}
-              clickable={false}
-            />
+            <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
           )}
 
           {/* Station markers */}
@@ -387,7 +413,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           ))}
 
-          {/* Route polyline */}
+          {/* Draw route polyline if available */}
           {routePath.length > 0 && (
             <Polyline
               path={routePath}
@@ -396,22 +422,26 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 strokeWeight: 4,
                 strokeOpacity: 0.8,
                 geodesic: true,
-                icons: [{
-                  icon: {
-                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                    scale: 3,
+                icons: [
+                  {
+                    icon: {
+                      path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                      scale: 3,
+                    },
+                    offset: '50%',
+                    repeat: '100px',
                   },
-                  offset: '50%',
-                  repeat: '100px',
-                }],
+                ],
               }}
             />
           )}
         </GoogleMap>
       </div>
 
+      {/* Station address search component */}
       <StationSelector onAddressSearch={handleAddressSearch} />
 
+      {/* Sheet with station details / list */}
       {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
@@ -419,62 +449,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
           title={getSheetTitle()}
           count={(searchLocation ? sortedStations : stations).length}
         >
-          <StationDetail 
-            stations={searchLocation ? sortedStations : stations}
-            activeStation={activeStation}
-            routeInfo={routeInfo}
-          />
+          <StationDetail stations={searchLocation ? sortedStations : stations} activeStation={activeStation} routeInfo={routeInfo} />
         </Sheet>
       )}
 
-      {/* Route information overlay */}
+      {/* Optional route information overlay */}
       {routeInfo && (
         <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-lg border border-border">
           <div className="space-y-2">
             <h3 className="font-medium text-sm text-foreground">Route Details</h3>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">
-                Distance: {routeInfo.distance}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Duration: {routeInfo.duration}
-              </p>
+              <p className="text-sm text-muted-foreground">Distance: {routeInfo.distance}</p>
+              <p className="text-sm text-muted-foreground">Duration: {routeInfo.duration}</p>
             </div>
           </div>
         </div>
       )}
-
-      {/* Data initialization effect */}
-      {useEffect(() => {
-        const init = async () => {
-          try {
-            await Promise.all([
-              dispatch(fetchStations()).unwrap(),
-              dispatch(fetchCars()).unwrap()
-            ]);
-            setOverlayVisible(false);
-          } catch (err) {
-            console.error('Error fetching data:', err);
-            toast.error('Failed to load map data');
-          }
-        };
-        init();
-      }, [dispatch])}
     </div>
   );
 }
 
-// Type for StationDetail props
-interface StationDetailProps {
-  stations: StationFeature[];
-  activeStation: StationFeature | null;
-  routeInfo?: {
-    distance: string;
-    duration: string;
-  } | null;
-}
-
-// Helper function to format station details
+// Helper function to format station details (if used elsewhere)
 function formatStationDetails(station: StationFeature) {
   return {
     title: station.properties.Place,
@@ -482,12 +477,10 @@ function formatStationDetails(station: StationFeature) {
     stats: [
       { label: 'Max Power', value: `${station.properties.maxPower} kW` },
       { label: 'Available', value: `${station.properties.availableSpots}/${station.properties.totalSpots}` },
-      station.properties.waitTime 
-        ? { label: 'Wait Time', value: `${station.properties.waitTime} min` }
-        : null
-    ].filter(Boolean)
+      station.properties.waitTime ? { label: 'Wait Time', value: `${station.properties.waitTime} min` } : null,
+    ].filter(Boolean),
   };
 }
 
 // Export types for external use
-export type { GMapProps, StationDetailProps };
+export type { GMapProps, StationDetailProps, RouteInfo };
