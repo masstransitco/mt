@@ -4,7 +4,7 @@ import React from 'react';
 import { useAppSelector } from '@/store/store';
 import { selectAllCars } from '@/store/carSlice';
 import { selectSelectedCarId } from '@/store/userSlice';
-import { selectViewState } from '@/store/uiSlice';
+// Removed import of selectViewState since we no longer conditionally render based on it
 import Sheet from '@/components/ui/sheet';
 import CarGrid from '@/components/booking/CarGrid';
 
@@ -17,31 +17,27 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
   // Always call hooks at the top level
   const cars = useAppSelector(selectAllCars);
   const selectedCarId = useAppSelector(selectSelectedCarId);
-  const viewState = useAppSelector(selectViewState);
+  // Removed viewState check so that the CarSheet always renders
 
   return (
-    <>
-      {viewState === 'showCar' && (
-        <Sheet
-          isOpen={isOpen}
-          onToggle={onToggle}
-          title="Available Cars"
-          count={cars.length}
-        >
-          <div className="px-4 py-2">
-            {selectedCarId ? (
-              <p className="text-sm text-muted-foreground mb-4">
-                Selected car #{selectedCarId}. Select a charging station to continue.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground mb-4">
-                Select a car to begin booking.
-              </p>
-            )}
-            <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
-          </div>
-        </Sheet>
-      )}
-    </>
+    <Sheet
+      isOpen={isOpen}
+      onToggle={onToggle}
+      title="Available Cars"
+      count={cars.length}
+    >
+      <div className="px-4 py-2">
+        {selectedCarId ? (
+          <p className="text-sm text-muted-foreground mb-4">
+            Selected car #{selectedCarId}. Select a charging station to continue.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground mb-4">
+            Select a car to begin booking.
+          </p>
+        )}
+        <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
+      </div>
+    </Sheet>
   );
 }
