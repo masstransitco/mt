@@ -48,7 +48,7 @@ const DEFAULT_ZOOM = 11;
 const BOUNDS_PADDING = 0.01; // For manual bounds padding
 
 // Props and interfaces
-interface GMapProps {
+export interface GMapProps {
   googleApiKey: string;
 }
 
