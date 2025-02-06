@@ -442,14 +442,18 @@ const getMarkerIcon = useCallback(
       <StationSelector onAddressSearch={handleAddressSearch} />
 
       {/* Sheet with station details / list */}
-      {viewState === 'showMap' && (
+    {viewState === 'showMap' && (
         <Sheet
           isOpen={!isSheetMinimized}
           onToggle={handleSheetToggle}
           title={getSheetTitle()}
           count={(searchLocation ? sortedStations : stations).length}
         >
-          <StationDetail stations={searchLocation ? sortedStations : stations} activeStation={activeStation} routeInfo={routeInfo} />
+          <StationDetail 
+            stations={searchLocation ? sortedStations : stations} 
+            activeStation={activeStation} 
+            routeInfo={routeInfo}
+          />
         </Sheet>
       )}
 
