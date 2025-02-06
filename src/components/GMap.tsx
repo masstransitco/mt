@@ -84,48 +84,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [isLoaded]);
 
   // Sort stations by distance to a given point
-  const sortStationsByDistanceToPoint = useCallback((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-    if (!google?.maps?.geometry?.spherical) return stationsToSort;
-    return [...stationsToSort].sort((a, b) => {
-      const [lngA, latA] = a.geometry.coordinates;
-      const [lngB, latB] = b.geometry.coordinates;
-      const distA = google.maps.geometry.spherical.computeDistanceBetween(
-        new google.maps.LatLng(latA, lngA),
-        new google.maps.LatLng(point.lat, point.lng)
-      );
-      const distB = google.maps.geometry.spherical.computeDistanceBetween(
-        new google.maps.LatLng(latB, lngB),
-        new google.maps.LatLng(point.lat, point.lng)
-      );
-      return distA - distB;
-    });
-  }, []);
+  const sortStationsByDistanceToPoint = useCallback(
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+      if (!google?.maps?.geometry?.spherical) return stationsToSort;
+      return [...stationsToSort].sort((a, b) => {
+        const [lngA, latA] = a.geometry.coordinates;
+        const [lngB, latB] = b.geometry.coordinates;
+        const distA = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(latA, lngA),
+          new google.maps.LatLng(point.lat, point.lng)
+        );
+        const distB = google.maps.geometry.spherical.computeDistanceBetween(
+          new google.maps.LatLng(latB, lngB),
+          new google.maps.LatLng(point.lat, point.lng)
+        );
+        return distA - distB;
+      });
+    },
+    []
+  );
 
   // Handle address search from StationSelector
-  const handleAddressSearch = useCallback((location: google.maps.LatLngLiteral) => {
-    if (!mapRef.current) return;
-    setSearchLocation(location);
-    mapRef.current.panTo(location);
-    mapRef.current.setZoom(15);
-    const sorted = sortStationsByDistanceToPoint(location, stations);
-    setSortedStations(sorted);
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-  }, [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]);
+  const handleAddressSearch = useCallback(
+    (location: google.maps.LatLngLiteral) => {
+      if (!mapRef.current) return;
+      setSearchLocation(location);
+      mapRef.current.panTo(location);
+      mapRef.current.setZoom(15);
+      const sorted = sortStationsByDistanceToPoint(location, stations);
+      setSortedStations(sorted);
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    },
+    [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
+  );
 
   // Map initialization: fit bounds to stations if available
-  const handleMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-    if (stations.length > 0) {
-      const bounds = new google.maps.LatLngBounds();
-      stations.forEach((station) => {
-        const [lng, lat] = station.geometry.coordinates;
-        bounds.extend({ lat, lng });
-      });
-      map.fitBounds(bounds, 50);
-    }
-  }, [stations]);
+  const handleMapLoad = useCallback(
+    (map: google.maps.Map) => {
+      mapRef.current = map;
+      if (stations.length > 0) {
+        const bounds = new google.maps.LatLngBounds();
+        stations.forEach((station) => {
+          const [lng, lat] = station.geometry.coordinates;
+          bounds.extend({ lat, lng });
+        });
+        map.fitBounds(bounds, 50);
+      }
+    },
+    [stations]
+  );
 
   // Data initialization: fetch stations and cars
   useEffect(() => {
@@ -150,86 +159,87 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Error handling
-  if (stationsError || carsError || loadError) {
-    return (
-      <div className="flex items-center justify-center w-full h-[calc(100vh-64px)] bg-background text-destructive p-4">
-        <div className="text-center space-y-2">
-          <p className="font-medium">Error loading map data</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="text-sm underline hover:text-destructive/80"
-          >
-            Try reloading
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Determine if an error exists
+  const hasError = stationsError || carsError || loadError;
 
-  if (overlayVisible) {
-    return <LoadingSpinner />;
-  }
-
-  // Sheet toggle control
+  // Sheet toggle control (always defined)
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
+  // Instead of returning early, always return the same container.
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
-      <div className="absolute inset-0">
-        <GoogleMap
-          mapContainerStyle={MAP_CONTAINER_STYLE}
-          center={userLocation || DEFAULT_CENTER}
-          zoom={DEFAULT_ZOOM}
-          options={mapOptions || {}}
-          onLoad={handleMapLoad}
-        >
-          {/* User Location Marker */}
-          {userLocation && markerIcons && (
-            <Marker
-              position={userLocation}
-              icon={markerIcons.user}
-              clickable={false}
-            />
-          )}
+      {hasError ? (
+        <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
+          <div className="text-center space-y-2">
+            <p className="font-medium">Error loading map data</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="text-sm underline hover:text-destructive/80"
+            >
+              Try reloading
+            </button>
+          </div>
+        </div>
+      ) : overlayVisible ? (
+        <LoadingSpinner />
+      ) : (
+        <>
+          <div className="absolute inset-0">
+            <GoogleMap
+              mapContainerStyle={MAP_CONTAINER_STYLE}
+              center={userLocation || DEFAULT_CENTER}
+              zoom={DEFAULT_ZOOM}
+              options={mapOptions || {}}
+              onLoad={handleMapLoad}
+            >
+              {/* User Location Marker */}
+              {userLocation && markerIcons && (
+                <Marker
+                  position={userLocation}
+                  icon={markerIcons.user}
+                  clickable={false}
+                />
+              )}
 
-          {/* Station Markers */}
-          {(searchLocation ? sortedStations : stations).map((station) => {
-            const [lng, lat] = station.geometry.coordinates;
-            return (
-              <Marker
-                key={station.id}
-                position={{ lat, lng }}
-                onClick={() => {
-                  /* Your marker click logic (if needed) */
-                }}
-                icon={markerIcons?.default}
-              />
-            );
-          })}
+              {/* Station Markers */}
+              {(searchLocation ? sortedStations : stations).map((station) => {
+                const [lng, lat] = station.geometry.coordinates;
+                return (
+                  <Marker
+                    key={station.id}
+                    position={{ lat, lng }}
+                    onClick={() => {
+                      /* Your marker click logic (if needed) */
+                    }}
+                    icon={markerIcons?.default}
+                  />
+                );
+              })}
 
-          {/* Car Markers */}
-          {cars.map((car) => (
-            <Marker
-              key={car.id}
-              position={{ lat: car.lat, lng: car.lng }}
-              title={car.name}
-              icon={markerIcons?.car}
-            />
-          ))}
-        </GoogleMap>
-      </div>
+              {/* Car Markers */}
+              {cars.map((car) => (
+                <Marker
+                  key={car.id}
+                  position={{ lat: car.lat, lng: car.lng }}
+                  title={car.name}
+                  icon={markerIcons?.car}
+                />
+              ))}
+            </GoogleMap>
+          </div>
 
-      {/* Optionally keep the StationSelector if you still want to search/filter stations */}
-      <StationSelector onAddressSearch={handleAddressSearch} />
+          {/* Optionally render StationSelector */}
+          <StationSelector onAddressSearch={handleAddressSearch} />
 
-      {/* Always render the CarSheet (which contains the CarGrid) */}
-      <CarSheet 
-        isOpen={!isSheetMinimized}
-        onToggle={handleSheetToggle}
-      />
+          {/* Always render the CarSheet now */}
+          <CarSheet 
+            isOpen={!isSheetMinimized}
+            onToggle={handleSheetToggle}
+          />
+        </>
+      )}
     </div>
   );
 }
