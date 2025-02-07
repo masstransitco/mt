@@ -352,9 +352,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             Position StationSelector flush with the top header 
             => top-[57px], left-0, right-0
           */}
-          <div className="absolute top-[1px] left-0 right-0 z-10">
             <StationSelector onAddressSearch={handleAddressSearch} />
-          </div>
 
           {/* Two icon buttons below it, at e.g. top-[120px] for spacing */}
           <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
