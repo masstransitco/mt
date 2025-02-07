@@ -12,19 +12,30 @@ import {
   selectDepartureStation,
   selectArrivalStation,
   selectDepartureStationId,
-  selectArrivalStationId
+  selectArrivalStationId,
+  selectDepartureStation as setDepartureStation,
+  selectArrivalStation as setArrivalStation,
 } from '@/store/userSlice';
 
+////////////////////////////////////////////////////////////////////////////////
+// Extended props interface to include an optional `onStationSelected` callback
+////////////////////////////////////////////////////////////////////////////////
 interface StationListItemProps extends ListChildComponentProps {
   data: {
     items: StationFeature[];
     searchLocation?: google.maps.LatLngLiteral | null;
+    /**
+     * An optional callback triggered when the user selects (clicks) a station
+     * from the list. The station is passed as an argument.
+     */
+    onStationSelected?: (station: StationFeature) => void;
   };
 }
 
 export const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
-  const { items: stations, searchLocation } = data;
+  const { items: stations, searchLocation, onStationSelected } = data;
+
   const station = stations[index];
   const dispatch = useAppDispatch();
 
@@ -42,29 +53,44 @@ export const StationListItem = memo<StationListItemProps>((props) => {
     }
 
     const [lng, lat] = station.geometry.coordinates;
-    return google.maps.geometry.spherical.computeDistanceBetween(
-      new google.maps.LatLng(lat, lng),
-      new google.maps.LatLng(searchLocation.lat, searchLocation.lng)
-    ) / 1000; // Convert to km
+    return (
+      google.maps.geometry.spherical.computeDistanceBetween(
+        new google.maps.LatLng(lat, lng),
+        new google.maps.LatLng(searchLocation.lat, searchLocation.lng)
+      ) / 1000 // Convert to km
+    );
   }, [station, searchLocation]);
 
+  // Handle user click on the station item
   const handleClick = useCallback(() => {
+    // Existing logic to set Redux state
     if (step === 1) {
       if (station.id === arrivalId) {
-        toast.error('Cannot select same station for departure and arrival');
+        toast.error('Cannot select the same station for departure and arrival');
         return;
       }
-      dispatch(selectDepartureStation(station.id));
+      dispatch(setDepartureStation(station.id));
       toast.success('Departure station selected');
     } else if (step === 2) {
       if (station.id === departureId) {
-        toast.error('Cannot select same station for arrival');
+        toast.error('Cannot select the same station for arrival');
         return;
       }
-      dispatch(selectArrivalStation(station.id));
+      dispatch(setArrivalStation(station.id));
       toast.success('Arrival station selected');
     }
-  }, [dispatch, station.id, step, departureId, arrivalId]);
+
+    // OPTIONAL: If the parent passed an `onStationSelected` callback, call it
+    // so that GMap (or whoever uses this list) can do further actions
+    onStationSelected?.(station);
+  }, [
+    dispatch,
+    station,
+    step,
+    departureId,
+    arrivalId,
+    onStationSelected
+  ]);
 
   const distance = getDistance();
 
@@ -83,7 +109,11 @@ export const StationListItem = memo<StationListItemProps>((props) => {
           <div className="flex items-center gap-2">
             {isSelected && (
               <div className="text-primary">
-                {isDeparture ? <MapPin className="w-4 h-4" /> : <Navigation className="w-4 h-4" />}
+                {isDeparture ? (
+                  <MapPin className="w-4 h-4" />
+                ) : (
+                  <Navigation className="w-4 h-4" />
+                )}
               </div>
             )}
             <h3 className="font-medium text-foreground">
@@ -108,5 +138,4 @@ export const StationListItem = memo<StationListItemProps>((props) => {
 });
 
 StationListItem.displayName = 'StationListItem';
-
 export default StationListItem;
