@@ -18,7 +18,15 @@ import {
   selectCarsLoading,
   selectCarsError,
 } from '@/store/carSlice';
-import { selectUserLocation } from '@/store/userSlice';
+import {
+  selectUserLocation,
+  selectDepartureStation,
+  selectArrivalStation,
+  selectDepartureStationId,
+  selectArrivalStationId,
+  selectDepartureStation as setDepartureStation,
+  selectArrivalStation as setArrivalStation,
+} from '@/store/userSlice';
 import {
   toggleSheet,
   selectIsSheetMinimized,
@@ -67,12 +75,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep); 
-  // bookingStep meanings (as defined in your updated booking slice):
-  // 1: selecting_departure_station
-  // 2: selected_departure_station
-  // 3: selecting_arrival_station
-  // 4: selected_arrival_station
-  // (Steps 5+ for later parts of the flow)
 
   // Load the Maps API
   const { isLoaded, loadError } = useJsApiLoader({
@@ -173,14 +175,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Determine sheet title based on booking step
-  let sheetTitle = "";
-  if (bookingStep === 1 || bookingStep === 2) {
-    sheetTitle = "Station Details";
-  } else if (bookingStep === 4) {
-    sheetTitle = "Select Arrival Station";
-  }
-
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {hasError ? (
@@ -224,19 +218,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
                     key={station.id}
                     position={{ lat, lng }}
                     onClick={() => {
-                      // When a station marker is clicked, set it as active.
+                      // Set the station as active so StationDetail can show it
                       setActiveStation(station);
+
+                      // Immediately store it in Redux so StationSelector can display it
+                      if (bookingStep < 3) {
+                        // If we're in departure flow (steps 1 or 2)
+                        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+                      } else {
+                        // If we're in arrival flow (steps 3 or 4)
+                        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+                      }
+
                       // Optionally, if the sheet is minimized, open it.
                       if (isSheetMinimized) {
                         dispatch(toggleSheet());
-                      }
-                      // Update booking step based on current state:
-                      if (bookingStep === 1) {
-                        // For departure selection: once a station is clicked, move to "selected_departure_station" (step 2)
-                        dispatch({ type: 'booking/advanceBookingStep', payload: 2 });
-                      } else if (bookingStep === 3) {
-                        // For arrival selection: once a station is clicked, move to "selected_arrival_station" (step 4)
-                        dispatch({ type: 'booking/advanceBookingStep', payload: 4 });
                       }
                     }}
                     icon={markerIcons?.default}
@@ -256,13 +252,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </GoogleMap>
           </div>
 
-          {/* Render the StationSelector */}
+          {/* StationSelector with only "Step 1 of 2" or "Step 2 of 2" in the UI */}
           <StationSelector onAddressSearch={handleAddressSearch} />
 
-          {/* Render bottom sheet based on booking step */}
+          {/* Render the bottom sheet for steps 1,2,4. 
+              (step 3 might hide the sheet, or you can adapt as needed)
+          */}
           {(bookingStep === 1 || bookingStep === 2 || bookingStep === 4) && (
             bookingStep === 1 ? (
-              // Step 1: selecting_departure_station
+              // Step 1 = selecting_departure_station
               activeStation ? (
                 <Sheet
                   isOpen={!isSheetMinimized}
@@ -282,7 +280,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 />
               )
             ) : bookingStep === 2 ? (
-              // Step 2: selected_departure_station
+              // Step 2 = selected_departure_station
               <Sheet
                 isOpen={!isSheetMinimized}
                 onToggle={handleSheetToggle}
@@ -295,7 +293,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 />
               </Sheet>
             ) : bookingStep === 4 ? (
-              // Step 4: selected_arrival_station
+              // Step 4 = selected_arrival_station
               <Sheet
                 isOpen={!isSheetMinimized}
                 onToggle={handleSheetToggle}
