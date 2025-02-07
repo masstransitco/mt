@@ -14,10 +14,16 @@ import {
 import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
 import debounce from 'lodash/debounce';
 
+/**
+ * StationSelector props
+ */
 interface StationSelectorProps {
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
 }
 
+/**
+ * AddressSearch props
+ */
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
   disabled?: boolean;
@@ -48,7 +54,7 @@ const AddressSearch = ({
   // If a station is already selected, show its name rather than an input
   if (selectedStation) {
     return (
-      <div className="flex-1 px-2 py-1.5 text-foreground font-medium">
+      <div className="flex-1 px-1 py-1 text-foreground font-medium">
         {selectedStation.properties.Place}
       </div>
     );
@@ -58,6 +64,7 @@ const AddressSearch = ({
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
     try {
+      // Casting to 'any' so we can pass componentRestrictions to the request
       const request: any = {
         input,
         componentRestrictions: { country: 'HK' },
@@ -105,7 +112,8 @@ const AddressSearch = ({
           onBlur={() => setTimeout(() => setShowResults(false), 200)}
           disabled={disabled}
           placeholder={placeholder}
-          className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60"
+          className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed
+                     placeholder:text-muted-foreground/60 p-1 text-sm"
         />
         {searchText && (
           <button
@@ -121,12 +129,13 @@ const AddressSearch = ({
       </div>
 
       {showResults && predictions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border
+                        rounded-lg shadow-md z-50">
           {predictions.map((prediction) => (
             <button
               key={prediction.place_id}
               onClick={() => handleSelect(prediction)}
-              className="w-full px-4 py-2 text-left hover:bg-muted/50 text-sm"
+              className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
             >
               <div className="font-medium">
                 {prediction.structured_formatting.main_text}
@@ -142,6 +151,13 @@ const AddressSearch = ({
   );
 };
 
+/**
+ * The main StationSelector component
+ * 
+ * Adjusted to be flush beneath your 57px header:
+ * - We remove the old "top-4 left-4 right-4" and "rounded-lg shadow-lg"
+ * - We add "top-[57px]" and full width. Minimal padding, less spacing.
+ */
 export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -155,7 +171,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // 2-step UI logic: 
+  // 2-step UI logic:
   // If bookingStep < 3 => Show "Step 1 of 2"
   // If bookingStep >= 3 => Show "Step 2 of 2"
   const uiStepNumber = step < 3 ? 1 : 2;
@@ -165,27 +181,31 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   const highlightArrival = step >= 3;
 
   return (
-    <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg">
-      <div className="p-4 space-y-3">
+    <div
+      className="absolute top-[57px] left-0 right-0 z-10
+                 bg-background/90 backdrop-blur-sm
+                 border-b border-border"
+    >
+      {/* We reduce the padding and spacing for a more minimal look */}
+      <div className="px-2 py-2 space-y-2">
 
         {/* DEPARTURE Input */}
         <div
           className={`
-            flex items-center gap-2 p-3 rounded-lg transition-all duration-200
-            ${highlightDeparture ? 'ring-2 ring-primary bg-background' : ''}
+            flex items-center gap-2 rounded-md transition-all duration-200
+            ${highlightDeparture ? 'ring-1 ring-primary bg-background' : ''}
             ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
           <MapPin
             className={`
-              w-5 h-5 flex-shrink-0
+              w-5 h-5 m-1 flex-shrink-0
               ${highlightDeparture ? 'text-primary' : 'text-muted-foreground'}
             `}
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            // Only editable if step < 3 => user is still picking departure
-            disabled={step >= 3}
+            disabled={step >= 3} // Only editable if step < 3 => picking departure
             placeholder="Search for departure station"
             selectedStation={departureStation}
           />
@@ -195,12 +215,11 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
                 // Clear departure
                 dispatch(clearDepartureStation());
                 dispatch(clearArrivalStation());
-                // Revert to step=1 => selecting_departure_station
-                // so user can pick again
+                // revert to step=1
                 dispatch(advanceBookingStep(1));
                 toast.success('Departure station cleared');
               }}
-              className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
+              className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
             >
               <X className="w-4 h-4" />
             </button>
@@ -210,21 +229,20 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
         {/* ARRIVAL Input */}
         <div
           className={`
-            flex items-center gap-2 p-3 rounded-lg transition-all duration-200
-            ${highlightArrival ? 'ring-2 ring-primary bg-background' : ''}
+            flex items-center gap-2 rounded-md transition-all duration-200
+            ${highlightArrival ? 'ring-1 ring-primary bg-background' : ''}
             ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
           <Navigation
             className={`
-              w-5 h-5 flex-shrink-0
+              w-5 h-5 m-1 flex-shrink-0
               ${highlightArrival ? 'text-primary' : 'text-muted-foreground'}
             `}
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            // Only editable if step >= 3 => user is picking arrival
-            disabled={step < 3}
+            disabled={step < 3} // Only editable if step >= 3 => picking arrival
             placeholder="Search for arrival station"
             selectedStation={arrivalStation}
           />
@@ -233,11 +251,11 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
               onClick={() => {
                 // Clear arrival
                 dispatch(clearArrivalStation());
-                // Revert to step=3 => selecting_arrival_station
+                // revert to step=3
                 dispatch(advanceBookingStep(3));
                 toast.success('Arrival station cleared');
               }}
-              className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
+              className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
             >
               <X className="w-4 h-4" />
             </button>
@@ -245,7 +263,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
         </div>
 
         {/* Info Bar: "Step X of 2" */}
-        <div className="flex items-center justify-between px-2 py-1">
+        <div className="flex items-center justify-between px-1 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Step {uiStepNumber} of 2</span>
             <span>•</span>
@@ -257,14 +275,19 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           </div>
           {departureStation && arrivalStation && (
             <div className="text-xs font-medium">
-              Total Route: {((departureStation.distance || 0) + (arrivalStation.distance || 0)).toFixed(1)} km
+              Total Route:{' '}
+              {(
+                (departureStation.distance || 0) +
+                (arrivalStation.distance || 0)
+              ).toFixed(1)}{' '}
+              km
             </div>
           )}
         </div>
 
         {/* Validation Messages */}
         {departureId && arrivalId && departureId === arrivalId && (
-          <div className="flex items-center gap-2 px-2 text-xs text-destructive">
+          <div className="flex items-center gap-2 px-1 py-1 text-xs text-destructive">
             <AlertCircle className="w-4 h-4" />
             <span>Departure and arrival stations cannot be the same</span>
           </div>
