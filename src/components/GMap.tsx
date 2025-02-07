@@ -54,7 +54,7 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Local state
+  // Basic local states
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
@@ -62,9 +62,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [markerIcons, setMarkerIcons] = useState<any>(null);
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
 
-  // Sheets
-  const [isStationListOpen, setIsStationListOpen] = useState(false);
-  const [isCarSheetOpen, setIsCarSheetOpen] = useState(true); // CarSheet open by default
+  // We keep track of which sheet is open, and which sheet was previously open
+  const [openSheet, setOpenSheet] = useState<'none' | 'car' | 'list' | 'detail'>('car');
+  const [previousSheet, setPreviousSheet] = useState<'none' | 'car' | 'list' | 'detail'>('none');
 
   // Redux
   const dispatch = useAppDispatch();
@@ -78,18 +78,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
 
-  // For station styling
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load Google Maps
+  // Google Maps
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
     libraries: LIBRARIES,
   });
 
-  // Once loaded, create map options & marker icons
+  // Once the map is loaded, create options + marker icons
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -97,7 +96,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Sort stations by distance
+  // Helper: sort stations by distance
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -118,7 +117,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Address search from StationSelector
+  // StationSelector => address search
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -129,6 +128,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSortedStations(sorted);
 
+      // If we have a minimized sheet, open it
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
@@ -136,7 +136,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Map initialization
+  // Map load => fit bounds
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -168,49 +168,60 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Hide overlay
+  // Hide overlay after data loads
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Check errors
   const hasError = stationsError || carsError || loadError;
 
-  // Toggle sheet from Redux
+  // Toggling the general bottom sheet
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Locate me => geolocation => userLocation => show station list
+  // Helper: open a new sheet => hide the old one, store old in `previousSheet`
+  const openNewSheet = (newSheet: 'none' | 'car' | 'list' | 'detail') => {
+    if (openSheet !== newSheet) {
+      setPreviousSheet(openSheet);
+      setOpenSheet(newSheet);
+    }
+  };
+
+  // Helper: close the current sheet => revert to previous
+  const closeCurrentSheet = () => {
+    const current = openSheet;
+    setOpenSheet(previousSheet);
+    setPreviousSheet('none');
+    // If we closed the detail or list, maybe also clear activeStation
+    if (current === 'detail') {
+      setActiveStation(null);
+    }
+  };
+
+  // 1) "Locate Me" => set user location => open station list => close others
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by this browser.');
+      toast.error('Geolocation not supported.');
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const newLoc = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
-        dispatch(setUserLocation(newLoc));
-
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        dispatch(setUserLocation(loc));
         if (mapRef.current) {
-          mapRef.current.panTo(newLoc);
+          mapRef.current.panTo(loc);
           mapRef.current.setZoom(15);
         }
-
-        const sorted = sortStationsByDistanceToPoint(newLoc, stations);
+        const sorted = sortStationsByDistanceToPoint(loc, stations);
         setSortedStations(sorted);
 
-        // If user is opening station list, we close CarSheet (and any station detail).
-        setIsCarSheetOpen(false);
+        // Clear any active station
         setActiveStation(null);
-
-        // Show station list
-        setIsStationListOpen(true);
+        // Open the station list sheet
+        openNewSheet('list');
         toast.success('Location found!');
       },
       (err) => {
@@ -220,11 +231,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // Toggle CarSheet => close station list, active station
+  // 2) "Car" => toggles CarSheet => if turning off, revert to previous
   const handleCarToggle = () => {
-    setIsCarSheetOpen((prev) => !prev);
-    setIsStationListOpen(false);
-    setActiveStation(null);
+    if (openSheet === 'car') {
+      // If car is open => close it => revert to previous
+      closeCurrentSheet();
+    } else {
+      // If car is not open => open it => hide detail/list
+      openNewSheet('car');
+      // Clear station if we want to hide detail
+      setActiveStation(null);
+    }
   };
 
   // Decide station icon
@@ -246,16 +263,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return markerIcons.station;
   };
 
-  // If user clicks a station => open station detail => hide station list
+  // Clicking a station => open "detail" => close others
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
-    setIsStationListOpen(false);
-
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
     }
+
+    openNewSheet('detail');
     if (isSheetMinimized) {
       dispatch(toggleSheet());
     }
@@ -279,7 +296,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <LoadingSpinner />
       ) : (
         <>
-          {/* The map */}
+          {/* The Map */}
           <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -288,7 +305,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               options={mapOptions || {}}
               onLoad={handleMapLoad}
             >
-              {/* User location */}
+              {/* User Location */}
               {userLocation && markerIcons && (
                 <Marker
                   position={userLocation}
@@ -297,7 +314,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 />
               )}
 
-              {/* Stations */}
+              {/* Station Markers */}
               {(searchLocation ? sortedStations : stations).map((station) => {
                 const [lng, lat] = station.geometry.coordinates;
                 return (
@@ -310,7 +327,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 );
               })}
 
-              {/* Cars */}
+              {/* Car Markers */}
               {cars.map((car) => (
                 <Marker
                   key={car.id}
@@ -322,16 +339,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </GoogleMap>
           </div>
 
-          {/* Station Selector (top-left) */}
+          {/* Station Selector at the top-left */}
           <div className="absolute top-4 left-4 right-4 z-10">
             <StationSelector onAddressSearch={handleAddressSearch} />
           </div>
 
-          {/* Two icon buttons below the StationSelector (z-30 so they appear on top).
-              Using top-[7.5rem] or so if StationSelector is e.g. 4rem tall. 
-              Adjust as needed. */}
-          <div className="absolute top-[7.5rem] left-4 z-30 flex flex-col space-y-2">
-            {/* Locate Me button (no text, just icon) */}
+          {/* 
+            Buttons below StationSelector: 
+            Use top-[9rem] or so to ensure no overlap 
+          */}
+          <div className="absolute top-[9rem] left-4 z-30 flex flex-col space-y-2">
+            {/* Locate Me */}
             <button
               onClick={handleLocateMe}
               className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
@@ -340,7 +358,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               <Target className="w-5 h-5" />
             </button>
 
-            {/* Car toggle button (no text, just icon) */}
+            {/* Car Toggle */}
             <button
               onClick={handleCarToggle}
               className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
@@ -350,36 +368,40 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </button>
           </div>
 
-          {/* CarSheet open by default. Clicking the Car icon toggles it. */}
-          <CarSheet
-            isOpen={isCarSheetOpen}
-            onToggle={() => setIsCarSheetOpen((v) => !v)}
-          />
+          {/* 1) CarSheet => visible if openSheet === 'car' */}
+          {openSheet === 'car' && (
+            <CarSheet
+              isOpen={true} 
+              onToggle={handleCarToggle} // toggling it again closes (-> closeCurrentSheet or logic)
+            />
+          )}
 
-          {/* StationList sheet (only open if user pressed "Locate me" and hasn't toggled something else) */}
-          <Sheet
-            isOpen={isStationListOpen}
-            onToggle={() => setIsStationListOpen(false)}
-            title="Nearby Stations"
-            count={sortedStations.length}
-          >
-            <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-              {sortedStations.map((station, idx) => (
-                <StationListItem
-                  key={station.id}
-                  index={idx}
-                  style={{}}
-                  data={{ items: sortedStations }}
-                />
-              ))}
-            </div>
-          </Sheet>
-
-          {/* StationDetail can still appear if user clicks a station (activeStation) */}
-          {(bookingStep === 1 || bookingStep === 2 || bookingStep === 4) && activeStation && (
+          {/* 2) StationList => visible if openSheet === 'list' */}
+          {openSheet === 'list' && (
             <Sheet
               isOpen
-              onToggle={() => setActiveStation(null)} // or any logic
+              onToggle={closeCurrentSheet}
+              title="Nearby Stations"
+              count={sortedStations.length}
+            >
+              <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+                {sortedStations.map((station, idx) => (
+                  <StationListItem
+                    key={station.id}
+                    index={idx}
+                    style={{}}
+                    data={{ items: sortedStations }}
+                  />
+                ))}
+              </div>
+            </Sheet>
+          )}
+
+          {/* 3) StationDetail => visible if openSheet === 'detail' & we have an activeStation */}
+          {openSheet === 'detail' && activeStation && (
+            <Sheet
+              isOpen
+              onToggle={closeCurrentSheet}
               title="Station Details"
               count={(searchLocation ? sortedStations : stations).length}
             >
