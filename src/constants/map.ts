@@ -146,6 +146,15 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 
 // Marker icons factory - implementing the dark-themed marker plan
 export const createMarkerIcons = () => {
+
+    const carPath = `
+    M -0.9,0.3
+    C -0.9,0.0 -0.7,-0.7  0.0,-0.7
+      0.7,-0.7  0.9,0.0   0.9,0.3
+    L  0.9,0.6
+    L -0.9,0.6
+    Z
+  `;
   // A diamond shape (for active station)
   const diamondPath = 'M 0 -1 L 1 0 0 1 -1 0 z';
 
@@ -207,13 +216,13 @@ export const createMarkerIcons = () => {
 
     // 6) Car marker
     //    A slightly smaller circle in neutral gray with a subtle stroke accent.
-    car: {
-      path: google?.maps?.SymbolPath?.CIRCLE,
-      scale: 7,
-      fillColor: '#4B5563',     // Darker gray (Tailwind gray‑600)
+        car: {
+      path: carPath,
+      scale: 10, // Larger scale to make it more visible
+      fillColor: '#374151', // A dark gray (Tailwind gray‑700)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#9CA3AF',   // Lighter gray stroke
+      strokeColor: '#F9FAFB', // Very light gray (Tailwind gray‑50)
     },
   };
 };
