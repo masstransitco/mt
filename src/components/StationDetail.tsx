@@ -14,9 +14,22 @@ import {
 } from '@/store/userSlice';
 import { StationFeature } from '@/store/stationsSlice';
 
+/////////////////////////////////////////////
+// Add two optional callback props here
+/////////////////////////////////////////////
 interface StationDetailProps {
   stations: StationFeature[];
   activeStation: StationFeature | null;
+  /**
+   * If the parent wants to perform additional logic
+   * after confirming a departure station, pass this callback.
+   */
+  onConfirmDeparture?: () => void;
+  /**
+   * If the parent wants to perform additional logic
+   * after clearing a station, pass this callback.
+   */
+  onClear?: () => void;
 }
 
 /**
@@ -26,7 +39,14 @@ interface StationDetailProps {
  *   3 = selecting_arrival_station
  *   4 = selected_arrival_station
  */
-export const StationDetail = memo<StationDetailProps>(({ stations, activeStation }) => {
+export const StationDetail = memo<StationDetailProps>((props) => {
+  const {
+    stations,
+    activeStation,
+    onConfirmDeparture,
+    onClear
+  } = props;
+
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
@@ -83,6 +103,10 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
       dispatch(advanceBookingStep(3));
       toast.success('Arrival station cleared');
     }
+    //////////////////////////////////
+    // Call parent's onClear if provided
+    //////////////////////////////////
+    onClear?.();
   };
 
   const handleConfirm = () => {
@@ -99,6 +123,10 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
         dispatch(advanceBookingStep(3));
         toast.success('Departure station confirmed. Now select your arrival station.');
       }
+      ///////////////////////////////////////////
+      // If the parent also wants to handle confirm departure
+      ///////////////////////////////////////////
+      onConfirmDeparture?.();
     } else {
       // Step 3 or 4 => arrival selection
       dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
@@ -112,6 +140,8 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
         dispatch(advanceBookingStep(5));
         toast.success('Route confirmed! Next: payment or finalizing.');
       }
+      // If the parent wants to handle any confirm logic for arrival
+      // we could do onConfirmArrival?.() if we had that prop
     }
   };
 
@@ -121,9 +151,7 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
       <div className="flex items-start gap-3">
         <Icon className="w-5 h-5 mt-1 text-primary" />
         <div className="flex-1">
-          <h3 className="font-medium">
-            {activeStation.properties.Place}
-          </h3>
+          <h3 className="font-medium">{activeStation.properties.Place}</h3>
           <p className="text-sm text-muted-foreground">
             {isDepartureFlow ? 'Departure Station' : 'Arrival Station'}
           </p>
@@ -143,12 +171,16 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Max Power</span>
-          <span className="font-medium">{activeStation.properties.maxPower} kW</span>
+          <span className="font-medium">
+            {activeStation.properties.maxPower} kW
+          </span>
         </div>
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Est. Wait Time</span>
-            <span className="font-medium">{activeStation.properties.waitTime} min</span>
+            <span className="font-medium">
+              {activeStation.properties.waitTime} min
+            </span>
           </div>
         )}
         {(activeStation.distance !== undefined || routeDistance) && (
@@ -167,15 +199,15 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
       <div className="flex gap-2 pt-2">
         <button
           onClick={handleClear}
-          className="flex-1 px-4 py-2 text-sm font-medium text-muted-foreground 
-                   bg-muted hover:bg-muted/80 rounded-lg transition-colors"
+          className="flex-1 px-4 py-2 text-sm font-medium text-muted-foreground
+                     bg-muted hover:bg-muted/80 rounded-lg transition-colors"
         >
           Clear
         </button>
         <button
           onClick={handleConfirm}
-          className="flex-1 px-4 py-2 text-sm font-medium text-white 
-                   bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+          className="flex-1 px-4 py-2 text-sm font-medium text-white
+                     bg-primary hover:bg-primary/90 rounded-lg transition-colors"
         >
           {isDepartureFlow ? 'Confirm Departure' : 'Confirm Arrival'}
         </button>
