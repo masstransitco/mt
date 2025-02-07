@@ -30,13 +30,11 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
-  // Redux user state: which station IDs are currently selected
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // Are we dealing with departure or arrival?
-  // steps 1 and 2 => departure, steps 3 and 4 => arrival
-  const isDepartureFlow = step <= 2;  
+  // steps 1 or 2 => departure flow, steps 3 or 4 => arrival flow
+  const isDepartureFlow = step <= 2;
 
   // If no station is active, show instructions
   if (!activeStation) {
@@ -61,14 +59,11 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
     );
   }
 
-  // For UI: which icon do we show?
   const Icon = isDepartureFlow ? MapPin : Navigation;
 
-  // For computing distance, find the "other station" (either arrival if we're in departure flow or vice versa)
+  // For distance calculations
   const otherStationId = isDepartureFlow ? arrivalId : departureId;
   const otherStation = stations.find(s => s.id === otherStationId);
-
-  // If both stations are selected, we can compute total route distance
   const routeDistance =
     otherStation &&
     activeStation.distance !== undefined &&
@@ -79,12 +74,12 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
   const handleClear = () => {
     if (isDepartureFlow) {
       dispatch(clearDepartureStation());
-      // Usually you'd revert to step=1 if you cleared the departure station
+      // Revert to step=1 (selecting_departure_station)
       dispatch(advanceBookingStep(1));
       toast.success('Departure station cleared');
     } else {
       dispatch(clearArrivalStation());
-      // Usually you'd revert to step=3 if you cleared the arrival station
+      // Revert to step=3 (selecting_arrival_station)
       dispatch(advanceBookingStep(3));
       toast.success('Arrival station cleared');
     }
@@ -96,11 +91,11 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
       dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
 
       if (step === 1) {
-        // If we were in step=1 (selecting_departure_station), we now set step=2 (selected_departure_station)
+        // Move to step=2 => selected_departure_station
         dispatch(advanceBookingStep(2));
         toast.success('Departure station selected.');
       } else if (step === 2) {
-        // If user reconfirms, or you want to proceed from "selected departure" to "selecting arrival"
+        // Move to step=3 => selecting_arrival_station
         dispatch(advanceBookingStep(3));
         toast.success('Departure station confirmed. Now select your arrival station.');
       }
@@ -109,12 +104,11 @@ export const StationDetail = memo<StationDetailProps>(({ stations, activeStation
       dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
 
       if (step === 3) {
-        // If we were in step=3 (selecting_arrival_station), we now set step=4 (selected_arrival_station)
+        // Move to step=4 => selected_arrival_station
         dispatch(advanceBookingStep(4));
         toast.success('Arrival station selected.');
       } else if (step === 4) {
-        // If user reconfirms or you want to finalize the route
-        // Possibly proceed to step=5 => payment or finalizing
+        // Move to step=5 => payment or finalizing
         dispatch(advanceBookingStep(5));
         toast.success('Route confirmed! Next: payment or finalizing.');
       }
