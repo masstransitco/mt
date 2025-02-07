@@ -36,8 +36,6 @@ import StationSelector from './StationSelector';
 import { LoadingSpinner } from './LoadingSpinner';
 import CarSheet from '@/components/booking/CarSheet';
 import StationDetail from './StationDetail';
-
-// Import the StationListItem that expects "onStationSelected" in the "data" object
 import { StationListItem } from './StationListItem';
 
 import {
@@ -95,7 +93,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Once map is loaded, create map options & marker icons
+  // Once the map is loaded, create map options & marker icons
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -103,7 +101,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Sort stations by distance to a point
+  // Sort stations by distance
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -135,7 +133,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setSearchLocation(location);
       setSortedStations(sorted);
 
-      // If we have a minimized sheet, open it
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
@@ -143,7 +140,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Map init => fit bounds
+  // Map load => fit bounds
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -175,7 +172,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Hide overlay after data loads
+  // Hide overlay
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -184,12 +181,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Toggling general sheet
+  // Toggle sheet from Redux
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Helper: open a new sheet => store current in previous => setOpenSheet
+  // Helper: open a new sheet => store current => setOpen
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
@@ -197,19 +194,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Helper: close current => revert to previous
+  // Helper: close => revert to previous
   const closeCurrentSheet = () => {
     const old = openSheet;
     setOpenSheet(previousSheet);
     setPreviousSheet('none');
-
-    // If detail was closed => clear activeStation
     if (old === 'detail') {
       setActiveStation(null);
     }
   };
 
-  // 1) "Locate Me" => geolocation => close CarSheet => show station list
+  // "Locate Me" => get geolocation => open station list => hide CarSheet
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
@@ -227,9 +222,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         setSearchLocation(loc);
         setSortedStations(sorted);
 
-        // Clear active station
         setActiveStation(null);
-        // Show station list => hide car if open
         openNewSheet('list');
         toast.success('Location found!');
       },
@@ -240,7 +233,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // 2) "Car" => toggles CarSheet => if open => close => revert, else open => hide detail/list
+  // Toggle CarSheet
   const handleCarToggle = () => {
     if (openSheet === 'car') {
       closeCurrentSheet();
@@ -250,22 +243,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Marker icon logic
+  // Decide icon for station
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
-    if (station.id === departureStationId) {
-      return markerIcons.departureStation;
-    }
-    if (station.id === arrivalStationId) {
-      return markerIcons.arrivalStation;
-    }
-    if (station.id === activeStation?.id) {
-      return markerIcons.activeStation;
-    }
+    if (station.id === departureStationId) return markerIcons.departureStation;
+    if (station.id === arrivalStationId) return markerIcons.arrivalStation;
+    if (station.id === activeStation?.id) return markerIcons.activeStation;
     return markerIcons.station;
   };
 
-  // Click station marker => open detail => hide list/car
+  // User clicks a marker => open detail => hide other sheets
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
     if (bookingStep < 3) {
@@ -279,7 +266,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // 3) If user selects from StationList => open detail
+  // Callback from station list => open detail
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
     if (bookingStep < 3) {
@@ -290,15 +277,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     openNewSheet('detail');
   };
 
-  // 4) Confirm departure => step=3 => hide all sheets
+  // Confirm departure => set step=3 => hide all
   const handleConfirmDeparture = () => {
-    dispatch(advanceBookingStep(3)); // => selecting_arrival_station
+    dispatch(advanceBookingStep(3));
     setPreviousSheet('none');
     setOpenSheet('none');
     setActiveStation(null);
   };
 
-  // 5) Clear station => revert to previous
+  // Clear station => revert
   const handleClearStationDetail = () => {
     closeCurrentSheet();
   };
@@ -321,7 +308,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <LoadingSpinner />
       ) : (
         <>
-          {/* The Map */}
+          {/* Google Map */}
           <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -330,7 +317,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
               options={mapOptions || {}}
               onLoad={handleMapLoad}
             >
-              {/* User Location */}
               {userLocation && markerIcons && (
                 <Marker
                   position={userLocation}
@@ -339,7 +325,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 />
               )}
 
-              {/* Station Markers */}
               {(searchLocation ? sortedStations : stations).map((station) => {
                 const [lng, lat] = station.geometry.coordinates;
                 return (
@@ -352,7 +337,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 );
               })}
 
-              {/* Car Markers */}
               {cars.map((car) => (
                 <Marker
                   key={car.id}
@@ -364,17 +348,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </GoogleMap>
           </div>
 
-          {/* Station Selector at the top-left */}
-          <div className="absolute top-4 left-4 right-4 z-10">
+          {/* 
+            Position StationSelector flush with the top header 
+            => top-[57px], left-0, right-0
+          */}
+          <div className="absolute top-[57px] left-0 right-0 z-10">
             <StationSelector onAddressSearch={handleAddressSearch} />
           </div>
 
-          {/* 
-            Buttons below StationSelector: 
-            e.g. top-[9rem] for no overlap 
-          */}
-          <div className="absolute top-[9rem] left-4 z-30 flex flex-col space-y-2">
-            {/* Locate Me => close others, open list */}
+          {/* Two icon buttons below it, at e.g. top-[120px] for spacing */}
+          <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
             <button
               onClick={handleLocateMe}
               className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
@@ -383,7 +366,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
               <Target className="w-5 h-5" />
             </button>
 
-            {/* Car => toggles CarSheet */}
             <button
               onClick={handleCarToggle}
               className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
@@ -393,7 +375,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </button>
           </div>
 
-          {/* CarSheet => open if openSheet='car' */}
           {openSheet === 'car' && (
             <CarSheet
               isOpen
@@ -401,7 +382,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* StationList => open if openSheet='list' */}
           {openSheet === 'list' && (
             <Sheet
               isOpen
@@ -415,10 +395,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
                     key={station.id}
                     index={idx}
                     style={{}}
-                    // Pass everything inside data
                     data={{
                       items: sortedStations,
-                      // Pass a callback inside data to handle station selection
                       onStationSelected: () => handleStationSelectedFromList(station),
                     }}
                   />
@@ -427,7 +405,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </Sheet>
           )}
 
-          {/* StationDetail => open if openSheet='detail' & we have activeStation */}
           {openSheet === 'detail' && activeStation && (
             <Sheet
               isOpen
