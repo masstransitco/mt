@@ -20,12 +20,8 @@ import {
 } from '@/store/carSlice';
 import {
   selectUserLocation,
-  selectDepartureStation,
-  selectArrivalStation,
   selectDepartureStationId,
   selectArrivalStationId,
-  selectDepartureStation as setDepartureStation,
-  selectArrivalStation as setArrivalStation,
 } from '@/store/userSlice';
 import {
   toggleSheet,
@@ -74,7 +70,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsError = useAppSelector(selectCarsError);
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
-  const bookingStep = useAppSelector(selectBookingStep); 
+  const bookingStep = useAppSelector(selectBookingStep);
+
+  // For marker styling logic
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
 
   // Load the Maps API
   const { isLoaded, loadError } = useJsApiLoader({
@@ -91,7 +91,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Sort stations by distance to a given point
+  // Helper to sort stations by distance to a given point
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -119,8 +119,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setSearchLocation(location);
       mapRef.current.panTo(location);
       mapRef.current.setZoom(15);
+
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSortedStations(sorted);
+
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
@@ -128,7 +130,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Map initialization: fit bounds to stations if available
+  // Map initialization: fit bounds to all stations
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -144,7 +146,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [stations]
   );
 
-  // Data initialization: fetch stations and cars
+  // Fetch station & car data
   useEffect(() => {
     const init = async () => {
       try {
@@ -160,20 +162,40 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Hide overlay when data is loaded
+  // Hide overlay when map & data are loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Determine if an error exists
+  // Error state
   const hasError = stationsError || carsError || loadError;
 
-  // Sheet toggle control
+  // Toggle sheet
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
+
+  // Decide which icon to use for a station
+  const getStationIcon = (station: StationFeature): google.maps.Symbol | null => {
+    if (!markerIcons) return null;
+
+    // If this station is the confirmed departure
+    if (station.id === departureStationId) {
+      return markerIcons.departureStation;
+    }
+    // If this station is the confirmed arrival
+    if (station.id === arrivalStationId) {
+      return markerIcons.arrivalStation;
+    }
+    // If it's the currently active station
+    if (station.id === activeStation?.id) {
+      return markerIcons.activeStation;
+    }
+    // Otherwise, it's just a normal station
+    return markerIcons.station;
+  };
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -217,6 +239,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   <Marker
                     key={station.id}
                     position={{ lat, lng }}
+                    icon={getStationIcon(station)} // Use our helper
                     onClick={() => {
                       // Set the station as active so StationDetail can show it
                       setActiveStation(station);
@@ -230,12 +253,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
                         dispatch({ type: 'user/selectArrivalStation', payload: station.id });
                       }
 
-                      // Optionally, if the sheet is minimized, open it.
+                      // If the sheet is minimized, open it
                       if (isSheetMinimized) {
                         dispatch(toggleSheet());
                       }
                     }}
-                    icon={markerIcons?.default}
                   />
                 );
               })}
@@ -245,8 +267,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 <Marker
                   key={car.id}
                   position={{ lat: car.lat, lng: car.lng }}
-                  title={car.name}
                   icon={markerIcons?.car}
+                  title={car.name}
                 />
               ))}
             </GoogleMap>
@@ -255,9 +277,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* StationSelector with only "Step 1 of 2" or "Step 2 of 2" in the UI */}
           <StationSelector onAddressSearch={handleAddressSearch} />
 
-          {/* Render the bottom sheet for steps 1,2,4. 
-              (step 3 might hide the sheet, or you can adapt as needed)
-          */}
+          {/* Bottom Sheet for steps 1, 2, or 4 (step 3 might hide the sheet) */}
           {(bookingStep === 1 || bookingStep === 2 || bookingStep === 4) && (
             bookingStep === 1 ? (
               // Step 1 = selecting_departure_station
