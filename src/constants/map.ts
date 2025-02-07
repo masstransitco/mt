@@ -1,3 +1,5 @@
+// src/constants/map.ts
+
 import type { Libraries } from '@react-google-maps/api';
 
 // Base map configuration - safe for SSR
@@ -6,9 +8,9 @@ export const MAP_CONTAINER_STYLE = {
   height: '100%',
 };
 
-export const DEFAULT_CENTER = { 
-  lat: 22.3, 
-  lng: 114.0 
+export const DEFAULT_CENTER = {
+  lat: 22.3,
+  lng: 114.0,
 };
 
 export const DEFAULT_ZOOM = 14;
@@ -23,106 +25,110 @@ export const HK_BOUNDS = {
   west: 113.8,
 };
 
-// Map styling - Dark minimalist theme
+// Dark minimalist map styling
 export const MAP_STYLES = [
   {
     featureType: 'all',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#ffffff' }]
+    stylers: [{ color: '#ffffff' }],
   },
   {
     featureType: 'all',
     elementType: 'labels.text.stroke',
-    stylers: [{ color: '#212121' }, { lightness: -100 }, { visibility: 'simplified' }]
+    stylers: [
+      { color: '#212121' },
+      { lightness: -100 },
+      { visibility: 'simplified' },
+    ],
   },
   {
     featureType: 'administrative',
     elementType: 'geometry',
-    stylers: [{ visibility: 'off' }]
+    stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'administrative.land_parcel',
     elementType: 'labels',
-    stylers: [{ visibility: 'off' }]
+    stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'landscape',
     elementType: 'geometry',
-    stylers: [{ color: '#212121' }]
+    stylers: [{ color: '#212121' }],
   },
   {
     featureType: 'poi',
     elementType: 'geometry',
-    stylers: [{ color: '#262626' }]
+    stylers: [{ color: '#262626' }],
   },
   {
     featureType: 'poi',
     elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }]
+    stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'poi',
     elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }]
+    stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry.fill',
-    stylers: [{ color: '#2c2c2c' }]
+    stylers: [{ color: '#2c2c2c' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#373737' }]
+    stylers: [{ color: '#373737' }],
   },
   {
     featureType: 'road',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#8a8a8a' }]
+    stylers: [{ color: '#8a8a8a' }],
   },
   {
     featureType: 'road.arterial',
     elementType: 'geometry',
-    stylers: [{ color: '#373737' }]
+    stylers: [{ color: '#373737' }],
   },
   {
     featureType: 'road.highway',
     elementType: 'geometry',
-    stylers: [{ color: '#3c3c3c' }]
+    stylers: [{ color: '#3c3c3c' }],
   },
   {
     featureType: 'road.highway.controlled_access',
     elementType: 'geometry',
-    stylers: [{ color: '#4e4e4e' }]
+    stylers: [{ color: '#4e4e4e' }],
   },
   {
     featureType: 'road.local',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#616161' }]
+    stylers: [{ color: '#616161' }],
   },
   {
     featureType: 'transit',
     elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }]
+    stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'transit',
     elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }]
+    stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#1a1a1a' }]
+    stylers: [{ color: '#1a1a1a' }],
   },
   {
     featureType: 'water',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#3d3d3d' }]
-  }
+    stylers: [{ color: '#3d3d3d' }],
+  },
 ];
 
-// Map options factory - safe for SSR
+// Create map options with a dark theme
 export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
   zoomControl: true,
@@ -138,65 +144,83 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   },
 });
 
-// Marker icons factory - safe for SSR
-export const createMarkerIcons = () => ({
-  user: {
-    path: google?.maps?.SymbolPath?.CIRCLE,
-    scale: 7,
-    fillColor: '#4285F4',
-    fillOpacity: 1,
-    strokeWeight: 2,
-    strokeColor: '#FFFFFF',
-  },
-  departureStation: {
-    path: google?.maps?.SymbolPath?.CIRCLE,
-    scale: 8,
-    fillColor: '#22C55E',
-    fillOpacity: 1,
-    strokeWeight: 2,
-    strokeColor: '#FFFFFF',
-  },
-  arrivalStation: {
-    path: google?.maps?.SymbolPath?.CIRCLE,
-    scale: 8,
-    fillColor: '#EF4444',
-    fillOpacity: 1,
-    strokeWeight: 2,
-    strokeColor: '#FFFFFF',
-  },
-  activeStation: {
-    path: google?.maps?.SymbolPath?.CIRCLE,
-    scale: 7,
-    fillColor: '#6B7280',
-    fillOpacity: 0.8,
-    strokeWeight: 2,
-    strokeColor: '#FFFFFF',
-  },
-  inactiveStation: {
-    path: google?.maps?.SymbolPath?.CIRCLE,
-    scale: 5,
-    fillColor: '#6B7280',
-    fillOpacity: 0.6,
-    strokeWeight: 2,
-    strokeColor: '#FFFFFF',
-  },
-  car: {
-    path: google?.maps?.SymbolPath?.CIRCLE,
-    scale: 8,
-    fillColor: '#333333',
-    fillOpacity: 1,
-    strokeWeight: 2,
-    strokeColor: '#0000FF',
-  },
-});
+// Marker icons factory - implementing the dark-themed marker plan
+export const createMarkerIcons = () => {
+  // A diamond shape (for active station) as an SVG path string
+  // M 0 -1 L 1 0 0 1 -1 0 z  => simple diamond around origin
+  const diamondPath = 'M 0 -1 L 1 0 0 1 -1 0 z';
 
-// Places API configuration - safe for SSR
-export const PLACES_OPTIONS = {
-  componentRestrictions: { 
-    country: 'HK' 
-  },
-  types: ['address']
+  return {
+    // 1) User Location (blue circle)
+    user: {
+      path: google?.maps?.SymbolPath?.CIRCLE,
+      scale: 7,
+      fillColor: '#4285F4',
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#FFFFFF',
+    },
+
+    // 2) Default station marker (dark circle)
+    station: {
+      path: google?.maps?.SymbolPath?.CIRCLE,
+      scale: 6,
+      fillColor: '#2E2E2E',   // dark gray fill
+      fillOpacity: 0.9,
+      strokeWeight: 2,
+      strokeColor: '#444',    // slightly lighter gray stroke
+    },
+
+    // 3) Active station (user has clicked or hovered; highlight)
+    //    Using a diamond shape with a bright accent color
+    activeStation: {
+      path: diamondPath,
+      scale: 8,
+      fillColor: '#48BB78',   // accent (green)
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#FFFFFF',
+    },
+
+    // 4) Confirmed departure station (circle with teal fill)
+    departureStation: {
+      path: google?.maps?.SymbolPath?.CIRCLE,
+      scale: 8,
+      fillColor: '#38B2AC',   // teal
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#FFFFFF',
+    },
+
+    // 5) Confirmed arrival station (circle with purple fill)
+    arrivalStation: {
+      path: google?.maps?.SymbolPath?.CIRCLE,
+      scale: 8,
+      fillColor: '#A78BFA',   // purple
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#FFFFFF',
+    },
+
+    // Car marker (simple circle, dark fill with a subtle accent stroke)
+    car: {
+      path: google?.maps?.SymbolPath?.CIRCLE,
+      scale: 7,
+      fillColor: '#333333',
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#48BB78', // green stroke or a brand accent
+    },
+  };
 };
 
-// Search debounce timeout (in milliseconds)
+// For the Places API usage in StationSelector
+export const PLACES_OPTIONS = {
+  componentRestrictions: {
+    country: 'HK',
+  },
+  types: ['address'],
+};
+
+// Debounce time for address searches
 export const SEARCH_DEBOUNCE_MS = 300;
