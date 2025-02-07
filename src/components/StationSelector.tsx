@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
+import { selectBookingStep } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
@@ -58,7 +58,6 @@ const AddressSearch = ({
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
     try {
-      // Cast to any to avoid TS error about 'componentRestrictions'
       const request: any = {
         input,
         componentRestrictions: { country: 'HK' },
@@ -73,7 +72,7 @@ const AddressSearch = ({
     }
   }, 300);
 
-  // Handle the user selecting a prediction from the list
+  // When user selects a prediction
   const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
 
@@ -156,16 +155,20 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // Basic 2-step approach:
-  // Step 1 => highlight departure
-  // Step 2 => highlight arrival
-  const highlightDeparture = step === 1;
-  const highlightArrival = step === 2;
+  // 2-step UI logic: 
+  // If bookingStep < 3 => Show "Step 1 of 2"
+  // If bookingStep >= 3 => Show "Step 2 of 2"
+  const uiStepNumber = step < 3 ? 1 : 2;
+
+  // Highlight departure if step < 3, highlight arrival if step >= 3
+  const highlightDeparture = step < 3;
+  const highlightArrival = step >= 3;
 
   return (
     <div className="absolute top-4 left-4 right-4 z-10 bg-background/95 backdrop-blur-sm rounded-lg shadow-lg">
       <div className="p-4 space-y-3">
-        {/* Departure Input */}
+
+        {/* DEPARTURE Input */}
         <div
           className={`
             flex items-center gap-2 p-3 rounded-lg transition-all duration-200
@@ -181,7 +184,8 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step !== 1}
+            // Only editable if step < 3 => user is still picking departure
+            disabled={step >= 3}
             placeholder="Search for departure station"
             selectedStation={departureStation}
           />
@@ -191,6 +195,8 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
                 // Clear departure
                 dispatch(clearDepartureStation());
                 dispatch(clearArrivalStation());
+                // Revert to step=1 => selecting_departure_station
+                // so user can pick again
                 dispatch(advanceBookingStep(1));
                 toast.success('Departure station cleared');
               }}
@@ -201,7 +207,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           )}
         </div>
 
-        {/* Arrival Input */}
+        {/* ARRIVAL Input */}
         <div
           className={`
             flex items-center gap-2 p-3 rounded-lg transition-all duration-200
@@ -217,7 +223,8 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step !== 2}
+            // Only editable if step >= 3 => user is picking arrival
+            disabled={step < 3}
             placeholder="Search for arrival station"
             selectedStation={arrivalStation}
           />
@@ -226,7 +233,8 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
               onClick={() => {
                 // Clear arrival
                 dispatch(clearArrivalStation());
-                dispatch(advanceBookingStep(2));
+                // Revert to step=3 => selecting_arrival_station
+                dispatch(advanceBookingStep(3));
                 toast.success('Arrival station cleared');
               }}
               className="p-1 hover:bg-muted rounded-full transition-colors flex-shrink-0"
@@ -236,12 +244,16 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           )}
         </div>
 
-        {/* Info Bar */}
+        {/* Info Bar: "Step X of 2" */}
         <div className="flex items-center justify-between px-2 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Step {step} of 2</span>
+            <span>Step {uiStepNumber} of 2</span>
             <span>•</span>
-            <span>{step === 1 ? 'Select departure station' : 'Select arrival station'}</span>
+            {uiStepNumber === 1 ? (
+              <span>Select departure station</span>
+            ) : (
+              <span>Select arrival station</span>
+            )}
           </div>
           {departureStation && arrivalStation && (
             <div className="text-xs font-medium">
