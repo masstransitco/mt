@@ -182,7 +182,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
 
   return (
     <div
-      className="absolute top-[1px] left-0 right-0 z-10
+      className="absolute top-[2px] left-5 right-5 z-10
                  bg-background/90 backdrop-blur-sm
                  border-b border-border"
     >
