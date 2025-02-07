@@ -148,11 +148,13 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 export const createMarkerIcons = () => {
 
     const carPath = `
-    M -0.9,0.3
-    C -0.9,0.0 -0.7,-0.7  0.0,-0.7
-      0.7,-0.7  0.9,0.0   0.9,0.3
-    L  0.9,0.6
-    L -0.9,0.6
+        M 0,-1
+    L 0.8,0 
+    L 0.25,0
+    L 0.25,1
+    L -0.25,1
+    L -0.25,0
+    L -0.8,0
     Z
   `;
   // A diamond shape (for active station)
@@ -218,11 +220,11 @@ export const createMarkerIcons = () => {
     //    A slightly smaller circle in neutral gray with a subtle stroke accent.
         car: {
       path: carPath,
-      scale: 10, // Larger scale to make it more visible
-      fillColor: '#374151', // A dark gray (Tailwind gray‑700)
+      scale: 9,
+      fillColor: '#3B82F6',       // Vibrant “Blue” (Tailwind blue-500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#F9FAFB', // Very light gray (Tailwind gray‑50)
+      strokeColor: '#DBEAFE',
     },
   };
 };
