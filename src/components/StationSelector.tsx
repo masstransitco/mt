@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectBookingStep } from '@/store/bookingSlice';
+import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
