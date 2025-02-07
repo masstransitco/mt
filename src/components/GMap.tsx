@@ -178,8 +178,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch]);
 
   // Decide which icon to use for a station
-  const getStationIcon = (station: StationFeature): google.maps.Symbol | null => {
-    if (!markerIcons) return null;
+  // Return string | google.maps.Symbol | google.maps.Icon | undefined
+  const getStationIcon = (station: StationFeature):
+    | string
+    | google.maps.Symbol
+    | google.maps.Icon
+    | undefined => {
+    if (!markerIcons) return undefined; // No icons yet, so return undefined
 
     // If this station is the confirmed departure
     if (station.id === departureStationId) {
@@ -239,17 +244,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   <Marker
                     key={station.id}
                     position={{ lat, lng }}
-                    icon={getStationIcon(station)} // Use our helper
+                    icon={getStationIcon(station)}
                     onClick={() => {
                       // Set the station as active so StationDetail can show it
                       setActiveStation(station);
 
                       // Immediately store it in Redux so StationSelector can display it
                       if (bookingStep < 3) {
-                        // If we're in departure flow (steps 1 or 2)
                         dispatch({ type: 'user/selectDepartureStation', payload: station.id });
                       } else {
-                        // If we're in arrival flow (steps 3 or 4)
                         dispatch({ type: 'user/selectArrivalStation', payload: station.id });
                       }
 
