@@ -146,69 +146,74 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 
 // Marker icons factory - implementing the dark-themed marker plan
 export const createMarkerIcons = () => {
-  // A diamond shape (for active station) as an SVG path string
+  // A diamond shape (for active station)
   const diamondPath = 'M 0 -1 L 1 0 0 1 -1 0 z';
 
   return {
-    // 1) User Location (blue circle)
+    // 1) User Location
+    //    A simple circle with a subtle accent fill.
     user: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 7,
-      fillColor: '#4285F4',
+      fillColor: '#A3BFFA',     // Soft periwinkle
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF',
+      strokeColor: '#FFFFFF',   // White stroke for clarity
     },
 
-    // 2) Default station marker (bright amber circle)
-    //    Increased scale from 6 → 8 for better visibility
+    // 2) Default station marker
+    //    A low-saturation gray fill with a white stroke for high contrast.
     station: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 8,
-      fillColor: '#F59E0B', // Amber (Tailwind amber-500)
-      fillOpacity: 1,
+      fillColor: '#5F5F5F',     // Muted gray
+      fillOpacity: 0.9,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF', // White stroke for contrast
+      strokeColor: '#FFFFFF',
     },
 
-    // 3) Active station (diamond with a bright gold fill)
+    // 3) Active station (user has clicked) 
+    //    A diamond shape with a soft teal fill to highlight “active” selection.
     activeStation: {
       path: diamondPath,
       scale: 9,
-      fillColor: '#FACC15', // Bright gold (Tailwind yellow-400)
+      fillColor: '#5EEAD4',     // Soft teal (Tailwind teal‑300)
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
     },
 
-    // 4) Confirmed departure station (green circle)
+    // 4) Confirmed departure station
+    //    A circle in a slightly more saturated teal to convey “locked in.”
     departureStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#10B981', // Emerald (Tailwind emerald-500)
+      fillColor: '#14B8A6',     // Teal (Tailwind teal‑500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF',
+      strokeColor: '#F1F5F9',   // Very light gray stroke
     },
 
-    // 5) Confirmed arrival station (purple circle)
+    // 5) Confirmed arrival station
+    //    A circle in a soft violet, distinct from teal but still harmonious.
     arrivalStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#8B5CF6', // Violet (Tailwind violet-500)
+      fillColor: '#8B5CF6',     // Violet (Tailwind violet‑500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF',
+      strokeColor: '#F1F5F9', 
     },
 
-    // 6) Car marker (light gray circle w/ bright accent stroke)
+    // 6) Car marker
+    //    A slightly smaller circle in neutral gray with a subtle stroke accent.
     car: {
       path: google?.maps?.SymbolPath?.CIRCLE,
-      scale: 8,
-      fillColor: '#737373', // Gray (Tailwind gray-500)
+      scale: 7,
+      fillColor: '#4B5563',     // Darker gray (Tailwind gray‑600)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#14B8A6', // Teal stroke (Tailwind teal-500)
+      strokeColor: '#9CA3AF',   // Lighter gray stroke
     },
   };
 };
