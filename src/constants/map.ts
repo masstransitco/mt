@@ -157,85 +157,106 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 
 // Marker icons factory - implementing the dark-themed marker plan
 export const createMarkerIcons = () => {
-
-    const carPath = `
-        M 0,-1
-    L 0.8,0 
-    L 0.25,0
-    L 0.25,1
-    L -0.25,1
-    L -0.25,0
-    L -0.8,0
+  // A stylized car arrow path, can be further refined
+  const carPath = `
+    M 0,-1
+    L 1,0 
+    L 0.3,0
+    L 0.3,1
+    L -0.3,1
+    L -0.3,0
+    L -1,0
     Z
   `;
+
   // A diamond shape (for active station)
   const diamondPath = 'M 0 -1 L 1 0 0 1 -1 0 z';
 
+  // A subtle “pin” shape for the user location
+  // Overlaps a circle on top of a small rectangular tail
+  const userPinPath = `
+    M 0,-1
+    A 1 1 0 1 1 0,1
+    L 0,1.5
+    L 0,1
+    Z
+  `;
+
+  // A hexagon shape for the default station marker
+  // Offers a more distinct geometry than just a circle
+  const hexagonPath = `
+    M 0,-1
+    L 0.866,-0.5
+    L 0.866,0.5
+    L 0,1
+    L -0.866,0.5
+    L -0.866,-0.5
+    Z
+  `;
+
   return {
-    // 1) User Location
-    //    A simple circle with a subtle accent fill.
+    // 1) User Location - a pin shape in a gentle sky-blue
     user: {
-      path: google?.maps?.SymbolPath?.CIRCLE,
-      scale: 7,
-      fillColor: '#A3BFFA',     // Soft periwinkle
+      path: userPinPath,
+      scale: 10,
+      fillColor: '#93C5FD',   // Light blue (Tailwind blue-300)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF',   // White stroke for clarity
+      strokeColor: '#FFFFFF', // White stroke for clarity
+      anchor: new google.maps.Point(0, 2), // slightly offset the anchor
     },
 
-    // 2) Default station marker
-    //    A low-saturation gray fill with a white stroke for high contrast.
+    // 2) Default station marker - a hexagon with a warm gray fill
     station: {
-      path: google?.maps?.SymbolPath?.CIRCLE,
-      scale: 8,
-      fillColor: '#5F5F5F',     // Muted gray
-      fillOpacity: 0.9,
+      path: hexagonPath,
+      scale: 9,
+      fillColor: '#6B7280',   // Gray (Tailwind gray-500)
+      fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
     },
 
-    // 3) Active station (user has clicked) 
-    //    A diamond shape with a soft teal fill to highlight “active” selection.
+    // 3) Active station (user has clicked) - diamond with a soft peach fill
+    //    to convey a gentle highlight.
     activeStation: {
       path: diamondPath,
-      scale: 9,
-      fillColor: '#5EEAD4',     // Soft teal (Tailwind teal‑300)
+      scale: 10,
+      fillColor: '#F9A8D4',   // Pink (Tailwind pink-300)
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
     },
 
-    // 4) Confirmed departure station
-    //    A circle in a slightly more saturated teal to convey “locked in.”
+    // 4) Confirmed departure station - circle with teal fill
+    //    Slightly smaller scale than default so it’s distinct from the hex.
     departureStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#14B8A6',     // Teal (Tailwind teal‑500)
+      fillColor: '#14B8A6',   // Teal (Tailwind teal-500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#F1F5F9',   // Very light gray stroke
+      strokeColor: '#F1F5F9', // Very light gray stroke
     },
 
-    // 5) Confirmed arrival station
-    //    A circle in a soft violet, distinct from teal but still harmonious.
+    // 5) Confirmed arrival station - circle with dusty purple fill
     arrivalStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#8B5CF6',     // Violet (Tailwind violet‑500)
+      fillColor: '#8B5CF6',   // Violet (Tailwind violet-500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#F1F5F9', 
+      strokeColor: '#F1F5F9',
     },
 
-    // 6) Car marker
-    //    A slightly smaller circle in neutral gray with a subtle stroke accent.
-        car: {
+    // 6) Car marker - arrow-like shape in a lively royal blue
+    //    with a bright accent stroke. 
+    car: {
       path: carPath,
-      scale: 9,
-      fillColor: '#3B82F6',       // Vibrant “Blue” (Tailwind blue-500)
+      scale: 10,
+      fillColor: '#3B82F6',    // Vibrant Blue (Tailwind blue-500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#DBEAFE',
+      strokeColor: '#BFDBFE',  // Lighter blue stroke (Tailwind blue-200)
     },
   };
 };
