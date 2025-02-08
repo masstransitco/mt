@@ -174,13 +174,16 @@ export const createMarkerIcons = () => {
 
   // A subtle “pin” shape for the user location
   // Overlaps a circle on top of a small rectangular tail
-  const userPinPath = `
-    M 0,-1
-    A 1 1 0 1 1 0,1
-    L 0,1.5
-    L 0,1
-    Z
-  `;
+const userPinPath = `
+  M -3 1
+  L -3 -1
+  L -2 -1
+  L -1 -1
+  L -1 1
+  A 1 1 0 0 0 -2 2
+  A 1 1 0 0 0 -3 1
+  Z
+`;
 
   // A hexagon shape for the default station marker
   // Offers a more distinct geometry than just a circle
