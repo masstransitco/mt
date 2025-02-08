@@ -3,7 +3,7 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { toast } from 'react-hot-toast';
-import { Navigation, Target } from 'lucide-react';
+import { Car, Locate } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
@@ -361,7 +361,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
                          flex items-center justify-center text-foreground shadow"
             >
-              <Target className="w-5 h-5" />
+              <Locate className="w-5 h-5" />
             </button>
 
             <button
@@ -369,7 +369,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
                          flex items-center justify-center text-foreground shadow"
             >
-              <Navigation className="w-5 h-5" />
+              <Car className="w-5 h-5" />
             </button>
           </div>
 
