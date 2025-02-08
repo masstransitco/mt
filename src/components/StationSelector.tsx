@@ -30,16 +30,15 @@ function CustomPinIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      // Same size & margin as before
+      // Adjust viewBox so your relative path is visible. This example uses 0 0 24 24.
+      viewBox="0 0 24 24"
+      fill="currentColor"
       className={`
-        w-5 h-5 m-1 flex-shrink-0
+        w-5 h-5 flex-shrink-0
         ${highlight ? 'text-primary' : 'text-muted-foreground'}
       `}
-      viewBox="0 0 24 24"
-      fill="currentColor" 
-      // ^ fill="currentColor" allows the .text-primary / .text-muted-foreground classes to color the path
     >
-      <path d="M-2-1.5-2 3.5 2 3.5 2-1.5 1-1.5M-2-1.5-1-1.5M0 1.5 0-3.5A1 1 0 001-2.5 1 1 0 001-2.5M0-3.5A1 1 0 000-3.5M-1-2.5A1 1 0 000-3.5" />
+      <path d="m-2-2v5h4v-5h-1m-3 0h1m1 3v-5a1 1 0 001 1 1 1 0 000 0m-1-1a1 1 0 000 0m-1 1a1 1 0 001-1" />
     </svg>
   );
 }
