@@ -14,16 +14,10 @@ import {
 import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
 import debounce from 'lodash/debounce';
 
-/**
- * StationSelector props
- */
 interface StationSelectorProps {
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
 }
 
-/**
- * AddressSearch props
- */
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
   disabled?: boolean;
@@ -51,7 +45,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If a station is already selected, show its name rather than an input
+  // If a station is already selected, display its name rather than an input
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -63,8 +57,8 @@ const AddressSearch = ({
   // Debounced search function for Google Autocomplete
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
+
     try {
-      // Casting to 'any' so we can pass componentRestrictions to the request
       const request: any = {
         input,
         componentRestrictions: { country: 'HK' },
@@ -151,13 +145,6 @@ const AddressSearch = ({
   );
 };
 
-/**
- * The main StationSelector component
- * 
- * Adjusted to be flush beneath your 57px header:
- * - We remove the old "top-4 left-4 right-4" and "rounded-lg shadow-lg"
- * - We add "top-[57px]" and full width. Minimal padding, less spacing.
- */
 export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -165,9 +152,9 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   // IDs of the selected departure & arrival stations
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
-
   // All stations + distance
   const stations = useAppSelector(selectStationsWithDistance);
+
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
@@ -184,9 +171,10 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
     <div
       className="absolute top-[2px] left-5 right-5 z-10
                  bg-background/90 backdrop-blur-sm
-                 border-b border-border"
+                 border-b border-border
+                 rounded-md  {/* <--- slight corner radius */}
+                 "
     >
-      {/* We reduce the padding and spacing for a more minimal look */}
       <div className="px-2 py-2 space-y-2">
 
         {/* DEPARTURE Input */}
@@ -205,7 +193,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step >= 3} // Only editable if step < 3 => picking departure
+            disabled={step >= 3}
             placeholder="Search for departure station"
             selectedStation={departureStation}
           />
@@ -242,7 +230,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           />
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step < 3} // Only editable if step >= 3 => picking arrival
+            disabled={step < 3}
             placeholder="Search for arrival station"
             selectedStation={arrivalStation}
           />
@@ -262,7 +250,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           )}
         </div>
 
-        {/* Info Bar: "Step X of 2" */}
+        {/* Info Bar */}
         <div className="flex items-center justify-between px-1 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Step {uiStepNumber} of 2</span>
