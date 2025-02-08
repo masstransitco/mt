@@ -39,8 +39,7 @@ function CustomPinIcon({ highlight }: { highlight: boolean }) {
       fill="currentColor" 
       // ^ fill="currentColor" allows the .text-primary / .text-muted-foreground classes to color the path
     >
-      <path d="M-2-2-2 3 2 3 2-2 1-2M-2-2-1-2M0 1 0-4A1 1 0 001-3 1 1 0 001-3M0-4A1 1 0 000-4M-1-3A1 1 0 000-4" />
-    </svg>
+       <path d="M-2-1.5-2 3.5 2 3.5 2-1.5 1-1.5M-2-1.5-1-1.5M0 1.5 0-3.5A1 1 0 001-2.5 1 1 0 001-2.5M0-3.5A1 1 0 000-3.5M-1-2.5A1 1 0 000-3.5" />
   );
 }
 
