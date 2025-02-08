@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter } from 'lucide-react';
+// import { Filter } from 'lucide-react'; // We'll comment out the filter usage
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectCar } from '@/store/userSlice';
@@ -27,6 +27,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   // UI: which screen are we on? (uiSlice)
   const viewState = useAppSelector(selectViewState);
 
+  // We’ll keep these states in case we add them back later
   const [filterType, setFilterType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -63,13 +64,13 @@ export default function CarGrid({ className = '' }: CarGridProps) {
     dispatch(selectCar(carId));
   };
 
-  // Example filter options
-  const filterOptions = [
-    { value: 'all', label: 'All Types' },
-    { value: 'electric', label: 'Electric' },
-    { value: 'hybrid', label: 'Hybrid' },
-    { value: 'lpg', label: 'LPG' },
-  ];
+  // Example filter options (currently unused since we commented out the filter UI)
+  // const filterOptions = [
+  //   { value: 'all', label: 'All Types' },
+  //   { value: 'electric', label: 'Electric' },
+  //   { value: 'hybrid', label: 'Hybrid' },
+  //   { value: 'lpg', label: 'LPG' },
+  // ];
 
   // Hide/show this grid based on `viewState`
   const isVisible = viewState === 'showCar';
@@ -82,58 +83,33 @@ export default function CarGrid({ className = '' }: CarGridProps) {
         visibility: isVisible ? 'visible' : 'hidden',
       }}
     >
-      {/* Header with filters */}
+      {/* 
+        Header with filters removed:
+        - Removed the <h2> title
+        - Commented out the filter button
+      */}
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          {/* Updated text: formerly "Available Cars" */}
-          <h2 className="text-xl font-semibold text-foreground">
-            Select a car to begin booking
-          </h2>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full
-                       bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-          >
-            <Filter size={16} />
-            <span>
-              {filterType === 'all'
-                ? 'Filters'
-                : filterOptions.find((opt) => opt.value === filterType)?.label}
-            </span>
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
+        {/* 
+          Example of commenting out the heading and filter:
+          
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-foreground">
+              Select a car to begin booking
+            </h2>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full
+                         bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
             >
-              <div className="grid grid-cols-2 gap-2 p-4 rounded-2xl bg-card">
-                {filterOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => {
-                      setFilterType(option.value);
-                      setShowFilters(false);
-                    }}
-                    className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors
-                                ${
-                                  filterType === option.value
-                                    ? 'bg-accent text-white'
-                                    : 'bg-muted hover:bg-muted/80 text-foreground'
-                                }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              <Filter size={16} />
+              <span>
+                {filterType === 'all'
+                  ? 'Filters'
+                  : filterOptions.find((opt) => opt.value === filterType)?.label}
+              </span>
+            </button>
+          </div>
+        */}
       </div>
 
       {/* Car grid with selected car on top */}
@@ -190,12 +166,15 @@ export default function CarGrid({ className = '' }: CarGridProps) {
             <p className="text-muted-foreground">
               No vehicles found matching your criteria.
             </p>
-            <button
-              onClick={() => setFilterType('all')}
-              className="mt-4 text-sm text-accent hover:underline"
-            >
-              Clear filters
-            </button>
+            {/* 
+              If you want to reintroduce filters, uncomment this:
+              <button
+                onClick={() => setFilterType('all')}
+                className="mt-4 text-sm text-accent hover:underline"
+              >
+                Clear filters
+              </button> 
+            */}
           </motion.div>
         )}
       </div>
