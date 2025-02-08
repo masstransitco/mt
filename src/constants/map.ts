@@ -27,20 +27,23 @@ export const HK_BOUNDS = {
 
 // Dark minimalist map styling
 export const MAP_STYLES = [
+  // 1) General text fill: a warm off-white for better contrast on dark
   {
     featureType: 'all',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#ffffff' }],
+    stylers: [{ color: '#EAEAEA' }],
   },
+  // 2) Subtle text stroke that merges with the background
   {
     featureType: 'all',
     elementType: 'labels.text.stroke',
     stylers: [
-      { color: '#212121' },
+      { color: '#1E1E1E' },
       { lightness: -100 },
       { visibility: 'simplified' },
     ],
   },
+  // 3) Hide administrative boundaries
   {
     featureType: 'administrative',
     elementType: 'geometry',
@@ -51,15 +54,18 @@ export const MAP_STYLES = [
     elementType: 'labels',
     stylers: [{ visibility: 'off' }],
   },
+  // 4) Landscape in a deep neutral
   {
     featureType: 'landscape',
     elementType: 'geometry',
-    stylers: [{ color: '#212121' }],
+    stylers: [{ color: '#1B1B1B' }],
   },
+  // 5) Points of Interest (POI) in a slightly different dark shade
+  //    to differentiate them from the landscape
   {
     featureType: 'poi',
     elementType: 'geometry',
-    stylers: [{ color: '#262626' }],
+    stylers: [{ color: '#202020' }],
   },
   {
     featureType: 'poi',
@@ -71,41 +77,45 @@ export const MAP_STYLES = [
     elementType: 'labels.icon',
     stylers: [{ visibility: 'off' }],
   },
+  // 6) Roads
   {
     featureType: 'road',
     elementType: 'geometry.fill',
-    stylers: [{ color: '#2c2c2c' }],
+    stylers: [{ color: '#2B2B2B' }], // Slightly lighter than the landscape
   },
   {
     featureType: 'road',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#373737' }],
+    stylers: [{ color: '#353535' }], // Subtle stroke
   },
   {
     featureType: 'road',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#8a8a8a' }],
+    stylers: [{ color: '#999999' }], // Mid-gray for road labels
   },
+  // 7) Arterial roads
   {
     featureType: 'road.arterial',
     elementType: 'geometry',
-    stylers: [{ color: '#373737' }],
+    stylers: [{ color: '#333333' }],
   },
+  // 8) Highways
   {
     featureType: 'road.highway',
     elementType: 'geometry',
-    stylers: [{ color: '#3c3c3c' }],
+    stylers: [{ color: '#3F3F3F' }],
   },
   {
     featureType: 'road.highway.controlled_access',
     elementType: 'geometry',
-    stylers: [{ color: '#4e4e4e' }],
+    stylers: [{ color: '#4A4A4A' }],
   },
   {
     featureType: 'road.local',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#616161' }],
+    stylers: [{ color: '#777777' }],
   },
+  // 9) Transit icons & labels hidden
   {
     featureType: 'transit',
     elementType: 'labels.icon',
@@ -116,15 +126,16 @@ export const MAP_STYLES = [
     elementType: 'labels.text',
     stylers: [{ visibility: 'off' }],
   },
+  // 10) Water - a deeper navy to contrast the dark land
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#1a1a1a' }],
+    stylers: [{ color: '#0E1621' }], // deep navy
   },
   {
     featureType: 'water',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#3d3d3d' }],
+    stylers: [{ color: '#3A3A3A' }],
   },
 ];
 
