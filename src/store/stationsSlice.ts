@@ -1,3 +1,5 @@
+// src/store/stationsSlice.ts
+
 import {
   createSlice,
   createAsyncThunk,
@@ -43,12 +45,9 @@ const initialState: StationsState = {
   lastFetched: null,
 };
 
-/* --------------------------- Thunks --------------------------- */
-/**
- * 1) Checks localStorage for a cached stations list.
- * 2) If it's older than 1 hour or not present, fetch from /stations.geojson.
- * 3) Dispatches either fulfilled or rejected depending on success.
- */
+/* ------------------------------------------------------
+   Thunk #1: fetchStations (as you already have)
+   ------------------------------------------------------ */
 export const fetchStations = createAsyncThunk<
   { data: StationFeature[]; timestamp: number },
   void,
@@ -85,12 +84,78 @@ export const fetchStations = createAsyncThunk<
   }
 });
 
+/* ------------------------------------------------------
+   Helper to build a bounding box around [lat, lng]
+   (west, south, east, north). Adjust delta as needed.
+   ------------------------------------------------------ */
+function createBoundingBox(lat: number, lng: number, delta = 0.01) {
+  const west = lng - delta;
+  const south = lat - delta;
+  const east = lng + delta;
+  const north = lat + delta;
+  // The resource.data.one.gov.hk expects “west,south,east,north”
+  return `${west},${south},${east},${north}`;
+}
+
+/* ------------------------------------------------------
+   Thunk #2: fetchStationVacancy
+   For a single station ID, we do:
+   - Find the station
+   - Build a bounding box
+   - Call external vacancy endpoint with limit=1
+   - Merge updated availableSpots into station
+   ------------------------------------------------------ */
+export const fetchStationVacancy = createAsyncThunk<
+  { stationId: number; newAvailable: number }, // success payload
+  number,                                     // stationId arg
+  { rejectValue: string }
+>(
+  'stations/fetchStationVacancy',
+  async (stationId, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as RootState;
+      const station = state.stations.items.find(s => s.id === stationId);
+      if (!station) {
+        throw new Error(`Station #${stationId} not found`);
+      }
+
+      const [lng, lat] = station.geometry.coordinates;
+      // Build bounding box around this station’s lat/lng
+      const bbox = createBoundingBox(lat, lng, 0.01); // delta=0.01 => ~±1km
+
+      // Example endpoint with limit=1
+      const url = `https://resource.data.one.gov.hk/td/carpark/vacancy?bbox=${bbox}&limit=1`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        throw new Error(`Vacancy request failed with status ${resp.status}`);
+      }
+      const data = await resp.json();
+
+      // Example parse logic:
+      if (!data.results || data.results.length === 0) {
+        // fallback if none found
+        return { stationId, newAvailable: station.properties.availableSpots };
+      }
+      // We'll take the first result
+      const first = data.results[0];
+      // Suppose “vacancy” is the # of free spots
+      const newAvailable = first.vacancy ?? station.properties.availableSpots;
+
+      return { stationId, newAvailable };
+    } catch (err: any) {
+      console.error(err);
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
 /* --------------------------- Slice --------------------------- */
 const stationsSlice = createSlice({
   name: 'stations',
   initialState,
   reducers: {},
   extraReducers: (builder) => {
+    // fetchStations
     builder
       .addCase(fetchStations.pending, (state) => {
         state.loading = true;
@@ -107,6 +172,19 @@ const stationsSlice = createSlice({
       .addCase(fetchStations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      });
+
+    // fetchStationVacancy
+    builder
+      .addCase(fetchStationVacancy.fulfilled, (state, action) => {
+        const { stationId, newAvailable } = action.payload;
+        const st = state.items.find((s) => s.id === stationId);
+        if (st) {
+          st.properties.availableSpots = newAvailable;
+        }
+      })
+      .addCase(fetchStationVacancy.rejected, (state, action) => {
+        console.error('Station vacancy fetch error:', action.payload);
       });
   },
 });
