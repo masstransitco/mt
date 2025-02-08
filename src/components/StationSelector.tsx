@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MapPin, Navigation, X, AlertCircle } from 'lucide-react';
+import { Navigation, X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
@@ -25,6 +25,28 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
+// Replaces the old Lucide MapPin with your desired path
+function CustomPinIcon({ highlight }: { highlight: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      // Same size & margin as before
+      className={`
+        w-5 h-5 m-1 flex-shrink-0
+        ${highlight ? 'text-primary' : 'text-muted-foreground'}
+      `}
+      viewBox="0 0 24 24"
+      fill="currentColor" 
+      // ^ fill="currentColor" allows the .text-primary / .text-muted-foreground classes to color the path
+    >
+      <path d="M-2-2-2 3 2 3 2-2 1-2M-2-2-1-2M0 1 0-4A1 1 0 001-3 1 1 0 001-3M0-4A1 1 0 000-4M-1-3A1 1 0 000-4" />
+    </svg>
+  );
+}
+
+////////////////////////////////////////////////////////////////
+// AddressSearch input (unchanged, aside from any minor styling)
+////////////////////////////////////////////////////////////////
 const AddressSearch = ({
   onAddressSelect,
   disabled,
@@ -145,6 +167,9 @@ const AddressSearch = ({
   );
 };
 
+////////////////////////////////////////////////////////////////
+// The main StationSelector
+////////////////////////////////////////////////////////////////
 export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -172,8 +197,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
       className="absolute top-[2px] left-5 right-5 z-10
                  bg-background/90 backdrop-blur-sm
                  border-b border-border
-                 rounded-md  {/* <--- slight corner radius */}
-                 "
+                 rounded-md"
     >
       <div className="px-2 py-2 space-y-2">
 
@@ -185,25 +209,21 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
-          <MapPin
-            className={`
-              w-5 h-5 m-1 flex-shrink-0
-              ${highlightDeparture ? 'text-primary' : 'text-muted-foreground'}
-            `}
-          />
+          {/* Replaced <MapPin> with our custom icon */}
+          <CustomPinIcon highlight={highlightDeparture} />
+
           <AddressSearch
             onAddressSelect={onAddressSearch}
             disabled={step >= 3}
             placeholder="Search for departure station"
             selectedStation={departureStation}
           />
+
           {departureStation && (
             <button
               onClick={() => {
-                // Clear departure
                 dispatch(clearDepartureStation());
                 dispatch(clearArrivalStation());
-                // revert to step=1
                 dispatch(advanceBookingStep(1));
                 toast.success('Departure station cleared');
               }}
@@ -222,6 +242,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
+          {/* We keep the same <Navigation> icon for arrival */}
           <Navigation
             className={`
               w-5 h-5 m-1 flex-shrink-0
@@ -234,12 +255,11 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             placeholder="Search for arrival station"
             selectedStation={arrivalStation}
           />
+
           {arrivalStation && (
             <button
               onClick={() => {
-                // Clear arrival
                 dispatch(clearArrivalStation());
-                // revert to step=3
                 dispatch(advanceBookingStep(3));
                 toast.success('Arrival station cleared');
               }}
