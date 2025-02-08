@@ -88,7 +88,7 @@ export const fetchStations = createAsyncThunk<
    Helper to build a bounding box around [lat, lng]
    (west, south, east, north). Adjust delta as needed.
    ------------------------------------------------------ */
-function createBoundingBox(lat: number, lng: number, delta = 0.01) {
+function createBoundingBox(lat: number, lng: number, delta = 0.1) {
   const west = lng - delta;
   const south = lat - delta;
   const east = lng + delta;
