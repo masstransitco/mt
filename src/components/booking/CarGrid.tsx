@@ -30,7 +30,7 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   const [filterType, setFilterType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // On mount, fetch cars from server (Cartrack) if needed
+  // On mount, fetch cars if needed
   useEffect(() => {
     dispatch(fetchCars());
   }, [dispatch]);
@@ -85,8 +85,9 @@ export default function CarGrid({ className = '' }: CarGridProps) {
       {/* Header with filters */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
+          {/* Updated text: formerly "Available Cars" */}
           <h2 className="text-xl font-semibold text-foreground">
-            Available Cars
+            Select a car to begin booking
           </h2>
           <button
             onClick={() => setShowFilters(!showFilters)}
