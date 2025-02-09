@@ -27,7 +27,6 @@ interface AddressSearchProps {
 
 /**
  * DepartureIcon:
- * Same custom path, shifted slightly to the right, unrotated (points upward).
  */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
@@ -41,7 +40,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
     >
-      <g transform="translate(1, 0)">
+      <g transform="translate(2, 0)">
         <path
           d="
             M 0 0
@@ -69,7 +68,6 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
 
 /**
  * ArrivalIcon:
- * The same path, but rotated 180° so it points downward.
  */
 function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
@@ -83,14 +81,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
     >
-      {/*
-        Rotate 180 about (0,0), then shift so that the shape remains in the viewBox.
-        If we rotate from the default center, it might appear off-center,
-        so we can do something like:
-          rotate(180) then translate(1, -someY)
-        to keep it visually aligned.
-      */}
-      <g transform="translate(1, 0)">
+      <g transform="translate(2, 0)">
         <path
           d="
             M 0 0
