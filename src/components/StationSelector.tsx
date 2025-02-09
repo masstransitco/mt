@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Navigation, X, AlertCircle } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
@@ -25,13 +25,15 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
-// Replaces the old Lucide MapPin with your desired path
-function CustomPinIcon({ highlight }: { highlight: boolean }) {
+/**
+ * DepartureIcon:
+ * Same custom path, shifted slightly to the right, unrotated (points upward).
+ */
+function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="-3 -7 6 8"
-      // No fill; we use stroke to draw the lines
       fill="none"
       stroke="currentColor"
       strokeWidth={0.7}
@@ -39,8 +41,7 @@ function CustomPinIcon({ highlight }: { highlight: boolean }) {
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
     >
-      {/* Shift the entire shape by +1px to the right */}
-      <g transform="translate(1 0)">
+      <g transform="translate(1, 0)">
         <path
           d="
             M 0 0
@@ -66,9 +67,59 @@ function CustomPinIcon({ highlight }: { highlight: boolean }) {
   );
 }
 
-////////////////////////////////////////////////////////////////
-// AddressSearch input (unchanged, aside from any minor styling)
-////////////////////////////////////////////////////////////////
+/**
+ * ArrivalIcon:
+ * The same path, but rotated 180° so it points downward.
+ */
+function ArrivalIcon({ highlight }: { highlight: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="-3 -7 6 8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={0.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
+    >
+      {/*
+        Rotate 180 about (0,0), then shift so that the shape remains in the viewBox.
+        If we rotate from the default center, it might appear off-center,
+        so we can do something like:
+          rotate(180) then translate(1, -someY)
+        to keep it visually aligned.
+      */}
+      <g transform="rotate(180) translate(-1, 0)">
+        <path
+          d="
+            M 0 0
+              L -2 0
+              L -2 -4
+              L -1 -4
+
+            M 1 -4
+              L 2 -4
+              L 2 0
+              L 0 0
+
+            M 0 -2
+              L 0 -6
+              L -1 -5
+
+            M 0 -6
+              L 1 -5
+          "
+        />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * AddressSearch:
+ * Unchanged logic (except minor styling).
+ */
 const AddressSearch = ({
   onAddressSelect,
   disabled,
@@ -89,7 +140,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If a station is already selected, display its name rather than an input
+  // If a station is already selected, display its name instead of input
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -98,10 +149,8 @@ const AddressSearch = ({
     );
   }
 
-  // Debounced search function for Google Autocomplete
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
-
     try {
       const request: any = {
         input,
@@ -117,7 +166,7 @@ const AddressSearch = ({
     }
   }, 300);
 
-  // When user selects a prediction
+  // Handle user choosing a place from predictions
   const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
 
@@ -189,28 +238,28 @@ const AddressSearch = ({
   );
 };
 
-////////////////////////////////////////////////////////////////
-// The main StationSelector
-////////////////////////////////////////////////////////////////
+/**
+ * The main StationSelector
+ */
 export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
-  // IDs of the selected departure & arrival stations
+  // IDs of selected departure & arrival
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
-  // All stations + distance
-  const stations = useAppSelector(selectStationsWithDistance);
 
+  // All stations with distance
+  const stations = useAppSelector(selectStationsWithDistance);
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
   // 2-step UI logic:
-  // If bookingStep < 3 => Show "Step 1 of 2"
-  // If bookingStep >= 3 => Show "Step 2 of 2"
+  // step < 3 => "Step 1 of 2"
+  // step >= 3 => "Step 2 of 2"
   const uiStepNumber = step < 3 ? 1 : 2;
 
-  // Highlight departure if step < 3, highlight arrival if step >= 3
+  // highlight if step < 3 or step >= 3
   const highlightDeparture = step < 3;
   const highlightArrival = step >= 3;
 
@@ -223,7 +272,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
     >
       <div className="px-2 py-2 space-y-2">
 
-        {/* DEPARTURE Input */}
+        {/* Departure Input */}
         <div
           className={`
             flex items-center gap-2 rounded-md transition-all duration-200
@@ -231,8 +280,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
-          {/* Replaced <MapPin> with our custom icon */}
-          <CustomPinIcon highlight={highlightDeparture} />
+          <DepartureIcon highlight={highlightDeparture} />
 
           <AddressSearch
             onAddressSelect={onAddressSearch}
@@ -256,7 +304,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           )}
         </div>
 
-        {/* ARRIVAL Input */}
+        {/* Arrival Input */}
         <div
           className={`
             flex items-center gap-2 rounded-md transition-all duration-200
@@ -264,13 +312,9 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
-          {/* We keep the same <Navigation> icon for arrival */}
-          <Navigation
-            className={`
-              w-5 h-5 m-1 flex-shrink-0
-              ${highlightArrival ? 'text-primary' : 'text-muted-foreground'}
-            `}
-          />
+          {/* Replacing <Navigation> with our ArrivalIcon */}
+          <ArrivalIcon highlight={highlightArrival} />
+
           <AddressSearch
             onAddressSelect={onAddressSearch}
             disabled={step < 3}
@@ -297,12 +341,9 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Step {uiStepNumber} of 2</span>
             <span>•</span>
-            {uiStepNumber === 1 ? (
-              <span>Select departure station</span>
-            ) : (
-              <span>Select arrival station</span>
-            )}
+            {uiStepNumber === 1 ? 'Select departure station' : 'Select arrival station'}
           </div>
+
           {departureStation && arrivalStation && (
             <div className="text-xs font-medium">
               Total Route:{' '}
