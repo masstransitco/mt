@@ -237,7 +237,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
             // fromLatLngAltitude returns e.g. Float64Array [x, y, z]
-            const coords = transformer.fromLatLngAltitude({ lat, lng, altitude: 0 }) as Float64Array;
+            const coords = transformer.fromLatLngAltitude({ lat, lng, altitude: 20 }) as Float64Array;
             const [x, y] = coords; 
             if (idx === 0) {
               shape.moveTo(x, y);
