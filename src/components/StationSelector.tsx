@@ -28,19 +28,35 @@ interface AddressSearchProps {
 // Replaces the old Lucide MapPin with your desired path
 function CustomPinIcon({ highlight }: { highlight: boolean }) {
   return (
-    <svg viewBox="-4 -4 8 10" fill="currentColor" width="24" height="24">
-  <path d="
-    M -2 -2      /* Move to top-left of rectangle */
-    v 5         /* down 5 */
-    h 4         /* right 4 */
-    v -5        /* up 5 */
-    h -1        /* left 1 => open top side, rectangle is missing top 1 unit maybe */
+     <svg
+      xmlns="http://www.w3.org/2000/svg"
+      // The bounding box for your shape is roughly x from -2 to 2, and y from -6 to 0.
+      // So let's use "viewBox='-3 -7 6 8'" for a little margin.
+      viewBox="-3 -7 6 8"
+      fill="currentColor"
+      className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
+    >
+      <path
+        d="
+          M 0 0 
+          L -2 0 
+          L -2 -4 
+          L -1 -4 
 
-    M -1 -3     /* Move up above the rectangle */
-    l 1 -1      /* line diagonally to create arrow tip */
-    l 1 1       /* line diagonally back => arrow shape */
-  " />
-</svg>
+          M 1 -4 
+          L 2 -4 
+          L 2 0 
+          L 0 0 
+
+          M 0 -2 
+          L 0 -6 
+          L -1 -5
+
+          M 0 -6 
+          L 1 -5
+        "
+      />
+    </svg>
   );
 }
 
