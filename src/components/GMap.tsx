@@ -222,7 +222,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlay.onDraw = ({ gl, transformer }) => {
         if (!sceneRef.current || !rendererRef.current) return;
 
-        // Use "as any" to bypass TS error about getCamera() not existing
+        // Cast overlay + optional chain => bypass TS for getCamera()
         const googleCam = (overlay as any).getCamera?.();
         if (!googleCam) return;
 
@@ -231,10 +231,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
         // If a station is selected, extrude its 3D polygon
         if (activeStation3D) {
-          const polygonCoords = activeStation3D.geometry.coordinates[0]; // e.g. [[lng, lat], [lng, lat], ...]
+          const polygonCoords = activeStation3D.geometry.coordinates[0]; 
+          // e.g. [[lng, lat], [lng, lat], ...]
 
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
+            // fromLatLngAltitude returns e.g. Float64Array [x, y, z]
             const coords = transformer.fromLatLngAltitude({ lat, lng, altitude: 0 }) as Float64Array;
             const [x, y] = coords; 
             if (idx === 0) {
@@ -268,7 +270,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
         // Render the scene
         rendererRef.current.render(sceneRef.current, googleCam);
-        gl.endFrameEXP();
+
+        // Cast gl => any to call endFrameEXP()
+        (gl as any).endFrameEXP();
       };
 
       overlay.setMap(map);
