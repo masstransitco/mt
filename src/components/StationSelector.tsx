@@ -32,7 +32,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="-3 -7 6 8"
+      viewBox="-2 -7 6 8"
       fill="none"
       stroke="currentColor"
       strokeWidth={0.7}
@@ -73,7 +73,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="-3 -7 6 8"
+      viewBox="-2 -7 6 8"
       fill="none"
       stroke="currentColor"
       strokeWidth={0.7}
