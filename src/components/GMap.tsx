@@ -4,7 +4,7 @@ import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { toast } from 'react-hot-toast';
 import { Car, Locate } from 'lucide-react';
-import * as THREE from 'three'; // For 3D (no WebGLOverlayView import from js-api-loader)
+import * as THREE from 'three';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
@@ -75,7 +75,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Active station for StationDetail
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
-  // Track which 3D feature matches the active station
+  // 3D feature for the active station
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
   // Which sheet is open? By default, CarSheet is open
@@ -97,7 +97,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // 3D data
   const stations3D = useAppSelector(selectStations3D);
 
-  // For station styling
+  // Station styling
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
@@ -116,7 +116,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Sort stations by distance
+  /**
+   * Sort stations by distance from a point
+   */
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -137,7 +139,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // StationSelector => address search
+  /**
+   * Handle address search from StationSelector
+   */
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -155,13 +159,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // On mount => fetch stations, 3D stations, cars
+  /**
+   * On mount: fetch stations, 3D stations, cars
+   */
   useEffect(() => {
     const init = async () => {
       try {
         await Promise.all([
           dispatch(fetchStations()).unwrap(),
-          dispatch(fetchStations3D()).unwrap(), // fetch the 3D polygons
+          dispatch(fetchStations3D()).unwrap(),
           dispatch(fetchCars()).unwrap(),
         ]);
       } catch (err) {
@@ -172,12 +178,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  // Map load => create the WebGL overlay & fit bounds
+  /**
+   * Handle map load: create WebGLOverlayView, fit bounds, etc.
+   */
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
 
-      // If we have stations => fit bounds
+      // Fit bounds
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -187,7 +195,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create the native WebGLOverlayView
+      // Create native WebGLOverlayView
       const overlay = new google.maps.WebGLOverlayView();
       overlayRef.current = overlay;
 
@@ -214,28 +222,29 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlay.onDraw = ({ gl, transformer }) => {
         if (!sceneRef.current || !rendererRef.current) return;
 
-       const googleCam = (overlay as any).getCamera();
-       if (!googleCam) return;
+        // Use "as any" to bypass TS error about getCamera() not existing
+        const googleCam = (overlay as any).getCamera?.();
+        if (!googleCam) return;
 
-        // Simple approach: if we have a 3D polygon, extrude it each frame
+        // Clear or re-init the scene each frame
         sceneRef.current.clear();
 
+        // If a station is selected, extrude its 3D polygon
         if (activeStation3D) {
-          const polygonCoords = activeStation3D.geometry.coordinates[0]; 
-          // e.g. [[lng1, lat1], [lng2, lat2], ...]
+          const polygonCoords = activeStation3D.geometry.coordinates[0]; // e.g. [[lng, lat], [lng, lat], ...]
 
-          // Build a shape in projected XY
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
-            const point = transformer.fromLatLngAltitude({ lat, lng, altitude: 0 });
+            const coords = transformer.fromLatLngAltitude({ lat, lng, altitude: 0 }) as Float64Array;
+            const [x, y] = coords; 
             if (idx === 0) {
-              shape.moveTo(point.x, point.y);
+              shape.moveTo(x, y);
             } else {
-              shape.lineTo(point.x, point.y);
+              shape.lineTo(x, y);
             }
           });
 
-          // Extrude geometry
+          // Build extrude geometry
           const extrudeSettings: THREE.ExtrudeGeometryOptions = {
             depth: 100,
             bevelEnabled: false,
@@ -251,12 +260,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
           extrudedMeshRef.current = mesh;
           sceneRef.current.add(mesh);
 
-          // Basic directional light
+          // Add directional light
           const light = new THREE.DirectionalLight(0xffffff, 1);
           light.position.set(0, 1000, 1000);
           sceneRef.current.add(light);
         }
 
+        // Render the scene
         rendererRef.current.render(sceneRef.current, googleCam);
         gl.endFrameEXP();
       };
@@ -266,7 +276,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [stations, activeStation3D]
   );
 
-  // Hide overlay after data loads
+  /**
+   * Hide overlay after data loads
+   */
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -275,12 +287,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Toggle sheet from Redux
+  /**
+   * Toggle sheet from Redux
+   */
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Helper: open a new sheet => store current => setOpen
+  /**
+   * Helper: open a new sheet => store current => setOpen
+   */
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
@@ -288,7 +304,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Helper: close => revert to previous
+  /**
+   * Helper: close => revert to previous
+   */
   const closeCurrentSheet = () => {
     const old = openSheet;
     setOpenSheet(previousSheet);
@@ -300,7 +318,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // "Locate Me"
+  /**
+   * "Locate Me"
+   */
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
@@ -330,7 +350,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // Toggle CarSheet
+  /**
+   * Toggle CarSheet
+   */
   const handleCarToggle = () => {
     if (openSheet === 'car') {
       closeCurrentSheet();
@@ -341,7 +363,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Decide icon for station
+  /**
+   * Decide icon for station marker
+   */
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
     if (station.id === departureStationId) return markerIcons.departureStation;
@@ -350,7 +374,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return markerIcons.station;
   };
 
-  // On station click => open detail => find matching 3D feature
+  /**
+   * On station marker click => set active => find matching 3D => open detail
+   */
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
 
@@ -369,7 +395,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Callback from station list => open detail
+  /**
+   * From station list => set active => find 3D => open detail
+   */
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
 
@@ -385,7 +413,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     openNewSheet('detail');
   };
 
-  // Confirm departure => set step=3 => hide all
+  /**
+   * Confirm departure => set step=3 => hide all
+   */
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setPreviousSheet('none');
@@ -395,7 +425,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     overlayRef.current?.requestRedraw();
   };
 
-  // Clear station => revert
+  /**
+   * Clear station => revert
+   */
   const handleClearStationDetail = () => {
     closeCurrentSheet();
   };
@@ -482,10 +514,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* CarSheet */}
           {openSheet === 'car' && (
-            <CarSheet
-              isOpen
-              onToggle={handleCarToggle}
-            />
+            <CarSheet isOpen onToggle={handleCarToggle} />
           )}
 
           {/* Nearby Stations List */}
