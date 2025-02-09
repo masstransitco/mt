@@ -159,15 +159,13 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 export const createMarkerIcons = () => {
   // A stylized car arrow path, can be further refined
   const carPath = `
-    M 0,-1
-    L 1,0 
-    L 0.3,0
-    L 0.3,1
-    L -0.3,1
-    L -0.3,0
-    L -1,0
-    Z
-  `;
+  M0,1
+  L-2,2
+  L0,-2
+  L2,2
+  L0,1
+  Z
+`;
 
   // A diamond shape (for active station)
   const diamondPath = 'M 0 -1 L 1 0 0 1 -1 0 z';
