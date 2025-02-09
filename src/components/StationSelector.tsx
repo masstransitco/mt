@@ -260,6 +260,7 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
                  bg-background/90 backdrop-blur-sm
                  border-b border-border
                  rounded-md"
+      style={{ overscrollBehavior: 'none', touchAction: 'none' }}
     >
       <div className="px-2 py-2 space-y-2">
 
