@@ -4,8 +4,7 @@ import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
 import { toast } from 'react-hot-toast';
 import { Car, Locate } from 'lucide-react';
-import * as THREE from 'three';                       // <--- (A) For 3D
-import { WebGLOverlayView } from '@googlemaps/js-api-loader'; // If using official google-maps overlay
+import * as THREE from 'three'; // For 3D (no WebGLOverlayView import from js-api-loader)
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
@@ -33,7 +32,7 @@ import {
 } from '@/store/uiSlice';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 
-// (A) New 3D imports
+// Fetch 3D data
 import { fetchStations3D, selectStations3D } from '@/store/stations3DSlice';
 
 import Sheet from '@/components/ui/sheet';
@@ -61,7 +60,7 @@ type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // (C) Refs for 3D overlay
+  // Refs for 3D overlay
   const overlayRef = useRef<google.maps.WebGLOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -76,8 +75,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Active station for StationDetail
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
-
-  // (D) Track which 3D feature matches the active station
+  // Track which 3D feature matches the active station
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
   // Which sheet is open? By default, CarSheet is open
@@ -96,7 +94,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
 
-  // (A) 3D data
+  // 3D data
   const stations3D = useAppSelector(selectStations3D);
 
   // For station styling
@@ -157,7 +155,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // (B) On mount => fetch stations, 3D stations, cars
+  // On mount => fetch stations, 3D stations, cars
   useEffect(() => {
     const init = async () => {
       try {
@@ -189,11 +187,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // (C) Create the WebGL overlay
+      // Create the native WebGLOverlayView
       const overlay = new google.maps.WebGLOverlayView();
       overlayRef.current = overlay;
 
-      // local references
       let scene: THREE.Scene;
       let camera: THREE.PerspectiveCamera;
       let renderer: THREE.WebGLRenderer;
@@ -220,25 +217,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const googleCam = overlay.getCamera();
         if (!googleCam) return;
 
-        // Very basic approach: if we have a 3D polygon, build or update geometry
-        // We'll store the extruded mesh in extrudedMeshRef
-        // Clear the scene or keep it minimal
+        // Simple approach: if we have a 3D polygon, extrude it each frame
         sceneRef.current.clear();
 
         if (activeStation3D) {
-          // We have 3D polygon coords => extrude them
           const polygonCoords = activeStation3D.geometry.coordinates[0]; 
-          // e.g. [ [lng1, lat1], [lng2, lat2], ...]
+          // e.g. [[lng1, lat1], [lng2, lat2], ...]
 
           // Build a shape in projected XY
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
-            // Convert lat,lng to map projection
-            const point = transformer.fromLatLngAltitude({
-              lat,
-              lng,
-              altitude: 0, // or some extrude base
-            });
+            const point = transformer.fromLatLngAltitude({ lat, lng, altitude: 0 });
             if (idx === 0) {
               shape.moveTo(point.x, point.y);
             } else {
@@ -246,36 +235,38 @@ export default function GMap({ googleApiKey }: GMapProps) {
             }
           });
 
-          // Extrude geometry upwards
+          // Extrude geometry
           const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-            depth: 100, // how tall is the building in meters
+            depth: 100,
             bevelEnabled: false,
           };
           const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-          const mat = new THREE.MeshPhongMaterial({ color: 0xff0000, opacity: 0.6, transparent: true });
+          const mat = new THREE.MeshPhongMaterial({
+            color: 0xff0000,
+            opacity: 0.6,
+            transparent: true,
+          });
           const mesh = new THREE.Mesh(geom, mat);
 
-          // Optional: position it, or store if needed
           extrudedMeshRef.current = mesh;
           sceneRef.current.add(mesh);
 
-          // Add some basic lighting
+          // Basic directional light
           const light = new THREE.DirectionalLight(0xffffff, 1);
           light.position.set(0, 1000, 1000);
           sceneRef.current.add(light);
         }
 
-        // Render with Google Maps camera
         rendererRef.current.render(sceneRef.current, googleCam);
         gl.endFrameEXP();
       };
 
       overlay.setMap(map);
     },
-    [stations, activeStation3D] // re-run if these change
+    [stations, activeStation3D]
   );
 
-  // Hide overlay when data is loaded
+  // Hide overlay after data loads
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -304,7 +295,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet('none');
     if (old === 'detail') {
       setActiveStation(null);
-      setActiveStation3D(null); // remove 3D if detail closed
+      setActiveStation3D(null);
       overlayRef.current?.requestRedraw();
     }
   };
@@ -359,13 +350,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return markerIcons.station;
   };
 
-  // (D) On station click => open detail => find matching 3D feature
+  // On station click => open detail => find matching 3D feature
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
 
-    // If we have 3D data loaded, find the matching polygon by ObjectId
     const objectId = station.properties.ObjectId;
-    const match = stations3D.find(f => f.properties.ObjectId === objectId) || null;
+    const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
 
     if (bookingStep < 3) {
@@ -382,9 +372,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Callback from station list => open detail
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
-    // find 3D
+
     const objectId = station.properties.ObjectId;
-    const match = stations3D.find(f => f.properties.ObjectId === objectId) || null;
+    const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
 
     if (bookingStep < 3) {
