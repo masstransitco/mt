@@ -210,7 +210,7 @@ const userPinPath = `
     station: {
       path: hexagonPath,
       scale: 9,
-      fillColor: '#6B7280',   // Gray (Tailwind gray-500)
+      fillColor: '#F7FAFA',   // Gray (Tailwind gray-500)
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
