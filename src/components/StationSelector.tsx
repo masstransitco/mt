@@ -40,7 +40,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
     >
-      <g transform="translate(2, 0)">
+      <g transform="translate(3, 0)">
         <path
           d="
             M 0 0
@@ -81,7 +81,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
     >
-      <g transform="translate(2, 0)">
+      <g transform="translate(3, 0)">
         <path
           d="
             M 0 0
