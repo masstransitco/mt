@@ -214,8 +214,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlay.onDraw = ({ gl, transformer }) => {
         if (!sceneRef.current || !rendererRef.current) return;
 
-      const googleCam = (overlay.getCamera as any)?.();
-      if (!googleCam) return;
+       const googleCam = (overlay as any).getCamera();
+       if (!googleCam) return;
 
         // Simple approach: if we have a 3D polygon, extrude it each frame
         sceneRef.current.clear();
