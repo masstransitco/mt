@@ -14,6 +14,7 @@ declare namespace google.maps {
       transformer?: any; // This could be typed more specifically if you have details
     }): void;
     onRemove?(): void;
+    getCamera?(): google.maps.WebGLCamera;
     setMap(map: google.maps.Map | null): void;
     getMap(): google.maps.Map | null;
   }
