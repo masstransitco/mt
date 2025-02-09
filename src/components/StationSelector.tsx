@@ -34,7 +34,7 @@ function CustomPinIcon({ highlight }: { highlight: boolean }) {
       // No fill; we use stroke to draw the lines
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.5}
+      strokeWidth={0.7}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
