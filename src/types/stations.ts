@@ -1,10 +1,12 @@
+// src/types/stations.ts
+
 // Types for GeoJSON Feature structure
 export interface StationFeature {
   type: 'Feature';
   id: number;
   geometry: {
     type: 'Point';
-    coordinates: [number, number];  // [longitude, latitude]
+    coordinates: [number, number]; // [longitude, latitude]
   };
   properties: {
     Place: string;
@@ -13,6 +15,8 @@ export interface StationFeature {
     totalSpots: number;
     availableSpots: number;
     waitTime?: number;
+    // Added ObjectId here so station.properties.ObjectId is valid
+    ObjectId: number;
   };
   distance?: number;
 }
