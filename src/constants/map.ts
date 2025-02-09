@@ -186,14 +186,13 @@ const userPinPath = `
   // A hexagon shape for the default station marker
   // Offers a more distinct geometry than just a circle
   const hexagonPath = `
-    M 0,-1
-    L 0.866,-0.5
-    L 0.866,0.5
-    L 0,1
-    L -0.866,0.5
-    L -0.866,-0.5
-    Z
-  `;
+  M -1,1
+  L -1,-1
+  L 1,-1
+  L 1,1
+  L -1,1
+  Z
+`;
 
   return {
     // 1) User Location - a pin shape in a gentle sky-blue
