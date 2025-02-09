@@ -27,8 +27,14 @@ export interface StationFeature {
     totalSpots: number;
     availableSpots: number;
     waitTime?: number;
+    /** 
+     * Added ObjectId here so code referencing 
+     * station.properties.ObjectId compiles 
+     */
+    ObjectId: number;
   };
-  distance?: number; // Distance from user's location, computed later
+  /** Distance from user's location, computed later */
+  distance?: number;
 }
 
 interface StationsState {
@@ -46,7 +52,7 @@ const initialState: StationsState = {
 };
 
 /* ------------------------------------------------------
-   Thunk #1: fetchStations (as you already have)
+   Thunk #1: fetchStations
    ------------------------------------------------------ */
 export const fetchStations = createAsyncThunk<
   { data: StationFeature[]; timestamp: number },
@@ -86,7 +92,6 @@ export const fetchStations = createAsyncThunk<
 
 /* ------------------------------------------------------
    Helper to build a bounding box around [lat, lng]
-   (west, south, east, north). Adjust delta as needed.
    ------------------------------------------------------ */
 function createBoundingBox(lat: number, lng: number, delta = 0.1) {
   const west = lng - delta;
@@ -99,11 +104,6 @@ function createBoundingBox(lat: number, lng: number, delta = 0.1) {
 
 /* ------------------------------------------------------
    Thunk #2: fetchStationVacancy
-   For a single station ID, we do:
-   - Find the station
-   - Build a bounding box
-   - Call external vacancy endpoint with limit=1
-   - Merge updated availableSpots into station
    ------------------------------------------------------ */
 export const fetchStationVacancy = createAsyncThunk<
   { stationId: number; newAvailable: number }, // success payload
@@ -203,7 +203,7 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   const toRad = (val: number) => (val * Math.PI) / 180;
   const R = 6371; // Earth radius in km
   const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
+  const dLng = toRad(lat2 - lng1);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) *
