@@ -90,7 +90,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
           rotate(180) then translate(1, -someY)
         to keep it visually aligned.
       */}
-      <g transform="rotate(180) translate(-1, 0)">
+      <g transform="rotate(180) translate(-1, 3)">
         <path
           d="
             M 0 0
