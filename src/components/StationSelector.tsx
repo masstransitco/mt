@@ -39,26 +39,29 @@ function CustomPinIcon({ highlight }: { highlight: boolean }) {
       strokeLinejoin="round"
       className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
     >
-      <path
-        d="
-          M 0 0
-            L -2 0
-            L -2 -4
-            L -1 -4
+      {/* Shift the entire shape by +1px to the right */}
+      <g transform="translate(1 0)">
+        <path
+          d="
+            M 0 0
+              L -2 0
+              L -2 -4
+              L -1 -4
 
-          M 1 -4
-            L 2 -4
-            L 2 0
-            L 0 0
+            M 1 -4
+              L 2 -4
+              L 2 0
+              L 0 0
 
-          M 0 -2
-            L 0 -6
-            L -1 -5
+            M 0 -2
+              L 0 -6
+              L -1 -5
 
-          M 0 -6
-            L 1 -5
-        "
-      />
+            M 0 -6
+              L 1 -5
+          "
+        />
+      </g>
     </svg>
   );
 }
