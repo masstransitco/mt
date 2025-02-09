@@ -159,11 +159,11 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 export const createMarkerIcons = () => {
   // A stylized car arrow path, can be further refined
   const carPath = `
-  M0,1
-  L-2,2
-  L0,-2
-  L2,2
-  L0,1
+  M0,0.3
+  L-0.6,0.6
+  L0,-0.6
+  L0.6,0.6
+  L0,0.3
   Z
 `;
 
