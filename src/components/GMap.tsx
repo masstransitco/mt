@@ -92,7 +92,7 @@ interface GMapProps {
 type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 
 export default function GMap({ googleApiKey }: GMapProps) {
-  // References for Google Map and Three.js objects.
+  // Refs for Google Map and Three.js objects.
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -107,7 +107,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Active station detail.
+  // Active station and matching 3D feature.
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
@@ -131,8 +131,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load the Google Maps API (beta version for ThreeJSOverlayView).
   console.log('Checking for ThreeJSOverlayView at import time =>', typeof ThreeJSOverlayView);
+
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -150,7 +150,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Helper: Sort stations by distance.
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) {
@@ -174,7 +173,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Handle address search.
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -188,7 +186,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Fetch data on mount.
   useEffect(() => {
     (async () => {
       try {
@@ -205,13 +202,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Handle map load: set up the ThreeJSOverlayView.
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       console.log('handleMapLoad called');
       mapRef.current = map;
 
-      // Fit map bounds based on station locations.
+      // Fit bounds based on station locations.
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -287,7 +283,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           cameraReady: !!cameraRef.current,
           rendererReady: !!rendererRef.current,
         });
-
         const camera = cameraRef.current;
         const renderer = rendererRef.current;
         const scene = sceneRef.current;
@@ -296,7 +291,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           return;
         }
 
-        // Clear the scene by removing all children.
+        // Clear the scene.
         while (scene.children.length > 0) {
           scene.remove(scene.children[0]);
         }
@@ -373,7 +368,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Cleanup Three.js resources on unmount.
+  // Cleanup effect for Three.js resources and animation loop.
   useEffect(() => {
     return () => {
       console.log('Cleaning up ThreeJS resources');
@@ -383,7 +378,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         animationFrameIdRef.current = undefined;
       }
       if (overlayRef.current) {
-        // Cast to any to allow passing null.
         (overlayRef.current as any).setMap(null);
         overlayRef.current = null;
       }
