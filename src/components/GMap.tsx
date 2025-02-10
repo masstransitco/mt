@@ -95,7 +95,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  // Ref for storing station cubes (for interactivity).
+  // Ref for storing station cubes for interactivity.
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
   // Local state.
@@ -184,7 +184,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Define handleStationClick before using it.
+  // Define handleStationClick before it's used in dependencies.
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       setActiveStation(station);
@@ -204,24 +204,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, bookingStep, isSheetMinimized, stations3D]
   );
 
-  // Instead of attaching a click listener to a canvas element, add the listener directly to the map.
-  // This uses Google Maps' built-in event system.
+  // Attach a click event listener to the map (using Google Maps' click events).
   const attachMapClickListener = useCallback(() => {
     if (!mapRef.current || !overlayRef.current) return;
     const map = mapRef.current;
     const overlay = overlayRef.current;
-    // Listen for Google Maps click events.
-    map.addListener('click', (event: google.maps.MouseEvent) => {
+    // Use Google Maps' built-in click listener.
+    map.addListener('click', (event: google.maps.MapMouseEvent) => {
       if (!event.latLng) return;
-      // Convert the clicked lat/lng to world coordinates at the same altitude as the cubes.
-      // (Using the same altitude as the cubes: anchor altitude + 50)
-      // Note: event.latLng is a google.maps.LatLng object.
+      // Convert the clicked lat/lng to world coordinates at the same altitude as our cubes.
       const clickedPoint = overlay.latLngAltitudeToVector3({
         lat: event.latLng.lat(),
         lng: event.latLng.lng(),
-        altitude: 100 + 50, // hardcoded: anchor altitude (100) + 50
+        altitude: 100 + 50, // Anchor altitude (100) + 50
       });
-      // For a "downward" ray, start a bit above the clicked point.
+      // Cast a downward ray from a point above the clicked point.
       const raycaster = new THREE.Raycaster();
       const rayStart = new THREE.Vector3(clickedPoint.x, clickedPoint.y + 100, clickedPoint.z);
       const rayDir = new THREE.Vector3(0, -1, 0);
