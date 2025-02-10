@@ -4,7 +4,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
+import {
+  selectBookingStep,
+  advanceBookingStep,
+  selectRoute,      // <-- Import route selector
+} from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
@@ -245,7 +249,11 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // 2-step UI logic:
+  // Retrieve the route info from Redux (distance & duration)
+  const route = useAppSelector(selectRoute);
+  const distanceInKm = route ? (route.distance / 1000).toFixed(1) : null;
+
+  // 2-step UI logic
   // step < 3 => "Step 1 of 2"
   // step >= 3 => "Step 2 of 2"
   const uiStepNumber = step < 3 ? 1 : 2;
@@ -336,14 +344,10 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             {uiStepNumber === 1 ? 'Select departure station' : 'Select arrival station'}
           </div>
 
-          {departureStation && arrivalStation && (
+          {/* Show the real route distance if both stations are chosen & we have route data */}
+          {departureStation && arrivalStation && distanceInKm && (
             <div className="text-xs font-medium">
-              Total Route:{' '}
-              {(
-                (departureStation.distance || 0) +
-                (arrivalStation.distance || 0)
-              ).toFixed(1)}{' '}
-              km
+              Total Route: {distanceInKm} km
             </div>
           )}
         </div>
