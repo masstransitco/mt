@@ -221,7 +221,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
 
         // Use latLngAltToVector3 to place it
-        const dummyPos = overlay.latLngAltToVector3({
+        const dummyPos = overlay.latLngAltitudeToVector3({
           lat: DEFAULT_CENTER.lat,
           lng: DEFAULT_CENTER.lng,
           altitude: 200,
