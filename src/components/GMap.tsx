@@ -64,14 +64,17 @@ function buildExtrudedPolygon(
   if (!coords.length) return null;
   const shape = new THREE.Shape();
   coords.forEach(([lng, lat], idx) => {
-    // Use the overlay to convert lat/lng with an altitude into a Vector3.
+    // Convert lat/lng + altitude into a Vector3 using the overlay method.
     const v3 = overlay.latLngAltitudeToVector3({
       lat,
       lng,
       altitude: 200, // Adjust altitude as needed
     });
-    if (idx === 0) shape.moveTo(v3.x, v3.y);
-    else shape.lineTo(v3.x, v3.y);
+    if (idx === 0) {
+      shape.moveTo(v3.x, v3.y);
+    } else {
+      shape.lineTo(v3.x, v3.y);
+    }
   });
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
     depth: 500, // Adjust extrusion depth as needed
@@ -194,6 +197,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
+  /**
+   * Handle map load: Create ThreeJSOverlayView and set up the scene.
+   */
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -236,9 +242,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // onContextRestored: create our own camera and renderer.
+      // onContextRestored: Create our camera and renderer.
       overlay.onContextRestored = ({ gl }) => {
-        console.log('Overlay onContextRestored: creating camera and renderer');
+        console.log('Overlay onContextRestored: creating camera and renderer', {
+          gl: gl ? 'WebGL context ready' : 'No WebGL context',
+          canvas: gl?.canvas ? 'Canvas ready' : 'No canvas',
+        });
         if (!gl) return;
         cameraRef.current = new THREE.PerspectiveCamera(
           45,
@@ -259,24 +268,29 @@ export default function GMap({ googleApiKey }: GMapProps) {
         rendererRef.current = renderer;
       };
 
-      // onDraw: use the transformer from the draw options and our stored camera.
+      // onDraw: This callback is called each frame.
       overlay.onDraw = ({ gl, transformer }) => {
         const camera = cameraRef.current;
+        console.log('📐 onDraw called', {
+          camera: camera ? 'Camera ready' : 'No camera',
+          renderer: rendererRef.current ? 'Renderer ready' : 'No renderer',
+          scene: sceneRef.current ? `Scene has ${sceneRef.current.children.length} children` : 'No scene'
+        });
         if (!camera || !rendererRef.current || !sceneRef.current) return;
 
-        // Clear the scene by removing all children.
+        // Clear the scene.
         while (sceneRef.current.children.length > 0) {
           sceneRef.current.remove(sceneRef.current.children[0]);
         }
 
-        // Re-add ambient and directional lights.
+        // Re-add lights.
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         sceneRef.current.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
         directionalLight.position.set(0, 1, 1);
         sceneRef.current.add(directionalLight);
 
-        // 1) Add a dummy cube.
+        // 1) Add dummy cube.
         const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
         const cubeMat = new THREE.MeshPhongMaterial({
           color: 0x00ff00,
@@ -292,20 +306,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
         cube.matrix.fromArray(matrix);
         cube.matrix.decompose(cube.position, cube.quaternion, cube.scale);
         sceneRef.current.add(cube);
-        console.log('Dummy cube added at:', cube.position);
+        console.log('🟩 Dummy cube added at:', {
+          x: cube.position.x.toFixed(2),
+          y: cube.position.y.toFixed(2),
+          z: cube.position.z.toFixed(2)
+        });
 
         // 2) If an active station 3D feature is selected, add its extruded polygon.
         if (activeStation3D) {
           const coords = activeStation3D.geometry.coordinates[0]; // expects [[lng, lat], ...]
-          console.log('Active station 3D coords:', coords);
+          console.log('🏢 Active station 3D coords:', coords, 'Point count:', coords.length);
           const extrudedMesh = buildExtrudedPolygon(overlay, coords);
           if (extrudedMesh) {
             sceneRef.current.add(extrudedMesh);
-            console.log('Extruded polygon added');
+            console.log('🏢 Extruded polygon added');
           }
         }
 
-        // Update the camera matrix using a sample lat/lng/altitude.
+        // Update the camera matrix using the current map center.
         const latLngAlt = {
           lat: map.getCenter()?.lat() || 0,
           lng: map.getCenter()?.lng() || 0,
@@ -318,11 +336,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
         // Render the scene.
         rendererRef.current.render(sceneRef.current, camera);
         rendererRef.current.resetState();
+        console.log('🎥 Scene rendered', {
+          lights: sceneRef.current.children.filter(child => child instanceof THREE.Light).length,
+          objects: sceneRef.current.children.filter(child => child instanceof THREE.Mesh).length
+        });
       };
 
-      // Start the overlay animation loop.
+      // onAdd: Start the animation loop.
       overlay.onAdd = () => {
-        console.log('Overlay onAdd called, starting animation loop');
+        console.log('➕ Overlay onAdd called, starting animation loop');
         function animate() {
           overlay.requestRedraw();
           requestAnimationFrame(animate);
