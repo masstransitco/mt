@@ -98,15 +98,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const animationFrameIdRef = useRef<number>();
 
-  // Local state for overlay visibility, search location, sorted stations, etc.
+  // Local state.
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Active station and matching 3D feature.
+  // Active station detail.
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
@@ -130,7 +131,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load the Google Maps API (using beta version for ThreeJSOverlayView)
+  // Load the Google Maps API (beta version for ThreeJSOverlayView).
   console.log('Checking for ThreeJSOverlayView at import time =>', typeof ThreeJSOverlayView);
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
@@ -149,7 +150,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Helper: Sort stations by distance from a given point.
+  // Helper: Sort stations by distance.
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) {
@@ -173,7 +174,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Handle address search from StationSelector.
+  // Handle address search.
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -187,7 +188,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // On mount, fetch stations, 3D data, and cars.
+  // Fetch data on mount.
   useEffect(() => {
     (async () => {
       try {
@@ -204,13 +205,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Handle map load: set up the ThreeJSOverlayView.
+  // Handle map load: create the ThreeJSOverlayView and set up lifecycle callbacks.
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       console.log('handleMapLoad called');
       mapRef.current = map;
 
-      // Fit bounds based on station locations.
+      // Fit map bounds based on station locations.
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -249,7 +250,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // onContextRestored: create our camera and renderer.
+      // onContextRestored: create our own camera and renderer.
       overlay.onContextRestored = ({ gl }) => {
         console.log('Overlay onContextRestored fired', {
           gl: gl ? 'WebGL context ready' : 'No WebGL context',
@@ -347,7 +348,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         camera.matrix.fromArray(matArr);
         camera.updateMatrixWorld(true);
 
-        // Render the scene.
         renderer.render(scene, camera);
         renderer.resetState();
         console.log('Scene rendered');
@@ -356,24 +356,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
       // onAdd: start the animation loop.
       overlay.onAdd = () => {
         console.log('Overlay onAdd called, starting animation loop');
-        let animationFrameId: number;
         const animate = () => {
           console.log('Animation frame requested');
           overlay.requestRedraw();
-          animationFrameId = requestAnimationFrame(animate);
+          animationFrameIdRef.current = requestAnimationFrame(animate);
         };
         animate();
-        // Store cleanup function for the animation loop.
-        overlay.userData = { cleanup: () => {
-          console.log('Cancelling animation frame', animationFrameId);
-          cancelAnimationFrame(animationFrameId);
-        }};
       };
     },
     [stations, userLocation, activeStation3D]
   );
 
-  // Hide overlay spinner when API and data are loaded.
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -384,6 +377,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   useEffect(() => {
     return () => {
       console.log('Cleaning up ThreeJS resources');
+      if (animationFrameIdRef.current) {
+        console.log('Cancelling animation frame', animationFrameIdRef.current);
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = undefined;
+      }
       if (overlayRef.current) {
         overlayRef.current.setMap(null);
         overlayRef.current = null;
@@ -400,7 +398,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
             object.geometry.dispose();
             if (Array.isArray(object.material)) {
-              object.material.forEach(mat => mat.dispose());
+              object.material.forEach((mat) => mat.dispose());
             } else if (object.material instanceof THREE.Material) {
               object.material.dispose();
             }
@@ -415,7 +413,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Sheet and UI handlers.
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
