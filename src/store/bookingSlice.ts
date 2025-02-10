@@ -82,7 +82,8 @@ export const fetchRoute = createAsyncThunk<
 
       const distance = leg.distance.value; // meters
       const duration = leg.duration.value; // seconds
-      const polyline = route.overview_polyline?.encodedPath || '';
+      // Use "points" from the overview_polyline for the route shape
+      const polyline = route.overview_polyline?.points || '';
 
       return { distance, duration, polyline };
     } catch (err) {
@@ -177,7 +178,11 @@ export const bookingSlice = createSlice({
 });
 
 // Action creators
-export const { setDepartureDate, advanceBookingStep, resetBookingFlow } = bookingSlice.actions;
+export const {
+  setDepartureDate,
+  advanceBookingStep,
+  resetBookingFlow,
+} = bookingSlice.actions;
 
 // Export the reducer
 export default bookingSlice.reducer;
