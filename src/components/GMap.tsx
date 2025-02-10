@@ -67,7 +67,7 @@ function buildExtrudedPolygon(
     const v3 = overlay.latLngAltitudeToVector3({
       lat,
       lng,
-      altitude: 200, // Adjust altitude as needed
+      altitude: 200, // Adjust as needed
     });
     if (idx === 0) shape.moveTo(v3.x, v3.y);
     else shape.lineTo(v3.x, v3.y);
@@ -92,24 +92,29 @@ interface GMapProps {
 type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 
 export default function GMap({ googleApiKey }: GMapProps) {
+  // References for Google Map and Three.js objects
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
+  // Local state for overlay visibility, search, sorted stations, and map options.
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
+  // Active station details.
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
+  // Sheet state.
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
+  // Redux selectors.
   const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
@@ -125,6 +130,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
+  // Load the Google Maps API (using beta version to support ThreeJSOverlayView)
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -191,6 +197,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     (map: google.maps.Map) => {
       mapRef.current = map;
 
+      // Fit map bounds based on station locations.
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -226,10 +233,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
           },
         },
       } as any);
+
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // onContextRestored: Create our camera and renderer.
+      // onContextRestored: create our own camera and renderer.
       overlay.onContextRestored = ({ gl }) => {
         console.log('Overlay onContextRestored: creating camera and renderer', {
           gl: gl ? 'WebGL context ready' : 'No WebGL context',
@@ -260,7 +268,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const camera = cameraRef.current;
         if (!camera || !rendererRef.current || !sceneRef.current) return;
 
-        // Debug logging
         console.log('onDraw called', {
           sceneChildren: sceneRef.current.children.length,
         });
@@ -293,7 +300,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         cube.matrix.fromArray(matrix);
         cube.matrix.decompose(cube.position, cube.quaternion, cube.scale);
         sceneRef.current.add(cube);
-        console.log('Dummy cube added at:', cube.position);
+        console.log('Dummy cube added at:', cube.position.toArray());
 
         // 2) If an active station 3D feature is selected, add its extruded polygon.
         if (activeStation3D) {
@@ -307,9 +314,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         }
 
         // Update the camera matrix using the map's center.
+        const center = map.getCenter();
         const latLngAlt = {
-          lat: map.getCenter()?.lat() || 0,
-          lng: map.getCenter()?.lng() || 0,
+          lat: center ? center.lat() : 0,
+          lng: center ? center.lng() : 0,
           altitude: 200,
         };
         const matArr = transformer.fromLatLngAltitude(latLngAlt);
