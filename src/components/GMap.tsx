@@ -33,9 +33,10 @@ import {
 } from '@/store/uiSlice';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 
-// Fetch 3D data
+// 3D data
 import { fetchStations3D, selectStations3D } from '@/store/stations3DSlice';
 
+// UI Components
 import Sheet from '@/components/ui/sheet';
 import StationSelector from './StationSelector';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -43,6 +44,7 @@ import CarSheet from '@/components/booking/CarSheet';
 import StationDetail from './StationDetail';
 import { StationListItem } from './StationListItem';
 
+// Map config
 import {
   LIBRARIES,
   MAP_CONTAINER_STYLE,
@@ -61,13 +63,11 @@ type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Refs for 3D overlay
+  // Three.js overlay refs
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const extrudedMeshRef = useRef<THREE.Mesh | null>(null);
 
-  // Basic local states
+  // Local state
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
@@ -76,10 +76,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Active station for StationDetail
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
-  // 3D feature for the active station
+  // Matching 3D feature
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
-  // Which sheet is open? By default, CarSheet is open.
+  // Which sheet is open? By default, CarSheet is open
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
@@ -95,10 +95,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
   const stations3D = useAppSelector(selectStations3D);
+
+  // Station styling
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load the Google Maps API (using the beta version to support ThreeJSOverlayView)
+  // Load the Google Maps API (beta version)
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -106,7 +108,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Once the API is loaded, set the map options and marker icons.
+  // Once loaded, set map options & marker icons
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -115,7 +117,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [isLoaded]);
 
   /**
-   * Sort stations by distance from a point.
+   * Sort stations by distance from a point
    */
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
@@ -138,16 +140,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   /**
-   * Handle address search from StationSelector.
+   * Handle address search (StationSelector => address search)
    */
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
       mapRef.current.panTo(location);
       mapRef.current.setZoom(15);
+
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSearchLocation(location);
       setSortedStations(sorted);
+
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
@@ -156,7 +160,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   /**
-   * On mount, fetch stations, 3D stations, and cars.
+   * On mount => fetch stations, 3D stations, cars
    */
   useEffect(() => {
     const init = async () => {
@@ -175,13 +179,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch]);
 
   /**
-   * Handle map load: create ThreeJSOverlayView and set up the scene.
+   * Handle map load => create ThreeJSOverlayView => define scene update
    */
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
 
-      // Fit bounds based on station points.
+      // Fit bounds if we have stations
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -191,56 +195,62 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create a Three.js scene.
+      // Create the Three.js scene
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
-      // Create the ThreeJSOverlayView.
-      // Since the options object does not officially include a "three" property,
-      // we cast the entire options object to any.
+      // Create the ThreeJSOverlayView (cast as any for "three: {...}" property)
       const overlay = new ThreeJSOverlayView({
         map,
         anchor: userLocation
           ? new google.maps.LatLng(userLocation.lat, userLocation.lng)
           : DEFAULT_CENTER,
-        three: { camera: { fov: 45, near: 1, far: 2000 } }
+        three: { camera: { fov: 45, near: 1, far: 2000 } },
       } as any);
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // Define the update function that runs on each frame.
+      // scene.userData.update => called each frame
       scene.userData.update = () => {
-        // Clear the scene.
+        // Clear the scene
         scene.clear();
 
-        // Add a dummy cube for debugging (green box).
+        // 1) Add a dummy cube
         const dummyCubeGeo = new THREE.BoxGeometry(20, 20, 20);
         const dummyCubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
         const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
-        const dummyPosition = overlay.fromLatLngAltitude(
-          new google.maps.LatLng(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng),
-          200
-        );
-        dummyCube.position.copy(dummyPosition);
+
+        // Use latLngAltToVector3 to place it
+        const dummyPos = overlay.latLngAltToVector3({
+          lat: DEFAULT_CENTER.lat,
+          lng: DEFAULT_CENTER.lng,
+          altitude: 200,
+        });
+        dummyCube.position.set(dummyPos.x, dummyPos.y, dummyPos.z);
         scene.add(dummyCube);
+
         console.log('Dummy cube added at:', dummyCube.position);
 
-        // If an active station is selected, extrude its 3D polygon.
+        // 2) If active station => extrude polygon
         if (activeStation3D) {
           const polygonCoords = activeStation3D.geometry.coordinates[0]; // [[lng, lat], ...]
-          console.log('Active 3D polygon coordinates:', polygonCoords);
+          console.log('Active 3D polygon coords:', polygonCoords);
+
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
-            const point = overlay.fromLatLngAltitude(
-              new google.maps.LatLng(lat, lng),
-              200
-            );
+            // Convert lat/lng + altitude => vector3
+            const v3 = overlay.latLngAltToVector3({
+              lat,
+              lng,
+              altitude: 200,
+            });
             if (idx === 0) {
-              shape.moveTo(point.x, point.y);
+              shape.moveTo(v3.x, v3.y);
             } else {
-              shape.lineTo(point.x, point.y);
+              shape.lineTo(v3.x, v3.y);
             }
           });
+
           const extrudeSettings: THREE.ExtrudeGeometryOptions = {
             depth: 500,
             bevelEnabled: false,
@@ -254,21 +264,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const mesh = new THREE.Mesh(geom, mat);
           scene.add(mesh);
           console.log('Extruded polygon added');
-          // Add directional light for the extrusion.
+
+          // Add directional light
           const light = new THREE.DirectionalLight(0xffffff, 1);
           light.position.set(0, 1000, 1000);
           scene.add(light);
         }
       };
 
-      // Request redraw on every frame.
+      // Request redraw
       overlay.requestRedraw();
     },
     [stations, userLocation, activeStation3D]
   );
 
   /**
-   * Hide overlay spinner after data loads.
+   * Hide overlay when data loads
    */
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
@@ -278,16 +289,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  /**
-   * Toggle sheet from Redux.
-   */
+  // Toggle sheet
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  /**
-   * Helper: open a new sheet.
-   */
+  // Helper: open new sheet
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
@@ -295,9 +302,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  /**
-   * Helper: close current sheet.
-   */
+  // Helper: close => revert to prev
   const closeCurrentSheet = () => {
     const old = openSheet;
     setOpenSheet(previousSheet);
@@ -341,7 +346,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /**
-   * Toggle CarSheet.
+   * Toggle CarSheet
    */
   const handleCarToggle = () => {
     if (openSheet === 'car') {
@@ -354,7 +359,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /**
-   * Decide icon for station marker.
+   * Decide icon for station
    */
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
@@ -365,7 +370,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /**
-   * On station marker click => set active, find matching 3D feature, open detail.
+   * On station marker click => open detail
    */
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
@@ -384,7 +389,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /**
-   * From station list => set active, find matching 3D feature, open detail.
+   * From station list => open detail
    */
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
@@ -400,7 +405,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /**
-   * Confirm departure => set step=3 and hide all.
+   * Confirm departure => hide all
    */
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
@@ -412,7 +417,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /**
-   * Clear station => revert.
+   * Clear station => revert
    */
   const handleClearStationDetail = () => {
     closeCurrentSheet();
@@ -424,7 +429,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
           <div className="text-center space-y-2">
             <p className="font-medium">Error loading map data</p>
-            <button onClick={() => window.location.reload()} className="text-sm underline hover:text-destructive/80">
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm underline hover:text-destructive/80"
+            >
               Try reloading
             </button>
           </div>
@@ -443,7 +451,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
               onLoad={handleMapLoad}
             >
               {userLocation && markerIcons && (
-                <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
+                <Marker
+                  position={userLocation}
+                  icon={markerIcons.user}
+                  clickable={false}
+                />
               )}
               {(searchLocation ? sortedStations : stations).map((station) => {
                 const [lng, lat] = station.geometry.coordinates;
@@ -457,7 +469,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 );
               })}
               {cars.map((car) => (
-                <Marker key={car.id} position={{ lat: car.lat, lng: car.lng }} icon={markerIcons?.car} title={car.name} />
+                <Marker
+                  key={car.id}
+                  position={{ lat: car.lat, lng: car.lng }}
+                  icon={markerIcons?.car}
+                  title={car.name}
+                />
               ))}
             </GoogleMap>
           </div>
@@ -469,31 +486,44 @@ export default function GMap({ googleApiKey }: GMapProps) {
           <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
             <button
               onClick={handleLocateMe}
-              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
+              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
+                         flex items-center justify-center text-foreground shadow"
             >
               <Locate className="w-5 h-5" />
             </button>
+
             <button
               onClick={handleCarToggle}
-              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
+              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
+                         flex items-center justify-center text-foreground shadow"
             >
               <Car className="w-5 h-5" />
             </button>
           </div>
 
           {/* CarSheet */}
-          {openSheet === 'car' && <CarSheet isOpen onToggle={handleCarToggle} />}
+          {openSheet === 'car' && (
+            <CarSheet isOpen onToggle={handleCarToggle} />
+          )}
 
           {/* Nearby Stations List */}
           {openSheet === 'list' && (
-            <Sheet isOpen onToggle={closeCurrentSheet} title="Nearby Stations" count={sortedStations.length}>
+            <Sheet
+              isOpen
+              onToggle={closeCurrentSheet}
+              title="Nearby Stations"
+              count={sortedStations.length}
+            >
               <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
                 {sortedStations.map((station, idx) => (
                   <StationListItem
                     key={station.id}
                     index={idx}
                     style={{}}
-                    data={{ items: sortedStations, onStationSelected: () => handleStationSelectedFromList(station) }}
+                    data={{
+                      items: sortedStations,
+                      onStationSelected: () => handleStationSelectedFromList(station),
+                    }}
                   />
                 ))}
               </div>
@@ -502,7 +532,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Station Detail */}
           {openSheet === 'detail' && activeStation && (
-            <Sheet isOpen onToggle={closeCurrentSheet} title="Station Details" count={(searchLocation ? sortedStations : stations).length}>
+            <Sheet
+              isOpen
+              onToggle={closeCurrentSheet}
+              title="Station Details"
+              count={(searchLocation ? sortedStations : stations).length}
+            >
               <StationDetail
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={activeStation}
