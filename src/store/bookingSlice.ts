@@ -75,17 +75,18 @@ export const fetchRoute = createAsyncThunk<
       }
 
       const route = response.routes[0];
-      const leg = route.legs?.[0];
-      if (!leg || !leg.distance || !leg.duration) {
-        return rejectWithValue('Incomplete route data');
-      }
+const leg = route.legs?.[0];
+if (!leg || !leg.distance || !leg.duration) {
+  return rejectWithValue('Incomplete route data');
+}
 
-      const distance = leg.distance.value; // meters
-      const duration = leg.duration.value; // seconds
-      // Use "points" from the overview_polyline for the route shape
-      const polyline = route.overview_polyline?.points || '';
+const distance = leg.distance.value; // meters
+const duration = leg.duration.value; // seconds
 
-      return { distance, duration, polyline };
+// If overview_polyline is typed as a string, just use it directly.
+const polyline = route.overview_polyline || '';
+
+return { distance, duration, polyline };
     } catch (err) {
       console.error(err);
       return rejectWithValue('Directions request failed');
