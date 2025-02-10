@@ -184,7 +184,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Define handleStationClick before it's used in dependencies.
+  // Define handleStationClick before using it.
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       setActiveStation(station);
@@ -204,32 +204,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, bookingStep, isSheetMinimized, stations3D]
   );
 
-  // Attach a click event listener to the map (using Google Maps' click events).
+  // Attach a click listener directly to the map using Google Maps' event system.
   const attachMapClickListener = useCallback(() => {
     if (!mapRef.current || !overlayRef.current) return;
     const map = mapRef.current;
     const overlay = overlayRef.current;
-    // Use Google Maps' built-in click listener.
     map.addListener('click', (event: google.maps.MapMouseEvent) => {
-      if (!event.latLng) return;
-      // Convert the clicked lat/lng to world coordinates at the same altitude as our cubes.
+      console.log('Map clicked at:', event.latLng?.toJSON());
+      console.log('Overlay available:', !!overlay);
+      if (!event.latLng || !overlay) return;
+      // Convert the clicked lat/lng to world coordinates at the same altitude as the cubes.
       const clickedPoint = overlay.latLngAltitudeToVector3({
         lat: event.latLng.lat(),
         lng: event.latLng.lng(),
         altitude: 100 + 50, // Anchor altitude (100) + 50
       });
-      // Cast a downward ray from a point above the clicked point.
-      const raycaster = new THREE.Raycaster();
-      const rayStart = new THREE.Vector3(clickedPoint.x, clickedPoint.y + 100, clickedPoint.z);
-      const rayDir = new THREE.Vector3(0, -1, 0);
-      raycaster.set(rayStart, rayDir);
-      const intersects = raycaster.intersectObjects(stationCubesRef.current, true);
-      if (intersects.length > 0) {
-        const station = intersects[0].object.userData.station;
-        if (station) {
-          console.log('Map click intersects station cube:', station);
-          handleStationClick(station);
-        }
+      // Use a simple distance calculation to find a nearby station cube.
+      const clickedLatLng = event.latLng.toJSON();
+      const threshold = 0.0001; // Adjust this threshold based on testing
+      const nearestCube = stationCubesRef.current.find((cube) => {
+        const station = cube.userData.station;
+        const [lng, lat] = station.geometry.coordinates;
+        const distance = Math.sqrt(
+          Math.pow(lat - clickedLatLng.lat, 2) +
+          Math.pow(lng - clickedLatLng.lng, 2)
+        );
+        return distance < threshold;
+      });
+      if (nearestCube) {
+        console.log('Found nearby cube:', nearestCube.userData.station);
+        handleStationClick(nearestCube.userData.station);
       }
     });
   }, [handleStationClick]);
