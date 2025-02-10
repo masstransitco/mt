@@ -233,7 +233,7 @@ const userPinPath = `
     departureStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#1C1C1F',   
+      fillColor: '#0717f5',   
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#F1F5F9', // Very light gray stroke
