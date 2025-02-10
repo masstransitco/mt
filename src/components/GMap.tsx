@@ -63,7 +63,7 @@ type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Three.js overlay refs
+  // Refs to store the overlay and the scene
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
 
@@ -76,7 +76,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Active station for StationDetail
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
-  // Matching 3D feature
+  // Matching 3D feature for the active station
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
   // Which sheet is open? By default, CarSheet is open
@@ -100,7 +100,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load the Google Maps API (beta version)
+  // Load the Google Maps API
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -116,9 +116,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  /**
-   * Sort stations by distance from a point
-   */
+  // Sort stations by distance from a point
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -139,9 +137,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  /**
-   * Handle address search (StationSelector => address search)
-   */
+  // Address search => pan/zoom => sort => setSearchLocation
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -159,9 +155,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  /**
-   * On mount => fetch stations, 3D stations, cars
-   */
+  // On mount => fetch stations, 3D stations, cars
   useEffect(() => {
     const init = async () => {
       try {
@@ -178,14 +172,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     init();
   }, [dispatch]);
 
-  /**
-   * Handle map load => create ThreeJSOverlayView => define scene update
-   */
+  // Map load => create ThreeJSOverlayView
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
 
-      // Fit bounds if we have stations
+      // Fit bounds if stations exist
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -195,92 +187,87 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create the Three.js scene
+      // Create scene
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
-      // Create the ThreeJSOverlayView (cast as any for "three: {...}" property)
+      // Create the overlay, providing an `update` callback
       const overlay = new ThreeJSOverlayView({
         map,
         anchor: userLocation
           ? new google.maps.LatLng(userLocation.lat, userLocation.lng)
           : DEFAULT_CENTER,
         three: { camera: { fov: 45, near: 1, far: 2000 } },
+        update: () => {
+          // This update callback is called each time overlay re-draws
+          scene.clear();
+
+          // 1) Add a dummy cube
+          const dummyCubeGeo = new THREE.BoxGeometry(20, 20, 20);
+          const dummyCubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+          const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
+
+          const dummyPos = overlay.latLngAltitudeToVector3({
+            lat: DEFAULT_CENTER.lat,
+            lng: DEFAULT_CENTER.lng,
+            altitude: 200,
+          });
+          dummyCube.position.set(dummyPos.x, dummyPos.y, dummyPos.z);
+          scene.add(dummyCube);
+
+          // 2) If active station => extrude polygon
+          if (activeStation3D) {
+            const polygonCoords = activeStation3D.geometry.coordinates[0]; // [[lng, lat], ...]
+            const shape = new THREE.Shape();
+
+            polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
+              const v3 = overlay.latLngAltitudeToVector3({
+                lat,
+                lng,
+                altitude: 200,
+              });
+              if (idx === 0) {
+                shape.moveTo(v3.x, v3.y);
+              } else {
+                shape.lineTo(v3.x, v3.y);
+              }
+            });
+
+            const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+              depth: 500,
+              bevelEnabled: false,
+            };
+            const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            const mat = new THREE.MeshPhongMaterial({
+              color: 0xff0000,
+              opacity: 0.6,
+              transparent: true,
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            scene.add(mesh);
+
+            // Add directional light
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(0, 1000, 1000);
+            scene.add(light);
+          }
+        },
       } as any);
+
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // scene.userData.update => called each frame
-      scene.userData.update = () => {
-        // Clear the scene
-        scene.clear();
-
-        // 1) Add a dummy cube
-        const dummyCubeGeo = new THREE.BoxGeometry(20, 20, 20);
-        const dummyCubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
-
-        // Use latLngAltToVector3 to place it
-        const dummyPos = overlay.latLngAltitudeToVector3({
-          lat: DEFAULT_CENTER.lat,
-          lng: DEFAULT_CENTER.lng,
-          altitude: 200,
-        });
-        dummyCube.position.set(dummyPos.x, dummyPos.y, dummyPos.z);
-        scene.add(dummyCube);
-
-        console.log('Dummy cube added at:', dummyCube.position);
-
-        // 2) If active station => extrude polygon
-        if (activeStation3D) {
-          const polygonCoords = activeStation3D.geometry.coordinates[0]; // [[lng, lat], ...]
-          console.log('Active 3D polygon coords:', polygonCoords);
-
-          const shape = new THREE.Shape();
-          polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
-            // Convert lat/lng + altitude => vector3
-            const v3 = overlay.latLngAltitudeToVector3({
-              lat,
-              lng,
-              altitude: 200,
-            });
-            if (idx === 0) {
-              shape.moveTo(v3.x, v3.y);
-            } else {
-              shape.lineTo(v3.x, v3.y);
-            }
-          });
-
-          const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-            depth: 500,
-            bevelEnabled: false,
-          };
-          const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-          const mat = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            opacity: 0.6,
-            transparent: true,
-          });
-          const mesh = new THREE.Mesh(geom, mat);
-          scene.add(mesh);
-          console.log('Extruded polygon added');
-
-          // Add directional light
-          const light = new THREE.DirectionalLight(0xffffff, 1);
-          light.position.set(0, 1000, 1000);
-          scene.add(light);
-        }
-      };
-
-      // Request redraw
-      overlay.requestRedraw();
+      // If you want continuous animation, request a loop
+      function animate() {
+        overlay.requestRedraw();
+        requestAnimationFrame(animate);
+      }
+      animate();
     },
     [stations, userLocation, activeStation3D]
   );
 
-  /**
-   * Hide overlay when data loads
-   */
+  // Hide overlay when data is loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -289,7 +276,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Toggle sheet
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
@@ -302,7 +288,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Helper: close => revert to prev
+  // Helper: close => revert to previous
   const closeCurrentSheet = () => {
     const old = openSheet;
     setOpenSheet(previousSheet);
@@ -314,9 +300,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  /**
-   * "Locate Me"
-   */
+  // "Locate Me"
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
@@ -345,9 +329,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  /**
-   * Toggle CarSheet
-   */
+  // Toggle CarSheet
   const handleCarToggle = () => {
     if (openSheet === 'car') {
       closeCurrentSheet();
@@ -358,9 +340,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  /**
-   * Decide icon for station
-   */
+  // Decide icon for station
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
     if (station.id === departureStationId) return markerIcons.departureStation;
@@ -369,9 +349,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return markerIcons.station;
   };
 
-  /**
-   * On station marker click => open detail
-   */
+  // Station marker click => open detail
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
     const objectId = station.properties.ObjectId;
@@ -388,9 +366,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  /**
-   * From station list => open detail
-   */
+  // From station list => open detail
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
     const objectId = station.properties.ObjectId;
@@ -404,9 +380,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     openNewSheet('detail');
   };
 
-  /**
-   * Confirm departure => hide all
-   */
+  // Confirm departure => hide all
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setPreviousSheet('none');
@@ -416,9 +390,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     overlayRef.current?.requestRedraw();
   };
 
-  /**
-   * Clear station => revert
-   */
+  // Clear station => revert
   const handleClearStationDetail = () => {
     closeCurrentSheet();
   };
