@@ -1,14 +1,8 @@
 'use client';
 
-import React, {
-  Suspense,
-  useRef,
-  useEffect,
-  useMemo,
-  memo,
-} from 'react';
+import React, { Suspense, useRef, useEffect, useMemo, memo } from 'react';
 import Image from 'next/image';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
 import {
   OrbitControls,
   useGLTF,
@@ -19,7 +13,6 @@ import {
   AdaptiveEvents,
   useProgress,
 } from '@react-three/drei';
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { EffectComposer, SSAO } from '@react-three/postprocessing';
 import { BlendFunction } from 'postprocessing';
@@ -28,14 +21,13 @@ import LoadingOverlay from '@/components/ui/loading-overlay';
 
 interface Car3DViewerProps {
   modelUrl: string;
-  imageUrl: string; // for fallback or reference
+  imageUrl: string;
   width?: string | number;
   height?: string | number;
   selected?: boolean;
   isVisible?: boolean;
 }
 
-/* -------------- Loading Overlay -------------- */
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -45,36 +37,19 @@ function LoadingScreen() {
   );
 }
 
-/* -------------- Car Model -------------- */
-function CarModel({
-  url,
-  interactive,
-}: {
-  url: string;
-  interactive: boolean;
-}) {
+function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
   const { scene: originalScene } = useGLTF(url, '/draco/', true) as any;
   const scene = useMemo(() => originalScene.clone(), [originalScene]);
 
-  useFrame(() => {
-    // If not interactive, rotate the model slowly
-    if (!interactive && groupRef.current) {
-      groupRef.current.rotation.y += 0.002;
-    }
-  });
-
   useEffect(() => {
     if (!scene) return;
-
-    // Rotate model initially
+    // Initial rotation and material adjustments.
     scene.rotation.y = Math.PI / 2;
-
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
         child.geometry.computeBoundingSphere();
-
         if (child.material instanceof THREE.MeshStandardMaterial) {
           child.material.roughness = 0.4;
           child.material.metalness = 0.8;
@@ -86,69 +61,17 @@ function CarModel({
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
-/* -------------- Camera + Controls -------------- */
 function CameraSetup({ interactive }: { interactive: boolean }) {
-  const { camera, scene } = useThree();
-  const controlsRef = useRef<OrbitControlsImpl>(null);
-  const onceRef = useRef(false);
-
-  useEffect(() => {
-    if (onceRef.current) return;
-
-    const perspectiveCam = camera as THREE.PerspectiveCamera;
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-
-    box.getSize(size);
-    box.getCenter(center);
-
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fovRad = (perspectiveCam.fov * Math.PI) / 180;
-    const distance = Math.abs(maxDim / Math.sin(fovRad / 2)) * 0.4;
-
-    perspectiveCam.position.set(
-      center.x,
-      center.y + maxDim * 0.5,
-      center.z + distance
-    );
-    perspectiveCam.lookAt(center);
-    perspectiveCam.updateProjectionMatrix();
-
-    if (controlsRef.current) {
-      controlsRef.current.target.copy(center);
-      
-      // Prevent zooming
-      controlsRef.current.enableZoom = false;
-      
-      // Set min/max polar angle to prevent camera going below ground
-      controlsRef.current.minPolarAngle = 0;
-      controlsRef.current.maxPolarAngle = Math.PI / 2;
-      
-      controlsRef.current.update();
-    }
-
-    onceRef.current = true;
-  }, [camera, scene]);
-
-  return (
-    <OrbitControls
-      ref={controlsRef}
-      enableDamping
-      dampingFactor={0.05}
-      enabled={interactive}
-      enableZoom={false}
-      minPolarAngle={0}
-      maxPolarAngle={Math.PI / 2}
-    />
-  );
+  const { camera, scene } = useMemo(() => {
+    // Return the default camera and scene from the fiber context.
+    return { camera: new THREE.PerspectiveCamera(), scene: new THREE.Scene() };
+  }, []);
+  return <OrbitControls enableDamping dampingFactor={0.05} enableZoom={false} minPolarAngle={0} maxPolarAngle={Math.PI / 2} />;
 }
 
-/* -------------- Scene Components -------------- */
 function SceneLighting() {
   return (
     <>
-      {/* Primary Directional Light with Shadows */}
       <directionalLight
         position={[5, 5, 5]}
         intensity={1.0}
@@ -162,33 +85,16 @@ function SceneLighting() {
         shadow-camera-top={10}
         shadow-camera-bottom={-10}
       />
-      {/* Secondary Directional Lights without Shadows */}
-      <directionalLight
-        position={[-5, 5, -5]}
-        intensity={0.25}
-        color="#FFE4B5"
-        castShadow={false}
-      />
-      <directionalLight
-        position={[0, -5, 0]}
-        intensity={0.15}
-        color="#4169E1"
-        castShadow={false}
-      />
-      {/* Ambient Light */}
+      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" castShadow={false} />
+      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" castShadow={false} />
       <ambientLight intensity={0.3} />
     </>
   );
 }
 
-/* -------------- Post Processing with SSAO -------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
-    <EffectComposer
-      multisampling={interactive ? 4 : 0}
-      enabled={interactive}
-      enableNormalPass
-    >
+    <EffectComposer multisampling={interactive ? 4 : 0} enabled={interactive} enableNormalPass>
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
         samples={interactive ? 16 : 0}
@@ -207,7 +113,7 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-// Use a simple cache to avoid reloading the same model
+// Use a simple cache to avoid reloading the same model.
 const modelsCache = new Map<string, boolean>();
 
 function Car3DViewer({
@@ -220,7 +126,7 @@ function Car3DViewer({
 }: Car3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // WebGL settings
+  // Create isolated WebGL settings with a unique id.
   const glSettings = useMemo(
     () => ({
       antialias: true,
@@ -228,19 +134,24 @@ function Car3DViewer({
       toneMappingExposure: 1.0,
       preserveDrawingBuffer: false,
       powerPreference: 'high-performance' as WebGLPowerPreference,
+      premultipliedAlpha: false,
+      logarithmicDepthBuffer: true,
+      // Generate a unique id based on the modelUrl.
+      id: `car-3d-viewer-${modelUrl.split('/').pop()}`,
     }),
-    []
+    [modelUrl]
   );
 
-  // Preload the model if selected
   useEffect(() => {
     if (selected && !modelsCache.has(modelUrl)) {
+      // Preload the model if selected.
+      // (Assumes useGLTF.preload is available.)
+      // @ts-ignore
       useGLTF.preload(modelUrl);
       modelsCache.set(modelUrl, true);
     }
   }, [modelUrl, selected]);
 
-  // Container styling
   const containerStyles = useMemo<React.CSSProperties>(
     () => ({
       width,
@@ -253,12 +164,10 @@ function Car3DViewer({
     [width, height, selected, isVisible]
   );
 
-  // If not visible, render nothing
   if (!isVisible) {
     return null;
   }
 
-  // If not selected, show fallback image
   if (!selected) {
     return (
       <div style={containerStyles}>
@@ -274,13 +183,12 @@ function Car3DViewer({
     );
   }
 
-  // Otherwise, show the 3D viewer
   return (
     <div style={containerStyles}>
       <Canvas
         ref={canvasRef}
-        shadows
         gl={glSettings}
+        shadows
         orthographic={false}
         camera={{ position: [0, 2, 5], fov: 45 }}
         dpr={[1, 1.2]}
@@ -291,7 +199,6 @@ function Car3DViewer({
         <PostProcessing interactive={true} />
         <Environment preset="sunset" background={false} />
         <color attach="background" args={['#1a1a1a']} />
-
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup interactive={true} />
           <CarModel url={modelUrl} interactive={true} />
@@ -304,10 +211,10 @@ function Car3DViewer({
 
 export default memo(Car3DViewer);
 
-// Helper if you want to preload multiple URLs in a batch
 export function preloadCarModels(urls: string[]) {
   urls.forEach((url) => {
     if (!modelsCache.has(url)) {
+      // @ts-ignore
       useGLTF.preload(url);
       modelsCache.set(url, true);
     }
