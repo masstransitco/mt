@@ -138,6 +138,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
+  // When the Maps API is loaded, set up our map options and marker icons.
   useEffect(() => {
     if (isLoaded && window.google) {
       console.log('Maps API loaded; setting map options and marker icons');
@@ -184,7 +185,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Define handleStationClick before using it.
+  // Define handleStationClick early.
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       setActiveStation(station);
@@ -204,7 +205,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, bookingStep, isSheetMinimized, stations3D]
   );
 
-  // Attach a click listener directly to the map using Google Maps' event system.
+  // Attach a click listener directly to the map (using Google Maps' click events).
+  // This approach works on both desktop and mobile.
   const attachMapClickListener = useCallback(() => {
     if (!mapRef.current || !overlayRef.current) return;
     const map = mapRef.current;
@@ -213,21 +215,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
       console.log('Map clicked at:', event.latLng?.toJSON());
       console.log('Overlay available:', !!overlay);
       if (!event.latLng || !overlay) return;
-      // Convert the clicked lat/lng to world coordinates at the same altitude as the cubes.
+      // Convert the clicked lat/lng to world coordinates at the same altitude as our cubes.
       const clickedPoint = overlay.latLngAltitudeToVector3({
         lat: event.latLng.lat(),
         lng: event.latLng.lng(),
         altitude: 100 + 50, // Anchor altitude (100) + 50
       });
-      // Use a simple distance calculation to find a nearby station cube.
+      // Instead of raycasting, we use a simple distance check on the station cubes.
       const clickedLatLng = event.latLng.toJSON();
-      const threshold = 0.0001; // Adjust this threshold based on testing
+      const threshold = 0.0001; // Adjust this threshold as needed
       const nearestCube = stationCubesRef.current.find((cube) => {
         const station = cube.userData.station;
         const [lng, lat] = station.geometry.coordinates;
         const distance = Math.sqrt(
-          Math.pow(lat - clickedLatLng.lat, 2) +
-          Math.pow(lng - clickedLatLng.lng, 2)
+          Math.pow(lat - clickedLatLng.lat, 2) + Math.pow(lng - clickedLatLng.lng, 2)
         );
         return distance < threshold;
       });
@@ -265,6 +266,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
+  // Final handleMapLoad: set up scene, overlay, cubes, etc.
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       console.log('handleMapLoad called');
