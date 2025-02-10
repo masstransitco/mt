@@ -95,7 +95,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  // New ref for storing station cubes for interactivity.
+  // Ref for storing station cubes (for interactivity).
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
   // Local state.
@@ -184,7 +184,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Define handleStationClick BEFORE it's used in dependencies.
+  // Define handleStationClick before using it.
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       setActiveStation(station);
@@ -204,45 +204,43 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, bookingStep, isSheetMinimized, stations3D]
   );
 
-  // Attach a click event listener for station cubes using raycasting.
-  useEffect(() => {
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function onOverlayClick(event: MouseEvent) {
-      console.log('Overlay canvas clicked', event);
-      // Query the canvas from the container with id "map-container".
-      const canvas = document.querySelector('#map-container canvas') as HTMLCanvasElement | null;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      // Assume the overlay exposes its camera as .camera.
-      const camera = (overlayRef.current as any)?.camera;
-      if (!camera) return;
-      raycaster.setFromCamera(mouse, camera);
+  // Instead of attaching a click listener to a canvas element, add the listener directly to the map.
+  // This uses Google Maps' built-in event system.
+  const attachMapClickListener = useCallback(() => {
+    if (!mapRef.current || !overlayRef.current) return;
+    const map = mapRef.current;
+    const overlay = overlayRef.current;
+    // Listen for Google Maps click events.
+    map.addListener('click', (event: google.maps.MouseEvent) => {
+      if (!event.latLng) return;
+      // Convert the clicked lat/lng to world coordinates at the same altitude as the cubes.
+      // (Using the same altitude as the cubes: anchor altitude + 50)
+      // Note: event.latLng is a google.maps.LatLng object.
+      const clickedPoint = overlay.latLngAltitudeToVector3({
+        lat: event.latLng.lat(),
+        lng: event.latLng.lng(),
+        altitude: 100 + 50, // hardcoded: anchor altitude (100) + 50
+      });
+      // For a "downward" ray, start a bit above the clicked point.
+      const raycaster = new THREE.Raycaster();
+      const rayStart = new THREE.Vector3(clickedPoint.x, clickedPoint.y + 100, clickedPoint.z);
+      const rayDir = new THREE.Vector3(0, -1, 0);
+      raycaster.set(rayStart, rayDir);
       const intersects = raycaster.intersectObjects(stationCubesRef.current, true);
       if (intersects.length > 0) {
-        console.log('Station cube intersected:', intersects[0].object);
         const station = intersects[0].object.userData.station;
         if (station) {
+          console.log('Map click intersects station cube:', station);
           handleStationClick(station);
         }
       }
-    }
-
-    const canvas = document.querySelector('#map-container canvas') as HTMLCanvasElement | null;
-    if (canvas) {
-      canvas.style.pointerEvents = 'auto';
-      canvas.addEventListener('click', onOverlayClick, false);
-    }
-    return () => {
-      if (canvas) {
-        canvas.removeEventListener('click', onOverlayClick);
-      }
-    };
+    });
   }, [handleStationClick]);
+
+  // Attach the map click listener once the map is loaded.
+  useEffect(() => {
+    attachMapClickListener();
+  }, [attachMapClickListener]);
 
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
@@ -387,14 +385,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  const openNewSheet = (newSheet: OpenSheetType) => {
-    if (openSheet !== newSheet) {
-      setPreviousSheet(openSheet);
-      setOpenSheet(newSheet);
-    }
-  };
+  const openNewSheet = useCallback(
+    (newSheet: OpenSheetType) => {
+      if (openSheet !== newSheet) {
+        setPreviousSheet(openSheet);
+        setOpenSheet(newSheet);
+      }
+    },
+    [openSheet]
+  );
 
-  const closeCurrentSheet = () => {
+  const closeCurrentSheet = useCallback(() => {
     const old = openSheet;
     setOpenSheet(previousSheet);
     setPreviousSheet('none');
@@ -403,9 +404,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setActiveStation3D(null);
       overlayRef.current?.requestRedraw();
     }
-  };
+  }, [openSheet, previousSheet]);
 
-  const handleLocateMe = () => {
+  const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
       return;
@@ -431,9 +432,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast.error('Unable to retrieve location.');
       }
     );
-  };
+  }, [dispatch, stations, openNewSheet, sortStationsByDistanceToPoint]);
 
-  const handleCarToggle = () => {
+  const handleCarToggle = useCallback(() => {
     if (openSheet === 'car') {
       closeCurrentSheet();
     } else {
@@ -441,41 +442,47 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setActiveStation3D(null);
       openNewSheet('car');
     }
-  };
+  }, [openNewSheet, openSheet, closeCurrentSheet]);
 
-  const getStationIcon = (station: StationFeature) => {
-    if (!markerIcons) return undefined;
-    if (station.id === departureStationId) return markerIcons.departureStation;
-    if (station.id === arrivalStationId) return markerIcons.arrivalStation;
-    if (station.id === activeStation?.id) return markerIcons.activeStation;
-    return markerIcons.station;
-  };
+  const getStationIcon = useCallback(
+    (station: StationFeature) => {
+      if (!markerIcons) return undefined;
+      if (station.id === departureStationId) return markerIcons.departureStation;
+      if (station.id === arrivalStationId) return markerIcons.arrivalStation;
+      if (station.id === activeStation?.id) return markerIcons.activeStation;
+      return markerIcons.station;
+    },
+    [markerIcons, activeStation, departureStationId, arrivalStationId]
+  );
 
-  const handleStationSelectedFromList = (station: StationFeature) => {
-    setActiveStation(station);
-    const objectId = station.properties.ObjectId;
-    const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
-    setActiveStation3D(match);
-    if (bookingStep < 3) {
-      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-    } else {
-      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-    }
-    openNewSheet('detail');
-  };
+  const handleStationSelectedFromList = useCallback(
+    (station: StationFeature) => {
+      setActiveStation(station);
+      const objectId = station.properties.ObjectId;
+      const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
+      setActiveStation3D(match);
+      if (bookingStep < 3) {
+        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+      } else {
+        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+      }
+      openNewSheet('detail');
+    },
+    [dispatch, bookingStep, openNewSheet, stations3D]
+  );
 
-  const handleConfirmDeparture = () => {
+  const handleConfirmDeparture = useCallback(() => {
     dispatch(advanceBookingStep(3));
     setPreviousSheet('none');
     setOpenSheet('none');
     setActiveStation(null);
     setActiveStation3D(null);
     overlayRef.current?.requestRedraw();
-  };
+  }, [dispatch]);
 
-  const handleClearStationDetail = () => {
+  const handleClearStationDetail = useCallback(() => {
     closeCurrentSheet();
-  };
+  }, [closeCurrentSheet]);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
