@@ -239,29 +239,50 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlayRef.current = overlay;
       console.log('ThreeJSOverlayView created with anchor:', hongKongCenter);
 
-      // Create a dummy cube and place it using the overlay's conversion function.
-      const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
-      const cubeMat = new THREE.MeshPhongMaterial({
+      // Create a dummy green cube at the Hong Kong center, 50 units above the anchor.
+      const dummyCubeGeo = new THREE.BoxGeometry(50, 50, 50);
+      const dummyCubeMat = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
         opacity: 0.8,
         transparent: true,
       });
-      const dummyCube = new THREE.Mesh(cubeGeo, cubeMat);
-
-      // Compute a world coordinate for the cube:
-      // Place it 50 units above the Hong Kong center.
-      const cubeWorldPos = overlay.latLngAltitudeToVector3({
+      const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
+      const dummyCubePos = overlay.latLngAltitudeToVector3({
         lat: hongKongCenter.lat,
         lng: hongKongCenter.lng,
         altitude: hongKongCenter.altitude + 50,
       });
-      dummyCube.position.copy(cubeWorldPos);
-
-      // Scale up the cube so that it is clearly visible.
+      dummyCube.position.copy(dummyCubePos);
+      // Scale dummy cube up.
       dummyCube.scale.set(5, 5, 5);
-
       scene.add(dummyCube);
       console.log('Dummy cube added at world position:', dummyCube.position);
+
+      // For every station, add a silver/white cube at the same altitude.
+      // Each station cube will be 70% of the dummy cube's size.
+      if (stations.length > 0) {
+        stations.forEach((station) => {
+          const [lng, lat] = station.geometry.coordinates;
+          // Compute station cube position at a fixed altitude of (anchor.altitude + 50).
+          const stationCubePos = overlay.latLngAltitudeToVector3({
+            lat,
+            lng,
+            altitude: hongKongCenter.altitude + 50,
+          });
+          const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
+          const stationCubeMat = new THREE.MeshPhongMaterial({
+            color: 0xcccccc, // Silver/white color
+            opacity: 0.8,
+            transparent: true,
+          });
+          const stationCube = new THREE.Mesh(stationCubeGeo, stationCubeMat);
+          stationCube.position.copy(stationCubePos);
+          // Scale the station cube to 70% of the dummy cube's scale (dummy is scaled to 5).
+          stationCube.scale.set(3.5, 3.5, 3.5);
+          scene.add(stationCube);
+          console.log(`Added station cube for station ${station.id} at position:`, stationCube.position);
+        });
+      }
     },
     [stations, userLocation, activeStation3D]
   );
