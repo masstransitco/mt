@@ -226,7 +226,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       scene.add(directionalLight);
 
       // Hardcode the anchor point to the center of Hong Kong.
-      const hongKongCenter = { lat: 22.3193, lng: 114.1694, altitude: 100 };
+      const hongKongCenter = { lat: 22.298, lng: 114.177, altitude: 100 };
 
       // Create the ThreeJSOverlayView using the hardcoded anchor.
       const overlay = new ThreeJSOverlayView({
