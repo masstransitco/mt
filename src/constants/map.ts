@@ -257,7 +257,7 @@ const userPinPath = `
       fillColor: '#161617',   
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#0717f5',  
+      strokeColor: '#f5f5f7',  
     },
   };
 };
