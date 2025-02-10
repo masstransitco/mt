@@ -61,29 +61,25 @@ interface GMapProps {
 type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 
 /**
- * A helper to build the extruded polygon for a station3D geometry
+ * A helper to build the extruded polygon for a 3D station.
  */
 function buildExtrudedPolygon(
   overlay: ThreeJSOverlayView,
   coords: number[][]
 ): THREE.Mesh | null {
   if (!coords.length) return null;
-
-  // coords => [ [lng, lat], [lng, lat], ... ]
   const shape = new THREE.Shape();
   coords.forEach(([lng, lat], idx) => {
-    // Convert lat/lng + altitude => vector
     const v3 = overlay.latLngAltitudeToVector3({
       lat,
       lng,
-      altitude: 200, // Adjust as desired
+      altitude: 200, // Adjust altitude as desired
     });
     if (idx === 0) shape.moveTo(v3.x, v3.y);
     else shape.lineTo(v3.x, v3.y);
   });
-
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-    depth: 300, // how tall to extrude
+    depth: 500, // Adjust depth for extrusion height
     bevelEnabled: false,
   };
   const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
@@ -98,12 +94,13 @@ function buildExtrudedPolygon(
 export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Three.js overlay + scene + camera + renderer
+  // Refs for Three.js overlay, scene, camera, and renderer
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
+  // Local state
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
@@ -114,11 +111,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
-  // Which sheet is open? By default, CarSheet is open
+  // Which sheet is open? By default, CarSheet is open.
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
-  // Redux
+  // Redux selectors
   const dispatch = useAppDispatch();
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
@@ -130,12 +127,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
   const stations3D = useAppSelector(selectStations3D);
-
-  // For station styling
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load the Google Maps API
+  // Load the Google Maps API (using beta version for ThreeJSOverlayView)
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -143,7 +138,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Once loaded, set map options & marker icons
+  // Once the API is loaded, set map options and marker icons
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -151,7 +146,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Sort stations by distance from a point
+  // Helper: Sort stations by distance from a point.
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -172,23 +167,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // StationSelector => address search
+  // Handle address search from StationSelector
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
       mapRef.current.panTo(location);
       mapRef.current.setZoom(15);
-
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSearchLocation(location);
       setSortedStations(sorted);
-
       if (isSheetMinimized) dispatch(toggleSheet());
     },
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // On mount => fetch stations, 3D data, cars
+  // Fetch stations, 3D data, and cars on mount.
   useEffect(() => {
     const init = async () => {
       try {
@@ -206,13 +199,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch]);
 
   /**
-   * Once map loads, create a ThreeJSOverlayView
+   * Handle map load: create the ThreeJSOverlayView and define the update callback.
    */
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
 
-      // Fit bounds if stations
+      // Fit bounds if there are station points
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -222,109 +215,64 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create the scene
+      // Create the Three.js scene
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
-      // Create overlay
-      const overlay = new ThreeJSOverlayView({});
+      // Create the ThreeJSOverlayView.
+      // Note: We cast the options to "any" to allow the custom "three" property.
+      const overlay = new ThreeJSOverlayView({
+        map,
+        anchor: userLocation
+          ? new google.maps.LatLng(userLocation.lat, userLocation.lng)
+          : DEFAULT_CENTER,
+        three: { camera: { fov: 45, near: 1, far: 2000 } },
+        // The update callback is called on every frame.
+        update: () => {
+          // Clear the scene (remove all children)
+          while (scene.children.length > 0) {
+            scene.remove(scene.children[0]);
+          }
+
+          // 1) Add a dummy cube for debugging.
+          const cubeGeo = new THREE.BoxGeometry(20, 20, 20);
+          const cubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+          const cube = new THREE.Mesh(cubeGeo, cubeMat);
+          const dummyVec = overlay.latLngAltitudeToVector3({
+            lat: DEFAULT_CENTER.lat,
+            lng: DEFAULT_CENTER.lng,
+            altitude: 200,
+          });
+          cube.position.set(dummyVec.x, dummyVec.y, dummyVec.z);
+          scene.add(cube);
+          console.log('Dummy cube added at:', cube.position);
+
+          // 2) If there is an active 3D station, build and add its extruded polygon.
+          if (activeStation3D) {
+            const coords = activeStation3D.geometry.coordinates[0]; // Assumes [ [lng, lat], ... ]
+            console.log('Active 3D polygon coordinates:', coords);
+            const extrudedMesh = buildExtrudedPolygon(overlay, coords);
+            if (extrudedMesh) {
+              scene.add(extrudedMesh);
+              // Add a directional light for the extrusion.
+              const light = new THREE.DirectionalLight(0xffffff, 1);
+              light.position.set(0, 1000, 1000);
+              scene.add(light);
+            }
+          }
+        },
+      } as any);
+
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // Start an animation loop
-      overlay.onAdd = () => {
-        console.log('ThreeJSOverlayView onAdd called');
-
-        function animate() {
-          overlay.requestRedraw(); 
-          requestAnimationFrame(animate);
-        }
-        animate();
-      };
-
-      // Build camera & renderer
-      overlay.onContextRestored = ({ gl }) => {
-        console.log('onContextRestored => creating camera & renderer');
-        if (!gl) return;
-
-        // Create a perspective camera
-        cameraRef.current = new THREE.PerspectiveCamera(45, gl.canvas.width / gl.canvas.height, 1, 3000);
-        cameraRef.current.matrixAutoUpdate = false;
-
-        // Create the WebGLRenderer
-        const renderer = new THREE.WebGLRenderer({
-          canvas: gl.canvas as HTMLCanvasElement,
-          context: gl,
-          ...gl.getContextAttributes(),
-        });
-        renderer.autoClear = false;
-        rendererRef.current = renderer;
-      };
-
-      overlay.onDraw = ({ gl, transformer }) => {
-        const scene = sceneRef.current;
-        const renderer = rendererRef.current;
-        const camera = cameraRef.current;
-        if (!scene || !renderer || !camera) return;
-
-        // Log each draw for debugging
-        // console.log('onDraw called');
-
-        // For debugging, let's NOT clear the entire scene each frame.
-        // We'll just remove our geometry if we re-run. But let's try a simpler approach:
-        // => We'll remove geometry and re-add it each frame for demonstration.
-        while (scene.children.length > 0) {
-          // remove all old geometry
-          const obj = scene.children[0];
-          scene.remove(obj);
-        }
-
-        // 1) Add dummy green cube
-        const dummyCubeGeo = new THREE.BoxGeometry(20, 20, 20);
-        const dummyCubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
-
-        // position the dummy in lat/lng => vector
-        const dummyVec = overlay.latLngAltitudeToVector3({
-          lat: DEFAULT_CENTER.lat,
-          lng: DEFAULT_CENTER.lng,
-          altitude: 200,
-        });
-        dummyCube.position.set(dummyVec.x, dummyVec.y, dummyVec.z);
-        scene.add(dummyCube);
-
-        // 2) If an activeStation3D => add extruded polygon
-        if (activeStation3D) {
-          const coords = activeStation3D.geometry.coordinates[0];
-          const extruded = buildExtrudedPolygon(overlay, coords);
-          if (extruded) scene.add(extruded);
-
-          // add a directional light
-          const light = new THREE.DirectionalLight(0xffffff, 1);
-          light.position.set(0, 1000, 1000);
-          scene.add(light);
-        }
-
-        // 3) Update camera matrix from transform
-        // We'll pick the map center for tilt.
-        const latLngAlt = {
-          lat: map.getCenter()?.lat() || 0,
-          lng: map.getCenter()?.lng() || 0,
-          altitude: 2, // small altitude => ensures matrix is valid
-        };
-        const matArr = transformer.fromLatLngAltitude(latLngAlt);
-        camera.matrix.fromArray(matArr);
-        camera.updateMatrixWorld(true);
-
-        // Render
-        renderer.render(scene, camera);
-        renderer.resetState();
-      };
+      // In case you want continuous animation, the update callback (set in overlay options)
+      // will be called on each frame when overlay.requestRedraw() is invoked.
     },
-    [stations, activeStation3D]
+    [stations, userLocation, activeStation3D]
   );
 
-  // Hide the overlay once loaded
+  // Hide the overlay spinner after data loads.
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -333,12 +281,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Toggle sheet
+  // Sheet toggle handlers
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Helper: open new sheet
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
@@ -346,7 +293,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Helper: close => revert
   const closeCurrentSheet = () => {
     const old = openSheet;
     setOpenSheet(previousSheet);
@@ -354,12 +300,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (old === 'detail') {
       setActiveStation(null);
       setActiveStation3D(null);
-      // request redraw to remove extrusions
       overlayRef.current?.requestRedraw();
     }
   };
 
-  // "Locate Me"
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
@@ -388,7 +332,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // Toggle CarSheet
   const handleCarToggle = () => {
     if (openSheet === 'car') {
       closeCurrentSheet();
@@ -399,7 +342,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Decide icon for station
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
     if (station.id === departureStationId) return markerIcons.departureStation;
@@ -408,13 +350,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return markerIcons.station;
   };
 
-  // On station marker click => open detail => find 3D
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
     const objectId = station.properties.ObjectId;
     const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
-
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
@@ -426,13 +366,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // From station list => open detail
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
     const objectId = station.properties.ObjectId;
     const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
-
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
@@ -441,7 +379,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     openNewSheet('detail');
   };
 
-  // Confirm departure => set step=3 => hide all
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setPreviousSheet('none');
@@ -451,7 +388,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     overlayRef.current?.requestRedraw();
   };
 
-  // Clear station => revert
   const handleClearStationDetail = () => {
     closeCurrentSheet();
   };
@@ -462,10 +398,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
           <div className="text-center space-y-2">
             <p className="font-medium">Error loading map data</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-sm underline hover:text-destructive/80"
-            >
+            <button onClick={() => window.location.reload()} className="text-sm underline hover:text-destructive/80">
               Try reloading
             </button>
           </div>
@@ -484,11 +417,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               onLoad={handleMapLoad}
             >
               {userLocation && markerIcons && (
-                <Marker
-                  position={userLocation}
-                  icon={markerIcons.user}
-                  clickable={false}
-                />
+                <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
               )}
               {(searchLocation ? sortedStations : stations).map((station) => {
                 const [lng, lat] = station.geometry.coordinates;
@@ -502,12 +431,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 );
               })}
               {cars.map((car) => (
-                <Marker
-                  key={car.id}
-                  position={{ lat: car.lat, lng: car.lng }}
-                  icon={markerIcons?.car}
-                  title={car.name}
-                />
+                <Marker key={car.id} position={{ lat: car.lat, lng: car.lng }} icon={markerIcons?.car} title={car.name} />
               ))}
             </GoogleMap>
           </div>
@@ -519,16 +443,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
           <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
             <button
               onClick={handleLocateMe}
-              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
-                         flex items-center justify-center text-foreground shadow"
+              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
             >
               <Locate className="w-5 h-5" />
             </button>
-
             <button
               onClick={handleCarToggle}
-              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
-                         flex items-center justify-center text-foreground shadow"
+              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
             >
               <Car className="w-5 h-5" />
             </button>
@@ -539,12 +460,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Nearby Stations List */}
           {openSheet === 'list' && (
-            <Sheet
-              isOpen
-              onToggle={closeCurrentSheet}
-              title="Nearby Stations"
-              count={sortedStations.length}
-            >
+            <Sheet isOpen onToggle={closeCurrentSheet} title="Nearby Stations" count={sortedStations.length}>
               <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
                 {sortedStations.map((station, idx) => (
                   <StationListItem
@@ -563,12 +479,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Station Detail */}
           {openSheet === 'detail' && activeStation && (
-            <Sheet
-              isOpen
-              onToggle={closeCurrentSheet}
-              title="Station Details"
-              count={(searchLocation ? sortedStations : stations).length}
-            >
+            <Sheet isOpen onToggle={closeCurrentSheet} title="Station Details" count={(searchLocation ? sortedStations : stations).length}>
               <StationDetail
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={activeStation}
