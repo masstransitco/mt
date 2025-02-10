@@ -310,7 +310,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const latLngAlt = {
           lat: map.getCenter()?.lat() || 0,
           lng: map.getCenter()?.lng() || 0,
-          altitude: 2,
+          altitude: 200,
         };
         const matArr = transformer.fromLatLngAltitude(latLngAlt);
         camera.matrix.fromArray(matArr);
