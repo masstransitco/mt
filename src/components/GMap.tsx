@@ -95,8 +95,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  // Ref for storing station cubes for interactivity.
-  const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
   // Local state.
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -138,7 +136,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // When the Maps API is loaded, set up our map options and marker icons.
   useEffect(() => {
     if (isLoaded && window.google) {
       console.log('Maps API loaded; setting map options and marker icons');
@@ -185,71 +182,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Define handleStationClick early.
-  const handleStationClick = useCallback(
-    (station: StationFeature) => {
-      setActiveStation(station);
-      const objectId = station.properties.ObjectId;
-      const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
-      setActiveStation3D(match);
-      if (bookingStep < 3) {
-        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-      } else {
-        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-      }
-      openNewSheet('detail');
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [dispatch, bookingStep, isSheetMinimized, stations3D]
-  );
-
-  // Attach a click listener directly to the map (using Google Maps' click events).
-  // This approach works on both desktop and mobile.
-  const attachMapClickListener = useCallback(() => {
-    if (!mapRef.current || !overlayRef.current) return;
-    const map = mapRef.current;
-    const overlay = overlayRef.current;
-    map.addListener('click', (event: google.maps.MapMouseEvent) => {
-      console.log('Map clicked at:', event.latLng?.toJSON());
-      console.log('Overlay available:', !!overlay);
-      if (!event.latLng || !overlay) return;
-      // Convert the clicked lat/lng to world coordinates at the same altitude as our cubes.
-      const clickedPoint = overlay.latLngAltitudeToVector3({
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng(),
-        altitude: 100 + 50, // Anchor altitude (100) + 50
-      });
-      // Instead of raycasting, we use a simple distance check on the station cubes.
-      const clickedLatLng = event.latLng.toJSON();
-      const threshold = 0.0001; // Adjust this threshold as needed
-      const nearestCube = stationCubesRef.current.find((cube) => {
-        const station = cube.userData.station;
-        const [lng, lat] = station.geometry.coordinates;
-        const distance = Math.sqrt(
-          Math.pow(lat - clickedLatLng.lat, 2) + Math.pow(lng - clickedLatLng.lng, 2)
-        );
-        return distance < threshold;
-      });
-      if (nearestCube) {
-        console.log('Found nearby cube:', nearestCube.userData.station);
-        handleStationClick(nearestCube.userData.station);
-      }
-    });
-  }, [handleStationClick]);
-
-  // Attach the map click listener once the map is loaded.
-  useEffect(() => {
-    attachMapClickListener();
-  }, [attachMapClickListener]);
-
-  useEffect(() => {
-    if (isLoaded && !stationsLoading && !carsLoading) {
-      setOverlayVisible(false);
-    }
-  }, [isLoaded, stationsLoading, carsLoading]);
-
   useEffect(() => {
     (async () => {
       try {
@@ -266,12 +198,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Final handleMapLoad: set up scene, overlay, cubes, etc.
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       console.log('handleMapLoad called');
       mapRef.current = map;
 
+      // Fit bounds based on station locations if available.
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -281,10 +213,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
+      // Create a new Three.js scene.
       const scene = new THREE.Scene();
       scene.background = null;
       sceneRef.current = scene;
 
+      // Add lights following the official sample.
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
       scene.add(ambientLight);
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.25);
@@ -294,6 +228,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       // Hardcode the anchor point to the center of Hong Kong.
       const hongKongCenter = { lat: 22.298, lng: 114.177, altitude: 100 };
 
+      // Create the ThreeJSOverlayView using the hardcoded anchor.
       const overlay = new ThreeJSOverlayView({
         map,
         scene,
@@ -304,7 +239,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlayRef.current = overlay;
       console.log('ThreeJSOverlayView created with anchor:', hongKongCenter);
 
-      // Create the dummy green cube.
+      // Create a dummy green cube at the Hong Kong center, 50 units above the anchor.
       const dummyCubeGeo = new THREE.BoxGeometry(50, 50, 50);
       const dummyCubeMat = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
@@ -318,14 +253,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
         altitude: hongKongCenter.altitude + 50,
       });
       dummyCube.position.copy(dummyCubePos);
+      // Scale dummy cube up.
       dummyCube.scale.set(3, 3, 3);
       scene.add(dummyCube);
       console.log('Dummy cube added at world position:', dummyCube.position);
 
-      // For each station, add a silver/white cube (70% of dummy cube size) and store it.
+      // For every station, add a silver/white cube at the same altitude.
+      // Each station cube will be 70% of the dummy cube's size.
       if (stations.length > 0) {
         stations.forEach((station) => {
           const [lng, lat] = station.geometry.coordinates;
+          // Compute station cube position at a fixed altitude of (anchor.altitude + 50).
           const stationCubePos = overlay.latLngAltitudeToVector3({
             lat,
             lng,
@@ -333,19 +271,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
           });
           const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
           const stationCubeMat = new THREE.MeshPhongMaterial({
-            color: 0xcccccc,
+            color: 0xcccccc, // Silver/white color
             opacity: 0.8,
             transparent: true,
           });
           const stationCube = new THREE.Mesh(stationCubeGeo, stationCubeMat);
           stationCube.position.copy(stationCubePos);
-          // Scale the station cube to 70% of dummy cube's scale (dummy cube scale is 3).
-          stationCube.scale.set(2.1, 2.1, 2.1);
-          // Attach station data.
-          stationCube.userData = { station };
+          // Scale the station cube to 70% of the dummy cube's scale (dummy is scaled to 5).
+          stationCube.scale.set(3.5, 3.5, 3.5);
           scene.add(stationCube);
-          stationCubesRef.current.push(stationCube);
-          console.log(`Added station cube for station ${station.id} at position:`, stationCube.position);
+          console.log(Added station cube for station ${station.id} at position:, stationCube.position);
         });
       }
     },
@@ -358,6 +293,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
+  // Cleanup effect.
   useEffect(() => {
     return () => {
       console.log('Cleaning up ThreeJS resources');
@@ -388,17 +324,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  const openNewSheet = useCallback(
-    (newSheet: OpenSheetType) => {
-      if (openSheet !== newSheet) {
-        setPreviousSheet(openSheet);
-        setOpenSheet(newSheet);
-      }
-    },
-    [openSheet]
-  );
+  const openNewSheet = (newSheet: OpenSheetType) => {
+    if (openSheet !== newSheet) {
+      setPreviousSheet(openSheet);
+      setOpenSheet(newSheet);
+    }
+  };
 
-  const closeCurrentSheet = useCallback(() => {
+  const closeCurrentSheet = () => {
     const old = openSheet;
     setOpenSheet(previousSheet);
     setPreviousSheet('none');
@@ -407,9 +340,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setActiveStation3D(null);
       overlayRef.current?.requestRedraw();
     }
-  }, [openSheet, previousSheet]);
+  };
 
-  const handleLocateMe = useCallback(() => {
+  const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
       return;
@@ -435,9 +368,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast.error('Unable to retrieve location.');
       }
     );
-  }, [dispatch, stations, openNewSheet, sortStationsByDistanceToPoint]);
+  };
 
-  const handleCarToggle = useCallback(() => {
+  const handleCarToggle = () => {
     if (openSheet === 'car') {
       closeCurrentSheet();
     } else {
@@ -445,47 +378,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setActiveStation3D(null);
       openNewSheet('car');
     }
-  }, [openNewSheet, openSheet, closeCurrentSheet]);
+  };
 
-  const getStationIcon = useCallback(
-    (station: StationFeature) => {
-      if (!markerIcons) return undefined;
-      if (station.id === departureStationId) return markerIcons.departureStation;
-      if (station.id === arrivalStationId) return markerIcons.arrivalStation;
-      if (station.id === activeStation?.id) return markerIcons.activeStation;
-      return markerIcons.station;
-    },
-    [markerIcons, activeStation, departureStationId, arrivalStationId]
-  );
+  const getStationIcon = (station: StationFeature) => {
+    if (!markerIcons) return undefined;
+    if (station.id === departureStationId) return markerIcons.departureStation;
+    if (station.id === arrivalStationId) return markerIcons.arrivalStation;
+    if (station.id === activeStation?.id) return markerIcons.activeStation;
+    return markerIcons.station;
+  };
 
-  const handleStationSelectedFromList = useCallback(
-    (station: StationFeature) => {
-      setActiveStation(station);
-      const objectId = station.properties.ObjectId;
-      const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
-      setActiveStation3D(match);
-      if (bookingStep < 3) {
-        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-      } else {
-        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-      }
-      openNewSheet('detail');
-    },
-    [dispatch, bookingStep, openNewSheet, stations3D]
-  );
+  const handleStationClick = (station: StationFeature) => {
+    setActiveStation(station);
+    const objectId = station.properties.ObjectId;
+    const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
+    setActiveStation3D(match);
+    if (bookingStep < 3) {
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+    } else {
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+    }
+    openNewSheet('detail');
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  };
 
-  const handleConfirmDeparture = useCallback(() => {
+  const handleStationSelectedFromList = (station: StationFeature) => {
+    setActiveStation(station);
+    const objectId = station.properties.ObjectId;
+    const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
+    setActiveStation3D(match);
+    if (bookingStep < 3) {
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+    } else {
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+    }
+    openNewSheet('detail');
+  };
+
+  const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setPreviousSheet('none');
     setOpenSheet('none');
     setActiveStation(null);
     setActiveStation3D(null);
     overlayRef.current?.requestRedraw();
-  }, [dispatch]);
+  };
 
-  const handleClearStationDetail = useCallback(() => {
+  const handleClearStationDetail = () => {
     closeCurrentSheet();
-  }, [closeCurrentSheet]);
+  };
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -505,8 +448,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         <LoadingSpinner />
       ) : (
         <>
-          {/* Wrap the GoogleMap in a div with an id for targeting the canvas */}
-          <div id="map-container" className="absolute inset-0">
+          <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
               center={userLocation || DEFAULT_CENTER}
