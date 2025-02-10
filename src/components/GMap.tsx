@@ -138,7 +138,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
-    version: 'beta',
     libraries: LIBRARIES,
   });
 
