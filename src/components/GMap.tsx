@@ -95,7 +95,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  // New ref to store station cubes for interactivity.
+  // New ref for storing station cubes for interactivity.
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
   // Local state.
@@ -184,6 +184,73 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
+  // Define handleStationClick BEFORE the useEffect that depends on it.
+  const handleStationClick = useCallback(
+    (station: StationFeature) => {
+      setActiveStation(station);
+      const objectId = station.properties.ObjectId;
+      const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
+      setActiveStation3D(match);
+      if (bookingStep < 3) {
+        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+      } else {
+        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+      }
+      openNewSheet('detail');
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    },
+    [dispatch, bookingStep, isSheetMinimized, stations3D]
+  );
+
+  // Add an event listener for clicks on station cubes.
+  useEffect(() => {
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function onOverlayClick(event: MouseEvent) {
+      // Get the canvas from the overlay or the first canvas found.
+      const canvas =
+        (overlayRef.current && (overlayRef.current as any).canvas) ||
+        document.querySelector('canvas');
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Assume the overlay exposes its camera as .camera.
+      const camera = (overlayRef.current as any)?.camera;
+      if (!camera) return;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(stationCubesRef.current, true);
+      if (intersects.length > 0) {
+        const station = intersects[0].object.userData.station;
+        if (station) {
+          handleStationClick(station);
+        }
+      }
+    }
+
+    const canvas =
+      (overlayRef.current && (overlayRef.current as any).canvas) ||
+      document.querySelector('canvas');
+    if (canvas) {
+      canvas.addEventListener('click', onOverlayClick, false);
+      return () => {
+        canvas.removeEventListener('click', onOverlayClick);
+      };
+    }
+  }, [handleStationClick]);
+
+  useEffect(() => {
+    if (isLoaded && !stationsLoading && !carsLoading) {
+      setOverlayVisible(false);
+    }
+  }, [isLoaded, stationsLoading, carsLoading]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -205,7 +272,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       console.log('handleMapLoad called');
       mapRef.current = map;
 
-      // Fit bounds based on station locations if available.
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -215,12 +281,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create a new Three.js scene.
       const scene = new THREE.Scene();
       scene.background = null;
       sceneRef.current = scene;
 
-      // Add lights following the official sample.
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
       scene.add(ambientLight);
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.25);
@@ -228,10 +292,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
       scene.add(directionalLight);
 
       // Hardcode the anchor point to the center of Hong Kong.
-      // (You can adjust these coordinates as needed.)
       const hongKongCenter = { lat: 22.298, lng: 114.177, altitude: 100 };
 
-      // Create the ThreeJSOverlayView using the hardcoded anchor.
       const overlay = new ThreeJSOverlayView({
         map,
         scene,
@@ -242,7 +304,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlayRef.current = overlay;
       console.log('ThreeJSOverlayView created with anchor:', hongKongCenter);
 
-      // Create a dummy green cube at the Hong Kong center, 50 units above the anchor.
+      // Create the dummy green cube.
       const dummyCubeGeo = new THREE.BoxGeometry(50, 50, 50);
       const dummyCubeMat = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
@@ -256,14 +318,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
         altitude: hongKongCenter.altitude + 50,
       });
       dummyCube.position.copy(dummyCubePos);
-      // Scale dummy cube up.
       dummyCube.scale.set(3, 3, 3);
       scene.add(dummyCube);
       console.log('Dummy cube added at world position:', dummyCube.position);
 
-      // For every station, add a silver/white cube.
-      // Each station cube will be 70% of the dummy cube's size.
-      // Also store the cube in stationCubesRef for interactivity.
+      // For each station, add a silver/white cube (70% size of dummy cube) and store it.
       if (stations.length > 0) {
         stations.forEach((station) => {
           const [lng, lat] = station.geometry.coordinates;
@@ -274,15 +333,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
           });
           const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
           const stationCubeMat = new THREE.MeshPhongMaterial({
-            color: 0xcccccc, // Silver/white color
+            color: 0xcccccc,
             opacity: 0.8,
             transparent: true,
           });
           const stationCube = new THREE.Mesh(stationCubeGeo, stationCubeMat);
           stationCube.position.copy(stationCubePos);
-          // Scale the station cube to 70% of the dummy cube's scale.
-          stationCube.scale.set(2.1, 2.1, 2.1); // (70% of 3 is 2.1)
-          // Attach the station data to the cube.
+          // Scale to 70% of the dummy cube's scale (dummy cube scale is 3).
+          stationCube.scale.set(2.1, 2.1, 2.1);
+          // Attach station data.
           stationCube.userData = { station };
           scene.add(stationCube);
           stationCubesRef.current.push(stationCube);
@@ -293,60 +352,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [stations, userLocation, activeStation3D]
   );
 
-  // Add an event listener to the overlay's canvas for clicks on station cubes.
-  useEffect(() => {
-    // Define the raycaster and mouse vector.
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function onOverlayClick(event: MouseEvent) {
-      // Try to get the canvas from the overlay.
-      // Depending on the library version, you might have to adjust this selector.
-      const canvas =
-        (overlayRef.current && (overlayRef.current as any).canvas) ||
-        document.querySelector('canvas');
-      if (!canvas) return;
-
-      // Get canvas bounding rectangle.
-      const rect = canvas.getBoundingClientRect();
-      // Compute normalized device coordinates (-1 to +1) for the mouse position.
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      // Get the overlay camera. (Assuming the overlay exposes it as .camera)
-      const camera = (overlayRef.current as any).camera;
-      if (!camera) return;
-
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(stationCubesRef.current, true);
-      if (intersects.length > 0) {
-        const station = intersects[0].object.userData.station;
-        if (station) {
-          // Trigger the same action as clicking the station marker.
-          handleStationClick(station);
-        }
-      }
-    }
-
-    // Attach the event listener to the overlay's canvas.
-    const canvas =
-      (overlayRef.current && (overlayRef.current as any).canvas) ||
-      document.querySelector('canvas');
-    if (canvas) {
-      canvas.addEventListener('click', onOverlayClick, false);
-      return () => {
-        canvas.removeEventListener('click', onOverlayClick);
-      };
-    }
-  }, [handleStationClick]);
-
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Cleanup effect.
   useEffect(() => {
     return () => {
       console.log('Cleaning up ThreeJS resources');
@@ -440,25 +451,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (station.id === activeStation?.id) return markerIcons.activeStation;
     return markerIcons.station;
   };
-
-  const handleStationClick = useCallback(
-    (station: StationFeature) => {
-      setActiveStation(station);
-      const objectId = station.properties.ObjectId;
-      const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
-      setActiveStation3D(match);
-      if (bookingStep < 3) {
-        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-      } else {
-        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-      }
-      openNewSheet('detail');
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [dispatch, bookingStep, isSheetMinimized, stations3D]
-  );
 
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
