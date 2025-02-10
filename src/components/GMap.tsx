@@ -239,7 +239,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
             // Convert lat/lng + altitude => vector3
-            const v3 = overlay.latLngAltToVector3({
+            const v3 = overlay.latLngAltitudeToVector3({
               lat,
               lng,
               altitude: 200,
