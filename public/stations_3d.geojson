@@ -1,32 +1,17 @@
 {
-    "type": "FeatureCollection",
-    "features": [
-        {
-            "type": "Feature",
-            "geometry": {
-                "type": "Polygon",
-                "coordinates": [
-                    [
-                        [
-                            22.395678,
-                            114.127845
-                        ],
-                        [
-                            22.395678,
-                            114.125321
-                        ],
-                        [
-                            22.397981,
-                            114.125321
-                        ],
-                        [
-                            22.397981,
-                            114.127845
-                        ],
-                        [
-                            22.395678,
-                            114.127845
-                        ]
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [114.127845, 22.395678],
+            [114.125321, 22.395678],
+            [114.125321, 22.397981],
+            [114.127845, 22.397981],
+            [114.127845, 22.395678]
                     ]
                 ]
             },
@@ -38,10 +23,10 @@
                 "District": "Tuen Mun",
                 "OBJECTID": 1875,
                 "Sheet_No": "6-SW-6A",
-                "Min_x": 22.395678,
-                "Min_y": 114.125321,
-                "Max_x": 22.397981,
-                "Max_y": 114.127845
+                "Min_x": 114.125321,
+                "Min_y": 22.395678,
+                "Max_x": 114.127845,
+                "Max_y": 22.397981
                 "Revision_Date": "10/2024",
                 "Format_3DS": "https://open.hkmapservice.gov.hk/OpenData/directDownload?productName=3D-BIT00&sheetName=T6-SW-6A&productFormat=3DS",
                 "Format_FBX": "https://open.hkmapservice.gov.hk/OpenData/directDownload?productName=3D-BIT00&sheetName=T6-SW-6A&productFormat=FBX",
@@ -55,26 +40,11 @@
                 "type": "Polygon",
                 "coordinates": [
                     [
-                        [
-                            810500.0,
-                            818000.0
-                        ],
-                        [
-                            810500.0,
-                            817400.0
-                        ],
-                        [
-                            811250.0,
-                            817400.0
-                        ],
-                        [
-                            811250.0,
-                            818000.0
-                        ],
-                        [
-                            810500.0,
-                            818000.0
-                        ]
+                                    [114.027845, 22.315678],
+            [114.025321, 22.315678],
+            [114.025321, 22.317981],
+            [114.027845, 22.317981],
+            [114.027845, 22.315678]
                     ]
                 ]
             },
@@ -86,10 +56,10 @@
                 "District": "Islands",
                 "OBJECTID": 652,
                 "Sheet_No": "9-SE-3A",
-                "Min_x": 810500,
-                "Min_y": 817400,
-                "Max_x": 811250,
-                "Max_y": 818000,
+                "Min_x": 114.025321,
+                "Min_y": 22.315678,
+                "Max_x": 114.027845,
+                "Max_y": 22.317981
                 "Revision_Date": "08/2024",
                 "Format_3DS": "https://open.hkmapservice.gov.hk/OpenData/directDownload?productName=3D-BIT00&sheetName=T9-SE-3A&productFormat=3DS",
                 "Format_FBX": "https://open.hkmapservice.gov.hk/OpenData/directDownload?productName=3D-BIT00&sheetName=T9-SE-3A&productFormat=FBX",
