@@ -5,7 +5,11 @@ import { MapPin, Navigation, Zap, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
+import {
+  selectBookingStep,
+  advanceBookingStep,
+  selectRoute, // <-- import route selector
+} from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
@@ -14,9 +18,6 @@ import {
 } from '@/store/userSlice';
 import { StationFeature } from '@/store/stationsSlice';
 
-/////////////////////////////////////////////
-// Add two optional callback props here
-/////////////////////////////////////////////
 interface StationDetailProps {
   stations: StationFeature[];
   activeStation: StationFeature | null;
@@ -34,21 +35,17 @@ interface StationDetailProps {
 
 /**
  * Step meanings (summarized):
- *   1 = selecting_departure_station
- *   2 = selected_departure_station
- *   3 = selecting_arrival_station
- *   4 = selected_arrival_station
+ *  1 = selecting_departure_station
+ *  2 = selected_departure_station
+ *  3 = selecting_arrival_station
+ *  4 = selected_arrival_station
  */
 export const StationDetail = memo<StationDetailProps>((props) => {
-  const {
-    stations,
-    activeStation,
-    onConfirmDeparture,
-    onClear
-  } = props;
+  const { stations, activeStation, onConfirmDeparture, onClear } = props;
 
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
+  const route = useAppSelector(selectRoute); // <-- route from Redux
 
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
@@ -81,16 +78,16 @@ export const StationDetail = memo<StationDetailProps>((props) => {
 
   const Icon = isDepartureFlow ? MapPin : Navigation;
 
-  // For distance calculations
-  const otherStationId = isDepartureFlow ? arrivalId : departureId;
-  const otherStation = stations.find(s => s.id === otherStationId);
-  const routeDistance =
-    otherStation &&
-    activeStation.distance !== undefined &&
-    otherStation.distance !== undefined
-      ? (activeStation.distance + otherStation.distance).toFixed(1)
-      : null;
+  // Extract total route distance & duration if available
+  // (Remember: route.distance is in meters, duration in seconds)
+  let routeDistanceKm: string | null = null;
+  let routeDurationMin: string | null = null;
+  if (route && departureId && arrivalId) {
+    routeDistanceKm = (route.distance / 1000).toFixed(1);
+    routeDurationMin = Math.round(route.duration / 60).toString();
+  }
 
+  // Clear station
   const handleClear = () => {
     if (isDepartureFlow) {
       dispatch(clearDepartureStation());
@@ -103,17 +100,15 @@ export const StationDetail = memo<StationDetailProps>((props) => {
       dispatch(advanceBookingStep(3));
       toast.success('Arrival station cleared');
     }
-    //////////////////////////////////
     // Call parent's onClear if provided
-    //////////////////////////////////
     onClear?.();
   };
 
+  // Confirm station
   const handleConfirm = () => {
     if (isDepartureFlow) {
       // Step 1 or 2 => departure selection
       dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
-
       if (step === 1) {
         // Move to step=2 => selected_departure_station
         dispatch(advanceBookingStep(2));
@@ -123,14 +118,11 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         dispatch(advanceBookingStep(3));
         toast.success('Departure station confirmed. Now select your arrival station.');
       }
-      ///////////////////////////////////////////
       // If the parent also wants to handle confirm departure
-      ///////////////////////////////////////////
       onConfirmDeparture?.();
     } else {
       // Step 3 or 4 => arrival selection
       dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
-
       if (step === 3) {
         // Move to step=4 => selected_arrival_station
         dispatch(advanceBookingStep(4));
@@ -140,8 +132,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         dispatch(advanceBookingStep(5));
         toast.success('Route confirmed! Next: payment or finalizing.');
       }
-      // If the parent wants to handle any confirm logic for arrival
-      // we could do onConfirmArrival?.() if we had that prop
+      // If the parent wants to handle confirm logic for arrival, e.g. onConfirmArrival?.()
     }
   };
 
@@ -183,15 +174,28 @@ export const StationDetail = memo<StationDetailProps>((props) => {
             </span>
           </div>
         )}
-        {(activeStation.distance !== undefined || routeDistance) && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">
-              {routeDistance ? 'Total Route Distance' : 'Distance from You'}
-            </span>
-            <span className="font-medium">
-              {routeDistance || activeStation.distance?.toFixed(1)} km
-            </span>
-          </div>
+
+        {/* Show driving distance/time if available, else fallback to distance from user */}
+        {routeDistanceKm && routeDurationMin ? (
+          <>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Total Route Distance</span>
+              <span className="font-medium">{routeDistanceKm} km</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Estimated Drive Time</span>
+              <span className="font-medium">{routeDurationMin} min</span>
+            </div>
+          </>
+        ) : (
+          activeStation.distance !== undefined && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Distance from You</span>
+              <span className="font-medium">
+                {activeStation.distance.toFixed(1)} km
+              </span>
+            </div>
+          )
         )}
       </div>
 
