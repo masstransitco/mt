@@ -252,6 +252,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map,
         scene,
         anchor,
+         // @ts-ignore: 'THREE' is expected at runtime but not defined in the type
         THREE,
       });
       overlayRef.current = overlay;
