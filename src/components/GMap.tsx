@@ -225,23 +225,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       directionalLight.position.set(0, 10, 50);
       scene.add(directionalLight);
 
-      // Add a dummy cube to the scene.
-      const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
-      const cubeMat = new THREE.MeshPhongMaterial({
-        color: 0x00ff00,
-        opacity: 0.8,
-        transparent: true,
-      });
-      const dummyCube = new THREE.Mesh(cubeGeo, cubeMat);
-      // Place the cube at (0,0,0) relative to the overlay’s anchor.
-      dummyCube.position.set(0, 0, 0);
-      scene.add(dummyCube);
-      console.log('Dummy cube added to scene');
-
-      // If an active station 3D feature exists, add its extruded polygon.
-      // (Since the helper requires an overlay reference, we add it right after creating the overlay.)
-      // We'll update the scene later if activeStation3D changes.
-      
       // Determine the anchor point.
       const anchor = userLocation
         ? { lat: userLocation.lat, lng: userLocation.lng, altitude: 100 }
@@ -258,9 +241,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlayRef.current = overlay;
       console.log('ThreeJSOverlayView created');
 
-      // (Optional) Trigger a redraw whenever needed.
-      // For example, if activeStation3D becomes available later, you could update the scene and then call:
-      // overlay.requestRedraw();
+      // Now create a dummy cube and place it using the overlay's conversion function.
+      const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
+      const cubeMat = new THREE.MeshPhongMaterial({
+        color: 0x00ff00,
+        opacity: 0.8,
+        transparent: true,
+      });
+      const dummyCube = new THREE.Mesh(cubeGeo, cubeMat);
+      // Instead of simply setting (0,0,0), compute a world coordinate using the overlay.
+      // Here we place it 50 units above the anchor.
+      const cubeWorldPos = overlay.latLngAltitudeToVector3({
+        lat: anchor.lat,
+        lng: anchor.lng,
+        altitude: anchor.altitude + 50,
+      });
+      dummyCube.position.copy(cubeWorldPos);
+      scene.add(dummyCube);
+      console.log('Dummy cube added to scene at position:', dummyCube.position);
     },
     [stations, userLocation, activeStation3D]
   );
