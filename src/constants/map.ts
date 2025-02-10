@@ -214,7 +214,7 @@ const userPinPath = `
       fillColor: '#C9C9C9',   // Gray (Tailwind gray-500)
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF',
+      strokeColor: '#1C1C1F',
     },
 
     // 3) Active station (user has clicked) - diamond with a soft peach fill
@@ -233,7 +233,7 @@ const userPinPath = `
     departureStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#14B8A6',   // Teal (Tailwind teal-500)
+      fillColor: '#1C1C1F',   
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#F1F5F9', // Very light gray stroke
@@ -243,7 +243,7 @@ const userPinPath = `
     arrivalStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#8B5CF6',   // Violet (Tailwind violet-500)
+      fillColor: '#A8161B',   
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#F1F5F9',
@@ -254,10 +254,10 @@ const userPinPath = `
     car: {
       path: carPath,
       scale: 10,
-      fillColor: '#3B82F6',    // Vibrant Blue (Tailwind blue-500)
+      fillColor: '#161617',   
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#BFDBFE',  // Lighter blue stroke (Tailwind blue-200)
+      strokeColor: '#0717f5',  
     },
   };
 };
