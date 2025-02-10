@@ -55,8 +55,7 @@ import {
 } from '@/constants/map';
 
 /**
- * Helper: Build an extruded polygon from a set of [lng, lat] coordinates.
- * Assumes a constant altitude for all vertices.
+ * Helper function to build an extruded polygon mesh from an array of [lng, lat] coordinates.
  */
 function buildExtrudedPolygon(
   overlay: ThreeJSOverlayView,
@@ -65,17 +64,17 @@ function buildExtrudedPolygon(
   if (!coords.length) return null;
   const shape = new THREE.Shape();
   coords.forEach(([lng, lat], idx) => {
-    // Convert lat/lng + a fixed altitude into a THREE.Vector3 using the overlay’s method.
+    // Convert lat/lng + fixed altitude to a THREE.Vector3 using the overlay’s method.
     const v3 = overlay.latLngAltitudeToVector3({
       lat,
       lng,
-      altitude: 200, // Adjust this altitude as needed
+      altitude: 200, // Adjust altitude as needed
     });
     if (idx === 0) shape.moveTo(v3.x, v3.y);
     else shape.lineTo(v3.x, v3.y);
   });
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-    depth: 500, // Adjust the extrusion depth as needed
+    depth: 500, // Adjust extrusion depth as needed
     bevelEnabled: false,
   };
   const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
@@ -112,7 +111,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
-  // UI sheet state
+  // Sheet state
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
@@ -183,7 +182,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // On mount: fetch stations, 3D data, and cars.
+  // On mount, fetch stations, 3D data, and cars.
   useEffect(() => {
     (async () => {
       try {
@@ -240,12 +239,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
           },
         },
       } as any);
-
-      // Set the overlay on the map and store its reference.
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // Handle WebGL context restoration: Create our camera and renderer.
+      // Setup onContextRestored to create our camera and renderer.
       overlay.onContextRestored = ({ gl }) => {
         console.log('Overlay onContextRestored: creating camera and renderer');
         if (!gl) return;
@@ -269,8 +266,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       };
 
       // Define the onDraw lifecycle method to update the scene each frame.
-      overlay.onDraw = ({ gl, transformer }) => {
-        const camera = overlay.getCamera();
+      overlay.onDraw = ({ gl, transformer, camera }) => {
         if (!camera || !rendererRef.current || !sceneRef.current) return;
 
         // Clear the scene by removing all children.
@@ -293,22 +289,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
           transparent: true,
         });
         const cube = new THREE.Mesh(cubeGeo, cubeMat);
-
-        // Use the transformer to convert a lat/lng/altitude to a THREE.Vector3.
         const matrix = transformer.fromLatLngAltitude({
           lat: DEFAULT_CENTER.lat,
           lng: DEFAULT_CENTER.lng,
           altitude: 100,
         });
-        // Apply the transformation matrix to the cube.
         cube.matrix.fromArray(matrix);
         cube.matrix.decompose(cube.position, cube.quaternion, cube.scale);
         sceneRef.current.add(cube);
         console.log('Dummy cube added at:', cube.position);
 
-        // 2) If an active station 3D feature is selected, add its extruded polygon.
+        // 2) If an active 3D station feature is selected, add its extruded polygon.
         if (activeStation3D) {
-          const coords = activeStation3D.geometry.coordinates[0]; // Expects an array of [lng, lat] pairs.
+          const coords = activeStation3D.geometry.coordinates[0];
           console.log('Active station 3D coords:', coords);
           const extrudedMesh = buildExtrudedPolygon(overlay, coords);
           if (extrudedMesh) {
@@ -317,7 +310,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           }
         }
 
-        // Render the scene using the overlay's camera.
+        // Render the scene using the provided camera.
         rendererRef.current.render(sceneRef.current, camera);
         rendererRef.current.resetState();
       };
@@ -344,7 +337,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Sheet and UI handlers.
+  // UI sheet handlers.
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
