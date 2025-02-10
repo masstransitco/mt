@@ -254,7 +254,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       });
       dummyCube.position.copy(dummyCubePos);
       // Scale dummy cube up.
-      dummyCube.scale.set(5, 5, 5);
+      dummyCube.scale.set(3, 3, 3);
       scene.add(dummyCube);
       console.log('Dummy cube added at world position:', dummyCube.position);
 
