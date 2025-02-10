@@ -205,7 +205,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Handle map load: create the ThreeJSOverlayView and set up lifecycle callbacks.
+  // Handle map load: set up the ThreeJSOverlayView.
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       console.log('handleMapLoad called');
@@ -383,7 +383,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
         animationFrameIdRef.current = undefined;
       }
       if (overlayRef.current) {
-        overlayRef.current.setMap(null);
+        // Cast to any to allow passing null.
+        (overlayRef.current as any).setMap(null);
         overlayRef.current = null;
       }
       if (rendererRef.current) {
