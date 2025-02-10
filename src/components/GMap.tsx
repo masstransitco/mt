@@ -44,7 +44,7 @@ import CarSheet from '@/components/booking/CarSheet';
 import StationDetail from './StationDetail';
 import { StationListItem } from './StationListItem';
 
-// Map config
+// Map configuration
 import {
   LIBRARIES,
   MAP_CONTAINER_STYLE,
@@ -61,7 +61,7 @@ interface GMapProps {
 type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 
 /**
- * A helper to build the extruded polygon for a 3D station.
+ * Helper: Build an extruded polygon from a set of [lng, lat] coordinates.
  */
 function buildExtrudedPolygon(
   overlay: ThreeJSOverlayView,
@@ -70,16 +70,17 @@ function buildExtrudedPolygon(
   if (!coords.length) return null;
   const shape = new THREE.Shape();
   coords.forEach(([lng, lat], idx) => {
+    // Convert the lat/lng with an altitude to a Vector3.
     const v3 = overlay.latLngAltitudeToVector3({
       lat,
       lng,
-      altitude: 200, // Adjust altitude as desired
+      altitude: 200, // Adjust altitude as needed
     });
     if (idx === 0) shape.moveTo(v3.x, v3.y);
     else shape.lineTo(v3.x, v3.y);
   });
   const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-    depth: 500, // Adjust depth for extrusion height
+    depth: 500, // Adjust the extrusion depth as needed
     bevelEnabled: false,
   };
   const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
@@ -94,24 +95,24 @@ function buildExtrudedPolygon(
 export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
 
-  // Refs for Three.js overlay, scene, camera, and renderer
+  // Refs for Three.js overlay, scene, camera, renderer
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
-  // Local state
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Active station detail
+  // Active station for details
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
+  // Matching 3D feature (if any)
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
 
-  // Which sheet is open? By default, CarSheet is open.
+  // Sheet state
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
@@ -127,10 +128,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
   const stations3D = useAppSelector(selectStations3D);
+
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load the Google Maps API (using beta version for ThreeJSOverlayView)
+  // Load the Google Maps API (beta version for ThreeJSOverlayView)
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -138,7 +140,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Once the API is loaded, set map options and marker icons
+  // Set map options and marker icons once the API is loaded.
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -146,7 +148,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Helper: Sort stations by distance from a point.
+  // Helper: Sort stations by distance from a given point.
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -167,7 +169,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Handle address search from StationSelector
+  // Handle address search from StationSelector.
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -181,7 +183,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Fetch stations, 3D data, and cars on mount.
+  // On mount, fetch stations, 3D data, and cars.
   useEffect(() => {
     const init = async () => {
       try {
@@ -205,7 +207,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     (map: google.maps.Map) => {
       mapRef.current = map;
 
-      // Fit bounds if there are station points
+      // Fit map bounds based on station locations.
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -215,64 +217,95 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create the Three.js scene
+      // Create a new Three.js scene.
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
       // Create the ThreeJSOverlayView.
-      // Note: We cast the options to "any" to allow the custom "three" property.
+      // We pass a custom options object that includes a 'three' property.
       const overlay = new ThreeJSOverlayView({
         map,
         anchor: userLocation
           ? new google.maps.LatLng(userLocation.lat, userLocation.lng)
           : DEFAULT_CENTER,
-        three: { camera: { fov: 45, near: 1, far: 2000 } },
-        // The update callback is called on every frame.
+        three: {
+          camera: { fov: 45, near: 1, far: 2000 },
+          scene: { background: null },
+          renderer: { alpha: true, antialias: true }
+        },
+        // The update callback is called each frame.
         update: () => {
-          // Clear the scene (remove all children)
+          // Clear the scene by removing all children.
           while (scene.children.length > 0) {
             scene.remove(scene.children[0]);
           }
 
-          // 1) Add a dummy cube for debugging.
-          const cubeGeo = new THREE.BoxGeometry(20, 20, 20);
-          const cubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+          // Re-add lights
+          const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+          scene.add(ambientLight);
+          const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+          directionalLight.position.set(0, 1, 1);
+          scene.add(directionalLight);
+
+          // 1) Add a dummy cube (for debugging)
+          const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
+          const cubeMat = new THREE.MeshPhongMaterial({ color: 0x00ff00, opacity: 0.8, transparent: true });
           const cube = new THREE.Mesh(cubeGeo, cubeMat);
-          const dummyVec = overlay.latLngAltitudeToVector3({
+          const cubePos = overlay.latLngAltitudeToVector3({
             lat: DEFAULT_CENTER.lat,
             lng: DEFAULT_CENTER.lng,
             altitude: 200,
           });
-          cube.position.set(dummyVec.x, dummyVec.y, dummyVec.z);
+          cube.position.copy(cubePos);
           scene.add(cube);
           console.log('Dummy cube added at:', cube.position);
 
-          // 2) If there is an active 3D station, build and add its extruded polygon.
+          // 2) If an active station 3D feature is selected, add its extruded polygon.
           if (activeStation3D) {
-            const coords = activeStation3D.geometry.coordinates[0]; // Assumes [ [lng, lat], ... ]
-            console.log('Active 3D polygon coordinates:', coords);
+            const coords = activeStation3D.geometry.coordinates[0]; // expects [[lng, lat], ...]
+            console.log('Active station 3D coords:', coords);
             const extrudedMesh = buildExtrudedPolygon(overlay, coords);
             if (extrudedMesh) {
               scene.add(extrudedMesh);
-              // Add a directional light for the extrusion.
-              const light = new THREE.DirectionalLight(0xffffff, 1);
-              light.position.set(0, 1000, 1000);
-              scene.add(light);
+              console.log('Extruded polygon added');
             }
           }
         },
       } as any);
 
+      // Set the overlay on the map and store its reference.
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // In case you want continuous animation, the update callback (set in overlay options)
-      // will be called on each frame when overlay.requestRedraw() is invoked.
+      // Setup the context restoration to create our camera and renderer.
+      overlay.onContextRestored = ({ gl }) => {
+        console.log('Overlay onContextRestored: creating camera and renderer');
+        if (!gl) return;
+        cameraRef.current = new THREE.PerspectiveCamera(45, gl.canvas.width / gl.canvas.height, 1, 3000);
+        cameraRef.current.matrixAutoUpdate = false;
+        const renderer = new THREE.WebGLRenderer({
+          canvas: gl.canvas as HTMLCanvasElement,
+          context: gl,
+          ...gl.getContextAttributes(),
+        });
+        renderer.autoClear = false;
+        rendererRef.current = renderer;
+      };
+
+      // Start the overlay animation loop.
+      overlay.onAdd = () => {
+        console.log('Overlay onAdd called, starting animation loop');
+        function animate() {
+          overlay.requestRedraw();
+          requestAnimationFrame(animate);
+        }
+        animate();
+      };
     },
     [stations, userLocation, activeStation3D]
   );
 
-  // Hide the overlay spinner after data loads.
+  // Hide the overlay spinner when the API and data are loaded.
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -281,7 +314,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Sheet toggle handlers
+  // Sheet and UI handlers
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
@@ -467,10 +500,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                     key={station.id}
                     index={idx}
                     style={{}}
-                    data={{
-                      items: sortedStations,
-                      onStationSelected: () => handleStationSelectedFromList(station),
-                    }}
+                    data={{ items: sortedStations, onStationSelected: () => handleStationSelectedFromList(station) }}
                   />
                 ))}
               </div>
