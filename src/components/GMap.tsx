@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useCallback, useRef, useState } from 'react';
@@ -7,6 +6,8 @@ import { toast } from 'react-hot-toast';
 import { Car, Locate } from 'lucide-react';
 import * as THREE from 'three';
 import { ThreeJSOverlayView } from '@googlemaps/three';
+// (Optional) If you wish to load GLTF models as in the official sample:
+// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
@@ -28,10 +29,7 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
 } from '@/store/userSlice';
-import {
-  toggleSheet,
-  selectIsSheetMinimized,
-} from '@/store/uiSlice';
+import { toggleSheet, selectIsSheetMinimized } from '@/store/uiSlice';
 import { selectBookingStep, advanceBookingStep } from '@/store/bookingSlice';
 
 // 3D data
@@ -97,9 +95,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const animationFrameIdRef = useRef<number>();
 
   // Local state.
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -220,145 +215,51 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       // Create a new Three.js scene.
       const scene = new THREE.Scene();
+      scene.background = null;
       sceneRef.current = scene;
 
-      // Create the ThreeJSOverlayView with proper options.
+      // Add lights following the official sample.
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.25);
+      directionalLight.position.set(0, 10, 50);
+      scene.add(directionalLight);
+
+      // Add a dummy cube to the scene.
+      const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
+      const cubeMat = new THREE.MeshPhongMaterial({
+        color: 0x00ff00,
+        opacity: 0.8,
+        transparent: true,
+      });
+      const dummyCube = new THREE.Mesh(cubeGeo, cubeMat);
+      // Place the cube at (0,0,0) relative to the overlay’s anchor.
+      dummyCube.position.set(0, 0, 0);
+      scene.add(dummyCube);
+      console.log('Dummy cube added to scene');
+
+      // If an active station 3D feature exists, add its extruded polygon.
+      // (Since the helper requires an overlay reference, we add it right after creating the overlay.)
+      // We'll update the scene later if activeStation3D changes.
+      
+      // Determine the anchor point.
+      const anchor = userLocation
+        ? { lat: userLocation.lat, lng: userLocation.lng, altitude: 100 }
+        : { ...DEFAULT_CENTER, altitude: 100 };
+
+      // Create the ThreeJSOverlayView following the official pattern.
       const overlay = new ThreeJSOverlayView({
         map,
-        anchor: userLocation
-          ? new google.maps.LatLng(userLocation.lat, userLocation.lng)
-          : DEFAULT_CENTER,
-        three: {
-          camera: { fov: 45, near: 1, far: 2000 },
-          scene: { background: null },
-          renderer: { alpha: true, antialias: true, logarithmicDepthBuffer: true },
-          contextAttributes: {
-            antialias: true,
-            preserveDrawingBuffer: false,
-            alpha: true,
-            stencil: true,
-            depth: true,
-            powerPreference: 'high-performance',
-            premultipliedAlpha: false,
-            xrCompatible: false,
-          },
-        },
-      } as any);
-      overlay.setMap(map);
+        scene,
+        anchor,
+        THREE,
+      });
       overlayRef.current = overlay;
+      console.log('ThreeJSOverlayView created');
 
-      // onContextRestored: create our own camera and renderer.
-      overlay.onContextRestored = ({ gl }) => {
-        console.log('Overlay onContextRestored fired', {
-          gl: gl ? 'WebGL context ready' : 'No WebGL context',
-          canvas: gl?.canvas ? 'Canvas ready' : 'No canvas',
-        });
-        if (!gl) return;
-        cameraRef.current = new THREE.PerspectiveCamera(
-          45,
-          gl.canvas.width / gl.canvas.height,
-          1,
-          3000
-        );
-        cameraRef.current.matrixAutoUpdate = false;
-        const renderer = new THREE.WebGLRenderer({
-          canvas: gl.canvas as HTMLCanvasElement,
-          context: gl,
-          ...gl.getContextAttributes(),
-        });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.autoClear = false;
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        rendererRef.current = renderer;
-        console.log('Renderer and camera created:', {
-          camera: cameraRef.current,
-          renderer: rendererRef.current,
-        });
-      };
-
-      // onDraw: update and render the scene.
-      overlay.onDraw = ({ gl, transformer }) => {
-        console.log('Overlay onDraw fired', {
-          sceneChildren: sceneRef.current?.children.length || 0,
-          cameraReady: !!cameraRef.current,
-          rendererReady: !!rendererRef.current,
-        });
-        const camera = cameraRef.current;
-        const renderer = rendererRef.current;
-        const scene = sceneRef.current;
-        if (!camera || !renderer || !scene) {
-          console.warn('Missing required Three.js components');
-          return;
-        }
-
-        // Clear the scene.
-        while (scene.children.length > 0) {
-          scene.remove(scene.children[0]);
-        }
-
-        // Re-add ambient and directional lights.
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
-        directionalLight.position.set(0, 1, 1);
-        scene.add(directionalLight);
-
-        // 1) Add a dummy cube.
-        const cubeGeo = new THREE.BoxGeometry(50, 50, 50);
-        const cubeMat = new THREE.MeshPhongMaterial({
-          color: 0x00ff00,
-          opacity: 0.8,
-          transparent: true,
-        });
-        const cube = new THREE.Mesh(cubeGeo, cubeMat);
-        const matrix = transformer.fromLatLngAltitude({
-          lat: DEFAULT_CENTER.lat,
-          lng: DEFAULT_CENTER.lng,
-          altitude: 100,
-        });
-        cube.matrix.fromArray(matrix);
-        cube.matrix.decompose(cube.position, cube.quaternion, cube.scale);
-        scene.add(cube);
-        console.log('Dummy cube added at:', cube.position.toArray());
-
-        // 2) If an active station 3D feature is selected, add its extruded polygon.
-        if (activeStation3D) {
-          const coords = activeStation3D.geometry.coordinates[0];
-          console.log('Active station 3D coords:', coords);
-          const extrudedMesh = buildExtrudedPolygon(overlay, coords);
-          if (extrudedMesh) {
-            scene.add(extrudedMesh);
-            console.log('Extruded polygon added');
-          }
-        }
-
-        // Update the camera matrix using the map's current center.
-        const center = map.getCenter();
-        const latLngAlt = {
-          lat: center ? center.lat() : 0,
-          lng: center ? center.lng() : 0,
-          altitude: 200,
-        };
-        const matArr = transformer.fromLatLngAltitude(latLngAlt);
-        camera.matrix.fromArray(matArr);
-        camera.updateMatrixWorld(true);
-
-        renderer.render(scene, camera);
-        renderer.resetState();
-        console.log('Scene rendered');
-      };
-
-      // onAdd: start the animation loop.
-      overlay.onAdd = () => {
-        console.log('Overlay onAdd called, starting animation loop');
-        const animate = () => {
-          console.log('Animation frame requested');
-          overlay.requestRedraw();
-          animationFrameIdRef.current = requestAnimationFrame(animate);
-        };
-        animate();
-      };
+      // (Optional) Trigger a redraw whenever needed.
+      // For example, if activeStation3D becomes available later, you could update the scene and then call:
+      // overlay.requestRedraw();
     },
     [stations, userLocation, activeStation3D]
   );
@@ -369,27 +270,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Cleanup effect for Three.js resources and animation loop.
+  // Cleanup effect.
   useEffect(() => {
     return () => {
       console.log('Cleaning up ThreeJS resources');
-      if (animationFrameIdRef.current) {
-        console.log('Cancelling animation frame', animationFrameIdRef.current);
-        cancelAnimationFrame(animationFrameIdRef.current);
-        animationFrameIdRef.current = undefined;
-      }
       if (overlayRef.current) {
         (overlayRef.current as any).setMap(null);
         overlayRef.current = null;
       }
-      if (rendererRef.current) {
-        console.log('Disposing renderer');
-        rendererRef.current.dispose();
-        rendererRef.current.forceContextLoss();
-        rendererRef.current = null;
-      }
       if (sceneRef.current) {
-        console.log('Clearing scene');
         sceneRef.current.traverse((object) => {
           if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
             object.geometry.dispose();
@@ -403,7 +292,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         sceneRef.current.clear();
         sceneRef.current = null;
       }
-      cameraRef.current = null;
     };
   }, []);
 
