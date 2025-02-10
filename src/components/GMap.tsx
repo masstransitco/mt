@@ -101,7 +101,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Load the Google Maps API (using the beta version to support ThreeJSOverlayView)
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleApiKey,
+    googleMapsApiKey: googleApiKey,
     version: 'beta',
     libraries: LIBRARIES,
   });
