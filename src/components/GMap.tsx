@@ -195,6 +195,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
+      // OPTIONAL: Force a 3D view (adjust these values as needed)
+      map.setMapTypeId('satellite');
+      map.setTilt(45);
+      map.setHeading(0);
+      map.setZoom(18);
+
       // Create native WebGLOverlayView
       const overlay = new google.maps.WebGLOverlayView();
       overlayRef.current = overlay;
@@ -206,6 +212,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       overlay.onAdd = () => {
         scene = new THREE.Scene();
         sceneRef.current = scene;
+        console.log('Overlay added: scene created');
       };
 
       overlay.onContextRestored = ({ gl }) => {
@@ -215,30 +222,54 @@ export default function GMap({ googleApiKey }: GMapProps) {
         });
         renderer.autoClear = false;
         rendererRef.current = renderer;
-
         camera = new THREE.PerspectiveCamera();
+        console.log('WebGL context restored, renderer and camera initialized');
       };
 
       overlay.onDraw = ({ gl, transformer }) => {
         if (!sceneRef.current || !rendererRef.current) return;
 
-        // Cast overlay + optional chain => bypass TS for getCamera()
-        const googleCam = (overlay as any).getCamera?.();
-        if (!googleCam) return;
+        // Debug log: indicate onDraw is called
+        console.log('Overlay onDraw called');
 
-        // Clear or re-init the scene each frame
+        // Use "as any" to bypass TS for getCamera()
+        const googleCam = (overlay as any).getCamera?.();
+        if (!googleCam) {
+          console.warn('getCamera() not available');
+          return;
+        }
+
+        // Log the active station and polygon if available
+        if (activeStation3D) {
+          console.log('Active 3D polygon coordinates:', activeStation3D.geometry.coordinates[0]);
+        } else {
+          console.log('No active 3D polygon selected');
+        }
+
+        // Clear the scene
         sceneRef.current.clear();
+
+        // Add a dummy cube for debugging – always add it
+        const dummyPosition = transformer.fromLatLngAltitude({
+          lat: DEFAULT_CENTER.lat,
+          lng: DEFAULT_CENTER.lng,
+          altitude: 200
+        }) as Float64Array;
+        const [dx, dy, dz] = dummyPosition;
+        const dummyGeo = new THREE.BoxGeometry(20, 20, 20);
+        const dummyMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const dummyCube = new THREE.Mesh(dummyGeo, dummyMat);
+        dummyCube.position.set(dx, dy, dz);
+        sceneRef.current.add(dummyCube);
+        console.log('Dummy cube added at:', { x: dx, y: dy, z: dz });
 
         // If a station is selected, extrude its 3D polygon
         if (activeStation3D) {
-          const polygonCoords = activeStation3D.geometry.coordinates[0]; 
-          // e.g. [[lng, lat], [lng, lat], ...]
-
+          const polygonCoords = activeStation3D.geometry.coordinates[0]; // e.g. [[lng, lat], ...]
           const shape = new THREE.Shape();
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
-            // fromLatLngAltitude returns e.g. Float64Array [x, y, z]
             const coords = transformer.fromLatLngAltitude({ lat, lng, altitude: 200 }) as Float64Array;
-            const [x, y] = coords; 
+            const [x, y] = coords;
             if (idx === 0) {
               shape.moveTo(x, y);
             } else {
@@ -246,7 +277,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             }
           });
 
-          // Build extrude geometry
+          // Build extrude geometry (adjust depth as needed)
           const extrudeSettings: THREE.ExtrudeGeometryOptions = {
             depth: 500,
             bevelEnabled: false,
@@ -258,11 +289,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
             transparent: true,
           });
           const mesh = new THREE.Mesh(geom, mat);
-
           extrudedMeshRef.current = mesh;
           sceneRef.current.add(mesh);
-
-          // Add directional light
+          console.log('Extruded polygon added');
+          
+          // Add directional light for the extrusion
           const light = new THREE.DirectionalLight(0xffffff, 1);
           light.position.set(0, 1000, 1000);
           sceneRef.current.add(light);
@@ -270,8 +301,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
         // Render the scene
         rendererRef.current.render(sceneRef.current, googleCam);
-
-        // Cast gl => any to call endFrameEXP()
+        // Cast gl to any so TS does not complain about endFrameEXP()
         (gl as any).endFrameEXP();
       };
 
@@ -341,7 +371,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const sorted = sortStationsByDistanceToPoint(loc, stations);
         setSearchLocation(loc);
         setSortedStations(sorted);
-
         setActiveStation(null);
         setActiveStation3D(null);
         openNewSheet('list');
@@ -383,11 +412,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
    */
   const handleStationClick = (station: StationFeature) => {
     setActiveStation(station);
-
     const objectId = station.properties.ObjectId;
     const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
-
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
@@ -404,11 +431,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
    */
   const handleStationSelectedFromList = (station: StationFeature) => {
     setActiveStation(station);
-
     const objectId = station.properties.ObjectId;
     const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
-
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
@@ -470,7 +495,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   clickable={false}
                 />
               )}
-
               {(searchLocation ? sortedStations : stations).map((station) => {
                 const [lng, lat] = station.geometry.coordinates;
                 return (
@@ -482,7 +506,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   />
                 );
               })}
-
               {cars.map((car) => (
                 <Marker
                   key={car.id}
@@ -501,34 +524,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
           <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
             <button
               onClick={handleLocateMe}
-              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
-                         flex items-center justify-center text-foreground shadow"
+              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
             >
               <Locate className="w-5 h-5" />
             </button>
-
             <button
               onClick={handleCarToggle}
-              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80
-                         flex items-center justify-center text-foreground shadow"
+              className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
             >
               <Car className="w-5 h-5" />
             </button>
           </div>
 
           {/* CarSheet */}
-          {openSheet === 'car' && (
-            <CarSheet isOpen onToggle={handleCarToggle} />
-          )}
+          {openSheet === 'car' && <CarSheet isOpen onToggle={handleCarToggle} />}
 
           {/* Nearby Stations List */}
           {openSheet === 'list' && (
-            <Sheet
-              isOpen
-              onToggle={closeCurrentSheet}
-              title="Nearby Stations"
-              count={sortedStations.length}
-            >
+            <Sheet isOpen onToggle={closeCurrentSheet} title="Nearby Stations" count={sortedStations.length}>
               <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
                 {sortedStations.map((station, idx) => (
                   <StationListItem
@@ -547,12 +560,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Station Detail */}
           {openSheet === 'detail' && activeStation && (
-            <Sheet
-              isOpen
-              onToggle={closeCurrentSheet}
-              title="Station Details"
-              count={(searchLocation ? sortedStations : stations).length}
-            >
+            <Sheet isOpen onToggle={closeCurrentSheet} title="Station Details" count={(searchLocation ? sortedStations : stations).length}>
               <StationDetail
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={activeStation}
