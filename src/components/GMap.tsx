@@ -68,6 +68,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
+  // We store our own camera in a ref
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
   // Basic local states
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
@@ -75,7 +78,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Active station for StationDetail
+  // Active station
   const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
   // Matching 3D feature
   const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
@@ -97,7 +100,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const bookingStep = useAppSelector(selectBookingStep);
   const stations3D = useAppSelector(selectStations3D);
 
-  // Station styling
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
@@ -117,9 +119,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  /**
-   * Sort stations by distance from a point
-   */
+  // Sort stations by distance
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -140,9 +140,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  /**
-   * Handle address search from StationSelector
-   */
+  // StationSelector => address search
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -153,16 +151,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setSearchLocation(location);
       setSortedStations(sorted);
 
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
+      if (isSheetMinimized) dispatch(toggleSheet());
     },
     [stations, isSheetMinimized, sortStationsByDistanceToPoint, dispatch]
   );
 
-  /**
-   * On mount => fetch stations, 3D, cars
-   */
+  // On mount => fetch stations, 3D data, cars
   useEffect(() => {
     (async () => {
       try {
@@ -179,13 +173,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch]);
 
   /**
-   * Handle map load => set up the ThreeJSOverlayView using lifecycle
+   * Handle map load => set up overlay
    */
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
 
-      // Fit bounds if we have stations
+      // Fit bounds
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -195,29 +189,33 @@ export default function GMap({ googleApiKey }: GMapProps) {
         map.fitBounds(bounds, 50);
       }
 
-      // Create scene
+      // Create the scene
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
-      // Create overlay
+      // Create the overlay
       const overlay = new ThreeJSOverlayView({});
       overlay.setMap(map);
       overlayRef.current = overlay;
 
-      // onAdd => start an animation loop
+      // onAdd => start anim loop
       overlay.onAdd = () => {
         function animate() {
-          // Force a redraw each frame => onDraw gets called
           overlay.requestRedraw();
           requestAnimationFrame(animate);
         }
         animate();
       };
 
-      // onContextRestored => create the WebGLRenderer
+      // onContextRestored => create our own camera + renderer
       overlay.onContextRestored = ({ gl }) => {
         if (!gl) return;
 
+        // Create a perspective camera
+        cameraRef.current = new THREE.PerspectiveCamera(45, gl.canvas.width / gl.canvas.height, 1, 3000);
+        cameraRef.current.matrixAutoUpdate = false;
+
+        // Create renderer
         const renderer = new THREE.WebGLRenderer({
           canvas: gl.canvas as HTMLCanvasElement,
           context: gl,
@@ -227,38 +225,34 @@ export default function GMap({ googleApiKey }: GMapProps) {
         rendererRef.current = renderer;
       };
 
-      // onDraw => build scene objects each frame
-      overlay.onDraw = ({ gl }) => {
-        const renderer = rendererRef.current;
+      // onDraw => re-build dummy + extrusions each frame
+      overlay.onDraw = ({ gl, transformer }) => {
         const scene = sceneRef.current;
-        if (!renderer || !scene) return;
-
-        // Access the overlay's camera: overlay.view.camera
-        const camera = overlay.view?.camera as THREE.Camera;
-        if (!camera) return;
+        const renderer = rendererRef.current;
+        const camera = cameraRef.current;
+        if (!scene || !renderer || !camera) return;
 
         // Clear
         scene.clear();
 
-        // 1) Dummy Cube
-        const dummyGeo = new THREE.BoxGeometry(20, 20, 20);
-        const dummyMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const dummyCube = new THREE.Mesh(dummyGeo, dummyMat);
+        // 1) Dummy cube
+        const cubeGeo = new THREE.BoxGeometry(20, 20, 20);
+        const cubeMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const cube = new THREE.Mesh(cubeGeo, cubeMat);
 
-        // Convert lat/lng => vector
-        const centerVector = overlay.latLngAltitudeToVector3({
+        // Position it via latLngAltitudeToVector3
+        const centerVec = overlay.latLngAltitudeToVector3({
           lat: DEFAULT_CENTER.lat,
           lng: DEFAULT_CENTER.lng,
           altitude: 200,
         });
-        dummyCube.position.set(centerVector.x, centerVector.y, centerVector.z);
-        scene.add(dummyCube);
+        cube.position.set(centerVec.x, centerVec.y, centerVec.z);
+        scene.add(cube);
 
         // 2) If active station => extrude
         if (activeStation3D) {
           const polygonCoords = activeStation3D.geometry.coordinates[0];
           const shape = new THREE.Shape();
-
           polygonCoords.forEach(([lng, lat]: [number, number], idx: number) => {
             const v3 = overlay.latLngAltitudeToVector3({
               lat,
@@ -268,7 +262,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             if (idx === 0) shape.moveTo(v3.x, v3.y);
             else shape.lineTo(v3.x, v3.y);
           });
-
           const extrudeSettings: THREE.ExtrudeGeometryOptions = {
             depth: 500,
             bevelEnabled: false,
@@ -282,11 +275,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const mesh = new THREE.Mesh(geom, mat);
           scene.add(mesh);
 
-          // Add a directional light
+          // Add directional light
           const light = new THREE.DirectionalLight(0xffffff, 1);
           light.position.set(0, 1000, 1000);
           scene.add(light);
         }
+
+        // 3) Update camera matrix from transformer
+        // Google provides a transform to match map tilt/heading
+        const latLngAlt = { lat: map.getCenter()?.lat() || 0, lng: map.getCenter()?.lng() || 0, altitude: 1 };
+        const matrixArray = transformer.fromLatLngAltitude(latLngAlt);
+        camera.matrix.fromArray(matrixArray);
+        camera.updateMatrixWorld(true);
 
         // Render
         renderer.render(scene, camera);
@@ -296,9 +296,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [stations, activeStation3D]
   );
 
-  /**
-   * Hide overlay once data loads
-   */
+  // Hide overlay after data loads
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -307,12 +305,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const hasError = stationsError || carsError || loadError;
 
-  // Toggle sheet from Redux
+  // Toggle sheet
   const handleSheetToggle = useCallback(() => {
     dispatch(toggleSheet());
   }, [dispatch]);
 
-  // Helper: open a new sheet => track old
+  // Helper: open new sheet
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
@@ -372,7 +370,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Station marker icon
+  // Decide icon for station
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
     if (station.id === departureStationId) return markerIcons.departureStation;
@@ -388,9 +386,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
     setActiveStation3D(match);
 
-    const step = bookingStep < 3 ? 'user/selectDepartureStation' : 'user/selectArrivalStation';
-    dispatch({ type: step, payload: station.id });
-
+    if (bookingStep < 3) {
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+    } else {
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+    }
     openNewSheet('detail');
     if (isSheetMinimized) {
       dispatch(toggleSheet());
@@ -461,7 +461,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   clickable={false}
                 />
               )}
-
               {(searchLocation ? sortedStations : stations).map((station) => {
                 const [lng, lat] = station.geometry.coordinates;
                 return (
@@ -473,7 +472,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   />
                 );
               })}
-
               {cars.map((car) => (
                 <Marker
                   key={car.id}
@@ -508,9 +506,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </div>
 
           {/* CarSheet */}
-          {openSheet === 'car' && (
-            <CarSheet isOpen onToggle={handleCarToggle} />
-          )}
+          {openSheet === 'car' && <CarSheet isOpen onToggle={handleCarToggle} />}
 
           {/* Nearby Stations List */}
           {openSheet === 'list' && (
