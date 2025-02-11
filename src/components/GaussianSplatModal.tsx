@@ -1,209 +1,149 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { Viewer, PlyLoader, SplatLoader } from 'gle-gaussian-splat-3d';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-import { SplatLoader } from '@/lib/splat';
-
-// Firebase storage URL for the splat file
-const FIREBASE_SPLAT_URL = 'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
 
 interface GaussianSplatModalProps {
+  isOpen: boolean;
   onClose: () => void;
 }
 
-const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ onClose }) => {
+const SPLAT_FILE_URL = 'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
+
+const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
+  isOpen,
+  onClose,
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const controlsRef = useRef<OrbitControls | null>(null);
-  const frameIdRef = useRef<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const viewerRef = useRef<Viewer | null>(null);
 
   useEffect(() => {
-    let mounted = true;
+    if (isOpen && containerRef.current && !viewerRef.current) {
+      const containerEl = containerRef.current;
 
-    const init = () => {
-      if (!containerRef.current) return;
+      const initViewer = async () => {
+        try {
+          // Initialize renderer
+          const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: 'high-performance',
+          });
 
-      // Initialize Scene
-      const scene = new THREE.Scene();
-      sceneRef.current = scene;
-      scene.background = new THREE.Color(0x000000);
+          // Setup camera
+          const camera = new THREE.PerspectiveCamera(
+            65,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+          );
+          camera.position.set(0, 1.5, 4);
+          camera.lookAt(0, 0, 0);
 
-      // Initialize Camera
-      const camera = new THREE.PerspectiveCamera(
-        75,
-        containerRef.current.clientWidth / containerRef.current.clientHeight,
-        0.1,
-        1000
-      );
-      cameraRef.current = camera;
-      camera.position.z = 5;
+          // Create viewer instance
+          const viewer = new Viewer({
+            renderer,
+            camera,
+            gpuAcceleratedSort: true,
+            useBuiltInControls: true,
+            selfDrivenMode: false,
+            backgroundColor: new THREE.Color(0x151515),
+            cameraUp: [0, 1, 0], // Y-up
+          });
+          viewerRef.current = viewer;
 
-      // Initialize Renderer
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      rendererRef.current = renderer;
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      containerRef.current.appendChild(renderer.domElement);
+          containerEl.appendChild(renderer.domElement);
 
-      // Initialize Controls
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controlsRef.current = controls;
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.screenSpacePanning = false;
-      controls.maxPolarAngle = Math.PI / 2;
-    };
-
-    const loadSplat = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // Create a new SplatLoader instance
-        const splatLoader = new SplatLoader();
-        
-        // Fetch the splat file from Firebase Storage
-        const response = await fetch(FIREBASE_SPLAT_URL);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch splat file: ${response.statusText}`);
-        }
-        
-        const splatBuffer = await response.arrayBuffer();
-        
-        // Load the splat data
-        await splatLoader.load(splatBuffer);
-        
-        // Get the splat scene
-        const splatScene = splatLoader.getSplatScene();
-        
-        if (mounted && sceneRef.current && splatScene) {
-          // Add the splat scene to the Three.js scene
-          sceneRef.current.add(splatScene);
-          
-          // Center the camera on the splat scene
-          const box = new THREE.Box3().setFromObject(splatScene);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          
-          if (cameraRef.current && controlsRef.current) {
-            const maxDim = Math.max(size.x, size.y, size.z);
-            const fov = cameraRef.current.fov * (Math.PI / 180);
-            const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2) / 2);
-            
-            cameraRef.current.position.copy(center);
-            cameraRef.current.position.z += cameraDistance;
-            cameraRef.current.lookAt(center);
-            
-            controlsRef.current.target.copy(center);
-            controlsRef.current.update();
-          }
-        }
-        
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Error loading splat:', err);
-        if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load splat file');
-          setIsLoading(false);
-        }
-      }
-    };
-
-    const animate = () => {
-      frameIdRef.current = requestAnimationFrame(animate);
-
-      if (controlsRef.current) {
-        controlsRef.current.update();
-      }
-
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
-      }
-    };
-
-    const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
-
-      const width = containerRef.current.clientWidth;
-      const height = containerRef.current.clientHeight;
-
-      cameraRef.current.aspect = width / height;
-      cameraRef.current.updateProjectionMatrix();
-
-      rendererRef.current.setSize(width, height);
-    };
-
-    init();
-    loadSplat();
-    animate();
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      mounted = false;
-      window.removeEventListener('resize', handleResize);
-      
-      if (frameIdRef.current) {
-        cancelAnimationFrame(frameIdRef.current);
-      }
-
-      if (rendererRef.current && containerRef.current) {
-        containerRef.current.removeChild(rendererRef.current.domElement);
-        rendererRef.current.dispose();
-      }
-
-      if (controlsRef.current) {
-        controlsRef.current.dispose();
-      }
-
-      // Clean up any materials, geometries, or textures
-      if (sceneRef.current) {
-        sceneRef.current.traverse((object) => {
-          if (object instanceof THREE.Mesh) {
-            if (object.geometry) {
-              object.geometry.dispose();
-            }
-            if (object.material) {
-              if (Array.isArray(object.material)) {
-                object.material.forEach((material) => material.dispose());
-              } else {
-                object.material.dispose();
+          // Load the PLY file
+          try {
+            const splatBuffer = await PlyLoader.loadFromURL(
+              SPLAT_FILE_URL,
+              12, // positionQuantizationBits
+              10, // scaleQuantizationBits
+              8,  // colorQuantizationBits
+              0,  // normalQuantizationBits
+              0,  // boundingBox (false)
+              0,  // autoScale (false)
+              0,  // reorder (false)
+              (progress: number) => {
+                console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
+              },
+              () => {
+                console.log('PLY file loaded successfully!');
+              },
+              (error: any) => {
+                console.error('Error loading PLY file:', error);
+                throw error;
               }
-            }
+            );
+
+            const splatLoader = new SplatLoader();
+            await splatLoader.loadFromBuffer(splatBuffer);
+            const splatScene = splatLoader.getSplatScene();
+
+            viewer.addSplatScene(splatScene, {
+              splatAlphaRemovalThreshold: 7,
+              showLoadingSpinner: true,
+              position: [0, -0.5, 0],
+              rotation: [-Math.PI / 2, 0, 0],
+              scale: [1, 1, 1],
+            });
+
+            // Add axes helper for debugging
+            viewer.scene.add(new THREE.AxesHelper(2));
+            viewer.start();
+
+          } catch (error) {
+            console.error('Error loading splat file:', error);
+            onClose();
           }
-        });
+
+          // Handle window resizing
+          const onResize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+          };
+          
+          window.addEventListener('resize', onResize);
+          onResize(); // Initial resize
+
+          return () => {
+            window.removeEventListener('resize', onResize);
+          };
+        } catch (error) {
+          console.error('Failed to initialize viewer:', error);
+          onClose();
+        }
+      };
+
+      initViewer();
+    }
+
+    // Cleanup on unmount or modal close
+    return () => {
+      if (viewerRef.current) {
+        viewerRef.current.dispose();
+        viewerRef.current = null;
       }
     };
-  }, []); // No url dependency anymore since we're using constant
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-      <div className="relative w-full h-full">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-white text-lg">Loading splat...</div>
-          </div>
-        )}
-        
-        {error && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-red-500 text-lg bg-black bg-opacity-75 p-4 rounded">
-              Error: {error}
-            </div>
-          </div>
-        )}
-        
-        <div ref={containerRef} className="w-full h-full" />
-        
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-85 flex justify-center items-center">
+      <div className="relative w-[95vw] h-[95vh] bg-black rounded-xl overflow-hidden">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-white hover:text-gray-300 bg-black bg-opacity-50 rounded"
+          className="absolute top-4 right-4 w-9 h-9 bg-white bg-opacity-15 hover:bg-opacity-25 
+                   text-white rounded-full cursor-pointer z-10 transition-colors duration-200"
+          aria-label="Close"
         >
-          Close
+          ×
         </button>
+        <div
+          ref={containerRef}
+          className="w-full h-full touch-none"
+        />
       </div>
     </div>
   );
