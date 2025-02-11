@@ -10,7 +10,7 @@ interface GaussianSplatModalProps {
 
 // Directly use your Firebase URL here
 const SPLAT_FILE_URL =
-  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=cc4b8455-d5ee-49a0-81c7-5f2bb0081119';
+  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.xyz?alt=media&token=8a0df3f2-7009-4557-86ad-0feb84421d92';
 
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
   isOpen,
