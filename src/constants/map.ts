@@ -142,7 +142,7 @@ export const MAP_STYLES = [
 // Create map options with a dark theme
 export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
-  zoomControl: true,
+  zoomControl: false, // Changed to false to hide zoom controls
   gestureHandling: 'greedy',
   backgroundColor: '#212121',
   maxZoom: 18,
@@ -154,6 +154,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
   },
+  tilt: 45 // Added tilt option
 });
 
 // Marker icons factory - implementing the dark-themed marker plan
