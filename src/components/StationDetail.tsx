@@ -8,13 +8,11 @@ import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
   selectBookingStep,
   advanceBookingStep,
-  selectRoute, // <-- import route selector
+  selectRoute,
 } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-  clearDepartureStation,
-  clearArrivalStation,
 } from '@/store/userSlice';
 import { StationFeature } from '@/store/stationsSlice';
 
@@ -26,11 +24,6 @@ interface StationDetailProps {
    * after confirming a departure station, pass this callback.
    */
   onConfirmDeparture?: () => void;
-  /**
-   * If the parent wants to perform additional logic
-   * after clearing a station, pass this callback.
-   */
-  onClear?: () => void;
 }
 
 /**
@@ -41,16 +34,16 @@ interface StationDetailProps {
  *  4 = selected_arrival_station
  */
 export const StationDetail = memo<StationDetailProps>((props) => {
-  const { stations, activeStation, onConfirmDeparture, onClear } = props;
+  const { stations, activeStation, onConfirmDeparture } = props;
 
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
-  const route = useAppSelector(selectRoute); // <-- route from Redux
+  const route = useAppSelector(selectRoute);
 
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // steps 1 or 2 => departure flow, steps 3 or 4 => arrival flow
+  // If step <= 2 => departure flow, else arrival flow
   const isDepartureFlow = step <= 2;
 
   // If no station is active, show instructions
@@ -76,10 +69,10 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     );
   }
 
+  // Choose icon based on flow
   const Icon = isDepartureFlow ? MapPin : Navigation;
 
-  // Extract total route distance & duration if available
-  // (Remember: route.distance is in meters, duration in seconds)
+  // If a route object is available, show distance/time
   let routeDistanceKm: string | null = null;
   let routeDurationMin: string | null = null;
   if (route && departureId && arrivalId) {
@@ -87,58 +80,43 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     routeDurationMin = Math.round(route.duration / 60).toString();
   }
 
-  // Clear station
-  const handleClear = () => {
-    if (isDepartureFlow) {
-      dispatch(clearDepartureStation());
-      // Revert to step=1 (selecting_departure_station)
-      dispatch(advanceBookingStep(1));
-      toast.success('Departure station cleared');
-    } else {
-      dispatch(clearArrivalStation());
-      // Revert to step=3 (selecting_arrival_station)
-      dispatch(advanceBookingStep(3));
-      toast.success('Arrival station cleared');
-    }
-    // Call parent's onClear if provided
-    onClear?.();
-  };
-
-  // Confirm station
+  // Confirm station selection
   const handleConfirm = () => {
     if (isDepartureFlow) {
-      // Step 1 or 2 => departure selection
       dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
+
       if (step === 1) {
-        // Move to step=2 => selected_departure_station
+        // Step 1 => selected_departure_station
         dispatch(advanceBookingStep(2));
         toast.success('Departure station selected.');
       } else if (step === 2) {
-        // Move to step=3 => selecting_arrival_station
+        // Step 2 => selecting_arrival_station
         dispatch(advanceBookingStep(3));
         toast.success('Departure station confirmed. Now select your arrival station.');
       }
-      // If the parent also wants to handle confirm departure
+
+      // If parent wants extra logic on confirm
       onConfirmDeparture?.();
     } else {
-      // Step 3 or 4 => arrival selection
+      // Arrival flow
       dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
+
       if (step === 3) {
-        // Move to step=4 => selected_arrival_station
+        // Step 3 => selected_arrival_station
         dispatch(advanceBookingStep(4));
         toast.success('Arrival station selected.');
       } else if (step === 4) {
-        // Move to step=5 => payment or finalizing
+        // Step 4 => step 5 (payment) or final steps
         dispatch(advanceBookingStep(5));
         toast.success('Route confirmed! Next: payment or finalizing.');
       }
-      // If the parent wants to handle confirm logic for arrival, e.g. onConfirmArrival?.()
+      // If you had an onConfirmArrival prop, you’d call it here
     }
   };
 
   return (
     <div className="p-4 space-y-4">
-      {/* Station Header */}
+      {/* Header */}
       <div className="flex items-start gap-3">
         <Icon className="w-5 h-5 mt-1 text-primary" />
         <div className="flex-1">
@@ -175,7 +153,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
           </div>
         )}
 
-        {/* Show driving distance/time if available, else fallback to distance from user */}
+        {/* Driving distance/time if route is available */}
         {routeDistanceKm && routeDurationMin ? (
           <>
             <div className="flex justify-between text-sm">
@@ -188,6 +166,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
             </div>
           </>
         ) : (
+          // Otherwise show distance from user if available
           activeStation.distance !== undefined && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Distance from You</span>
@@ -199,18 +178,11 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         )}
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-2 pt-2">
-        <button
-          onClick={handleClear}
-          className="flex-1 px-4 py-2 text-sm font-medium text-muted-foreground
-                     bg-muted hover:bg-muted/80 rounded-lg transition-colors"
-        >
-          Clear
-        </button>
+      {/* Single Action Button => Confirm */}
+      <div className="pt-2">
         <button
           onClick={handleConfirm}
-          className="flex-1 px-4 py-2 text-sm font-medium text-white
+          className="w-full px-4 py-2 text-sm font-medium text-white
                      bg-primary hover:bg-primary/90 rounded-lg transition-colors"
         >
           {isDepartureFlow ? 'Confirm Departure' : 'Confirm Arrival'}
