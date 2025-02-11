@@ -1,131 +1,146 @@
+// src/components/GaussianSplatModal.tsx
+
 import React, { useEffect, useRef } from 'react';
-import { Viewer } from 'gle-gaussian-splat-3d';
 import * as THREE from 'three';
-import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 
 interface GaussianSplatModalProps {
+  /** Whether the modal is open */
   isOpen: boolean;
+  /** Called when the user clicks "×" close button */
   onClose: () => void;
 }
 
-const SPLAT_FILE_PATH = 'icc.ply';
+/**
+ * Your Firebase-hosted .ply file
+ */
+const PLY_FILE_URL = 
+  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
 
-const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
-  isOpen,
-  onClose,
-}) => {
+const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Viewer | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
 
   useEffect(() => {
-    if (isOpen && containerRef.current && !viewerRef.current) {
-      const containerEl = containerRef.current;
+    if (!isOpen || !containerRef.current) return;
 
-      const initViewer = async () => {
-        try {
-          // Initialize Three.js renderer first
-          const renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            powerPreference: 'high-performance',
-          });
-          rendererRef.current = renderer;
-          containerEl.appendChild(renderer.domElement);
+    const containerEl = containerRef.current;
+    const renderWidth = containerEl.clientWidth;
+    const renderHeight = containerEl.clientHeight;
 
-          // Create camera
-          const camera = new THREE.PerspectiveCamera(
-            65,
-            containerEl.clientWidth / containerEl.clientHeight,
-            0.1,
-            1000
-          );
-          camera.position.set(0, 1.5, 4);
-          camera.lookAt(0, 0, 0);
+    // 1) Create a WebGL renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(renderWidth, renderHeight);
+    containerEl.appendChild(renderer.domElement);
 
-          // Initialize viewer with explicit renderer and camera [5][6]
-          const viewer = new Viewer({
-            renderer,
-            camera,
-            gpuAcceleratedSort: true,
-            useBuiltInControls: true,
-            selfDrivenMode: false,
-            backgroundColor: new THREE.Color(0x151515),
-          });
+    // 2) Create a PerspectiveCamera
+    const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
+    // Example camera positions from the library docs—tweak as needed
+    camera.position.set(-1, -4, 6);
+    camera.up.set(0, -1, -0.6).normalize();
+    camera.lookAt(new THREE.Vector3(0, 4, 0));
 
-          viewerRef.current = viewer;
+    // 3) Create the GaussianSplat3D Viewer
+    const viewer = new GaussianSplats3D.Viewer({
+      selfDrivenMode: false,
+      renderer,
+      camera,
+      useBuiltInControls: false,
+      ignoreDevicePixelRatio: false,
+      gpuAcceleratedSort: true,
+      enableSIMDInSort: true,
+      sharedMemoryForWorkers: true,
+      integerBasedSort: true,
+      halfPrecisionCovariancesOnGPU: true,
+      dynamicScene: false,
+      webXRMode: GaussianSplats3D.WebXRMode.None,
+      renderMode: GaussianSplats3D.RenderMode.OnChange,
+      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
+      antialiased: false,
+      focalAdjustment: 1.0,
+      logLevel: GaussianSplats3D.LogLevel.None,
+      sphericalHarmonicsDegree: 0,
+      enableOptionalEffects: false,
+      plyInMemoryCompressionLevel: 2,
+      freeIntermediateSplatData: false,
+    });
+    viewerRef.current = viewer;
 
-          try {
-            const storage = getStorage();
-            const fileRef = ref(storage, SPLAT_FILE_PATH);
-            const signedUrl = await getDownloadURL(fileRef);
-            const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
-
-            // Load file using validated method [1][2]
-            await viewer.loadFile(proxyUrl, {
-              splatAlphaRemovalThreshold: 7,
-              halfPrecisionCovariancesOnGPU: true,
-              position: [0, -0.5, 0],
-              rotation: [-Math.PI / 2, 0, 0]
-            });
-
-            viewer.start();
-          } catch (error) {
-            console.error('Error loading splat:', error);
-            onClose();
-          }
-
-          // Handle window resizing
-          const onResize = () => {
-            camera.aspect = containerEl.clientWidth / containerEl.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
-          };
-
-          window.addEventListener('resize', onResize);
-          onResize();
-
-          return () => {
-            window.removeEventListener('resize', onResize);
-          };
-        } catch (error) {
-          console.error('Failed to initialize viewer:', error);
-          onClose();
-        }
-      };
-
-      initViewer();
-    }
-
-    return () => {
-      if (viewerRef.current) {
-        viewerRef.current.dispose();
-        viewerRef.current = null;
-      }
-      if (rendererRef.current) {
-        rendererRef.current.domElement.remove();
-        rendererRef.current = null;
-      }
+    // Define the animation loop
+    const update = () => {
+      if (!viewerRef.current) return;
+      viewerRef.current.update(); // Renders the splats
+      requestAnimationFrame(update);
     };
-  }, [isOpen, onClose]);
+
+    // 4) Load the .ply file from Firebase
+    viewer
+      .addSplatScene(PLY_FILE_URL)
+      .then(() => {
+        // Once loaded, start rendering
+        requestAnimationFrame(update);
+      })
+      .catch((err: any) => {
+        console.error('Failed to load splat scene:', err);
+      });
+
+    // Cleanup when unmounting or closing
+    return () => {
+      // Dispose viewer if needed
+      viewerRef.current = null;
+      renderer.dispose();
+      // Remove canvas from DOM
+      containerEl.removeChild(renderer.domElement);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-85 flex justify-center items-center">
-      <div className="relative w-[95vw] h-[95vh] bg-black rounded-xl overflow-hidden">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-9 h-9 bg-white bg-opacity-15 hover:bg-opacity-25 
-                   text-white rounded-full cursor-pointer z-10 transition-colors duration-200"
-          aria-label="Close"
-        >
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <button className="close-button" onClick={onClose}>
           ×
         </button>
-        <div
-          ref={containerRef}
-          className="w-full h-full touch-none"
-        />
+        <div ref={containerRef} className="splat-container" />
       </div>
+
+      <style jsx>{`
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.75);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+        }
+        .modal-content {
+          position: relative;
+          width: 80vw;
+          height: 80vh;
+          background: #000;
+          border-radius: 8px;
+          overflow: hidden;
+        }
+        .close-button {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: #fff;
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          cursor: pointer;
+          z-index: 1;
+        }
+        .splat-container {
+          width: 100%;
+          height: 100%;
+        }
+      `}</style>
     </div>
   );
 };
