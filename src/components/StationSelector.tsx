@@ -7,19 +7,30 @@ import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
   selectBookingStep,
   advanceBookingStep,
-  selectRoute,      // <-- Import route selector
+  selectRoute,
 } from '@/store/bookingSlice';
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-  clearDepartureStation,
-  clearArrivalStation,
+  // We remove direct usage of clearDepartureStation and clearArrivalStation here
+  // so that StationSelector is less "smart" and instead calls back to the parent
+  // clearDepartureStation,
+  // clearArrivalStation,
 } from '@/store/userSlice';
 import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
 import debounce from 'lodash/debounce';
 
 interface StationSelectorProps {
+  /** Called when the user searches/selects an address on the map. */
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
+
+  /**
+   * New callbacks: if the user presses the "X" button on
+   * the departure or arrival input, we call these.
+   * GMap can then decide how to clear Redux + close StationDetail.
+   */
+  onClearDeparture?: () => void;
+  onClearArrival?: () => void;
 }
 
 interface AddressSearchProps {
@@ -30,7 +41,7 @@ interface AddressSearchProps {
 }
 
 /**
- * DepartureIcon:
+ * DepartureIcon
  */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
@@ -71,7 +82,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
 }
 
 /**
- * ArrivalIcon:
+ * ArrivalIcon
  */
 function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
@@ -113,7 +124,6 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
 
 /**
  * AddressSearch:
- * Unchanged logic (except minor styling).
  */
 const AddressSearch = ({
   onAddressSelect,
@@ -147,7 +157,7 @@ const AddressSearch = ({
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
     try {
-      const request: any = {
+      const request: google.maps.places.AutocompleteRequest = {
         input,
         componentRestrictions: { country: 'HK' },
         types: ['address'],
@@ -234,9 +244,13 @@ const AddressSearch = ({
 };
 
 /**
- * The main StationSelector
+ * StationSelector:
  */
-export default function StationSelector({ onAddressSearch }: StationSelectorProps) {
+export default function StationSelector({
+  onAddressSearch,
+  onClearDeparture,
+  onClearArrival,
+}: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
@@ -253,12 +267,8 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
   const route = useAppSelector(selectRoute);
   const distanceInKm = route ? (route.distance / 1000).toFixed(1) : null;
 
-  // 2-step UI logic
-  // step < 3 => "Step 1 of 2"
-  // step >= 3 => "Step 2 of 2"
+  // Step logic: step < 3 => "Step 1 of 2" (departure), step >= 3 => "Step 2 of 2" (arrival)
   const uiStepNumber = step < 3 ? 1 : 2;
-
-  // highlight if step < 3 or step >= 3
   const highlightDeparture = step < 3;
   const highlightArrival = step >= 3;
 
@@ -271,7 +281,6 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
       style={{ overscrollBehavior: 'none', touchAction: 'none' }}
     >
       <div className="px-2 py-2 space-y-2">
-
         {/* Departure Input */}
         <div
           className={`
@@ -292,10 +301,16 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           {departureStation && (
             <button
               onClick={() => {
-                dispatch(clearDepartureStation());
-                dispatch(clearArrivalStation());
-                dispatch(advanceBookingStep(1));
-                toast.success('Departure station cleared');
+                // Instead of dispatching directly here, we call the parent's callback.
+                if (onClearDeparture) {
+                  onClearDeparture();
+                } else {
+                  // Fallback if no callback is provided (optional):
+                  dispatch(clearDepartureStation());
+                  dispatch(clearArrivalStation());
+                  dispatch(advanceBookingStep(1));
+                  toast.success('Departure station cleared');
+                }
               }}
               className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
             >
@@ -312,7 +327,6 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
             ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
           `}
         >
-          {/* Replacing <Navigation> with our ArrivalIcon */}
           <ArrivalIcon highlight={highlightArrival} />
 
           <AddressSearch
@@ -325,9 +339,14 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           {arrivalStation && (
             <button
               onClick={() => {
-                dispatch(clearArrivalStation());
-                dispatch(advanceBookingStep(3));
-                toast.success('Arrival station cleared');
+                if (onClearArrival) {
+                  onClearArrival();
+                } else {
+                  // Fallback if no callback is provided (optional)
+                  dispatch(clearArrivalStation());
+                  dispatch(advanceBookingStep(3));
+                  toast.success('Arrival station cleared');
+                }
               }}
               className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
             >
@@ -341,10 +360,12 @@ export default function StationSelector({ onAddressSearch }: StationSelectorProp
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Step {uiStepNumber} of 2</span>
             <span>•</span>
-            {uiStepNumber === 1 ? 'Select departure station' : 'Select arrival station'}
+            {uiStepNumber === 1
+              ? 'Select departure station'
+              : 'Select arrival station'}
           </div>
 
-          {/* Show the real route distance if both stations are chosen & we have route data */}
+          {/* Show route distance if both stations chosen & we have route data */}
           {departureStation && arrivalStation && distanceInKm && (
             <div className="text-xs font-medium">
               Total Route: {distanceInKm} km
