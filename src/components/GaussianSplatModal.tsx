@@ -6,18 +6,21 @@ import * as THREE from 'three';
 interface GaussianSplatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  splatUrl: string;
 }
+
+// Directly use your Firebase URL here
+const SPLAT_FILE_URL =
+  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/ifc.ply?alt=media&token=6142be63-a9f9-4651-a993-72c36c2768ce';
 
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
   isOpen,
   onClose,
-  splatUrl
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
 
   useEffect(() => {
+    // Initialize the viewer if modal is open, container is present, and not already instantiated
     if (isOpen && containerRef.current && !viewerRef.current) {
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       const camera = new THREE.PerspectiveCamera(
@@ -42,8 +45,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
       viewerRef.current = viewer;
       containerRef.current.appendChild(renderer.domElement);
 
-      // Load the splat file
-      viewer.addSplatScene(splatUrl, {
+      // Load the .ply file directly from your Firebase URL
+      viewer.addSplatScene(SPLAT_FILE_URL, {
         splatAlphaRemovalThreshold: 5,
         showLoadingSpinner: true,
         position: [0, 0, 0],
@@ -54,13 +57,14 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
       viewer.start();
     }
 
+    // Cleanup on unmount or when closing the modal
     return () => {
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
       }
     };
-  }, [isOpen, splatUrl]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -73,6 +77,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
         <div ref={containerRef} className="splat-container" />
       </div>
 
+      {/* Example inline styling—replace or move to a CSS/SCSS file as desired */}
       <style jsx>{`
         .modal-overlay {
           position: fixed;
