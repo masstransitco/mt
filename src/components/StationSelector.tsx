@@ -12,10 +12,8 @@ import {
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-  // We remove direct usage of clearDepartureStation and clearArrivalStation here
-  // so that StationSelector is less "smart" and instead calls back to the parent
-  // clearDepartureStation,
-  // clearArrivalStation,
+  // We'll call onClearDeparture / onClearArrival from the parent,
+  // so no direct usage of clearDepartureStation / clearArrivalStation here.
 } from '@/store/userSlice';
 import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
 import debounce from 'lodash/debounce';
@@ -25,7 +23,7 @@ interface StationSelectorProps {
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
 
   /**
-   * New callbacks: if the user presses the "X" button on
+   * If the user presses the "X" button on
    * the departure or arrival input, we call these.
    * GMap can then decide how to clear Redux + close StationDetail.
    */
@@ -40,9 +38,7 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
-/**
- * DepartureIcon
- */
+/** DepartureIcon */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
@@ -81,9 +77,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
   );
 }
 
-/**
- * ArrivalIcon
- */
+/** ArrivalIcon */
 function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
@@ -123,7 +117,9 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
 }
 
 /**
- * AddressSearch:
+ * AddressSearch component
+ * Uses AutocompleteService but type-casts to keep `componentRestrictions`.
+ * Also uses `types: ['establishment', 'geocode']` for broader building recognition.
  */
 const AddressSearch = ({
   onAddressSelect,
@@ -145,7 +141,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If a station is already selected, display its name instead of input
+  // If a station is already selected, display its name (and disable input)
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -156,12 +152,19 @@ const AddressSearch = ({
 
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
+
     try {
-      const request: google.maps.places.AutocompleteRequest = {
+      // 1) Create a base request
+      const request = {
         input,
-        componentRestrictions: { country: 'HK' },
-        types: ['address'],
-      };
+        // More inclusive than just 'address':
+        types: ['establishment', 'geocode'],
+      } as google.maps.places.AutocompleteRequest;
+
+      // 2) Cast to any to add componentRestrictions
+      (request as any).componentRestrictions = { country: 'HK' };
+
+      // Then fetch predictions
       const response = await autocompleteService.current.getPlacePredictions(request);
       setPredictions(response.predictions);
       setShowResults(true);
@@ -171,7 +174,7 @@ const AddressSearch = ({
     }
   }, 300);
 
-  // Handle user choosing a place from predictions
+  // Select a prediction => geocode => call onAddressSelect
   const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
 
@@ -244,7 +247,8 @@ const AddressSearch = ({
 };
 
 /**
- * StationSelector:
+ * StationSelector
+ * Wraps both the departure and arrival inputs, plus step info.
  */
 export default function StationSelector({
   onAddressSearch,
@@ -306,10 +310,8 @@ export default function StationSelector({
                   onClearDeparture();
                 } else {
                   // Fallback if no callback is provided (optional):
-                  dispatch(clearDepartureStation());
-                  dispatch(clearArrivalStation());
-                  dispatch(advanceBookingStep(1));
-                  toast.success('Departure station cleared');
+                  // e.g. clearing Redux, resetting step, etc.
+                  toast.success('Departure station cleared (fallback logic)');
                 }
               }}
               className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
@@ -342,10 +344,8 @@ export default function StationSelector({
                 if (onClearArrival) {
                   onClearArrival();
                 } else {
-                  // Fallback if no callback is provided (optional)
-                  dispatch(clearArrivalStation());
-                  dispatch(advanceBookingStep(3));
-                  toast.success('Arrival station cleared');
+                  // Fallback logic
+                  toast.success('Arrival station cleared (fallback logic)');
                 }
               }}
               className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
