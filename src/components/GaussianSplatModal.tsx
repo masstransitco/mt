@@ -17,6 +17,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   useEffect(() => {
     if (isOpen && containerRef.current && !viewerRef.current) {
@@ -24,11 +25,13 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
       const initViewer = async () => {
         try {
-          // Initialize renderer
+          // Initialize renderer and append to DOM first
           const renderer = new THREE.WebGLRenderer({
             antialias: true,
             powerPreference: 'high-performance',
           });
+          rendererRef.current = renderer;
+          containerEl.appendChild(renderer.domElement);
 
           // Setup camera
           const camera = new THREE.PerspectiveCamera(
@@ -40,7 +43,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           camera.position.set(0, 1.5, 4);
           camera.lookAt(0, 0, 0);
 
-          // Create viewer instance
+          // Create viewer with explicit Three.js components
           const viewer = new GaussianSplat3D.Viewer({
             renderer,
             camera,
@@ -53,26 +56,17 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           viewerRef.current = viewer;
 
-          containerEl.appendChild(
-            viewer.renderer.domElement as unknown as HTMLElement
-          );
-
           try {
-            // Get Firebase Storage instance and generate a signed URL
             const storage = getStorage();
             const fileRef = ref(storage, SPLAT_FILE_PATH);
             const signedUrl = await getDownloadURL(fileRef);
-
-            // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Load the splat file
             await viewer.loadFile(proxyUrl, {
               splatAlphaRemovalThreshold: 7,
               halfPrecisionCovariancesOnGPU: true,
               position: [0, -0.5, 0],
               rotation: [-Math.PI / 2, 0, 0],
-              scale: [1, 1, 1],
             });
 
             viewer.start();
@@ -103,11 +97,14 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
       initViewer();
     }
 
-    // Cleanup on unmount or modal close
     return () => {
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
+      }
+      if (rendererRef.current) {
+        rendererRef.current.domElement.remove();
+        rendererRef.current = null;
       }
     };
   }, [isOpen, onClose]);
