@@ -667,8 +667,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={stationToShow}
                 onConfirmDeparture={handleConfirmDeparture}
-                // "Clear" button is removed from StationDetail—no longer needed
-                onClear={handleClearStationDetail}
+
               />
             </Sheet>
           )}
