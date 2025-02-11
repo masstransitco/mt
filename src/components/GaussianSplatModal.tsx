@@ -9,10 +9,6 @@ interface GaussianSplatModalProps {
   onClose: () => void;
 }
 
-/**
- * Path to your publicly accessible point-cloud PLY file
- * (e.g., from Firebase Storage).
- */
 const SPLAT_FILE_URL =
   'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=fe72cbcf-4a26-42b4-b307-211fe431f641';
 
@@ -25,7 +21,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
   useEffect(() => {
     if (isOpen && containerRef.current && !viewerRef.current) {
-      // Store in local variable to confirm it's non-null
       const containerEl = containerRef.current;
 
       const initViewer = async () => {
@@ -60,9 +55,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           viewerRef.current = viewer;
           containerEl.appendChild(renderer.domElement);
 
-          // Convert PLY to SPLAT at runtime
-          const plyLoader = new PlyLoader();
-          const splatBuffer = await plyLoader.loadFromURL(SPLAT_FILE_URL, {
+          // Use static PlyLoader.loadFromURL (no need for "new PlyLoader()")
+          const splatBuffer = await PlyLoader.loadFromURL(SPLAT_FILE_URL, {
             positionQuantizationBits: 12,
             scaleQuantizationBits: 10,
             colorQuantizationBits: 8,
@@ -76,9 +70,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           viewer.addSplatScene(splatScene, {
             splatAlphaRemovalThreshold: 7,
             showLoadingSpinner: true,
-            // Adjust for coordinate alignment if needed
             position: [0, -0.5, 0],
-            rotation: [-Math.PI / 2, 0, 0],
+            rotation: [-Math.PI / 2, 0, 0], // if needed for coordinate alignment
             scale: [1, 1, 1],
             progressCallback: (progress) => {
               console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
@@ -97,7 +90,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           };
           window.addEventListener('resize', onResize);
 
-          // Cleanup resize listener if modal closes/unmounts
+          // Clean up resize listener if modal closes/unmounts
           return () => {
             window.removeEventListener('resize', onResize);
           };
