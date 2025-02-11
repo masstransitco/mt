@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { Viewer, PlyLoader, SplatLoader } from 'gle-gaussian-splat-3d';
+import * as GaussianSplat3D from 'gle-gaussian-splat-3d';
+import type { Viewer } from 'gle-gaussian-splat-3d';
 import * as THREE from 'three';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
@@ -39,8 +40,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           camera.position.set(0, 1.5, 4);
           camera.lookAt(0, 0, 0);
 
-          // Create viewer instance
-          const viewer = new Viewer({
+          // Create viewer instance with proper typing
+          const viewer = new GaussianSplat3D.Viewer({
             renderer,
             camera,
             gpuAcceleratedSort: true,
@@ -48,10 +49,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             selfDrivenMode: false,
             backgroundColor: new THREE.Color(0x151515),
             cameraUp: [0, 1, 0], // Y-up
-          });
+          } as GaussianSplat3D.ViewerParams);
+
           viewerRef.current = viewer;
 
-          containerEl.appendChild(renderer.domElement);
+          containerEl.appendChild(viewer.renderer.domElement as unknown as HTMLElement);
 
           try {
             // Get Firebase Storage instance and generate a signed URL
@@ -62,51 +64,19 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Load the PLY file using callbacks
-            PlyLoader.loadFromURL(
-              proxyUrl,
-              12, // positionQuantizationBits
-              10, // scaleQuantizationBits
-              8,  // colorQuantizationBits
-              0,  // normalQuantizationBits
-              0,  // boundingBox (false)
-              0,  // autoScale (false)
-              0,  // reorder (false)
-              function(progress: number): void {
-                console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
-              },
-              function(buffer: ArrayBuffer): void {
-                console.log('PLY file loaded successfully!');
-                try {
-                  if (viewerRef.current) {
-                    // Create a new SplatLoader instance
-                    const splatLoader = new SplatLoader();
+            // Use the new unified loadFile method
+            await viewer.loadFile(proxyUrl, {
+              splatAlphaRemovalThreshold: 7,
+              halfPrecisionCovariancesOnGPU: true,
+              position: [0, -0.5, 0],
+              rotation: [-Math.PI / 2, 0, 0],
+              scale: [1, 1, 1]
+            });
 
-                    if (viewerRef.current) {
-                      viewerRef.current.addSplatScene(splatLoader, {
-                        splatAlphaRemovalThreshold: 7,
-                        showLoadingSpinner: true,
-                        position: [0, -0.5, 0],
-                        rotation: [-Math.PI / 2, 0, 0],
-                        scale: [1, 1, 1],
-                      });
-
-                      viewerRef.current.start();
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error processing splat data:', error);
-                  onClose();
-                }
-              },
-              function(error: Error): void {
-                console.error('Error loading PLY file:', error);
-                onClose();
-              }
-            );
+            viewer.start();
 
           } catch (error) {
-            console.error('Error fetching from Firebase Storage:', error);
+            console.error('Error loading splat:', error);
             onClose();
           }
 
