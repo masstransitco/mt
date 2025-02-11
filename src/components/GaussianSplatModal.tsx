@@ -60,7 +60,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             const signedUrl = await getDownloadURL(fileRef);
 
             // Create a proxy request through your own domain
-            const proxyUrl = `/api/proxy-splat?url=${encodeURIComponent(signedUrl)}`;
+            const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
             // Load the PLY file using callbacks
             PlyLoader.loadFromURL(
