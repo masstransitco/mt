@@ -237,6 +237,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // openNewSheet
   const openNewSheet = (newSheet: OpenSheetType) => {
+    if (newSheet !== 'detail') {
+    setForceSheetOpen(false);
+  }
+
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
       setOpenSheet(newSheet);
