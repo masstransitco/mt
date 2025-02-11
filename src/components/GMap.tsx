@@ -650,7 +650,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* Station detail sheet */}
           {openSheet === 'detail' && stationToShow && (
             <Sheet
-              isOpen
               onToggle={closeCurrentSheet}
               title="Station Details"
               count={(searchLocation ? sortedStations : stations).length}
