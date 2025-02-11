@@ -66,37 +66,40 @@ interface GMapProps {
 
 type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
 
+/**
+ * GMap:
+ * - Defaults to openSheet = 'car' (CarSheet open at start).
+ * - If user closes StationDetail in step 2, we forcibly clear departure station.
+ * - We rely on “Confirm Departure” to proceed from step 2 => 3 in StationDetail,
+ *   so we no longer need a separate “Clear” button in StationDetail itself.
+ */
 export default function GMap({ googleApiKey }: GMapProps) {
-  // -------------------------------------------
-  // Refs for Google Map and Three.js
-  // -------------------------------------------
+  // -------------------------------
+  // Refs for Map & 3D
+  // -------------------------------
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
-  // -------------------------------------------
+  // -------------------------------
   // Local UI state
-  // -------------------------------------------
+  // -------------------------------
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Which sheet is open?
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
-  /**
-   * A local key to force a fresh mount of StationDetail
-   * whenever a user selects a station.
-   */
+  // Force re-mount for StationDetail each time user clicks a station
   const [detailKey, setDetailKey] = useState(0);
 
-  // -------------------------------------------
+  // -------------------------------
   // Redux
-  // -------------------------------------------
+  // -------------------------------
   const dispatch = useAppDispatch();
 
   // Station data
@@ -121,9 +124,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // -------------------------------------------
-  // Load the Maps JS API
-  // -------------------------------------------
+  // -------------------------------
+  // Load Maps JS
+  // -------------------------------
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: googleApiKey,
@@ -131,7 +134,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // On initial load, set map options/icons
+  // On load => set map options/icons
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -139,9 +142,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // -------------------------------------------
-  // Fetch stations, cars, and 3D data
-  // -------------------------------------------
+  // -------------------------------
+  // Fetch Stations, Cars, 3D
+  // -------------------------------
   useEffect(() => {
     (async () => {
       try {
@@ -157,19 +160,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Once data is loaded, remove overlay spinner
+  // Hide overlay once data is loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // If any error from station/cars or loadError, show error UI
+  // Error check
   const hasError = stationsError || carsError || loadError;
 
-  // -------------------------------------------
+  // -------------------------------
   // Auto-fetch route if departure & arrival
-  // -------------------------------------------
+  // -------------------------------
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -180,9 +183,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // -------------------------------------------
-  // Utility to sort stations by distance
-  // -------------------------------------------
+  // -------------------------------
+  // Sort stations by distance
+  // -------------------------------
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -203,9 +206,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // -------------------------------------------
-  // Handle address search from StationSelector
-  // -------------------------------------------
+  // -------------------------------
+  // StationSelector => address search
+  // -------------------------------
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -223,16 +226,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // -------------------------------------------
-  // Callbacks for clearing stations in StationSelector
-  // -------------------------------------------
+  // -------------------------------
+  // Clear station from StationSelector
+  // -------------------------------
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
     toast.success('Departure station cleared');
 
-    // If StationDetail is open, close it
     if (openSheet === 'detail') {
+      // If detail is open, close it
       setOpenSheet('none');
       setPreviousSheet('none');
     }
@@ -243,16 +246,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(advanceBookingStep(3));
     toast.success('Arrival station cleared');
 
-    // If StationDetail is open, close it
     if (openSheet === 'detail') {
       setOpenSheet('none');
       setPreviousSheet('none');
     }
   };
 
-  // -------------------------------------------
+  // -------------------------------
   // Sheet helpers
-  // -------------------------------------------
+  // -------------------------------
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
@@ -264,20 +266,25 @@ export default function GMap({ googleApiKey }: GMapProps) {
     const old = openSheet;
 
     if (old === 'detail') {
-      // Close detail -> none
+      // If we're in step 2 => forcibly unselect the departure station
+      if (bookingStep === 2) {
+        dispatch(clearDepartureStation());
+        dispatch(advanceBookingStep(1));
+        toast.success('Departure station unselected (sheet closed)');
+      }
+
       setOpenSheet('none');
       setPreviousSheet('none');
       overlayRef.current?.requestRedraw();
     } else {
-      // Revert to the previous sheet
       setOpenSheet(previousSheet);
       setPreviousSheet('none');
     }
   };
 
-  // -------------------------------------------
+  // -------------------------------
   // "Locate me"
-  // -------------------------------------------
+  // -------------------------------
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported.');
@@ -304,9 +311,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // -------------------------------------------
+  // -------------------------------
   // "Car" sheet toggle
-  // -------------------------------------------
+  // -------------------------------
   const handleCarToggle = () => {
     if (openSheet === 'car') {
       closeCurrentSheet();
@@ -315,9 +322,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // -------------------------------------------
-  // Marker / Station selection
-  // -------------------------------------------
+  // -------------------------------
+  // Station selection (Marker or List)
+  // -------------------------------
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       // If still picking departure
@@ -327,7 +334,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       }
 
-      // Force a fresh StationDetail every time
+      // Force a fresh StationDetail mount
       setDetailKey((prev) => prev + 1);
 
       openNewSheet('detail');
@@ -338,20 +345,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, bookingStep, isSheetMinimized]
   );
 
-  // If user picks from the station list
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
     }
+
     setDetailKey((prev) => prev + 1);
     openNewSheet('detail');
   };
 
-  // -------------------------------------------
-  // 3D overlay click logic (raycaster)
-  // -------------------------------------------
+  // -------------------------------
+  // 3D overlay click logic
+  // -------------------------------
   useEffect(() => {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -390,22 +397,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [handleStationClick]);
 
-  // -------------------------------------------
+  // -------------------------------
   // Confirm / Clear from StationDetail
-  // -------------------------------------------
+  // -------------------------------
   const handleConfirmDeparture = () => {
+    // user is going from step 2 => step 3
     dispatch(advanceBookingStep(3));
     setOpenSheet('none');
     setPreviousSheet('none');
   };
 
   const handleClearStationDetail = () => {
+    // If the user manually closes the sheet, we handle forcibly unselect in closeCurrentSheet
     closeCurrentSheet();
   };
 
-  // -------------------------------------------
+  // -------------------------------
   // Map / 3D Setup
-  // -------------------------------------------
+  // -------------------------------
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -509,30 +518,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, []);
 
-  // -------------------------------------------
+  // -------------------------------
   // Marker icons
-  // -------------------------------------------
+  // -------------------------------
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
-
     if (station.id === departureStationId) return markerIcons.departureStation;
     if (station.id === arrivalStationId) return markerIcons.arrivalStation;
     return markerIcons.station;
   };
 
-  // -------------------------------------------
+  // -------------------------------
   // Which station to show in StationDetail?
-  // -------------------------------------------
-  // Steps 1 or 2 => departure. Steps 3+ => arrival
-  const selectedStationId =
-    bookingStep < 3 ? departureStationId : arrivalStationId;
+  // -------------------------------
+  const selectedStationId = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = selectedStationId
     ? stations.find((s) => s.id === selectedStationId)
     : null;
 
-  // -------------------------------------------
+  // -------------------------------
   // Render
-  // -------------------------------------------
+  // -------------------------------
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Error or loading states */}
@@ -657,10 +663,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
               count={(searchLocation ? sortedStations : stations).length}
             >
               <StationDetail
-                key={detailKey} // Also force new mount in StationDetail
+                key={detailKey} // Force new mount in StationDetail
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={stationToShow}
                 onConfirmDeparture={handleConfirmDeparture}
+                // "Clear" button is removed from StationDetail—no longer needed
                 onClear={handleClearStationDetail}
               />
             </Sheet>
