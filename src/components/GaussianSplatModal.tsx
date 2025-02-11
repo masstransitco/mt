@@ -79,20 +79,23 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
                 console.log('PLY file loaded successfully!');
                 try {
                   if (viewerRef.current && buffer) {
-                    // Process the buffer and create a scene
+                    // Create a new SplatLoader instance
                     const splatLoader = new SplatLoader();
-                    splatLoader.processBuffer(buffer);
-                    const splatScene = splatLoader.createScene();
+                    
+                    // Load the buffer directly into the SplatLoader
+                    splatLoader.load(buffer);
 
-                    viewerRef.current.addSplatScene(splatScene, {
-                      splatAlphaRemovalThreshold: 7,
-                      showLoadingSpinner: true,
-                      position: [0, -0.5, 0],
-                      rotation: [-Math.PI / 2, 0, 0],
-                      scale: [1, 1, 1],
-                    });
+                    if (viewerRef.current) {
+                      viewerRef.current.addSplatScene(splatLoader, {
+                        splatAlphaRemovalThreshold: 7,
+                        showLoadingSpinner: true,
+                        position: [0, -0.5, 0],
+                        rotation: [-Math.PI / 2, 0, 0],
+                        scale: [1, 1, 1],
+                      });
 
-                    viewerRef.current.start();
+                      viewerRef.current.start();
+                    }
                   }
                 } catch (error) {
                   console.error('Error processing splat data:', error);
