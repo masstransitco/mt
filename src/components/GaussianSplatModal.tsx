@@ -63,7 +63,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
             // Load the PLY file
-            const splatBuffer = PlyLoader.loadFromURL(
+            PlyLoader.loadFromURL(
               proxyUrl,
               12, // positionQuantizationBits
               10, // scaleQuantizationBits
@@ -79,11 +79,9 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
                 console.log('PLY file loaded successfully!');
                 try {
                   if (viewerRef.current && buffer) {
-                    // Create a new SplatLoader instance
-                    const splatLoader = new SplatLoader();
-                    
-                    // Load the buffer directly into the SplatLoader
-                    splatLoader.load(buffer);
+                    // Create the SplatLoader instance with the buffer
+                    const vertices = new Float32Array(buffer);
+                    const splatLoader = new SplatLoader(vertices);
 
                     if (viewerRef.current) {
                       viewerRef.current.addSplatScene(splatLoader, {
