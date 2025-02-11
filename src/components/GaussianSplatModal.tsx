@@ -62,9 +62,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Create the SplatLoader instance first
-            const splatLoader = new SplatLoader();
-
             // Load the PLY file using callbacks
             PlyLoader.loadFromURL(
               proxyUrl,
@@ -82,25 +79,20 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
                 console.log('PLY file loaded successfully!');
                 try {
                   if (viewerRef.current) {
-                    if (splatLoader.loadFromBuffer) {
-                      splatLoader.loadFromBuffer(buffer);
-                    } else if (splatLoader.load) {
-                      splatLoader.load(buffer);
-                    } else {
-                      console.error('No compatible load method found on SplatLoader');
-                      onClose();
-                      return;
+                    // Create a new SplatLoader instance
+                    const splatLoader = new SplatLoader();
+
+                    if (viewerRef.current) {
+                      viewerRef.current.addSplatScene(splatLoader, {
+                        splatAlphaRemovalThreshold: 7,
+                        showLoadingSpinner: true,
+                        position: [0, -0.5, 0],
+                        rotation: [-Math.PI / 2, 0, 0],
+                        scale: [1, 1, 1],
+                      });
+
+                      viewerRef.current.start();
                     }
-
-                    viewerRef.current.addSplatScene(splatLoader, {
-                      splatAlphaRemovalThreshold: 7,
-                      showLoadingSpinner: true,
-                      position: [0, -0.5, 0],
-                      rotation: [-Math.PI / 2, 0, 0],
-                      scale: [1, 1, 1],
-                    });
-
-                    viewerRef.current.start();
                   }
                 } catch (error) {
                   console.error('Error processing splat data:', error);
