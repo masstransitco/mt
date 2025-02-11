@@ -81,8 +81,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
                     scale: [1, 1, 1],
                   });
 
-                  // Add axes helper for debugging
-                  viewerRef.current.scene.add(new THREE.AxesHelper(2));
                   viewerRef.current.start();
                 }
               } catch (error) {
