@@ -67,14 +67,13 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             },
             () => {
               console.log('PLY file loaded successfully!');
-              // Create SplatLoader instance and get scene
+              // Create SplatLoader instance
               try {
                 const splatLoader = new SplatLoader();
-                // The scene is created automatically when loading the PLY
-                const splatScene = splatLoader.getSplatScene();
-
-                if (viewerRef.current && splatScene) {
-                  viewerRef.current.addSplatScene(splatScene, {
+                
+                if (viewerRef.current) {
+                  // Add the splat scene directly to the viewer
+                  viewerRef.current.addSplatScene(splatLoader, {
                     splatAlphaRemovalThreshold: 7,
                     showLoadingSpinner: true,
                     position: [0, -0.5, 0],
