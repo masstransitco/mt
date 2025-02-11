@@ -259,15 +259,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   const closeCurrentSheet = () => {
-    const old = openSheet;
-    setOpenSheet(previousSheet);
+  const old = openSheet;
+
+  if (old === 'detail') {
+    // If we are closing the detail sheet, just go to 'none'
+    setOpenSheet('none');
     setPreviousSheet('none');
 
-    // If we are closing the detail sheet
-    if (old === 'detail') {
-      overlayRef.current?.requestRedraw();
-    }
-  };
+    // If desired, force a redraw
+    overlayRef.current?.requestRedraw();
+  } else {
+    // Otherwise, revert to whatever was previously open
+    setOpenSheet(previousSheet);
+    setPreviousSheet('none');
+  }
+};
 
   // -------------------------------------------
   // "Locate me"
