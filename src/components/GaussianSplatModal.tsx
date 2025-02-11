@@ -1,183 +1,210 @@
-// src/components/GaussianSplatModal.tsx
-
-import React, { useEffect, useRef } from 'react';
-import { Viewer, PlyLoader, SplatLoader } from 'gle-gaussian-splat-3d';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { SplatLoader } from '@/lib/splat';
+
+// Firebase storage URL for the splat file
+const FIREBASE_SPLAT_URL = 'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
 
 interface GaussianSplatModalProps {
-  isOpen: boolean;
   onClose: () => void;
 }
 
-// Replace with your publicly available file URL
-const SPLAT_FILE_URL =
-  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
-
-const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
-  isOpen,
-  onClose,
-}) => {
+const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Viewer | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const frameIdRef = useRef<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && containerRef.current && !viewerRef.current) {
-      const containerEl = containerRef.current;
+    let mounted = true;
 
-      const initViewer = () => {
-        try {
-          const renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            powerPreference: 'high-performance',
-          });
+    const init = () => {
+      if (!containerRef.current) return;
 
-          const camera = new THREE.PerspectiveCamera(
-            65,
-            window.innerWidth / window.innerHeight,
-            0.1,
-            1000
-          );
-          camera.position.set(0, 1.5, 4);
-          camera.lookAt(0, 0, 0);
+      // Initialize Scene
+      const scene = new THREE.Scene();
+      sceneRef.current = scene;
+      scene.background = new THREE.Color(0x000000);
 
-          // Create the Viewer
-          const viewer = new Viewer({
-            renderer,
-            camera,
-            gpuAcceleratedSort: true,
-            useBuiltInControls: true,
-            selfDrivenMode: false,
-            backgroundColor: new THREE.Color(0x151515),
-            cameraUp: [0, 1, 0], // Y-up
-          });
-          viewerRef.current = viewer;
+      // Initialize Camera
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        containerRef.current.clientWidth / containerRef.current.clientHeight,
+        0.1,
+        1000
+      );
+      cameraRef.current = camera;
+      camera.position.z = 5;
 
-          containerEl.appendChild(renderer.domElement);
+      // Initialize Renderer
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      rendererRef.current = renderer;
+      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      containerRef.current.appendChild(renderer.domElement);
 
-          // loadFromURL with 11 arguments (numbers/callbacks)
-          const splatBuffer = PlyLoader.loadFromURL(
-            SPLAT_FILE_URL,
-            12,   // positionQuantizationBits
-            10,   // scaleQuantizationBits
-            8,    // colorQuantizationBits
-            0,    // normalQuantizationBits
-            0,    // boundingBox (0 => false)
-            0,    // autoScale   (0 => false)
-            0,    // reorder     (0 => false)
-            (progress: number) => {
-              console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
-            },
-            () => {
-              console.log('PLY file loaded successfully!');
-            },
-            (error: any) => {
-              console.error('Error loading PLY file:', error);
-            }
-          );
+      // Initialize Controls
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controlsRef.current = controls;
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.screenSpacePanning = false;
+      controls.maxPolarAngle = Math.PI / 2;
+    };
 
-          // Use the SplatLoader instance without passing anything to constructor
-          const splatLoader = new SplatLoader();
-          // Instead, load the buffer here:
-          splatLoader.loadFromBuffer(splatBuffer);
+    const loadSplat = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-          // Now get your SplatScene
-          const splatScene = splatLoader.getSplatScene();
-
-          viewer.addSplatScene(splatScene, {
-            splatAlphaRemovalThreshold: 7,
-            showLoadingSpinner: true,
-            position: [0, -0.5, 0],
-            rotation: [-Math.PI / 2, 0, 0],
-            scale: [1, 1, 1],
-          });
-
-          viewer.scene.add(new THREE.AxesHelper(2));
-          viewer.start();
-
-          // Handle window resizing
-          const onResize = () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-          };
-          window.addEventListener('resize', onResize);
-
-          return () => {
-            window.removeEventListener('resize', onResize);
-          };
-        } catch (error) {
-          console.error('Failed to load splat:', error);
-          onClose();
+        // Create a new SplatLoader instance
+        const splatLoader = new SplatLoader();
+        
+        // Fetch the splat file from Firebase Storage
+        const response = await fetch(FIREBASE_SPLAT_URL);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch splat file: ${response.statusText}`);
         }
-      };
-
-      initViewer();
-    }
-
-    // Cleanup on unmount or modal close
-    return () => {
-      if (viewerRef.current) {
-        viewerRef.current.dispose();
-        viewerRef.current = null;
+        
+        const splatBuffer = await response.arrayBuffer();
+        
+        // Load the splat data
+        await splatLoader.load(splatBuffer);
+        
+        // Get the splat scene
+        const splatScene = splatLoader.getSplatScene();
+        
+        if (mounted && sceneRef.current && splatScene) {
+          // Add the splat scene to the Three.js scene
+          sceneRef.current.add(splatScene);
+          
+          // Center the camera on the splat scene
+          const box = new THREE.Box3().setFromObject(splatScene);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          
+          if (cameraRef.current && controlsRef.current) {
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = cameraRef.current.fov * (Math.PI / 180);
+            const cameraDistance = Math.abs(maxDim / Math.sin(fov / 2) / 2);
+            
+            cameraRef.current.position.copy(center);
+            cameraRef.current.position.z += cameraDistance;
+            cameraRef.current.lookAt(center);
+            
+            controlsRef.current.target.copy(center);
+            controlsRef.current.update();
+          }
+        }
+        
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error loading splat:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load splat file');
+          setIsLoading(false);
+        }
       }
     };
-  }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+    const animate = () => {
+      frameIdRef.current = requestAnimationFrame(animate);
+
+      if (controlsRef.current) {
+        controlsRef.current.update();
+      }
+
+      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+      }
+    };
+
+    const handleResize = () => {
+      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
+
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+
+      cameraRef.current.aspect = width / height;
+      cameraRef.current.updateProjectionMatrix();
+
+      rendererRef.current.setSize(width, height);
+    };
+
+    init();
+    loadSplat();
+    animate();
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('resize', handleResize);
+      
+      if (frameIdRef.current) {
+        cancelAnimationFrame(frameIdRef.current);
+      }
+
+      if (rendererRef.current && containerRef.current) {
+        containerRef.current.removeChild(rendererRef.current.domElement);
+        rendererRef.current.dispose();
+      }
+
+      if (controlsRef.current) {
+        controlsRef.current.dispose();
+      }
+
+      // Clean up any materials, geometries, or textures
+      if (sceneRef.current) {
+        sceneRef.current.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            if (object.geometry) {
+              object.geometry.dispose();
+            }
+            if (object.material) {
+              if (Array.isArray(object.material)) {
+                object.material.forEach((material) => material.dispose());
+              } else {
+                object.material.dispose();
+              }
+            }
+          }
+        });
+      }
+    };
+  }, []); // No url dependency anymore since we're using constant
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <button className="close-button" onClick={onClose}>
-          ×
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+      <div className="relative w-full h-full">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-white text-lg">Loading splat...</div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-red-500 text-lg bg-black bg-opacity-75 p-4 rounded">
+              Error: {error}
+            </div>
+          </div>
+        )}
+        
+        <div ref={containerRef} className="w-full h-full" />
+        
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-white hover:text-gray-300 bg-black bg-opacity-50 rounded"
+        >
+          Close
         </button>
-        <div ref={containerRef} className="splat-container" />
       </div>
-
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.85);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-        }
-        .modal-content {
-          position: relative;
-          width: 95vw;
-          height: 95vh;
-          background: #000;
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        .close-button {
-          position: absolute;
-          top: 15px;
-          right: 15px;
-          background: rgba(255, 255, 255, 0.15);
-          border: none;
-          color: white;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          cursor: pointer;
-          z-index: 1;
-          transition: background 0.2s;
-        }
-        .close-button:hover {
-          background: rgba(255, 255, 255, 0.25);
-        }
-        .splat-container {
-          width: 100%;
-          height: 100%;
-          touch-action: none;
-        }
-      `}</style>
     </div>
   );
 };
