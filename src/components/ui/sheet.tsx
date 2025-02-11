@@ -32,7 +32,7 @@ const Sheet = ({
       className={cn(
         'fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm',
         'overflow-hidden transition-all duration-300 ease-in-out',
-        isOpen ? 'max-h-[70vh]' : 'max-h-0', // Fully closed vs. up to 70% viewport height
+        isOpen ? 'max-h-[50vh]' : 'max-h-0', // Fully closed vs. up to 70% viewport height
         className
       )}
     >
