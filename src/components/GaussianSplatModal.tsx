@@ -40,7 +40,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           camera.position.set(0, 1.5, 4);
           camera.lookAt(0, 0, 0);
 
-          // Create viewer instance with proper typing
+          // Create viewer instance
           const viewer = new GaussianSplat3D.Viewer({
             renderer,
             camera,
@@ -48,12 +48,14 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             useBuiltInControls: true,
             selfDrivenMode: false,
             backgroundColor: new THREE.Color(0x151515),
-            cameraUp: [0, 1, 0], // Y-up
-          } as GaussianSplat3D.ViewerParams);
+            cameraUp: [0, 1, 0],
+          });
 
           viewerRef.current = viewer;
 
-          containerEl.appendChild(viewer.renderer.domElement as unknown as HTMLElement);
+          containerEl.appendChild(
+            viewer.renderer.domElement as unknown as HTMLElement
+          );
 
           try {
             // Get Firebase Storage instance and generate a signed URL
@@ -64,17 +66,16 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Use the new unified loadFile method
+            // Load the splat file
             await viewer.loadFile(proxyUrl, {
               splatAlphaRemovalThreshold: 7,
               halfPrecisionCovariancesOnGPU: true,
               position: [0, -0.5, 0],
               rotation: [-Math.PI / 2, 0, 0],
-              scale: [1, 1, 1]
+              scale: [1, 1, 1],
             });
 
             viewer.start();
-
           } catch (error) {
             console.error('Error loading splat:', error);
             onClose();
@@ -86,9 +87,9 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
           };
-          
+
           window.addEventListener('resize', onResize);
-          onResize(); // Initial resize
+          onResize();
 
           return () => {
             window.removeEventListener('resize', onResize);
