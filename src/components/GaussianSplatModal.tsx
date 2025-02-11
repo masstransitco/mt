@@ -62,8 +62,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
+            // Create the SplatLoader instance first
+            const splatLoader = new SplatLoader();
+
             // Load the PLY file
-            PlyLoader.loadFromURL(
+            const splatBuffer = await PlyLoader.loadFromURL(
               proxyUrl,
               12, // positionQuantizationBits
               10, // scaleQuantizationBits
@@ -75,25 +78,22 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
               function(progress: number): void {
                 console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
               },
-              function(buffer: ArrayBuffer): void {
+              async function(buffer: ArrayBuffer): Promise<void> {
                 console.log('PLY file loaded successfully!');
                 try {
-                  if (viewerRef.current && buffer) {
-                    // Create the SplatLoader instance with the buffer
-                    const vertices = new Float32Array(buffer);
-                    const splatLoader = new SplatLoader(vertices);
+                  if (viewerRef.current) {
+                    // Try to load the buffer using loadFromBuffer
+                    splatLoader.loadFromBuffer(buffer);
 
-                    if (viewerRef.current) {
-                      viewerRef.current.addSplatScene(splatLoader, {
-                        splatAlphaRemovalThreshold: 7,
-                        showLoadingSpinner: true,
-                        position: [0, -0.5, 0],
-                        rotation: [-Math.PI / 2, 0, 0],
-                        scale: [1, 1, 1],
-                      });
+                    viewerRef.current.addSplatScene(splatLoader, {
+                      splatAlphaRemovalThreshold: 7,
+                      showLoadingSpinner: true,
+                      position: [0, -0.5, 0],
+                      rotation: [-Math.PI / 2, 0, 0],
+                      scale: [1, 1, 1],
+                    });
 
-                      viewerRef.current.start();
-                    }
+                    viewerRef.current.start();
                   }
                 } catch (error) {
                   console.error('Error processing splat data:', error);
