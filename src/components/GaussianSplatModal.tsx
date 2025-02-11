@@ -62,9 +62,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Create a new SplatLoader instance
-            const splatLoader = new SplatLoader();
-
             // Load the PLY file
             const splatBuffer = PlyLoader.loadFromURL(
               proxyUrl,
@@ -74,19 +71,20 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
               0,  // normalQuantizationBits
               0,  // boundingBox (false)
               0,  // autoScale (false)
-              0,  // reorder (false),
-              function(progress) {
+              0,  // reorder (false)
+              function(progress: number): void {
                 console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
               },
-              function(buffer) {
+              function(buffer: ArrayBuffer): void {
                 console.log('PLY file loaded successfully!');
                 try {
                   if (viewerRef.current && buffer) {
-                    // Use the buffer to create the scene
-                    const scene = new THREE.Scene();
-                    scene.add(buffer);
+                    // Process the buffer and create a scene
+                    const splatLoader = new SplatLoader();
+                    splatLoader.processBuffer(buffer);
+                    const splatScene = splatLoader.createScene();
 
-                    viewerRef.current.addSplatScene(scene, {
+                    viewerRef.current.addSplatScene(splatScene, {
                       splatAlphaRemovalThreshold: 7,
                       showLoadingSpinner: true,
                       position: [0, -0.5, 0],
@@ -101,7 +99,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
                   onClose();
                 }
               },
-              function(error) {
+              function(error: Error): void {
                 console.error('Error loading PLY file:', error);
                 onClose();
               }
