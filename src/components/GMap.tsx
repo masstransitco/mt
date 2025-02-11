@@ -31,10 +31,9 @@ import { toggleSheet, selectIsSheetMinimized } from '@/store/uiSlice';
 import {
   selectBookingStep,
   advanceBookingStep,
-  fetchRoute,          // <--- IMPORT OUR THUNK
+  fetchRoute,
 } from '@/store/bookingSlice';
 
-// 3D data
 import { fetchStations3D, selectStations3D } from '@/store/stations3DSlice';
 
 // UI Components
@@ -68,33 +67,38 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
-  // Local state
+  // Local UI state
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Active station & sheet states
-  const [activeStation, setActiveStation] = useState<StationFeature | null>(null);
-  const [activeStation3D, setActiveStation3D] = useState<any | null>(null);
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
 
   // Redux
   const dispatch = useAppDispatch();
+
+  // Station data
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
+
+  // Cars data
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
+
+  // 3D station data
+  const stations3D = useAppSelector(selectStations3D);
+
+  // User & UI
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
-  const stations3D = useAppSelector(selectStations3D);
 
-  // IDs
+  // IDs for departure/arrival
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
@@ -141,14 +145,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const hasError = stationsError || carsError || loadError;
 
   // --- Directions: If both departure & arrival selected, fetch route
-  // You could also do this in a callback, but the effect approach
-  // automatically updates if user changes stations.
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
-      const departureStation = stations.find(s => s.id === departureStationId);
-      const arrivalStation = stations.find(s => s.id === arrivalStationId);
+      const departureStation = stations.find((s) => s.id === departureStationId);
+      const arrivalStation = stations.find((s) => s.id === arrivalStationId);
       if (departureStation && arrivalStation) {
-        // Dispatch thunk that calls the Directions API
         dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
       }
     }
@@ -181,6 +182,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       if (!mapRef.current) return;
       mapRef.current.panTo(location);
       mapRef.current.setZoom(15);
+
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSearchLocation(location);
       setSortedStations(sorted);
@@ -192,28 +194,92 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Station click (Marker or 3D cube)
+  // Open/close sheet helpers
+  const openNewSheet = (newSheet: OpenSheetType) => {
+    if (openSheet !== newSheet) {
+      setPreviousSheet(openSheet);
+      setOpenSheet(newSheet);
+    }
+  };
+
+  const closeCurrentSheet = () => {
+    const old = openSheet;
+    setOpenSheet(previousSheet);
+    setPreviousSheet('none');
+    if (old === 'detail') {
+      // We used to clear local activeStation here; no longer needed
+      overlayRef.current?.requestRedraw();
+    }
+  };
+
+  // "Locate me" logic
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation not supported.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        dispatch(setUserLocation(loc));
+        if (mapRef.current) {
+          mapRef.current.panTo(loc);
+          mapRef.current.setZoom(15);
+        }
+        const sorted = sortStationsByDistanceToPoint(loc, stations);
+        setSearchLocation(loc);
+        setSortedStations(sorted);
+        openNewSheet('list');
+        toast.success('Location found!');
+      },
+      (err) => {
+        console.error('Geolocation error:', err);
+        toast.error('Unable to retrieve location.');
+      }
+    );
+  };
+
+  // "Car" sheet toggle
+  const handleCarToggle = () => {
+    if (openSheet === 'car') {
+      closeCurrentSheet();
+    } else {
+      openNewSheet('car');
+    }
+  };
+
+  // ----------------------------
+  // Marker / Station selection
+  // ----------------------------
+
+  // Handler for station clicks (marker or 3D)
   const handleStationClick = useCallback(
     (station: StationFeature) => {
-      setActiveStation(station);
-      const objectId = station.properties.ObjectId;
-      const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
-      setActiveStation3D(match);
-
-      // Conditionally set departure or arrival
+      // Based on the current step, set departure or arrival
       if (bookingStep < 3) {
         dispatch({ type: 'user/selectDepartureStation', payload: station.id });
       } else {
         dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       }
 
+      // Open detail sheet
       openNewSheet('detail');
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
     },
-    [dispatch, bookingStep, isSheetMinimized, stations3D]
+    [dispatch, bookingStep, isSheetMinimized]
   );
+
+  // For station list item click
+  const handleStationSelectedFromList = (station: StationFeature) => {
+    if (bookingStep < 3) {
+      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+    } else {
+      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+    }
+    openNewSheet('detail');
+  };
 
   // 3D overlay click logic (raycaster)
   useEffect(() => {
@@ -221,8 +287,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     const mouse = new THREE.Vector2();
 
     function onOverlayClick(event: MouseEvent) {
-      const canvas = (overlayRef.current && (overlayRef.current as any).canvas)
-        || document.querySelector('canvas');
+      const canvas =
+        (overlayRef.current && (overlayRef.current as any).canvas) ||
+        document.querySelector('canvas');
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
@@ -242,8 +309,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       }
     }
 
-    const canvas = (overlayRef.current && (overlayRef.current as any).canvas)
-      || document.querySelector('canvas');
+    const canvas =
+      (overlayRef.current && (overlayRef.current as any).canvas) ||
+      document.querySelector('canvas');
     if (canvas) {
       canvas.addEventListener('click', onOverlayClick, false);
       return () => {
@@ -252,7 +320,25 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [handleStationClick]);
 
-  // Handle map load: build 3D overlay, create geometry for stations, etc.
+  // ----------------------------
+  // Confirm / Clear from detail
+  // ----------------------------
+  const handleConfirmDeparture = () => {
+    // When user confirms departure station, go from step 2 -> step 3
+    dispatch(advanceBookingStep(3));
+    // Close the detail sheet
+    setOpenSheet('none');
+    setPreviousSheet('none');
+  };
+
+  const handleClearStationDetail = () => {
+    // Just close the detail sheet in the UI
+    closeCurrentSheet();
+  };
+
+  // ----------------------------
+  // Map / 3D Setup
+  // ----------------------------
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -278,7 +364,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       directionalLight.position.set(0, 10, 50);
       scene.add(directionalLight);
 
-      // Hardcode anchor point
+      // Anchor point
       const hongKongCenter = { lat: 22.298, lng: 114.177, altitude: 100 };
 
       const overlay = new ThreeJSOverlayView({
@@ -356,106 +442,33 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, []);
 
-  // Helpers for the side-sheets
-  const openNewSheet = (newSheet: OpenSheetType) => {
-    if (openSheet !== newSheet) {
-      setPreviousSheet(openSheet);
-      setOpenSheet(newSheet);
-    }
-  };
-
-  const closeCurrentSheet = () => {
-    const old = openSheet;
-    setOpenSheet(previousSheet);
-    setPreviousSheet('none');
-    if (old === 'detail') {
-      setActiveStation(null);
-      setActiveStation3D(null);
-      overlayRef.current?.requestRedraw();
-    }
-  };
-
-  // "Locate me" logic
-  const handleLocateMe = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation not supported.');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        dispatch(setUserLocation(loc));
-        if (mapRef.current) {
-          mapRef.current.panTo(loc);
-          mapRef.current.setZoom(15);
-        }
-        const sorted = sortStationsByDistanceToPoint(loc, stations);
-        setSearchLocation(loc);
-        setSortedStations(sorted);
-        setActiveStation(null);
-        setActiveStation3D(null);
-        openNewSheet('list');
-        toast.success('Location found!');
-      },
-      (err) => {
-        console.error('Geolocation error:', err);
-        toast.error('Unable to retrieve location.');
-      }
-    );
-  };
-
-  // "Car" sheet toggle
-  const handleCarToggle = () => {
-    if (openSheet === 'car') {
-      closeCurrentSheet();
-    } else {
-      setActiveStation(null);
-      setActiveStation3D(null);
-      openNewSheet('car');
-    }
-  };
-
-  // Decide marker icon for each station
+  // ----------------------------
+  // Marker Icons
+  // ----------------------------
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
+    // Show departure icon if it matches departureStationId
     if (station.id === departureStationId) return markerIcons.departureStation;
+    // Show arrival icon if it matches arrivalStationId
     if (station.id === arrivalStationId) return markerIcons.arrivalStation;
-    if (station.id === activeStation?.id) return markerIcons.activeStation;
+    // Default
     return markerIcons.station;
   };
 
-  // Station list item click
-  const handleStationSelectedFromList = (station: StationFeature) => {
-    setActiveStation(station);
-    const objectId = station.properties.ObjectId;
-    const match = stations3D.find((f: any) => f.properties.ObjectId === objectId) || null;
-    setActiveStation3D(match);
-
-    if (bookingStep < 3) {
-      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
-    } else {
-      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
-    }
-    openNewSheet('detail');
-  };
-
-  // Example callback: after user confirms departure
-  const handleConfirmDeparture = () => {
-    dispatch(advanceBookingStep(3));
-    setPreviousSheet('none');
-    setOpenSheet('none');
-    setActiveStation(null);
-    setActiveStation3D(null);
-    overlayRef.current?.requestRedraw();
-  };
-
-  // Example callback: clearing station detail sheet
-  const handleClearStationDetail = () => {
-    closeCurrentSheet();
-  };
+  // ----------------------------
+  // Which station to show in StationDetail?
+  // If user is in steps 1 or 2 => departure flows
+  // If user is in steps 3+ => arrival flows
+  // We'll pick whichever is selected from Redux.
+  // ----------------------------
+  const selectedStationId = bookingStep < 3 ? departureStationId : arrivalStationId;
+  const stationToShow = selectedStationId
+    ? stations.find((s) => s.id === selectedStationId)
+    : null;
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
+      {/* Error or Loading states */}
       {hasError ? (
         <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
           <div className="text-center space-y-2">
@@ -559,7 +572,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           )}
 
           {/* Station detail sheet */}
-          {openSheet === 'detail' && activeStation && (
+          {openSheet === 'detail' && stationToShow && (
             <Sheet
               isOpen
               onToggle={closeCurrentSheet}
@@ -568,7 +581,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             >
               <StationDetail
                 stations={searchLocation ? sortedStations : stations}
-                activeStation={activeStation}
+                activeStation={stationToShow}
                 onConfirmDeparture={handleConfirmDeparture}
                 onClear={handleClearStationDetail}
               />
