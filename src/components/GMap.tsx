@@ -84,8 +84,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
+  // Which sheet is open?
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
+
+  /**
+   * A local key to force a fresh mount of StationDetail
+   * whenever a user selects a station.
+   */
+  const [detailKey, setDetailKey] = useState(0);
 
   // -------------------------------------------
   // Redux
@@ -220,11 +227,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Callbacks for clearing stations in StationSelector
   // -------------------------------------------
   const handleClearDepartureInSelector = () => {
-    // Clear in Redux
     dispatch(clearDepartureStation());
-    // Optionally also clear arrival if you want to reset everything:
-    // dispatch(clearArrivalStation());
-    // Move flow back to step 1
     dispatch(advanceBookingStep(1));
     toast.success('Departure station cleared');
 
@@ -237,7 +240,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const handleClearArrivalInSelector = () => {
     dispatch(clearArrivalStation());
-    // Move flow back to step 3
     dispatch(advanceBookingStep(3));
     toast.success('Arrival station cleared');
 
@@ -259,21 +261,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   const closeCurrentSheet = () => {
-  const old = openSheet;
+    const old = openSheet;
 
-  if (old === 'detail') {
-    // If we are closing the detail sheet, just go to 'none'
-    setOpenSheet('none');
-    setPreviousSheet('none');
-
-    // If desired, force a redraw
-    overlayRef.current?.requestRedraw();
-  } else {
-    // Otherwise, revert to whatever was previously open
-    setOpenSheet(previousSheet);
-    setPreviousSheet('none');
-  }
-};
+    if (old === 'detail') {
+      // Close detail -> none
+      setOpenSheet('none');
+      setPreviousSheet('none');
+      overlayRef.current?.requestRedraw();
+    } else {
+      // Revert to the previous sheet
+      setOpenSheet(previousSheet);
+      setPreviousSheet('none');
+    }
+  };
 
   // -------------------------------------------
   // "Locate me"
@@ -320,14 +320,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // -------------------------------------------
   const handleStationClick = useCallback(
     (station: StationFeature) => {
-      // Based on the current step, set departure or arrival
+      // If still picking departure
       if (bookingStep < 3) {
         dispatch({ type: 'user/selectDepartureStation', payload: station.id });
       } else {
         dispatch({ type: 'user/selectArrivalStation', payload: station.id });
       }
 
-      // Open detail sheet
+      // Force a fresh StationDetail every time
+      setDetailKey((prev) => prev + 1);
+
       openNewSheet('detail');
       if (isSheetMinimized) {
         dispatch(toggleSheet());
@@ -336,13 +338,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, bookingStep, isSheetMinimized]
   );
 
-  // Station List item click
+  // If user picks from the station list
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep < 3) {
       dispatch({ type: 'user/selectDepartureStation', payload: station.id });
     } else {
       dispatch({ type: 'user/selectArrivalStation', payload: station.id });
     }
+    setDetailKey((prev) => prev + 1);
     openNewSheet('detail');
   };
 
@@ -391,9 +394,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Confirm / Clear from StationDetail
   // -------------------------------------------
   const handleConfirmDeparture = () => {
-    // Move from step 2 => step 3
     dispatch(advanceBookingStep(3));
-    // Close detail sheet
     setOpenSheet('none');
     setPreviousSheet('none');
   };
@@ -522,9 +523,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // -------------------------------------------
   // Which station to show in StationDetail?
   // -------------------------------------------
-  // Steps 1 or 2 => show departure
-  // Steps 3+ => show arrival
-  const selectedStationId = bookingStep < 3 ? departureStationId : arrivalStationId;
+  // Steps 1 or 2 => departure. Steps 3+ => arrival
+  const selectedStationId =
+    bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = selectedStationId
     ? stations.find((s) => s.id === selectedStationId)
     : null;
@@ -597,7 +598,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* Station selector overlay */}
           <StationSelector
             onAddressSearch={handleAddressSearch}
-            // Pass in callbacks to clear departure/arrival
             onClearDeparture={handleClearDepartureInSelector}
             onClearArrival={handleClearArrivalInSelector}
           />
@@ -650,12 +650,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* Station detail sheet */}
           {openSheet === 'detail' && stationToShow && (
             <Sheet
-              isOpen={true}
+              key={detailKey} // Force new mount whenever detailKey changes
+              isOpen
               onToggle={closeCurrentSheet}
               title="Station Details"
               count={(searchLocation ? sortedStations : stations).length}
             >
               <StationDetail
+                key={detailKey} // Also force new mount in StationDetail
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={stationToShow}
                 onConfirmDeparture={handleConfirmDeparture}
