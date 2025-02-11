@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Viewer, PlyLoader, SplatLoader } from 'gle-gaussian-splat-3d';
 import * as THREE from 'three';
-import { getStorage, ref, getBlob } from 'firebase/storage';
+import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 interface GaussianSplatModalProps {
   isOpen: boolean;
@@ -53,18 +53,18 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           containerEl.appendChild(renderer.domElement);
 
-          // Get Firebase Storage instance
-          const storage = getStorage();
-          const fileRef = ref(storage, SPLAT_FILE_PATH);
-
           try {
-            // Get the blob from Firebase Storage
-            const blob = await getBlob(fileRef);
-            const arrayBuffer = await blob.arrayBuffer();
+            // Get Firebase Storage instance and generate a signed URL
+            const storage = getStorage();
+            const fileRef = ref(storage, SPLAT_FILE_PATH);
+            const signedUrl = await getDownloadURL(fileRef);
+
+            // Create a proxy request through your own domain
+            const proxyUrl = `/api/proxy-splat?url=${encodeURIComponent(signedUrl)}`;
 
             // Load the PLY file using callbacks
             PlyLoader.loadFromURL(
-              URL.createObjectURL(new Blob([arrayBuffer])),
+              proxyUrl,  // Use the proxy URL instead of direct Firebase URL
               12, // positionQuantizationBits
               10, // scaleQuantizationBits
               8,  // colorQuantizationBits
