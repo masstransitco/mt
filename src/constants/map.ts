@@ -27,13 +27,11 @@ export const HK_BOUNDS = {
 
 // Dark minimalist map styling
 export const MAP_STYLES = [
-  // 1) General text fill: a warm off-white for better contrast on dark
   {
     featureType: 'all',
     elementType: 'labels.text.fill',
     stylers: [{ color: '#EAEAEA' }],
   },
-  // 2) Subtle text stroke that merges with the background
   {
     featureType: 'all',
     elementType: 'labels.text.stroke',
@@ -43,7 +41,6 @@ export const MAP_STYLES = [
       { visibility: 'simplified' },
     ],
   },
-  // 3) Hide administrative boundaries
   {
     featureType: 'administrative',
     elementType: 'geometry',
@@ -54,14 +51,11 @@ export const MAP_STYLES = [
     elementType: 'labels',
     stylers: [{ visibility: 'off' }],
   },
-  // 4) Landscape in a deep neutral
   {
     featureType: 'landscape',
     elementType: 'geometry',
     stylers: [{ color: '#1B1B1B' }],
   },
-  // 5) Points of Interest (POI) in a slightly different dark shade
-  //    to differentiate them from the landscape
   {
     featureType: 'poi',
     elementType: 'geometry',
@@ -77,29 +71,26 @@ export const MAP_STYLES = [
     elementType: 'labels.icon',
     stylers: [{ visibility: 'off' }],
   },
-  // 6) Roads
   {
     featureType: 'road',
     elementType: 'geometry.fill',
-    stylers: [{ color: '#2B2B2B' }], // Slightly lighter than the landscape
+    stylers: [{ color: '#2B2B2B' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry.stroke',
-    stylers: [{ color: '#353535' }], // Subtle stroke
+    stylers: [{ color: '#353535' }],
   },
   {
     featureType: 'road',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#999999' }], // Mid-gray for road labels
+    stylers: [{ color: '#999999' }],
   },
-  // 7) Arterial roads
   {
     featureType: 'road.arterial',
     elementType: 'geometry',
     stylers: [{ color: '#333333' }],
   },
-  // 8) Highways
   {
     featureType: 'road.highway',
     elementType: 'geometry',
@@ -115,7 +106,6 @@ export const MAP_STYLES = [
     elementType: 'labels.text.fill',
     stylers: [{ color: '#777777' }],
   },
-  // 9) Transit icons & labels hidden
   {
     featureType: 'transit',
     elementType: 'labels.icon',
@@ -126,11 +116,10 @@ export const MAP_STYLES = [
     elementType: 'labels.text',
     stylers: [{ visibility: 'off' }],
   },
-  // 10) Water - a deeper navy to contrast the dark land
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#0E1621' }], // deep navy
+    stylers: [{ color: '#0E1621' }],
   },
   {
     featureType: 'water',
@@ -142,7 +131,7 @@ export const MAP_STYLES = [
 // Create map options with a dark theme
 export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
-  zoomControl: false, // Changed to false to hide zoom controls
+  zoomControl: false, // hide zoom controls
   gestureHandling: 'greedy',
   backgroundColor: '#212121',
   maxZoom: 18,
@@ -154,111 +143,118 @@ export const createMapOptions = (): google.maps.MapOptions => ({
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
   },
-  tilt: 45 // Added tilt option
+  tilt: 45,
 });
 
-// Marker icons factory - implementing the dark-themed marker plan
-export const createMarkerIcons = () => {
-  // A stylized car arrow path, can be further refined
-  const carPath = `
-  M0,0.3
-  L-0.6,0.6
-  L0,-0.6
-  L0.6,0.6
-  L0,0.3
-  Z
-`;
+// ----- NEW ADDITIONS -----
 
-  // A diamond shape (for active station)
+/**
+ * The dispatch hub (previously `hongKongCenter`).
+ * We anchor the ThreeJSOverlayView here for 3D transformations.
+ */
+export const DISPATCH_HUB = {
+  lat: 22.298,
+  lng: 114.177,
+  altitude: 100,
+};
+
+/**
+ * A special marker location for demonstration: 
+ * International Commerce Centre (ICC).
+ */
+export const INTER_CC = {
+  lat: 22.304,
+  lng: 114.160,
+};
+
+// Marker icons factory
+export const createMarkerIcons = () => {
+  const carPath = `
+    M0,0.3
+    L-0.6,0.6
+    L0,-0.6
+    L0.6,0.6
+    L0,0.3
+    Z
+  `;
+
   const diamondPath = 'M 0 -1 L 1 0 0 1 -1 0 z';
 
-  // A subtle “pin” shape for the user location
-  // Overlaps a circle on top of a small rectangular tail
-const userPinPath = `
-  M -3 1
-  L -3 -1
-  L -2 -1
-  L -1 -1
-  L -1 1
-  A 1 1 0 0 0 -2 2
-  A 1 1 0 0 0 -3 1
-  Z
-`;
+  const userPinPath = `
+    M -3 1
+    L -3 -1
+    L -2 -1
+    L -1 -1
+    L -1 1
+    A 1 1 0 0 0 -2 2
+    A 1 1 0 0 0 -3 1
+    Z
+  `;
 
-  // A hexagon shape for the default station marker
-  // Offers a more distinct geometry than just a circle
   const hexagonPath = `
-  M -1,1
-  L -1,-1
-  L 1,-1
-  L 1,1
-  L -1,1
-  Z
-`;
+    M -1,1
+    L -1,-1
+    L 1,-1
+    L 1,1
+    L -1,1
+    Z
+  `;
 
   return {
-    // 1) User Location - a pin shape in a gentle sky-blue
+    // 1) User Location
     user: {
       path: userPinPath,
       scale: 10,
-      fillColor: '#93C5FD',   // Light blue (Tailwind blue-300)
+      fillColor: '#93C5FD',   // Light blue
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF', // White stroke for clarity
-      anchor: new google.maps.Point(0, 2), // slightly offset the anchor
+      strokeColor: '#FFFFFF', 
+      anchor: new google.maps.Point(0, 2),
     },
-
-    // 2) Default station marker - a hexagon with a warm gray fill
+    // 2) Default station marker
     station: {
       path: hexagonPath,
       scale: 9,
-      fillColor: '#C9C9C9',   // Gray (Tailwind gray-500)
+      fillColor: '#C9C9C9',
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#1C1C1F',
     },
-
-    // 3) Active station (user has clicked) - diamond with a soft peach fill
-    //    to convey a gentle highlight.
-    activeStation: {
+    // 3) Previously 'activeStation' -> now 'icc'
+    icc: {
       path: diamondPath,
       scale: 10,
-      fillColor: '#F9A8D4',   // Pink (Tailwind pink-300)
+      fillColor: '#F9A8D4', // Pink
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF',
     },
-
-    // 4) Confirmed departure station - circle with teal fill
-    //    Slightly smaller scale than default so it’s distinct from the hex.
+    // 4) Departure station
     departureStation: {
       path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 9,
-      fillColor: '#0717f5',   
-      fillOpacity: 1,
-      strokeWeight: 2,
-      strokeColor: '#F1F5F9', // Very light gray stroke
-    },
-
-    // 5) Confirmed arrival station - circle with dusty purple fill
-    arrivalStation: {
-      path: google?.maps?.SymbolPath?.CIRCLE,
-      scale: 9,
-      fillColor: '#A8161B',   
+      fillColor: '#0717f5',
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#F1F5F9',
     },
-
-    // 6) Car marker - arrow-like shape in a lively royal blue
-    //    with a bright accent stroke. 
+    // 5) Arrival station
+    arrivalStation: {
+      path: google?.maps?.SymbolPath?.CIRCLE,
+      scale: 9,
+      fillColor: '#A8161B',
+      fillOpacity: 1,
+      strokeWeight: 2,
+      strokeColor: '#F1F5F9',
+    },
+    // 6) Car marker
     car: {
       path: carPath,
       scale: 10,
-      fillColor: '#161617',   
+      fillColor: '#161617',
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#f5f5f7',  
+      strokeColor: '#f5f5f7',
     },
   };
 };
@@ -271,5 +267,4 @@ export const PLACES_OPTIONS = {
   types: ['address'],
 };
 
-// Debounce time for address searches
 export const SEARCH_DEBOUNCE_MS = 300;
