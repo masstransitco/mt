@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Viewer } from 'gle-gaussian-splat-3d'; // Direct named import
+import { Viewer } from 'gle-gaussian-splat-3d';
 import * as THREE from 'three';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
@@ -16,6 +16,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   useEffect(() => {
     if (isOpen && containerRef.current && !viewerRef.current) {
@@ -23,18 +24,26 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
       const initViewer = async () => {
         try {
-          // Initialize viewer with validated parameters from docs
+          // Initialize Three.js renderer first
+          const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: 'high-performance',
+          });
+          rendererRef.current = renderer;
+          containerEl.appendChild(renderer.domElement);
+
+          // Create viewer with explicit renderer reference
           const viewer = new Viewer({
+            renderer,
+            camera: new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 1000),
             gpuAcceleratedSort: true,
             useBuiltInControls: true,
+            selfDrivenMode: false,
             backgroundColor: new THREE.Color(0x151515),
-            cameraUp: [0, 1, 0],
-            initialCameraPosition: [0, 1.5, 4],
-            initialCameraLookAt: [0, 0, 0]
+            cameraUp: [0, 1, 0]
           });
 
           viewerRef.current = viewer;
-          containerEl.appendChild(viewer.domElement);
 
           try {
             const storage = getStorage();
@@ -42,7 +51,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             const signedUrl = await getDownloadURL(fileRef);
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Use validated loading pattern from documentation
             await viewer.loadFile(proxyUrl, {
               splatAlphaRemovalThreshold: 7,
               halfPrecisionCovariancesOnGPU: true,
@@ -58,6 +66,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           // Handle window resizing
           const onResize = () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
             viewer.setSize(window.innerWidth, window.innerHeight);
           };
 
@@ -80,6 +89,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
+      }
+      if (rendererRef.current) {
+        rendererRef.current.domElement.remove();
+        rendererRef.current = null;
       }
     };
   }, [isOpen, onClose]);
