@@ -1,13 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { Viewer, PlyLoader, SplatLoader } from 'gle-gaussian-splat-3d';
 import * as THREE from 'three';
+import { getStorage, ref, getBlob } from 'firebase/storage';
 
 interface GaussianSplatModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const SPLAT_FILE_URL = 'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
+const SPLAT_FILE_PATH = 'icc.ply';
 
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
   isOpen,
@@ -20,7 +21,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
     if (isOpen && containerRef.current && !viewerRef.current) {
       const containerEl = containerRef.current;
 
-      const initViewer = () => {
+      const initViewer = async () => {
         try {
           // Initialize renderer
           const renderer = new THREE.WebGLRenderer({
@@ -52,47 +53,58 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           containerEl.appendChild(renderer.domElement);
 
-          // Load the PLY file using callbacks
-          PlyLoader.loadFromURL(
-            SPLAT_FILE_URL,
-            12, // positionQuantizationBits
-            10, // scaleQuantizationBits
-            8,  // colorQuantizationBits
-            0,  // normalQuantizationBits
-            0,  // boundingBox (false)
-            0,  // autoScale (false)
-            0,  // reorder (false)
-            (progress: number) => {
-              console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
-            },
-            () => {
-              console.log('PLY file loaded successfully!');
-              // Create SplatLoader instance
-              try {
-                const splatLoader = new SplatLoader();
-                
-                if (viewerRef.current) {
-                  // Add the splat scene directly to the viewer
-                  viewerRef.current.addSplatScene(splatLoader, {
-                    splatAlphaRemovalThreshold: 7,
-                    showLoadingSpinner: true,
-                    position: [0, -0.5, 0],
-                    rotation: [-Math.PI / 2, 0, 0],
-                    scale: [1, 1, 1],
-                  });
+          // Get Firebase Storage instance
+          const storage = getStorage();
+          const fileRef = ref(storage, SPLAT_FILE_PATH);
 
-                  viewerRef.current.start();
+          try {
+            // Get the blob from Firebase Storage
+            const blob = await getBlob(fileRef);
+            const arrayBuffer = await blob.arrayBuffer();
+
+            // Load the PLY file using callbacks
+            PlyLoader.loadFromURL(
+              URL.createObjectURL(new Blob([arrayBuffer])),
+              12, // positionQuantizationBits
+              10, // scaleQuantizationBits
+              8,  // colorQuantizationBits
+              0,  // normalQuantizationBits
+              0,  // boundingBox (false)
+              0,  // autoScale (false)
+              0,  // reorder (false)
+              (progress: number) => {
+                console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
+              },
+              () => {
+                console.log('PLY file loaded successfully!');
+                try {
+                  const splatLoader = new SplatLoader();
+                  
+                  if (viewerRef.current) {
+                    viewerRef.current.addSplatScene(splatLoader, {
+                      splatAlphaRemovalThreshold: 7,
+                      showLoadingSpinner: true,
+                      position: [0, -0.5, 0],
+                      rotation: [-Math.PI / 2, 0, 0],
+                      scale: [1, 1, 1],
+                    });
+
+                    viewerRef.current.start();
+                  }
+                } catch (error) {
+                  console.error('Error processing splat data:', error);
+                  onClose();
                 }
-              } catch (error) {
-                console.error('Error processing splat data:', error);
+              },
+              (error: any) => {
+                console.error('Error loading PLY file:', error);
                 onClose();
               }
-            },
-            (error: any) => {
-              console.error('Error loading PLY file:', error);
-              onClose();
-            }
-          );
+            );
+          } catch (error) {
+            console.error('Error fetching from Firebase Storage:', error);
+            onClose();
+          }
 
           // Handle window resizing
           const onResize = () => {
