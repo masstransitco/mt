@@ -24,7 +24,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
     if (isOpen && containerRef.current && !viewerRef.current) {
       const containerEl = containerRef.current;
 
-      // Initialize the viewer & load data
       const initViewer = () => {
         try {
           const renderer = new THREE.WebGLRenderer({
@@ -55,21 +54,44 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           containerEl.appendChild(renderer.domElement);
 
-          // IMPORTANT: PlyLoader.loadFromURL(...) is NOT typed as a Promise
-          // so we do NOT await it. It returns a buffer synchronously.
-          const splatBuffer = PlyLoader.loadFromURL(SPLAT_FILE_URL, {
-            positionQuantizationBits: 12,
-            scaleQuantizationBits: 10,
-            colorQuantizationBits: 8,
-            // If the library supports progress callbacks in these options:
-            progressCallback: (progress) => {
+          // Match the signature that expects 11 arguments:
+          // loadFromURL(
+          //   url: string,
+          //   positionQuantizationBits: number,
+          //   scaleQuantizationBits: number,
+          //   colorQuantizationBits: number,
+          //   normalQuantizationBits: number,
+          //   boundingBox: boolean,
+          //   autoScale: boolean,
+          //   reorder: boolean,
+          //   progressCB?: (progress: number) => void,
+          //   onSuccessCB?: () => void,
+          //   onErrorCB?: (error: any) => void
+          // ): ArrayBuffer;
+
+          const splatBuffer = PlyLoader.loadFromURL(
+            SPLAT_FILE_URL,
+            12,          // positionQuantizationBits
+            10,          // scaleQuantizationBits
+            8,           // colorQuantizationBits
+            0,           // normalQuantizationBits
+            false,       // boundingBox
+            false,       // autoScale
+            false,       // reorder
+            (progress: number) => {
               console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
             },
-          });
+            () => {
+              console.log('PLY file loaded successfully!');
+            },
+            (error: any) => {
+              console.error('Error loading PLY file:', error);
+            }
+          );
 
           // Convert the buffer into a SplatScene
           const splatLoader = new SplatLoader(splatBuffer);
-          const splatScene = splatLoader.getSplatScene(); // also synchronous
+          const splatScene = splatLoader.getSplatScene();
 
           viewer.addSplatScene(splatScene, {
             splatAlphaRemovalThreshold: 7,
@@ -79,10 +101,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             scale: [1, 1, 1],
           });
 
-          // Example: Add Axes for reference
           viewer.scene.add(new THREE.AxesHelper(2));
-
-          // Start render loop
           viewer.start();
 
           // Handle window resizing
@@ -93,7 +112,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           };
           window.addEventListener('resize', onResize);
 
-          // Cleanup the resize listener when closed
           return () => {
             window.removeEventListener('resize', onResize);
           };
@@ -103,11 +121,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
         }
       };
 
-      // Invoke it
       initViewer();
     }
 
-    // Dispose viewer on unmount or when modal closes
+    // Cleanup on unmount or modal close
     return () => {
       if (viewerRef.current) {
         viewerRef.current.dispose();
