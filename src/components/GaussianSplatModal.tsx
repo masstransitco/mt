@@ -70,7 +70,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
               // Handle successful load
               try {
                 const splatLoader = new SplatLoader();
-                splatLoader.loadFromBuffer(splatBuffer);
+                splatLoader.load(splatBuffer);
                 const splatScene = splatLoader.getSplatScene();
 
                 if (viewerRef.current) {
