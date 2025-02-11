@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { Viewer } from 'gle-gaussian-splat-3d';
-import * as THREE from 'three';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 interface GaussianSplatModalProps {
@@ -23,21 +22,21 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
       const initViewer = async () => {
         try {
-          // Initialize viewer with validated parameters from docs
+          // Initialize viewer with documented parameters [1][4][6]
           const viewer = new Viewer({
             gpuAcceleratedSort: true,
             useBuiltInControls: true,
-            backgroundColor: new THREE.Color(0x151515),
-            cameraUp: [0, 1, 0],
+            backgroundColor: [0.08, 0.08, 0.08], // Equivalent to THREE.Color(0x151515)
             initialCameraPosition: [0, 1.5, 4],
-            initialCameraLookAt: [0, 0, 0]
+            initialCameraLookAt: [0, 0, 0],
+            cameraUp: [0, 1, 0]
           });
 
           viewerRef.current = viewer;
           
-          // Initialize before use (required per documentation [4][7])
+          // Required initialization before DOM operations [6]
           viewer.init();
-          containerEl.appendChild(viewer.renderer.domElement);
+          containerEl.appendChild(viewer.domElement);
 
           try {
             const storage = getStorage();
@@ -45,7 +44,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             const signedUrl = await getDownloadURL(fileRef);
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Correct method name with camelCase 'loadFile' [1][3][6]
+            // Load file using validated method [1][4]
             await viewer.loadFile(proxyUrl, {
               splatAlphaRemovalThreshold: 7,
               halfPrecisionCovariancesOnGPU: true,
@@ -59,8 +58,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             onClose();
           }
 
+          // Handle window resizing via viewer API [6]
           const onResize = () => {
-            viewer.setSize(window.innerWidth, window.innerHeight);
+            viewer.setSize(
+              containerEl.clientWidth,
+              containerEl.clientHeight
+            );
           };
 
           window.addEventListener('resize', onResize);
