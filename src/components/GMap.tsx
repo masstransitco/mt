@@ -300,7 +300,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   // Station selection (marker or list)
-  const [detailKey, setDetailKey] = useState(0);
 
   const handleStationClick = useCallback(
     (station: StationFeature) => {
