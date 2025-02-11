@@ -54,16 +54,16 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           containerEl.appendChild(renderer.domElement);
 
-          // loadFromURL signature might expect numeric flags, not booleans
+          // loadFromURL with 11 arguments (numbers/callbacks)
           const splatBuffer = PlyLoader.loadFromURL(
             SPLAT_FILE_URL,
             12,   // positionQuantizationBits
             10,   // scaleQuantizationBits
             8,    // colorQuantizationBits
             0,    // normalQuantizationBits
-            0,    // boundingBox (0 for false)
-            0,    // autoScale   (0 for false)
-            0,    // reorder     (0 for false)
+            0,    // boundingBox (0 => false)
+            0,    // autoScale   (0 => false)
+            0,    // reorder     (0 => false)
             (progress: number) => {
               console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
             },
@@ -75,8 +75,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             }
           );
 
-          // Convert the buffer into a SplatScene
-          const splatLoader = new SplatLoader(splatBuffer);
+          // Use the SplatLoader instance without passing anything to constructor
+          const splatLoader = new SplatLoader();
+          // Instead, load the buffer here:
+          splatLoader.loadFromBuffer(splatBuffer);
+
+          // Now get your SplatScene
           const splatScene = splatLoader.getSplatScene();
 
           viewer.addSplatScene(splatScene, {
