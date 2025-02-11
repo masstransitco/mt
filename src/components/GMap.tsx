@@ -57,6 +57,8 @@ import {
   DEFAULT_ZOOM,
   createMapOptions,
   createMarkerIcons,
+  DISPATCH_HUB,    // <-- Added import
+  INTER_CC,        // <-- Added import
 } from '@/constants/map';
 
 interface GMapProps {
@@ -82,41 +84,23 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Which sheet is open?
   const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
-
-  /**
-   * A local key to force a fresh mount of StationDetail
-   * whenever a user selects a station.
-   */
   const [detailKey, setDetailKey] = useState(0);
-
-  /**
-   * forceSheetOpen ensures we can always open StationDetail,
-   * even if the previousSheet logic would otherwise revert.
-   */
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
 
   // Redux
   const dispatch = useAppDispatch();
-
-  // Station data
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
-
-  // Cars data
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
-
-  // 3D data
   const stations3D = useAppSelector(selectStations3D);
 
-  // User & UI
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
 
-  // IDs
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
@@ -128,7 +112,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // On initial load => set map options & icons
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -161,6 +144,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Error check
   const hasError = stationsError || carsError || loadError;
+  if (hasError) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
+        <div className="text-center space-y-2">
+          <p className="font-medium">Error loading map data</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm underline hover:text-destructive/80"
+          >
+            Try reloading
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Auto-fetch route if departure & arrival
   useEffect(() => {
@@ -173,7 +171,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // Utility to sort stations by distance
+  // Sort stations
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -238,9 +236,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // openNewSheet
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== 'detail') {
-    setForceSheetOpen(false);
-  }
-
+      setForceSheetOpen(false);
+    }
     if (openSheet !== newSheet) {
       setPreviousSheet(openSheet);
       setOpenSheet(newSheet);
@@ -304,7 +301,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   // Station selection (marker or list)
-
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep < 3) {
@@ -386,7 +382,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setForceSheetOpen(false);
   };
 
-  // Reset forceSheetOpen if component unmounts
   useEffect(() => {
     return () => {
       setForceSheetOpen(false);
@@ -417,33 +412,34 @@ export default function GMap({ googleApiKey }: GMapProps) {
       directionalLight.position.set(0, 10, 50);
       scene.add(directionalLight);
 
-      const hongKongCenter = { lat: 22.298, lng: 114.177, altitude: 100 };
-
+      // Use DISPATCH_HUB instead of hongKongCenter
       const overlay = new ThreeJSOverlayView({
         map,
         scene,
-        anchor: hongKongCenter,
+        anchor: DISPATCH_HUB,
         // @ts-expect-error
         THREE,
       });
       overlayRef.current = overlay;
 
-      // Example dummy
-      const dummyCubeGeo = new THREE.BoxGeometry(50, 50, 50);
-      const dummyCubeMat = new THREE.MeshPhongMaterial({
+      // Renamed dummyCube -> dispatchCube
+      const dispatchCubeGeo = new THREE.BoxGeometry(50, 50, 50);
+      const dispatchCubeMat = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
         opacity: 0.8,
         transparent: true,
       });
-      const dummyCube = new THREE.Mesh(dummyCubeGeo, dummyCubeMat);
-      const dummyCubePos = overlay.latLngAltitudeToVector3({
-        lat: hongKongCenter.lat,
-        lng: hongKongCenter.lng,
-        altitude: hongKongCenter.altitude + 50,
+      const dispatchCube = new THREE.Mesh(dispatchCubeGeo, dispatchCubeMat);
+
+      // Position the dispatchCube relative to DISPATCH_HUB
+      const dispatchCubePos = overlay.latLngAltitudeToVector3({
+        lat: DISPATCH_HUB.lat,
+        lng: DISPATCH_HUB.lng,
+        altitude: DISPATCH_HUB.altitude + 50,
       });
-      dummyCube.position.copy(dummyCubePos);
-      dummyCube.scale.set(3, 3, 3);
-      scene.add(dummyCube);
+      dispatchCube.position.copy(dispatchCubePos);
+      dispatchCube.scale.set(3, 3, 3);
+      scene.add(dispatchCube);
 
       // Station cubes
       stations.forEach((station) => {
@@ -451,7 +447,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const stationCubePos = overlay.latLngAltitudeToVector3({
           lat,
           lng,
-          altitude: hongKongCenter.altitude + 50,
+          altitude: DISPATCH_HUB.altitude + 50,
         });
         const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
         const stationCubeMat = new THREE.MeshPhongMaterial({
@@ -502,28 +498,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return markerIcons.station;
   };
 
-  // Figure out which station to show
   const selectedStationId =
     bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = selectedStationId
     ? stations.find((s) => s.id === selectedStationId)
     : null;
-
-  if (hasError) {
-    return (
-      <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
-        <div className="text-center space-y-2">
-          <p className="font-medium">Error loading map data</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="text-sm underline hover:text-destructive/80"
-          >
-            Try reloading
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (overlayVisible) {
     return <LoadingSpinner />;
@@ -540,9 +519,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
           options={mapOptions || {}}
           onLoad={handleMapLoad}
         >
+          {/* User Location Marker */}
           {userLocation && markerIcons && (
-            <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
+            <Marker
+              position={userLocation}
+              icon={markerIcons.user}
+              clickable={false}
+            />
           )}
+
+          {/* 
+            We also render a special marker at the INTER_CC location
+            using the new 'icc' icon from createMarkerIcons. 
+          */}
+          {markerIcons && (
+            <Marker
+              position={INTER_CC}
+              icon={markerIcons.icc}
+              title="ICC Marker"
+            />
+          )}
+
+          {/* Station Markers */}
           {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -554,6 +552,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
               />
             );
           })}
+
+          {/* Car Markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -565,7 +565,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* Station selector overlay */}
+      {/* Station Selector Overlay */}
       <StationSelector
         onAddressSearch={handleAddressSearch}
         onClearDeparture={handleClearDepartureInSelector}
@@ -588,7 +588,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </button>
       </div>
 
-      {/* Car sheet */}
+      {/* Car Sheet */}
       {openSheet === 'car' && (
         <CarSheet isOpen onToggle={handleCarToggle} />
       )}
