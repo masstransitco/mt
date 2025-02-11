@@ -54,30 +54,16 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           containerEl.appendChild(renderer.domElement);
 
-          // Match the signature that expects 11 arguments:
-          // loadFromURL(
-          //   url: string,
-          //   positionQuantizationBits: number,
-          //   scaleQuantizationBits: number,
-          //   colorQuantizationBits: number,
-          //   normalQuantizationBits: number,
-          //   boundingBox: boolean,
-          //   autoScale: boolean,
-          //   reorder: boolean,
-          //   progressCB?: (progress: number) => void,
-          //   onSuccessCB?: () => void,
-          //   onErrorCB?: (error: any) => void
-          // ): ArrayBuffer;
-
+          // loadFromURL signature might expect numeric flags, not booleans
           const splatBuffer = PlyLoader.loadFromURL(
             SPLAT_FILE_URL,
-            12,          // positionQuantizationBits
-            10,          // scaleQuantizationBits
-            8,           // colorQuantizationBits
-            0,           // normalQuantizationBits
-            false,       // boundingBox
-            false,       // autoScale
-            false,       // reorder
+            12,   // positionQuantizationBits
+            10,   // scaleQuantizationBits
+            8,    // colorQuantizationBits
+            0,    // normalQuantizationBits
+            0,    // boundingBox (0 for false)
+            0,    // autoScale   (0 for false)
+            0,    // reorder     (0 for false)
             (progress: number) => {
               console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
             },
