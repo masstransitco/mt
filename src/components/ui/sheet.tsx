@@ -1,7 +1,7 @@
 'use client';
 
 import React, { ReactNode } from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SheetProps {
@@ -14,10 +14,10 @@ interface SheetProps {
 }
 
 /**
- * A bottom sheet that:
- * - Animates open/close with a `transition-all duration-300 ease-in-out`.
- * - Automatically sizes based on content, up to a max height (e.g. `70vh`).
- * - In "closed" state, it shrinks to `max-h-[20vh]`, or you can do `0px` if you want it fully hidden.
+ * Updated Sheet:
+ * - If `isOpen` is true => max-h-[70vh].
+ * - Otherwise => max-h-0 (fully hidden).
+ * - Adds a close (X) button instead of the header being clickable.
  */
 const Sheet = ({
   isOpen,
@@ -31,42 +31,48 @@ const Sheet = ({
     <div
       className={cn(
         'fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm',
-        'overflow-hidden transition-all duration-300 ease-in-out',  // Smooth in/out
-        isOpen ? 'max-h-[70vh]' : 'max-h-[20vh]',                    // Adjust to your preference
+        'overflow-hidden transition-all duration-300 ease-in-out',
+        isOpen ? 'max-h-[70vh]' : 'max-h-0', // Fully closed vs. up to 70% viewport height
         className
       )}
     >
-      {/* We remove `h-full` so content can dictate height up to max-h */}
       <div className="flex flex-col min-h-0">
-        {/* Header Section: clickable to toggle */}
-        <div
-          className="flex items-center justify-between p-4 border-b border-border/20"
-          onClick={onToggle}
-        >
+        {/* Header Section */}
+        <div className="flex items-center justify-between p-4 border-b border-border/20">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-            <p className="text-sm text-muted-foreground">
-              {count} stations found
-            </p>
+            <h2 className="text-lg font-semibold text-foreground">
+              {title}
+            </h2>
+            {typeof count === 'number' && (
+              <p className="text-sm text-muted-foreground">
+                {count} stations found
+              </p>
+            )}
           </div>
-          <div className="flex gap-4 items-center">
+
+          <div className="flex items-center gap-4">
+            {/* Example "Sort by" button */}
             <button className="px-4 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
               Sort by
             </button>
-            {isOpen ? (
-              <ChevronDown className="w-6 h-6 text-muted-foreground" />
-            ) : (
-              <ChevronUp className="w-6 h-6 text-muted-foreground" />
-            )}
+
+            {/* X button to close */}
+            <button
+              onClick={onToggle}
+              className="p-2 rounded-full hover:bg-muted transition-colors"
+              aria-label="Close sheet"
+            >
+              <X className="w-5 h-5 text-muted-foreground" />
+            </button>
           </div>
         </div>
 
-        {/* Scrollable Content: allow vertical scroll if content > max-h */}
+        {/* Scrollable content */}
         <div className="overflow-y-auto">
           {children}
         </div>
 
-        {/* Home Indicator / Grab handle at the bottom (if desired) */}
+        {/* Optional bottom handle */}
         <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
           <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
         </div>
