@@ -65,8 +65,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create the SplatLoader instance first
             const splatLoader = new SplatLoader();
 
-            // Load the PLY file
-            const splatBuffer = await PlyLoader.loadFromURL(
+            // Load the PLY file using callbacks
+            PlyLoader.loadFromURL(
               proxyUrl,
               12, // positionQuantizationBits
               10, // scaleQuantizationBits
@@ -78,12 +78,19 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
               function(progress: number): void {
                 console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
               },
-              async function(buffer: ArrayBuffer): Promise<void> {
+              function(buffer: ArrayBuffer): void {
                 console.log('PLY file loaded successfully!');
                 try {
                   if (viewerRef.current) {
-                    // Try to load the buffer using loadFromBuffer
-                    splatLoader.loadFromBuffer(buffer);
+                    if (splatLoader.loadFromBuffer) {
+                      splatLoader.loadFromBuffer(buffer);
+                    } else if (splatLoader.load) {
+                      splatLoader.load(buffer);
+                    } else {
+                      console.error('No compatible load method found on SplatLoader');
+                      onClose();
+                      return;
+                    }
 
                     viewerRef.current.addSplatScene(splatLoader, {
                       splatAlphaRemovalThreshold: 7,
