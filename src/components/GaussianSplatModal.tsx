@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Viewer } from 'gle-gaussian-splat-3d';
+import * as THREE from 'three';
 import { getStorage, ref, getDownloadURL } from 'firebase/storage';
 
 interface GaussianSplatModalProps {
@@ -15,6 +16,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
   useEffect(() => {
     if (isOpen && containerRef.current && !viewerRef.current) {
@@ -22,21 +24,35 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
       const initViewer = async () => {
         try {
-          // Initialize viewer with documented parameters [1][4][6]
+          // Initialize Three.js renderer first
+          const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: 'high-performance',
+          });
+          rendererRef.current = renderer;
+          containerEl.appendChild(renderer.domElement);
+
+          // Create camera
+          const camera = new THREE.PerspectiveCamera(
+            65,
+            containerEl.clientWidth / containerEl.clientHeight,
+            0.1,
+            1000
+          );
+          camera.position.set(0, 1.5, 4);
+          camera.lookAt(0, 0, 0);
+
+          // Initialize viewer with explicit renderer and camera [5][6]
           const viewer = new Viewer({
+            renderer,
+            camera,
             gpuAcceleratedSort: true,
             useBuiltInControls: true,
-            backgroundColor: [0.08, 0.08, 0.08], // Equivalent to THREE.Color(0x151515)
-            initialCameraPosition: [0, 1.5, 4],
-            initialCameraLookAt: [0, 0, 0],
-            cameraUp: [0, 1, 0]
+            selfDrivenMode: false,
+            backgroundColor: new THREE.Color(0x151515),
           });
 
           viewerRef.current = viewer;
-          
-          // Required initialization before DOM operations [6]
-          viewer.init();
-          containerEl.appendChild(viewer.domElement);
 
           try {
             const storage = getStorage();
@@ -44,7 +60,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             const signedUrl = await getDownloadURL(fileRef);
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            // Load file using validated method [1][4]
+            // Load file using validated method [1][2]
             await viewer.loadFile(proxyUrl, {
               splatAlphaRemovalThreshold: 7,
               halfPrecisionCovariancesOnGPU: true,
@@ -58,12 +74,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             onClose();
           }
 
-          // Handle window resizing via viewer API [6]
+          // Handle window resizing
           const onResize = () => {
-            viewer.setSize(
-              containerEl.clientWidth,
-              containerEl.clientHeight
-            );
+            camera.aspect = containerEl.clientWidth / containerEl.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
           };
 
           window.addEventListener('resize', onResize);
@@ -85,6 +100,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
       if (viewerRef.current) {
         viewerRef.current.dispose();
         viewerRef.current = null;
+      }
+      if (rendererRef.current) {
+        rendererRef.current.domElement.remove();
+        rendererRef.current = null;
       }
     };
   }, [isOpen, onClose]);
