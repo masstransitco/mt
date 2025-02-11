@@ -62,39 +62,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             // Create a proxy request through your own domain
             const proxyUrl = `/api/splat?url=${encodeURIComponent(signedUrl)}`;
 
-            const onProgress = (progress: number) => {
-              console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
-            };
+            // Create a new SplatLoader instance
+            const splatLoader = new SplatLoader();
 
-            const onBufferReady = function() {
-              console.log('PLY file loaded successfully!');
-              try {
-                const splatLoader = new SplatLoader();
-                
-                if (viewerRef.current) {
-                  viewerRef.current.addSplatScene(splatLoader, {
-                    splatAlphaRemovalThreshold: 7,
-                    showLoadingSpinner: true,
-                    position: [0, -0.5, 0],
-                    rotation: [-Math.PI / 2, 0, 0],
-                    scale: [1, 1, 1],
-                  });
-
-                  viewerRef.current.start();
-                }
-              } catch (error) {
-                console.error('Error processing splat data:', error);
-                onClose();
-              }
-            };
-
-            const onError = function(error: any) {
-              console.error('Error loading PLY file:', error);
-              onClose();
-            };
-
-            // Load the PLY file using callbacks with proper function declarations
-            PlyLoader.loadFromURL(
+            // Load the PLY file
+            const splatBuffer = PlyLoader.loadFromURL(
               proxyUrl,
               12, // positionQuantizationBits
               10, // scaleQuantizationBits
@@ -102,10 +74,37 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
               0,  // normalQuantizationBits
               0,  // boundingBox (false)
               0,  // autoScale (false)
-              0,  // reorder (false)
-              onProgress,
-              onBufferReady,
-              onError
+              0,  // reorder (false),
+              function(progress) {
+                console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
+              },
+              function(buffer) {
+                console.log('PLY file loaded successfully!');
+                try {
+                  if (viewerRef.current && buffer) {
+                    // Use the buffer to create the scene
+                    const scene = new THREE.Scene();
+                    scene.add(buffer);
+
+                    viewerRef.current.addSplatScene(scene, {
+                      splatAlphaRemovalThreshold: 7,
+                      showLoadingSpinner: true,
+                      position: [0, -0.5, 0],
+                      rotation: [-Math.PI / 2, 0, 0],
+                      scale: [1, 1, 1],
+                    });
+
+                    viewerRef.current.start();
+                  }
+                } catch (error) {
+                  console.error('Error processing splat data:', error);
+                  onClose();
+                }
+              },
+              function(error) {
+                console.error('Error loading PLY file:', error);
+                onClose();
+              }
             );
 
           } catch (error) {
