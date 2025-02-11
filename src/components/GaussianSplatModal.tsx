@@ -53,7 +53,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           containerEl.appendChild(renderer.domElement);
 
           // Load the PLY file using callbacks
-          const splatBuffer = PlyLoader.loadFromURL(
+          PlyLoader.loadFromURL(
             SPLAT_FILE_URL,
             12, // positionQuantizationBits
             10, // scaleQuantizationBits
@@ -65,12 +65,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
             (progress: number) => {
               console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
             },
-            () => {
+            (buffer: ArrayBuffer) => {
               console.log('PLY file loaded successfully!');
-              // Handle successful load
+              // Create SplatLoader with the buffer directly
               try {
-                const splatLoader = new SplatLoader();
-                splatLoader.load(splatBuffer);
+                const splatLoader = new SplatLoader(buffer);
                 const splatScene = splatLoader.getSplatScene();
 
                 if (viewerRef.current) {
