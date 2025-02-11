@@ -20,7 +20,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
     if (isOpen && containerRef.current && !viewerRef.current) {
       const containerEl = containerRef.current;
 
-      const initViewer = async () => {
+      const initViewer = () => {
         try {
           // Initialize renderer
           const renderer = new THREE.WebGLRenderer({
@@ -52,49 +52,50 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
 
           containerEl.appendChild(renderer.domElement);
 
-          // Load the PLY file
-          try {
-            const splatBuffer = await PlyLoader.loadFromURL(
-              SPLAT_FILE_URL,
-              12, // positionQuantizationBits
-              10, // scaleQuantizationBits
-              8,  // colorQuantizationBits
-              0,  // normalQuantizationBits
-              0,  // boundingBox (false)
-              0,  // autoScale (false)
-              0,  // reorder (false)
-              (progress: number) => {
-                console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
-              },
-              () => {
-                console.log('PLY file loaded successfully!');
-              },
-              (error: any) => {
-                console.error('Error loading PLY file:', error);
-                throw error;
+          // Load the PLY file using callbacks
+          const splatBuffer = PlyLoader.loadFromURL(
+            SPLAT_FILE_URL,
+            12, // positionQuantizationBits
+            10, // scaleQuantizationBits
+            8,  // colorQuantizationBits
+            0,  // normalQuantizationBits
+            0,  // boundingBox (false)
+            0,  // autoScale (false)
+            0,  // reorder (false)
+            (progress: number) => {
+              console.log(`Loading: ${(progress * 100).toFixed(1)}%`);
+            },
+            () => {
+              console.log('PLY file loaded successfully!');
+              // Handle successful load
+              try {
+                const splatLoader = new SplatLoader();
+                splatLoader.loadFromBuffer(splatBuffer);
+                const splatScene = splatLoader.getSplatScene();
+
+                if (viewerRef.current) {
+                  viewerRef.current.addSplatScene(splatScene, {
+                    splatAlphaRemovalThreshold: 7,
+                    showLoadingSpinner: true,
+                    position: [0, -0.5, 0],
+                    rotation: [-Math.PI / 2, 0, 0],
+                    scale: [1, 1, 1],
+                  });
+
+                  // Add axes helper for debugging
+                  viewerRef.current.scene.add(new THREE.AxesHelper(2));
+                  viewerRef.current.start();
+                }
+              } catch (error) {
+                console.error('Error processing splat data:', error);
+                onClose();
               }
-            );
-
-            const splatLoader = new SplatLoader();
-            await splatLoader.loadFromBuffer(splatBuffer);
-            const splatScene = splatLoader.getSplatScene();
-
-            viewer.addSplatScene(splatScene, {
-              splatAlphaRemovalThreshold: 7,
-              showLoadingSpinner: true,
-              position: [0, -0.5, 0],
-              rotation: [-Math.PI / 2, 0, 0],
-              scale: [1, 1, 1],
-            });
-
-            // Add axes helper for debugging
-            viewer.scene.add(new THREE.AxesHelper(2));
-            viewer.start();
-
-          } catch (error) {
-            console.error('Error loading splat file:', error);
-            onClose();
-          }
+            },
+            (error: any) => {
+              console.error('Error loading PLY file:', error);
+              onClose();
+            }
+          );
 
           // Handle window resizing
           const onResize = () => {
