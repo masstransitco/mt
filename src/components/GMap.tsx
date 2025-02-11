@@ -48,6 +48,7 @@ import { LoadingSpinner } from './LoadingSpinner';
 import CarSheet from '@/components/booking/CarSheet';
 import StationDetail from './StationDetail';
 import { StationListItem } from './StationListItem';
+import GaussianSplatModal from '@/components/GaussianSplatModal';
 
 // Map config
 import {
@@ -86,6 +87,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
   const [detailKey, setDetailKey] = useState(0);
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
+  const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
   // Redux
   const dispatch = useAppDispatch();
@@ -537,6 +539,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
               position={INTER_CC}
               icon={markerIcons.icc}
               title="ICC Marker"
+              onClick={() => setIsSplatModalOpen(true)}
             />
           )}
 
@@ -634,6 +637,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
           />
         </Sheet>
       )}
+       {/* Finally, render the GaussianSplatModal */}
+      <GaussianSplatModal
+        isOpen={isSplatModalOpen}
+        onClose={() => setIsSplatModalOpen(false)}
+      />
     </div>
   );
 }
