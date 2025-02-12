@@ -45,7 +45,7 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   useEffect(() => {
     if (!scene) return;
     // Initial rotation and material adjustments.
-    scene.position.set(0, -0.5, 0);
+    scene.position.set(0, -0.8, 0);
     scene.rotation.y = Math.PI / 2;
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
