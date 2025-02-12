@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url');
-
   if (!url) {
     return NextResponse.json(
       { error: 'URL parameter is required' },
@@ -16,11 +15,15 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url);
     const buffer = await response.arrayBuffer();
 
-    // Create response with the file data
+    // Set explicit binary stream headers
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': 'application/octet-stream',
         'Access-Control-Allow-Origin': '*',
+        'Content-Length': buffer.byteLength.toString(),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=31536000',
+        'X-Content-Type-Options': 'nosniff'
       },
     });
   } catch (error) {
@@ -32,13 +35,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// CORS preflight request handler
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS, HEAD',
+      'Access-Control-Allow-Headers': 'Content-Type, Range',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+      'Access-Control-Max-Age': '86400',
     },
   });
 }
