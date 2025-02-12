@@ -37,11 +37,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
 
     // Camera setup optimized for Polycam scenes
     const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 1000);
-    camera.position.set(0, 0, 5); // Start further back for Polycam scenes
-    camera.up.set(0, 1, 0); // Standard up vector for Polycam
+    camera.position.set(0, 0, 5);
+    camera.up.set(0, 1, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // Configure viewer specifically for Polycam SPLAT PLY format
+    // Configure viewer for Polycam SPLAT PLY format
     const viewer = new GaussianSplats3D.Viewer({
       selfDrivenMode: false,
       renderer,
@@ -57,13 +57,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       renderMode: GaussianSplats3D.RenderMode.OnChange,
       sceneRevealMode: GaussianSplats3D.SceneRevealMode.Progressive,
       antialiased: true,
-      focalAdjustment: 0.33, // Adjusted for Polycam exports
+      focalAdjustment: 0.33,
       logLevel: GaussianSplats3D.LogLevel.Debug,
-      // Specific settings for Polycam SPLAT PLY
-      splatAlphaRemovalThreshold: 1, // Necessary for Polycam format
-      vertexColorType: GaussianSplats3D.VertexColorType.RGB, // Polycam uses RGB
-      splatQuadric: true, // Enable for Polycam compatibility
-      skipLoaderChecks: true, // Skip some format checks that might fail with Polycam
+      // Polycam-specific settings
+      splatAlphaRemovalThreshold: 1,
+      skipLoaderChecks: true
     });
     viewerRef.current = viewer;
 
@@ -79,10 +77,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         // Load the scene with specific options for Polycam
         await viewer.addSplatScene(PLY_FILE_URL, {
           splatAlphaRemovalThreshold: 1,
-          rotation: new THREE.Euler(Math.PI, 0, 0), // Adjust orientation if needed
-          scale: 1.0, // Adjust scale if needed
+          rotation: new THREE.Euler(Math.PI, 0, 0), // Adjust if needed
+          scale: 1.0,
           position: new THREE.Vector3(0, 0, 0),
-          plyInMemoryCompressionLevel: 0,
+          plyInMemoryCompressionLevel: 0
         });
 
         // Start render loop
