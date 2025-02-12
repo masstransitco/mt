@@ -16,6 +16,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const animationFrameRef = useRef<number>();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -97,7 +98,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         const url = URL.createObjectURL(blob);
         
         await viewer.addSplatScene(url);
-        URL.revokeObjectURL(url); // Clean up the URL immediately after loading
+        URL.revokeObjectURL(url);
 
         setIsLoading(false);
         setLoadingProgress(100);
@@ -106,7 +107,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
-            requestAnimationFrame(animate);
+            animationFrameRef.current = requestAnimationFrame(animate);
           }
         };
         animate();
@@ -132,14 +133,19 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     };
     window.addEventListener('resize', handleResize);
 
+    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
       
-      if (viewerRef.current) {
-        viewerRef.current.dispose();
-        viewerRef.current = null;
+      // Cancel any pending animation frame
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
       }
       
+      // Clear viewer reference
+      viewerRef.current = null;
+      
+      // Clean up renderer
       if (rendererRef.current) {
         rendererRef.current.dispose();
         rendererRef.current.forceContextLoss();
