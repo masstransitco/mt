@@ -7,12 +7,12 @@ interface GaussianSplatModalProps {
   onClose: () => void;
 }
 
-// Original Firebase URL that we'll pass through the proxy
+// Original Firebase URL with .splat file
 const FIREBASE_URL = 
-  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/ifc.ply?alt=media&token=6142be63-a9f9-4651-a993-72c36c2768ce';
+  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.splat?alt=media&token=fe72cbcf-4a26-42b4-b307-211fe431f641';
 
 // Create the proxied URL
-const PROXIED_PLY_URL = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
+const PROXIED_URL = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
 
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,29 +31,31 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     setIsLoading(true);
     setError(null);
 
-    // Create renderer
+    // Create renderer with specific settings for .splat files
     const renderer = new THREE.WebGLRenderer({ 
-      antialias: false,
+      antialias: true,
       powerPreference: 'high-performance',
-      preserveDrawingBuffer: true
+      preserveDrawingBuffer: true,
+      alpha: true
     });
-    rendererRef.current = renderer;
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(renderWidth, renderHeight);
     containerEl.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
-    // Camera setup
+    // Camera setup optimized for .splat viewing
     const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 1000);
     camera.position.set(0, 0, 5);
     camera.up.set(0, 1, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // Configure viewer
+    // Configure viewer specifically for .splat files
     const viewer = new GaussianSplats3D.Viewer({
       selfDrivenMode: false,
       renderer,
       camera,
       useBuiltInControls: true,
-      ignoreDevicePixelRatio: true,
+      ignoreDevicePixelRatio: false,
       gpuAcceleratedSort: true,
       sharedMemoryForWorkers: true,
       integerBasedSort: true,
@@ -65,27 +67,18 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       antialiased: true,
       focalAdjustment: 0.33,
       logLevel: GaussianSplats3D.LogLevel.Debug,
-      splatAlphaRemovalThreshold: 1,
-      skipLoaderChecks: true,
-      initialScale: 1.0,
-      initialPosition: new THREE.Vector3(0, 0, 0),
-      initialRotation: new THREE.Euler(Math.PI, 0, 0)
+      splatAlphaRemovalThreshold: 0,
+      skipLoaderChecks: false
     });
     viewerRef.current = viewer;
 
-    // Load scene through proxy
+    // Custom loading with proper error handling
     const loadScene = async () => {
       try {
-        // First verify the proxy endpoint is accessible
-        const checkResponse = await fetch(PROXIED_PLY_URL, { method: 'HEAD' });
-        if (!checkResponse.ok) {
-          throw new Error(`Failed to access proxy: ${checkResponse.statusText}`);
-        }
+        // Load the scene
+        await viewer.addSplatScene(PROXIED_URL);
 
-        // Load the scene through the proxy
-        await viewer.addSplatScene(PROXIED_PLY_URL);
-
-        // Start render loop
+        // Start render loop only after successful load
         const update = () => {
           if (viewerRef.current) {
             viewerRef.current.update();
@@ -97,7 +90,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       } catch (err: any) {
         console.error('Failed to load splat scene:', err);
         setError(
-          'Failed to load the 3D scene. Please try again later.'
+          'Failed to load the 3D scene. Please check your connection and try again.'
         );
         setIsLoading(false);
       }
@@ -107,10 +100,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
 
     // Handle window resize
     const handleResize = () => {
-      if (!containerRef.current || !viewerRef.current) return;
+      if (!containerRef.current || !viewerRef.current || !rendererRef.current) return;
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
-      renderer.setSize(width, height);
+      rendererRef.current.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     };
@@ -119,11 +112,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
-      
-      // Clear the viewer reference
       viewerRef.current = null;
       
-      // Dispose of the renderer and remove canvas
       if (rendererRef.current) {
         rendererRef.current.dispose();
         if (rendererRef.current.domElement.parentElement) {
@@ -152,7 +142,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           {error && (
             <div className="error-overlay">
               <p>{error}</p>
-              <button onClick={onClose}>Close</button>
+              <button 
+                onClick={onClose}
+                className="bg-white text-black px-4 py-2 rounded mt-4 hover:bg-gray-200"
+              >
+                Close
+              </button>
             </div>
           )}
         </div>
