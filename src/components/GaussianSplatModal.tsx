@@ -60,6 +60,7 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     // Adjust as needed based on your capture to get the building vertical.
     // ------------------------------------------------------------------
     splats.rotation.set(0, 0, -0.3); // ~17 degrees around Z axis (example)
+    splats.position.set(1, 0, 0);
 
     // 2b. Luma’s initial camera transform – optional. 
     //     You can skip or override if you prefer your own camera.
