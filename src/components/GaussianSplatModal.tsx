@@ -1,220 +1,282 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import * as THREE from "three";
+// Three.js Examples imports
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { PMREMGenerator } from "three/examples/jsm/pmrem/PMREMGenerator.js";
 
-interface GaussianSplatModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+const SplatViewerModal = ({ onClose }) => {
+  const mountRef = useRef(null); // Reference to the DOM container
+  const [loading, setLoading] = useState(true);
 
-const FIREBASE_URL = 
-  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.splat?alt=media&token=fe72cbcf-4a26-42b4-b307-211fe431f641';
+  // We'll store renderer, scene, camera, controls as refs so we can clean up
+  const rendererRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const controlsRef = useRef(null);
+  const animationIdRef = useRef(null);
 
-const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const animationFrameRef = useRef<number>();
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen || !containerRef.current) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    const containerEl = containerRef.current;
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: false,
-      powerPreference: 'high-performance',
-    });
-    renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
-    containerEl.appendChild(renderer.domElement);
+  const initScene = useCallback(async () => {
+    // Create renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    const camera = new THREE.PerspectiveCamera(65, containerEl.clientWidth / containerEl.clientHeight, 0.1, 1000);
+    // Create scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x101010);
+    sceneRef.current = scene;
+
+    // Create camera
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      1000
+    );
     camera.position.set(0, 0, 5);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(new THREE.Vector3(0, 0, 0));
+    cameraRef.current = camera;
 
-    const viewer = new GaussianSplats3D.Viewer({
-      renderer,
-      camera,
-      useBuiltInControls: true,
-      selfDrivenMode: true,
-      gpuAcceleratedSort: true,
-      antialiased: true,
-      maxSplatCount: 500000,
-      shaderMode: 'highQuality',
-      calcMedian: false // Disable median calculation which might cause issues
-    });
-    viewerRef.current = viewer;
+    // Orbit Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controlsRef.current = controls;
 
-    const loadScene = async () => {
-      try {
-        console.log('Starting to load scene...');
-        
-        // Try direct loading first
-        try {
-          await viewer.addSplatScene(FIREBASE_URL);
-          console.log('Direct load successful');
-          setIsLoading(false);
-        } catch (directError) {
-          console.log('Direct load failed:', directError);
-          
-          // If direct load fails, try loading through fetch
-          const response = await fetch(FIREBASE_URL);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          
-          const arrayBuffer = await response.arrayBuffer();
-          console.log('Fetched buffer size:', arrayBuffer.byteLength);
-          
-          // Create a simple blob with no type specification
-          const blob = new Blob([arrayBuffer]);
-          const url = URL.createObjectURL(blob);
-          
-          console.log('Attempting to load from blob URL...');
-          await viewer.addSplatScene(url);
-          URL.revokeObjectURL(url);
-          
-          console.log('Load successful');
-          setIsLoading(false);
+    // Optional: Load an HDR environment map for reflections
+    // (Remove or modify if you don't have an HDR file)
+    const pmremGenerator = new PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    // Example environment map load (omit if you don’t have one):
+    try {
+      const hdrLoader = new RGBELoader();
+      // Replace with your actual .hdr file path (or remove this block if you don't need environment lighting)
+      const hdrMap = await hdrLoader.loadAsync(
+        "path/to/environment.hdr"
+      );
+      const envMap = pmremGenerator.fromEquirectangular(hdrMap).texture;
+      scene.environment = envMap;
+      pmremGenerator.dispose();
+    } catch (err) {
+      console.warn("Failed to load environment HDR:", err);
+    }
+
+    // Load the PLY file from Firebase
+    // Replace with your actual Firebase URL:
+    const plyUrl =
+      "https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=cc4b8455-d5ee-49a0-81c7-5f2bb0081119";
+
+    const plyLoader = new PLYLoader();
+    plyLoader.load(
+      plyUrl,
+      (geometry) => {
+        if (!geometry.hasAttribute("color")) {
+          // Provide a default color if the PLY has no color attribute
+          const numVertices = geometry.attributes.position.count;
+          const colors = new Float32Array(numVertices * 3);
+          for (let i = 0; i < numVertices; i++) {
+            colors[i * 3 + 0] = 1.0;
+            colors[i * 3 + 1] = 1.0;
+            colors[i * 3 + 2] = 1.0;
+          }
+          geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
         }
 
-        // Start animation loop
-        const animate = () => {
-          if (viewerRef.current && isOpen) {
-            viewerRef.current.update();
-            animationFrameRef.current = requestAnimationFrame(animate);
-          }
-        };
-        animate();
+        // Compute normals for basic lighting (if needed)
+        geometry.computeVertexNormals();
 
-      } catch (err: any) {
-        console.error('Failed to load splat scene:', err);
-        setError(`Failed to load the 3D scene: ${err.message}`);
-        setIsLoading(false);
+        // Create base plane geometry for each splat
+        const baseGeometry = new THREE.PlaneBufferGeometry(1, 1);
+
+        // Simple shader material example
+        const material = new THREE.ShaderMaterial({
+          uniforms: {
+            envMap: { value: scene.environment },
+          },
+          vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+
+            void main() {
+              // Billboard transformation in the vertex shader 
+              // (For more advanced usage, you might add an instancePosition attribute.)
+              vec3 newPosition = position;
+              vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
+              vPosition = mvPosition.xyz;
+              vNormal = normalMatrix * normal;
+              gl_Position = projectionMatrix * mvPosition;
+            }
+          `,
+          fragmentShader: `
+            uniform samplerCube envMap;
+            varying vec3 vNormal;
+            varying vec3 vPosition;
+
+            void main() {
+              // We can access cameraPosition directly (built-in in Three.js)
+              vec3 N = normalize(vNormal);
+              vec3 V = normalize(cameraPosition - vPosition);
+              vec3 R = reflect(-V, N);
+              
+              // Basic reflection from the envMap
+              vec3 envColor = vec3(0.0);
+              if (envMap != null) {
+                envColor = textureCube(envMap, R).rgb;
+              }
+
+              vec3 baseColor = vec3(1.0);
+              vec3 color = mix(baseColor, envColor, 0.5);
+
+              gl_FragColor = vec4(color, 1.0);
+            }
+          `,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.NormalBlending,
+        });
+
+        // Create an instanced mesh
+        const numInstances = geometry.attributes.position.count;
+        const instancedMesh = new THREE.InstancedMesh(
+          baseGeometry,
+          material,
+          numInstances
+        );
+
+        // Set up instance transforms
+        const dummy = new THREE.Object3D();
+        const splatScale = 0.05;
+
+        for (let i = 0; i < numInstances; i++) {
+          dummy.position.set(
+            geometry.attributes.position.getX(i),
+            geometry.attributes.position.getY(i),
+            geometry.attributes.position.getZ(i)
+          );
+          dummy.lookAt(camera.position);
+          dummy.scale.set(splatScale, splatScale, splatScale);
+          dummy.updateMatrix();
+          instancedMesh.setMatrixAt(i, dummy.matrix);
+        }
+
+        scene.add(instancedMesh);
+
+        // Hide loading overlay
+        setLoading(false);
+      },
+      (xhr) => {
+        console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`);
+      },
+      (error) => {
+        console.error("Error loading PLY from Firebase:", error);
+        setLoading(false);
       }
-    };
+    );
+  }, []);
 
-    loadScene();
+  // ** Initialize scene once on component mount
+  useEffect(() => {
+    initScene();
 
-    const handleResize = () => {
-      if (!containerRef.current || !viewerRef.current || !rendererRef.current) return;
-      const width = containerRef.current.clientWidth;
-      const height = containerRef.current.clientHeight;
-      rendererRef.current.setSize(width, height);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    };
-    window.addEventListener('resize', handleResize);
-
+    // Cleanup on unmount
     return () => {
-      window.removeEventListener('resize', handleResize);
-      
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      
-      viewerRef.current = null;
-      
       if (rendererRef.current) {
         rendererRef.current.dispose();
-        rendererRef.current.forceContextLoss();
-        if (rendererRef.current.domElement.parentElement) {
-          rendererRef.current.domElement.parentElement.removeChild(rendererRef.current.domElement);
-        }
-        rendererRef.current = null;
+      }
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
       }
     };
-  }, [isOpen]);
+  }, [initScene]);
 
-  if (!isOpen) return null;
+  // ** Animation loop
+  const animate = useCallback(() => {
+    animationIdRef.current = requestAnimationFrame(animate);
+
+    if (!rendererRef.current || !cameraRef.current || !sceneRef.current || !controlsRef.current) return;
+
+    controlsRef.current.update();
+    rendererRef.current.render(sceneRef.current, cameraRef.current);
+  }, []);
+
+  // ** Start animation once the scene is ready
+  useEffect(() => {
+    // Start rendering
+    animate();
+  }, [animate]);
+
+  // ** Resize handling
+  useEffect(() => {
+    function handleResize() {
+      if (!cameraRef.current || !rendererRef.current) return;
+      const width = mountRef.current.clientWidth;
+      const height = mountRef.current.clientHeight;
+      cameraRef.current.aspect = width / height;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(width, height);
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <button className="close-button" onClick={onClose}>×</button>
-        <div ref={containerRef} className="splat-container">
-          {isLoading && (
-            <div className="loading-overlay">
-              <div className="loading-spinner" />
-              <p>Loading 3D Scene...</p>
-            </div>
-          )}
-          {error && (
-            <div className="error-overlay">
-              <p>{error}</p>
-              <button onClick={onClose} className="bg-white text-black px-4 py-2 rounded mt-4 hover:bg-gray-200">
-                Close
-              </button>
-            </div>
-          )}
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+        zIndex: 9999,
+      }}
+    >
+      {loading && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            color: "#fff",
+            transform: "translate(-50%, -50%)",
+            fontSize: 20,
+            zIndex: 1000,
+          }}
+        >
+          Loading...
         </div>
-      </div>
-
-      <style jsx>{`
-        .modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.75);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 9999;
-        }
-        .modal-content {
-          position: relative;
-          width: 80vw;
-          height: 80vh;
-          background: #000;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        .close-button {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          background: rgba(255, 255, 255, 0.2);
-          border: none;
-          color: #fff;
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          cursor: pointer;
-          z-index: 1;
-        }
-        .splat-container {
-          width: 100%;
-          height: 100%;
-        }
-        .loading-overlay, .error-overlay {
-          position: absolute;
-          inset: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background: rgba(0, 0, 0, 0.8);
-          color: white;
-        }
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-          border: 4px solid #f3f3f3;
-          border-top: 4px solid #3498db;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-          margin-bottom: 1rem;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
+      )}
+      <button
+        onClick={onClose}
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          zIndex: 1001,
+          padding: "8px 16px",
+          background: "rgba(255, 255, 255, 0.1)",
+          color: "#fff",
+          border: "1px solid #fff",
+          cursor: "pointer",
+        }}
+      >
+        Close
+      </button>
+      <div
+        ref={mountRef}
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+      />
     </div>
   );
 };
 
-export default GaussianSplatModal;
+export default SplatViewerModal;
