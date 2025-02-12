@@ -91,7 +91,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         geometry.computeVertexNormals();
 
         // Base plane geometry for each splat
-        const baseGeometry = new THREE.PlaneBufferGeometry(1, 1);
+        const baseGeometry = new THREE.PlaneGeometry(1, 1);
 
         // Simple shader material example
         const material = new THREE.ShaderMaterial({
