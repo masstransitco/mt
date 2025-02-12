@@ -45,35 +45,34 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     camera.up.set(0, 1, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // Create viewer with minimal settings
+    // Create viewer with updated settings
     const viewer = new GaussianSplats3D.Viewer({
       renderer,
       camera,
       useBuiltInControls: true,
-      selfDrivenMode: false,
+      selfDrivenMode: true, // Changed to true for better performance
       gpuAcceleratedSort: true,
-      antialiased: false,
-      splatAlphaRemovalThreshold: 0
+      antialiased: true, // Changed to true for better quality
+      splatAlphaRemovalThreshold: 0.001, // Added threshold
+      maxSplatCount: 500000, // Added max splat count
+      showLoadingSpinner: false, // We'll handle loading UI ourselves
     });
     viewerRef.current = viewer;
 
-    // Manual binary loading
+    // Load scene with improved error handling
     const loadScene = async () => {
       try {
-        // Fetch the binary data
         const response = await fetch(PROXIED_URL);
         if (!response.ok) {
-          throw new Error('Failed to fetch splat data');
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        // Get total size for progress tracking
         const totalSize = parseInt(response.headers.get('content-length') || '0');
         const reader = response.body?.getReader();
         if (!reader) {
-          throw new Error('Failed to initialize stream reader');
+          throw new Error('Stream reader initialization failed');
         }
 
-        // Read the stream
         const chunks: Uint8Array[] = [];
         let loadedSize = 0;
 
@@ -86,7 +85,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           setLoadingProgress(Math.round((loadedSize / totalSize) * 100));
         }
 
-        // Combine chunks into a single buffer
         const completeBuffer = new Uint8Array(loadedSize);
         let position = 0;
         for (const chunk of chunks) {
@@ -94,31 +92,25 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           position += chunk.length;
         }
 
-        // Create a blob URL from the buffer
-        const blob = new Blob([completeBuffer], { type: 'model/splat' });
-        const url = URL.createObjectURL(blob);
+        // Load directly from array buffer instead of blob URL
+        await viewer.loadSplatSceneFromBuffer(completeBuffer.buffer);
 
-        // Load into viewer
-        await viewer.addSplatScene(url);
-
-        // Start render loop
-        const update = () => {
-          if (viewerRef.current) {
-            viewerRef.current.update();
-            requestAnimationFrame(update);
-          }
-        };
-        requestAnimationFrame(update);
-
-        // Cleanup blob URL
-        URL.revokeObjectURL(url);
-        
         setIsLoading(false);
         setLoadingProgress(100);
+
+        // Start render loop only after successful load
+        const animate = () => {
+          if (viewerRef.current && isOpen) {
+            viewerRef.current.update();
+            requestAnimationFrame(animate);
+          }
+        };
+        animate();
+
       } catch (err: any) {
         console.error('Failed to load splat scene:', err);
         setError(
-          'Failed to load the 3D scene. Please try again later.'
+          `Failed to load the 3D scene: ${err.message || 'Unknown error'}`
         );
         setIsLoading(false);
       }
@@ -126,7 +118,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
 
     loadScene();
 
-    // Handle window resize
     const handleResize = () => {
       if (!containerRef.current || !viewerRef.current || !rendererRef.current) return;
       const width = containerRef.current.clientWidth;
@@ -137,13 +128,17 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     };
     window.addEventListener('resize', handleResize);
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
-      viewerRef.current = null;
+      
+      if (viewerRef.current) {
+        viewerRef.current.dispose();
+        viewerRef.current = null;
+      }
       
       if (rendererRef.current) {
         rendererRef.current.dispose();
+        rendererRef.current.forceContextLoss();
         if (rendererRef.current.domElement.parentElement) {
           rendererRef.current.domElement.parentElement.removeChild(rendererRef.current.domElement);
         }
