@@ -46,34 +46,42 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       gpuAcceleratedSort: true,
       antialiased: true,
       maxSplatCount: 500000,
+      initialPointSize: 10,  // Added to help with initial visibility
+      shaderMode: 'highQuality', // Added to ensure best rendering
     });
     viewerRef.current = viewer;
 
-    // Direct binary loading from Firebase
     const loadScene = async () => {
       try {
-        // Fetch directly from Firebase to avoid proxy issues
-        const response = await fetch(FIREBASE_URL, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/octet-stream'
-          }
+        console.log('Starting to load scene...');
+        
+        // Fetch raw data
+        const response = await fetch(FIREBASE_URL);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        // Get the data as ArrayBuffer
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('Received buffer size:', arrayBuffer.byteLength);
+        
+        // Create file-like object
+        const file = new File([arrayBuffer], 'scene.splat', {
+          type: 'application/octet-stream'
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const buffer = await response.arrayBuffer();
-        const blob = new Blob([buffer], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-
+        
+        // Create object URL
+        const url = URL.createObjectURL(file);
+        console.log('Created URL:', url);
+        
+        // Load the scene
         await viewer.addSplatScene(url);
+        console.log('Scene loaded successfully');
+        
+        // Clean up
         URL.revokeObjectURL(url);
 
         setIsLoading(false);
 
-        // Start animation loop
+        // Start render loop
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
@@ -108,7 +116,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         cancelAnimationFrame(animationFrameRef.current);
       }
       
-      viewerRef.current = null;
+      if (viewerRef.current) {
+        // Clean up viewer
+        viewerRef.current = null;
+      }
       
       if (rendererRef.current) {
         rendererRef.current.dispose();
