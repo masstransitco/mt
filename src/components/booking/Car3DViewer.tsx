@@ -190,7 +190,7 @@ function Car3DViewer({
         gl={glSettings}
         shadows
         orthographic={false}
-        camera={{ position: [0, 2, 5], fov: 45 }}
+        camera={{ position: [0, 2, 3], fov: 15 }}
         dpr={[1, 1.2]}
       >
         <AdaptiveDpr pixelated />
