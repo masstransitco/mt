@@ -1,18 +1,25 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-import { PMREMGenerator } from "three/src/extras/PMREMGenerator.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader";
 
 interface GaussianSplatModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const BATCH_SIZE = 20000; // How many points to add per frame
+// Adjust these as needed
+const BATCH_SIZE = 20000;
 const POINT_SIZE = 0.02;
 
-const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
+// Direct link to your *compressed* PLY file in Firebase:
+const PLY_FILE_URL =
+  "https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/ifc.ply?alt=media&token=6142be63-a9f9-4651-a993-72c36c2768ce";
+
+const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
+  isOpen,
+  onClose,
+}) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -20,11 +27,10 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
   const controlsRef = useRef<OrbitControls | null>(null);
   const pointsRef = useRef<THREE.Points | null>(null);
 
-  // UI states
   const [progress, setProgress] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Initialize THREE scene once
+  /** Initialize an empty scene on mount */
   const initScene = useCallback(() => {
     if (!mountRef.current) return;
 
@@ -59,11 +65,11 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     controls.panSpeed = 0.5;
     controlsRef.current = controls;
 
-    // Create an *empty* geometry + points
+    // Create an empty geometry + points
     const emptyGeo = new THREE.BufferGeometry();
     const material = new THREE.PointsMaterial({
       size: POINT_SIZE,
-      vertexColors: true, // must be true to see per-vertex color
+      vertexColors: true,
       sizeAttenuation: true,
     });
     const points = new THREE.Points(emptyGeo, material);
@@ -71,95 +77,88 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     pointsRef.current = points;
   }, []);
 
-  // Progressive load: read .ply via streaming fetch
-  const fetchPlyFile = useCallback(
-    async (fileUrl: string) => {
-      setIsLoading(true);
-      setProgress(0);
+  /**
+   * Fetch the PLY file in streaming mode.
+   * Show incremental progress from 0..100 (if content-length is available).
+   */
+  const fetchPlyFile = useCallback(async (url: string): Promise<ArrayBuffer> => {
+    setIsLoading(true);
+    setProgress(0);
 
-      const response = await fetch(fileUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
-      }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+    }
 
-      const contentLengthStr = response.headers.get("content-length") || "0";
-      const total = parseInt(contentLengthStr, 10) || 0;
+    const contentLengthStr = response.headers.get("content-length") || "0";
+    const total = parseInt(contentLengthStr, 10) || 0;
 
-      // We'll accumulate all chunks in a dynamic array
-      const chunks: Uint8Array[] = [];
-      let loaded = 0;
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error("No response reader available");
-      }
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error("No readable stream from fetch.");
+    }
 
-      // Read the stream
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          loaded += value.byteLength;
-          if (total) {
-            setProgress(Math.floor((loaded / total) * 100));
-          } else {
-            // If total is unknown, just approximate or show loaded bytes
-            setProgress(Math.floor(loaded / 1024)); // show KB
-          }
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        loaded += value.byteLength;
+        if (total > 0) {
+          setProgress(Math.floor((loaded / total) * 100));
+        } else {
+          // If total is unknown, you might just show loaded KB, etc.
+          setProgress(Math.floor(loaded / 1024)); 
         }
       }
+    }
 
-      // Combine into single ArrayBuffer
-      let combined = new Uint8Array(loaded);
-      let offset = 0;
-      for (const chunk of chunks) {
-        combined.set(chunk, offset);
-        offset += chunk.length;
-      }
+    // Combine into a single ArrayBuffer
+    const combined = new Uint8Array(loaded);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
 
-      return combined.buffer; // The ArrayBuffer
-    },
-    []
-  );
+    return combined.buffer;
+  }, []);
 
-  // Parse the loaded arrayBuffer with PLYLoader
-  const parseGeometry = useCallback(async (data: ArrayBuffer) => {
-    const plyLoader = new PLYLoader();
-    // The parse method is sync, but let's wrap in a promise
-    const geometry = await new Promise<THREE.BufferGeometry>((resolve, reject) => {
-      try {
-        const geom = plyLoader.parse(data);
-        resolve(geom);
-      } catch (e) {
-        reject(e);
-      }
-    });
+  /**
+   * Use Three.js PLYLoader to parse the full ArrayBuffer into a BufferGeometry.
+   */
+  const parsePLY = useCallback((data: ArrayBuffer): THREE.BufferGeometry => {
+    const loader = new PLYLoader();
+    const geometry = loader.parse(data);
     return geometry;
   }, []);
 
-  // After we parse the geometry, add to the existing Points object in batches
+  /**
+   * Convert the geometry's position/color data into a final Points geometry,
+   * in batches so you see partial updates (optional).
+   */
   const addGeometryInBatches = useCallback(
-    async (finalGeo: THREE.BufferGeometry) => {
+    (finalGeo: THREE.BufferGeometry) => {
       if (!pointsRef.current) return;
 
-      // Check if color attribute is in bytes or floats
+      // If there's a color attribute, check if it's 0..255
       if (finalGeo.hasAttribute("color")) {
         const colorAttr = finalGeo.getAttribute("color");
-        // If your PLY color is stored as 0..255, then the type is likely Uint8Array
+        // If it's stored as Uint8, we set normalized = true
         if (colorAttr.array instanceof Uint8Array && !colorAttr.normalized) {
-          // Convert to normalized attribute
           const asUint8 = colorAttr.array as Uint8Array;
-          const itemSize = colorAttr.itemSize; // usually 3 or 4
           finalGeo.setAttribute(
             "color",
-            new THREE.Uint8BufferAttribute(asUint8, itemSize, true /* normalized */)
+            new THREE.Uint8BufferAttribute(asUint8, colorAttr.itemSize, true)
           );
         }
       } else {
-        // If no color, assign white
-        const positionAttr = finalGeo.getAttribute("position");
-        const count = positionAttr.count;
+        // Assign white if no color
+        const positions = finalGeo.getAttribute("position");
+        const count = positions.count;
         const white = new Uint8Array(count * 3).fill(255);
         finalGeo.setAttribute(
           "color",
@@ -171,113 +170,91 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       const colAttr = finalGeo.getAttribute("color") as THREE.BufferAttribute;
       const totalPoints = posAttr.count;
 
-      // We'll create a new typed array for a "batch geometry"
-      // or simply reuse the same Points's geometry, appending in chunks.
-      const finalPositions = posAttr.array as Float32Array | Uint32Array | Int32Array;
-      // Because we re-wrote color as a Uint8BufferAttribute (normalized),
-      // internally that .array might still be a Uint8Array.
-      // But to do partial copy, we can interpret them carefully.
-
-      // For progressive rendering, let's create a bigger geometry 
-      // with the full size, then fill it piece by piece.
+      // Prepare a new geometry for our Points
       const mergedGeometry = new THREE.BufferGeometry();
-      // We'll allocate final typed arrays
       const mergedPositions = new Float32Array(totalPoints * 3);
-      // For color, we must keep it as a Uint8Array if we want hardware normalization
-      // or we can convert to float [0..1]. We'll do hardware normalization:
-      const mergedColors = new Uint8Array(totalPoints * 3);
+      const mergedColors = new Uint8Array(totalPoints * 3); // normalized in GPU
 
-      // Actually create the BufferAttributes for the final geometry
       const positionAttrFinal = new THREE.BufferAttribute(mergedPositions, 3);
-      // For color, use Uint8BufferAttribute (normalized)
       const colorAttrFinal = new THREE.Uint8BufferAttribute(mergedColors, 3, true);
 
       mergedGeometry.setAttribute("position", positionAttrFinal);
       mergedGeometry.setAttribute("color", colorAttrFinal);
 
-      // We do a function that copies chunk from finalGeo arrays to merged arrays
+      // Copy data in small batches so we can see partial updates
       let currentIndex = 0;
-      const addBatch = () => {
+      const copyBatch = () => {
+        if (!pointsRef.current) return;
         if (currentIndex >= totalPoints) {
-          // Done
           mergedGeometry.computeBoundingSphere();
-          pointsRef.current!.geometry = mergedGeometry;
+          pointsRef.current.geometry = mergedGeometry;
           setIsLoading(false);
           return;
         }
 
         const endIndex = Math.min(currentIndex + BATCH_SIZE, totalPoints);
-        // Copy positions
-        if (finalPositions instanceof Float32Array) {
-          // copy float -> float
-          mergedPositions.set(
-            finalPositions.subarray(currentIndex * 3, endIndex * 3),
-            currentIndex * 3
-          );
-        } else {
-          // If for some reason it's another typed array
-          for (let i = currentIndex * 3; i < endIndex * 3; i++) {
-            mergedPositions[i] = finalPositions[i];
-          }
-        }
-        // Copy colors
-        const originalColorArray = colAttr.array; // possibly a Uint8Array or Float32Array
-        if (originalColorArray instanceof Uint8Array) {
+
+        // Positions (final file data might be Float32Array)
+        const srcPos = posAttr.array as Float32Array;
+        mergedPositions.set(
+          srcPos.subarray(currentIndex * 3, endIndex * 3),
+          currentIndex * 3
+        );
+
+        // Colors 
+        const srcColor = colAttr.array;
+        if (srcColor instanceof Uint8Array) {
+          // directly copy
           mergedColors.set(
-            originalColorArray.subarray(currentIndex * 3, endIndex * 3),
+            srcColor.subarray(currentIndex * 3, endIndex * 3),
             currentIndex * 3
           );
-        } else if (originalColorArray instanceof Float32Array) {
-          // If your PLY had float color
+        } else if (srcColor instanceof Float32Array) {
+          // convert float [0..1 or 0..255?] to byte
           for (let i = currentIndex * 3; i < endIndex * 3; i++) {
-            // clamp or convert float -> byte
-            mergedColors[i] = Math.min(255, Math.max(0, originalColorArray[i] * 255));
+            mergedColors[i] = Math.min(255, Math.max(0, srcColor[i] * 255));
           }
         }
 
         currentIndex = endIndex;
 
-        // Update the geometry so we can see partial updates
         positionAttrFinal.needsUpdate = true;
         colorAttrFinal.needsUpdate = true;
         mergedGeometry.computeBoundingSphere();
-        pointsRef.current!.geometry = mergedGeometry;
+        pointsRef.current.geometry = mergedGeometry;
 
-        requestAnimationFrame(addBatch);
+        requestAnimationFrame(copyBatch);
       };
-      requestAnimationFrame(addBatch);
+      requestAnimationFrame(copyBatch);
     },
     []
   );
 
-  const loadAndParsePLY = useCallback(async () => {
-    if (!sceneRef.current) return;
+  /** Orchestrate the entire load + parse + batch-render pipeline */
+  const loadPlyAndDisplay = useCallback(async () => {
     try {
       setIsLoading(true);
       setProgress(0);
 
-      // 1) FETCH via your Next.js proxy
-      const url = "/api/splat?url=" + encodeURIComponent(
-        "https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=cc4b8455-d5ee-49a0-81c7-5f2bb0081119"
-      );
-      const arrayBuffer = await fetchPlyFile(url);
+      // 1) Download PLY file from Firebase (direct URL).
+      const data = await fetchPlyFile(PLY_FILE_URL);
 
-      // 2) PARSE .ply data
-      const geometry = await parseGeometry(arrayBuffer);
+      // 2) Parse with PLYLoader
+      const geometry = parsePLY(data);
 
-      // 3) BATCH ADD geometry to scene
-      await addGeometryInBatches(geometry);
-
+      // 3) Progressive geometry update
+      addGeometryInBatches(geometry);
     } catch (err) {
       console.error("Error loading PLY:", err);
       setIsLoading(false);
     }
-  }, [fetchPlyFile, parseGeometry, addGeometryInBatches]);
+  }, [fetchPlyFile, parsePLY, addGeometryInBatches]);
 
   // Animation loop
   useEffect(() => {
-    if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !controlsRef.current) return;
-
+    if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !controlsRef.current) {
+      return;
+    }
     let stopped = false;
     const animate = () => {
       if (stopped) return;
@@ -286,20 +263,20 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       rendererRef.current!.render(sceneRef.current!, cameraRef.current!);
     };
     animate();
-
     return () => {
       stopped = true;
     };
   }, []);
 
-  // Initialize on open
+  // On open, set up scene and load
   useEffect(() => {
     if (!isOpen) return;
-    initScene();
-    loadAndParsePLY();
 
-    // Cleanup on close
+    initScene();
+    loadPlyAndDisplay();
+
     return () => {
+      // Cleanup
       setIsLoading(false);
       setProgress(0);
 
@@ -307,26 +284,27 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         rendererRef.current.dispose();
         rendererRef.current = null;
       }
+
       if (pointsRef.current) {
         pointsRef.current.geometry.dispose();
         if (Array.isArray(pointsRef.current.material)) {
-          pointsRef.current.material.forEach((m) => m.dispose());
+          pointsRef.current.material.forEach((mat) => mat.dispose());
         } else {
           (pointsRef.current.material as THREE.Material).dispose();
         }
         pointsRef.current = null;
       }
+
       if (sceneRef.current) {
         sceneRef.current.clear();
         sceneRef.current = null;
       }
     };
-  }, [isOpen, initScene, loadAndParsePLY]);
+  }, [isOpen, initScene, loadPlyAndDisplay]);
 
   // Handle resize
   useEffect(() => {
     if (!isOpen) return;
-
     const handleResize = () => {
       if (!mountRef.current || !cameraRef.current || !rendererRef.current) return;
       const width = mountRef.current.clientWidth;
@@ -335,7 +313,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(width, height);
     };
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [isOpen]);
