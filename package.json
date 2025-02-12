@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.14.1",
     "@googlemaps/three": "^4.0.13",
+    "@lumaai/luma-web": "^0.2.2",
     "@googlemaps/js-api-loader": "^1.16.8",
     "@mkkellogg/gaussian-splats-3d": "^0.4.7",
     "@radix-ui/react-alert-dialog": "^1.0.5",
