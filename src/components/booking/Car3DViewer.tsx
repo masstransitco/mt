@@ -45,6 +45,7 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   useEffect(() => {
     if (!scene) return;
     // Initial rotation and material adjustments.
+    scene.position.set(0, -0.5, 0);
     scene.rotation.y = Math.PI / 2;
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
@@ -66,7 +67,14 @@ function CameraSetup({ interactive }: { interactive: boolean }) {
     // Return the default camera and scene from the fiber context.
     return { camera: new THREE.PerspectiveCamera(), scene: new THREE.Scene() };
   }, []);
-  return <OrbitControls enableDamping dampingFactor={0.05} enableZoom={false} minPolarAngle={0} maxPolarAngle={Math.PI / 2} />;
+  return <OrbitControls
+  enableDamping
+  dampingFactor={0.05}
+  enableZoom={false}
+  minPolarAngle={0}
+  maxPolarAngle={Math.PI / 2}
+  enablePan={false}   // Disable panning
+/>;
 }
 
 function SceneLighting() {
