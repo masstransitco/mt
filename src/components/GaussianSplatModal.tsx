@@ -46,8 +46,6 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       gpuAcceleratedSort: true,
       antialiased: true,
       maxSplatCount: 500000,
-      initialPointSize: 10,  // Added to help with initial visibility
-      shaderMode: 'highQuality', // Added to ensure best rendering
     });
     viewerRef.current = viewer;
 
@@ -55,33 +53,45 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       try {
         console.log('Starting to load scene...');
         
-        // Fetch raw data
-        const response = await fetch(FIREBASE_URL);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
-        // Get the data as ArrayBuffer
-        const arrayBuffer = await response.arrayBuffer();
-        console.log('Received buffer size:', arrayBuffer.byteLength);
-        
-        // Create file-like object
-        const file = new File([arrayBuffer], 'scene.splat', {
-          type: 'application/octet-stream'
-        });
-        
-        // Create object URL
-        const url = URL.createObjectURL(file);
-        console.log('Created URL:', url);
-        
-        // Load the scene
-        await viewer.addSplatScene(url);
-        console.log('Scene loaded successfully');
-        
-        // Clean up
-        URL.revokeObjectURL(url);
+        // Try loading directly from Firebase first
+        try {
+          console.log('Attempting direct Firebase load...');
+          await viewer.addSplatScene(FIREBASE_URL);
+          console.log('Direct load successful');
+        } catch (directError) {
+          console.log('Direct load failed, trying proxy...', directError);
+          
+          // If direct load fails, try through proxy
+          const proxyUrl = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
+          const response = await fetch(proxyUrl);
+          
+          if (!response.ok) {
+            throw new Error(`Proxy fetch failed: ${response.status}`);
+          }
+          
+          const arrayBuffer = await response.arrayBuffer();
+          console.log('Received buffer size:', arrayBuffer.byteLength);
+          
+          // Try loading the raw buffer
+          try {
+            // @ts-ignore - Assuming there might be an undocumented method
+            if (typeof viewer.loadFromArrayBuffer === 'function') {
+              await viewer.loadFromArrayBuffer(arrayBuffer);
+            } else {
+              // Fall back to blob URL method
+              const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+              const url = URL.createObjectURL(blob);
+              console.log('Created URL:', url);
+              await viewer.addSplatScene(url);
+              URL.revokeObjectURL(url);
+            }
+          } catch (loadError) {
+            throw new Error(`Load failed: ${loadError.message}`);
+          }
+        }
 
         setIsLoading(false);
 
-        // Start render loop
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
@@ -116,10 +126,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         cancelAnimationFrame(animationFrameRef.current);
       }
       
-      if (viewerRef.current) {
-        // Clean up viewer
-        viewerRef.current = null;
-      }
+      viewerRef.current = null;
       
       if (rendererRef.current) {
         rendererRef.current.dispose();
