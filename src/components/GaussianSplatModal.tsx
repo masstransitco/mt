@@ -11,7 +11,6 @@ interface LumaSplatModalProps {
 const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // We'll store references to Three.js objects so we can dispose them on unmount
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -21,7 +20,7 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!isOpen) return;
 
-    // 1. Create basic Three.js setup
+    // 1. Basic Three.js setup
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -34,13 +33,8 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     scene.background = new THREE.Color("white");
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(
-      60,
-      window.innerWidth / window.innerHeight,
-      0.01,
-      1000
-    );
-    camera.position.set(0, 0, 2);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 1000);
+    camera.position.set(0, 0, 3);
     cameraRef.current = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -50,28 +44,42 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     // 2. Create Luma Splat object
     const splats = new LumaSplatsThree({
       source: "https://lumalabs.ai/capture/F1A8381A-AF0A-4F78-A0C1-DF4D430A950D",
-      enableThreeShaderIntegration: false, // simpler, faster route
+      enableThreeShaderIntegration: false,
       particleRevealEnabled: true,
     });
     scene.add(splats);
     splatsRef.current = splats;
 
-    // Rotate the model 45 degrees around the X-axis (adjust sign if needed).
-    splats.rotation.x = -Math.PI / 4; // -45 degrees
+    // ------------------------------------------------------------------
+    // 2a. Adjust the orientation of the entire model to stand "upright."
+    // 
+    //   - rotation.z tilts the model side-to-side 
+    //   - rotation.x tilts it forward/backward
+    //   - rotation.y spins it around vertical
+    //
+    // Adjust as needed based on your capture to get the building vertical.
+    // ------------------------------------------------------------------
+    splats.rotation.set(0, 0, 0.3); // ~17 degrees around Z axis (example)
 
-    // 2a. Use the initial camera transform from the Luma file
+    // 2b. Luma’s initial camera transform – optional. 
+    //     You can skip or override if you prefer your own camera.
     splats.onInitialCameraTransform = (transform) => {
+      // If you do want to honor Luma’s default camera:
       const position = new THREE.Vector3();
       const quaternion = new THREE.Quaternion();
       const scale = new THREE.Vector3();
       transform.decompose(position, quaternion, scale);
       camera.position.copy(position);
       camera.quaternion.copy(quaternion);
-      // scale can be used if you want to adjust camera distance
+      // Or omit these lines if you prefer a custom camera viewpoint
     };
 
-    // 3. Add a plane with the text "Hong Kong"
+    // 3. Add a plane with the text "Hong Kong", 
+    //    but rotate it so it lies flat like a ground decal
     const textPlane = createTextPlane("Hong Kong");
+    // For a ground-plane orientation in Three.js, normal is +Y:
+    textPlane.rotation.x = -Math.PI / 2; // rotate from facing front to facing upward
+    textPlane.position.set(0, 0, 0);    // adjust as needed (X,Z to move around, Y for height)
     scene.add(textPlane);
 
     // 4. Start render loop
@@ -100,7 +108,6 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
       isCancelled = true;
       window.removeEventListener("resize", onResize);
 
-      // Dispose Luma splats
       if (splatsRef.current) {
         splatsRef.current.dispose();
         splatsRef.current = null;
@@ -111,7 +118,6 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
         rendererRef.current = null;
       }
 
-      // Clear scene
       if (sceneRef.current) {
         sceneRef.current.traverse((obj) => {
           if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
@@ -207,9 +213,7 @@ function createTextPlane(text: string): THREE.Mesh {
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  // position & rotate as desired
-  mesh.position.set(0.8, -0.9, 0);
-  mesh.rotation.y = Math.PI / 2;
+  // (No extra rotation here— we’ll rotate in the main code.)
   mesh.scale.setScalar(0.6);
 
   return mesh;
