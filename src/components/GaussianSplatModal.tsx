@@ -50,12 +50,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       renderer,
       camera,
       useBuiltInControls: true,
-      selfDrivenMode: true, // Changed to true for better performance
+      selfDrivenMode: true,
       gpuAcceleratedSort: true,
-      antialiased: true, // Changed to true for better quality
-      splatAlphaRemovalThreshold: 0.001, // Added threshold
-      maxSplatCount: 500000, // Added max splat count
-      showLoadingSpinner: false, // We'll handle loading UI ourselves
+      antialiased: true,
+      splatAlphaRemovalThreshold: 0.001,
+      maxSplatCount: 500000,
+      showLoadingSpinner: false,
     });
     viewerRef.current = viewer;
 
@@ -92,8 +92,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           position += chunk.length;
         }
 
-        // Load directly from array buffer instead of blob URL
-        await viewer.loadSplatSceneFromBuffer(completeBuffer.buffer);
+        // Create blob and load using addSplatScene
+        const blob = new Blob([completeBuffer], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        
+        await viewer.addSplatScene(url);
+        URL.revokeObjectURL(url); // Clean up the URL immediately after loading
 
         setIsLoading(false);
         setLoadingProgress(100);
