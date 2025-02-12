@@ -31,24 +31,21 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     setError(null);
     setLoadingProgress(0);
 
-    // Create scene and camera
-    const scene = new THREE.Scene();
+    // Initialize Three.js setup
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: false,
+      powerPreference: 'high-performance',
+    });
+    renderer.setSize(renderWidth, renderHeight);
+    containerEl.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
     const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 1000);
     camera.position.set(0, 0, 5);
     camera.up.set(0, 1, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // Initialize renderer
-    const renderer = new THREE.WebGLRenderer({
-      antialias: false,
-      powerPreference: 'high-performance',
-    });
-    renderer.setPixelRatio(1); // Force 1:1 pixel ratio for performance
-    renderer.setSize(renderWidth, renderHeight);
-    containerEl.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
-
-    // Initialize viewer with minimal settings
+    // Create viewer with minimal settings
     const viewer = new GaussianSplats3D.Viewer({
       renderer,
       camera,
@@ -56,28 +53,53 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       selfDrivenMode: false,
       gpuAcceleratedSort: true,
       antialiased: false,
-      splatAlphaRemovalThreshold: 0,
-      // Disable features that might cause issues
-      ignoreDevicePixelRatio: true,
-      integerBasedSort: false,
-      halfPrecisionCovariancesOnGPU: false,
-      // Set progressive loading
-      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Progressive,
-      renderMode: GaussianSplats3D.RenderMode.OnChange
+      splatAlphaRemovalThreshold: 0
     });
     viewerRef.current = viewer;
 
-    // Load the splat file
+    // Manual binary loading
     const loadScene = async () => {
       try {
-        // Pre-fetch to check file availability
-        const checkResponse = await fetch(PROXIED_URL, { method: 'HEAD' });
-        if (!checkResponse.ok) {
-          throw new Error('Failed to access splat file');
+        // Fetch the binary data
+        const response = await fetch(PROXIED_URL);
+        if (!response.ok) {
+          throw new Error('Failed to fetch splat data');
         }
 
-        // Load the scene
-        await viewer.addSplatScene(PROXIED_URL);
+        // Get total size for progress tracking
+        const totalSize = parseInt(response.headers.get('content-length') || '0');
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('Failed to initialize stream reader');
+        }
+
+        // Read the stream
+        const chunks: Uint8Array[] = [];
+        let loadedSize = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          chunks.push(value);
+          loadedSize += value.length;
+          setLoadingProgress(Math.round((loadedSize / totalSize) * 100));
+        }
+
+        // Combine chunks into a single buffer
+        const completeBuffer = new Uint8Array(loadedSize);
+        let position = 0;
+        for (const chunk of chunks) {
+          completeBuffer.set(chunk, position);
+          position += chunk.length;
+        }
+
+        // Create a blob URL from the buffer
+        const blob = new Blob([completeBuffer], { type: 'model/splat' });
+        const url = URL.createObjectURL(blob);
+
+        // Load into viewer
+        await viewer.addSplatScene(url);
 
         // Start render loop
         const update = () => {
@@ -87,12 +109,17 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           }
         };
         requestAnimationFrame(update);
+
+        // Cleanup blob URL
+        URL.revokeObjectURL(url);
         
         setIsLoading(false);
         setLoadingProgress(100);
       } catch (err: any) {
         console.error('Failed to load splat scene:', err);
-        setError('Failed to load the 3D scene. Please ensure the file format is correct.');
+        setError(
+          'Failed to load the 3D scene. Please try again later.'
+        );
         setIsLoading(false);
       }
     };
