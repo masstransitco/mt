@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
-import { PMREMGenerator } from "three/examples/jsm/pmrem/PMREMGenerator.js";
+import { PMREMGenerator } from "three/examples/jsm/utils/PMREMGenerator.js";
 
 interface GaussianSplatModalProps {
   isOpen: boolean;
