@@ -57,7 +57,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({
           style={{
             position: "absolute",
             // Scale to 110%: We set width/height to 110% of viewport
-            width: "110vw",
+            width: "120vw",
             height: "110vh",
             // shift it left/top by 5% so it's centered in the modal
             left: "-5vw",
