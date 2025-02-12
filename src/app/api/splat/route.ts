@@ -36,12 +36,9 @@ export async function GET(request: NextRequest) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+    // Direct fetch without any content-type expectations
     const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'Accept': '*/*',  // Accept any content type
-        'Accept-Encoding': 'identity'  // Prevent compression
-      }
+      signal: controller.signal
     });
 
     clearTimeout(timeoutId);
@@ -50,7 +47,6 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
     }
 
-    // Get the response as ArrayBuffer to preserve binary data exactly
     const buffer = await response.arrayBuffer();
     
     if (buffer.byteLength === 0) {
@@ -61,19 +57,12 @@ export async function GET(request: NextRequest) {
       throw new Error('File too large');
     }
 
-    // Return binary data with headers optimized for binary transfer
+    // Return with minimal headers to avoid any content-type issues
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'application/octet-stream',
         'Content-Length': buffer.byteLength.toString(),
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Cache-Control': 'public, max-age=31536000, immutable',
-        'Content-Transfer-Encoding': 'binary',  // Explicitly specify binary transfer
-        'Content-Disposition': 'attachment; filename="scene.splat"',
-        'X-Content-Type-Options': 'nosniff',
-        'Vary': 'Origin, Accept-Encoding',
-        'Accept-Ranges': 'bytes',  // Support partial content requests
+        'Cache-Control': 'no-cache'  // Disable caching during debugging
       },
     });
   } catch (error: any) {
@@ -105,7 +94,7 @@ export async function OPTIONS(request: NextRequest) {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range, Accept-Encoding',
+      'Access-Control-Allow-Headers': '*',
       'Access-Control-Max-Age': '86400',
     },
   });
