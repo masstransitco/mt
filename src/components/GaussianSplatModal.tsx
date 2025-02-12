@@ -34,7 +34,12 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     scene.background = new THREE.Color("white");
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 1000);
+    const camera = new THREE.PerspectiveCamera(
+      60,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      1000
+    );
     camera.position.set(0, 0, 2);
     cameraRef.current = camera;
 
@@ -43,7 +48,6 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     controlsRef.current = controls;
 
     // 2. Create Luma Splat object
-    //    See docs: https://github.com/luma-ai/luma-web
     const splats = new LumaSplatsThree({
       source: "https://lumalabs.ai/capture/F1A8381A-AF0A-4F78-A0C1-DF4D430A950D",
       enableThreeShaderIntegration: false, // simpler, faster route
@@ -51,6 +55,9 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     });
     scene.add(splats);
     splatsRef.current = splats;
+
+    // Rotate the model 45 degrees around the X-axis (adjust sign if needed).
+    splats.rotation.x = -Math.PI / 4; // -45 degrees
 
     // 2a. Use the initial camera transform from the Luma file
     splats.onInitialCameraTransform = (transform) => {
