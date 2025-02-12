@@ -13,17 +13,20 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(url);
-    const buffer = await response.arrayBuffer();
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.statusText}`);
+    }
 
-    // Set explicit binary stream headers
+    const buffer = await response.arrayBuffer();
+    
+    // Return binary data with explicit headers
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'application/octet-stream',
-        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'model/splat',
         'Content-Length': buffer.byteLength.toString(),
-        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=31536000',
-        'X-Content-Type-Options': 'nosniff'
+        'Content-Disposition': 'attachment; filename="scene.splat"'
       },
     });
   } catch (error) {
@@ -39,9 +42,8 @@ export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS, HEAD',
-      'Access-Control-Allow-Headers': 'Content-Type, Range',
-      'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
       'Access-Control-Max-Age': '86400',
     },
   });
