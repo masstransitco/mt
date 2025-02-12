@@ -10,8 +10,6 @@ interface GaussianSplatModalProps {
 const FIREBASE_URL = 
   'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.splat?alt=media&token=fe72cbcf-4a26-42b4-b307-211fe431f641';
 
-const PROXIED_URL = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
-
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
@@ -51,11 +49,31 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     });
     viewerRef.current = viewer;
 
-    // Simplified direct loading
-    viewer.addSplatScene(PROXIED_URL)
-      .then(() => {
+    // Direct binary loading from Firebase
+    const loadScene = async () => {
+      try {
+        // Fetch directly from Firebase to avoid proxy issues
+        const response = await fetch(FIREBASE_URL, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/octet-stream'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const buffer = await response.arrayBuffer();
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+
+        await viewer.addSplatScene(url);
+        URL.revokeObjectURL(url);
+
         setIsLoading(false);
-        
+
+        // Start animation loop
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
@@ -63,12 +81,15 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           }
         };
         animate();
-      })
-      .catch((err) => {
+
+      } catch (err: any) {
         console.error('Failed to load splat scene:', err);
         setError(`Failed to load the 3D scene: ${err.message}`);
         setIsLoading(false);
-      });
+      }
+    };
+
+    loadScene();
 
     const handleResize = () => {
       if (!containerRef.current || !viewerRef.current || !rendererRef.current) return;
