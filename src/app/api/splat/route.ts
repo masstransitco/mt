@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// Whitelist of allowed domains for security
 const ALLOWED_DOMAINS = [
   'firebasestorage.googleapis.com',
-  // Add other trusted domains as needed
 ];
 
-// Helper to validate URL domain
 function isAllowedDomain(urlString: string): boolean {
   try {
     const url = new URL(urlString);
@@ -21,7 +18,6 @@ function isAllowedDomain(urlString: string): boolean {
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url');
   
-  // Input validation
   if (!url) {
     return NextResponse.json(
       { error: 'URL parameter is required' },
@@ -29,7 +25,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Domain validation
   if (!isAllowedDomain(url)) {
     return NextResponse.json(
       { error: 'Invalid domain' },
@@ -39,13 +34,13 @@ export async function GET(request: NextRequest) {
 
   try {
     const controller = new AbortController();
-    // 30 second timeout
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'Accept': 'application/octet-stream,*/*',
+        'Accept': '*/*',  // Accept any content type
+        'Accept-Encoding': 'identity'  // Prevent compression
       }
     });
 
@@ -55,39 +50,35 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
     }
 
-    // Validate content type if available
-    const contentType = response.headers.get('content-type');
-    if (contentType && !contentType.includes('octet-stream') && !contentType.includes('model/splat')) {
-      console.warn(`Unexpected content type: ${contentType}`);
-    }
-
+    // Get the response as ArrayBuffer to preserve binary data exactly
     const buffer = await response.arrayBuffer();
     
-    // Validate buffer size
     if (buffer.byteLength === 0) {
       throw new Error('Empty response received');
     }
 
-    if (buffer.byteLength > 100 * 1024 * 1024) { // 100MB limit
+    if (buffer.byteLength > 100 * 1024 * 1024) {
       throw new Error('File too large');
     }
 
-    // Return binary data with explicit headers
+    // Return binary data with headers optimized for binary transfer
     return new NextResponse(buffer, {
       headers: {
-        'Content-Type': 'application/octet-stream',  // More generic content type
+        'Content-Type': 'application/octet-stream',
         'Content-Length': buffer.byteLength.toString(),
         'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Transfer-Encoding': 'binary',  // Explicitly specify binary transfer
         'Content-Disposition': 'attachment; filename="scene.splat"',
-        'X-Content-Type-Options': 'nosniff',  // Prevent MIME type sniffing
-        'Vary': 'Origin'  // For proper CORS caching
+        'X-Content-Type-Options': 'nosniff',
+        'Vary': 'Origin, Accept-Encoding',
+        'Accept-Ranges': 'bytes',  // Support partial content requests
       },
     });
   } catch (error: any) {
     console.error('Error proxying file:', error);
     
-    // More specific error responses
     if (error.name === 'AbortError') {
       return NextResponse.json(
         { error: 'Request timed out' },
@@ -114,7 +105,7 @@ export async function OPTIONS(request: NextRequest) {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Range, Accept-Encoding',
       'Access-Control-Max-Age': '86400',
     },
   });
