@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { PMREMGenerator } from 'three/src/extras/PMREMGenerator.js';
 
 interface GaussianSplatModalProps {
@@ -10,23 +9,31 @@ interface GaussianSplatModalProps {
   onClose: () => void;
 }
 
+const BATCH_SIZE = 10000; // Number of points to process in each batch
+const POINT_SIZE = 0.02; // Adjust based on your scene scale
+
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const pointsRef = useRef<THREE.Points | null>(null);
   const requestIdRef = useRef<number | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
-  const initScene = useCallback(async () => {
+  const initScene = useCallback(() => {
     if (!mountRef.current) return;
 
-    // Create renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Create renderer with alpha and better precision
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      precision: "highp"
+    });
     renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -35,259 +42,157 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     scene.background = new THREE.Color(0x101010);
     sceneRef.current = scene;
 
-    // Create camera
+    // Create camera with better near/far planes
     const camera = new THREE.PerspectiveCamera(
-      45,
+      60,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
-      0.1,
+      0.01,
       1000
     );
-    camera.position.set(0, 0, 5);
+    camera.position.set(0, 0, 2);
     cameraRef.current = camera;
 
-    // Add OrbitControls
+    // Optimize OrbitControls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.rotateSpeed = 0.5;
+    controls.zoomSpeed = 0.5;
+    controls.panSpeed = 0.5;
     controlsRef.current = controls;
 
-    // Optional: Load environment map (HDR) for reflections
-    try {
-      const pmremGenerator = new PMREMGenerator(renderer);
-      pmremGenerator.compileEquirectangularShader();
-
-      const hdrLoader = new RGBELoader();
-      // If you have an HDR file, load it here:
-      // const hdrTexture = await hdrLoader.loadAsync("path/to/environment.hdr");
-      // const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
-      // scene.environment = envMap;
-      // pmremGenerator.dispose();
-    } catch (err) {
-      console.warn("Failed to load HDR environment:", err);
-    }
-
-    // Load your .ply file from Firebase
-    // Replace with your actual Firebase PLY URL
-    const firebasePlyURL =
-      "https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=cc4b8455-d5ee-49a0-81c7-5f2bb0081119";
-
-    const plyLoader = new PLYLoader();
-    plyLoader.load(
-      firebasePlyURL,
-      (geometry) => {
-        // If no color attribute, assign default white
-        if (!geometry.hasAttribute("color")) {
-          const numVertices = geometry.attributes.position.count;
-          const colors = new Float32Array(numVertices * 3);
-          for (let i = 0; i < numVertices; i++) {
-            colors[i * 3 + 0] = 1.0;
-            colors[i * 3 + 1] = 1.0;
-            colors[i * 3 + 2] = 1.0;
-          }
-          geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-        }
-
-        // Compute normals for basic lighting if desired
-        geometry.computeVertexNormals();
-
-        // Base plane geometry for each splat
-        const baseGeometry = new THREE.PlaneGeometry(1, 1);
-
-        // Simple shader material example
-        const material = new THREE.ShaderMaterial({
-          uniforms: {
-            // If you set an env map above, reference it here
-            envMap: { value: scene.environment },
-          },
-          vertexShader: `
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-
-            void main() {
-              vec3 newPosition = position;
-              vec4 mvPosition = modelViewMatrix * vec4(newPosition, 1.0);
-              vPosition = mvPosition.xyz;
-              vNormal = normalMatrix * normal;
-              gl_Position = projectionMatrix * mvPosition;
-            }
-          `,
-          fragmentShader: `
-            uniform samplerCube envMap;
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-
-            void main() {
-              vec3 N = normalize(vNormal);
-              // cameraPosition is built-in in Three.js
-              vec3 V = normalize(cameraPosition - vPosition);
-              vec3 R = reflect(-V, N);
-
-              // Always sample the envMap
-              vec3 envColor = textureCube(envMap, R).rgb;
-
-              vec3 baseColor = vec3(1.0);
-              vec3 color = mix(baseColor, envColor, 0.5);
-
-              gl_FragColor = vec4(color, 1.0);
-            }
-          `,
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.NormalBlending,
-        });
-
-        // Create an instanced mesh
-        const numInstances = geometry.attributes.position.count;
-        const instancedMesh = new THREE.InstancedMesh(baseGeometry, material, numInstances);
-
-        // Position & scale each point
-        const dummy = new THREE.Object3D();
-        const splatScale = 0.05;
-
-        for (let i = 0; i < numInstances; i++) {
-          dummy.position.set(
-            geometry.attributes.position.getX(i),
-            geometry.attributes.position.getY(i),
-            geometry.attributes.position.getZ(i)
-          );
-          // Make each quad face the camera
-          dummy.lookAt(camera.position);
-          dummy.scale.set(splatScale, splatScale, splatScale);
-          dummy.updateMatrix();
-          instancedMesh.setMatrixAt(i, dummy.matrix);
-        }
-
-        scene.add(instancedMesh);
-
-        setLoading(false);
-      },
-      (xhr) => {
-        console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`);
-      },
-      (err) => {
-        console.error("Error loading PLY from Firebase:", err);
-        setLoading(false);
-      }
-    );
+    // Create initial empty points system
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.PointsMaterial({
+      size: POINT_SIZE,
+      vertexColors: true,
+      sizeAttenuation: true,
+    });
+    
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+    pointsRef.current = points;
   }, []);
 
+  const processPointsBatch = useCallback((
+    geometry: THREE.BufferGeometry,
+    startIdx: number,
+    endIdx: number,
+    positions: Float32Array,
+    colors: Float32Array,
+    totalPoints: number
+  ) => {
+    if (!pointsRef.current) return;
+
+    const batchPositions = positions.slice(startIdx * 3, endIdx * 3);
+    const batchColors = colors.slice(startIdx * 3, endIdx * 3);
+
+    const positionAttribute = new THREE.Float32BufferAttribute(batchPositions, 3);
+    const colorAttribute = new THREE.Float32BufferAttribute(batchColors, 3);
+
+    geometry.setAttribute('position', positionAttribute);
+    geometry.setAttribute('color', colorAttribute);
+    
+    // Update loading progress
+    setLoadingProgress((endIdx / totalPoints) * 100);
+    
+    // Force geometry update
+    geometry.computeBoundingSphere();
+    pointsRef.current.geometry = geometry;
+  }, []);
+
+  const loadPLY = useCallback(async () => {
+    if (!sceneRef.current) return;
+
+    const firebasePlyURL = "https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=cc4b8455-d5ee-49a0-81c7-5f2bb0081119";
+
+    const plyLoader = new PLYLoader();
+    
+    try {
+      const geometry = await new Promise<THREE.BufferGeometry>((resolve, reject) => {
+        plyLoader.load(firebasePlyURL,
+          (geometry) => resolve(geometry),
+          (xhr) => {
+            console.log(`${(xhr.loaded / xhr.total) * 100}% loaded`);
+          },
+          reject
+        );
+      });
+
+      const positions = geometry.attributes.position.array as Float32Array;
+      const colors = geometry.hasAttribute('color') 
+        ? geometry.attributes.color.array as Float32Array
+        : new Float32Array(positions.length).fill(1.0);
+
+      const totalPoints = positions.length / 3;
+      
+      // Process points in batches
+      for (let i = 0; i < totalPoints; i += BATCH_SIZE) {
+        const endIdx = Math.min(i + BATCH_SIZE, totalPoints);
+        processPointsBatch(
+          new THREE.BufferGeometry(),
+          i,
+          endIdx,
+          positions,
+          colors,
+          totalPoints
+        );
+        // Allow render thread to update
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+    } catch (err) {
+      console.error("Error loading PLY:", err);
+    }
+  }, [processPointsBatch]);
+
   const animate = useCallback(() => {
-    if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !controlsRef.current)
-      return;
+    if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !controlsRef.current) return;
+    
     requestIdRef.current = requestAnimationFrame(animate);
     controlsRef.current.update();
     rendererRef.current.render(sceneRef.current, cameraRef.current);
   }, []);
 
-  // Initialize scene once the modal is open
   useEffect(() => {
-    if (!isOpen) return; // Only init when modal is open
+    if (!isOpen) return;
 
     initScene();
+    loadPLY();
+    animate();
+
     return () => {
-      // Cleanup on unmount or close
-      if (rendererRef.current) {
-        rendererRef.current.dispose();
-        rendererRef.current = null;
-      }
       if (requestIdRef.current) {
         cancelAnimationFrame(requestIdRef.current);
-        requestIdRef.current = null;
       }
-      if (sceneRef.current) {
-        sceneRef.current.traverse((obj) => {
-          if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
-            obj.geometry.dispose();
-            if (Array.isArray(obj.material)) {
-              obj.material.forEach((mat) => mat.dispose());
-            } else if (obj.material instanceof THREE.Material) {
-              obj.material.dispose();
-            }
-          }
-        });
-        sceneRef.current.clear();
-        sceneRef.current = null;
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+      }
+      if (pointsRef.current) {
+        pointsRef.current.geometry.dispose();
+        (pointsRef.current.material as THREE.Material).dispose();
       }
     };
-  }, [initScene, isOpen]);
+  }, [isOpen, initScene, loadPLY, animate]);
 
-  // Start rendering once everything is ready
-  useEffect(() => {
-    if (!isOpen) return;
-    const startRendering = () => {
-      if (!requestIdRef.current) {
-        animate();
-      }
-    };
-    startRendering();
-  }, [isOpen, animate]);
-
-  // Handle resize
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleResize = () => {
-      if (!mountRef.current || !cameraRef.current || !rendererRef.current) return;
-      const width = mountRef.current.clientWidth;
-      const height = mountRef.current.clientHeight;
-      cameraRef.current.aspect = width / height;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(width, height);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [isOpen]);
-
-  // If modal is not open, don't render anything
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0,0,0,0.8)",
-        zIndex: 9999,
-      }}
-    >
-      {loading && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            color: "#fff",
-            transform: "translate(-50%, -50%)",
-            fontSize: 20,
-            zIndex: 1000,
-          }}
+    <div className="fixed inset-0 bg-black/80 z-50">
+      <div className="absolute top-5 right-5 z-10 text-white">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-white/10 border border-white/20 rounded hover:bg-white/20"
         >
-          Loading Splat...
+          Close
+        </button>
+      </div>
+      {loadingProgress < 100 && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white text-xl">
+          Loading: {Math.round(loadingProgress)}%
         </div>
       )}
-      <button
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          zIndex: 1001,
-          padding: "8px 16px",
-          background: "rgba(255, 255, 255, 0.1)",
-          color: "#fff",
-          border: "1px solid #fff",
-          cursor: "pointer",
-        }}
-      >
-        Close
-      </button>
-      <div
-        ref={mountRef}
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
-      />
+      <div ref={mountRef} className="w-full h-full" />
     </div>
   );
 };
