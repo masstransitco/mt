@@ -59,7 +59,7 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     //
     // Adjust as needed based on your capture to get the building vertical.
     // ------------------------------------------------------------------
-    splats.rotation.set(0, 0, 0.3); // ~17 degrees around Z axis (example)
+    splats.rotation.set(0, 0, -0.3); // ~17 degrees around Z axis (example)
 
     // 2b. Luma’s initial camera transform – optional. 
     //     You can skip or override if you prefer your own camera.
@@ -78,7 +78,6 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     //    but rotate it so it lies flat like a ground decal
     const textPlane = createTextPlane("Hong Kong");
     // For a ground-plane orientation in Three.js, normal is +Y:
-    textPlane.rotation.x = -Math.PI / 2; // rotate from facing front to facing upward
     textPlane.position.set(0, 0, 0);    // adjust as needed (X,Z to move around, Y for height)
     scene.add(textPlane);
 
