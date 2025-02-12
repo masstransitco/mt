@@ -13,6 +13,7 @@ const PLY_FILE_URL =
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,6 +33,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       powerPreference: 'high-performance',
       preserveDrawingBuffer: true
     });
+    rendererRef.current = renderer;
     renderer.setSize(renderWidth, renderHeight);
     containerEl.appendChild(renderer.domElement);
 
@@ -77,7 +79,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           throw new Error(`Failed to access file: ${response.statusText}`);
         }
 
-        // Load the scene with single parameter
+        // Load the scene
         await viewer.addSplatScene(PLY_FILE_URL);
 
         // Start render loop
@@ -114,12 +116,18 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (viewerRef.current) {
-        viewerRef.current.dispose();
-      }
+      
+      // Clear the viewer reference
       viewerRef.current = null;
-      renderer.dispose();
-      containerEl.removeChild(renderer.domElement);
+      
+      // Dispose of the renderer and remove canvas
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        if (rendererRef.current.domElement.parentElement) {
+          rendererRef.current.domElement.parentElement.removeChild(rendererRef.current.domElement);
+        }
+        rendererRef.current = null;
+      }
     };
   }, [isOpen]);
 
