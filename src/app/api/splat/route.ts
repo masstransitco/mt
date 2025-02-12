@@ -33,55 +33,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    // Direct fetch without any content-type expectations
+    // Fetch with explicit streaming
     const response = await fetch(url, {
-      signal: controller.signal
+      headers: {
+        'Accept': 'application/octet-stream'
+      }
     });
-
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
     }
 
+    // Get the raw binary data
     const buffer = await response.arrayBuffer();
-    
-    if (buffer.byteLength === 0) {
-      throw new Error('Empty response received');
-    }
 
-    if (buffer.byteLength > 100 * 1024 * 1024) {
-      throw new Error('File too large');
-    }
-
-    // Return with minimal headers to avoid any content-type issues
-    return new NextResponse(buffer, {
+    // Return raw binary data with minimal headers
+    return new Response(buffer, {
       headers: {
+        'Content-Type': 'application/octet-stream',
         'Content-Length': buffer.byteLength.toString(),
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-cache'  // Disable caching during debugging
+        'Access-Control-Allow-Origin': '*'
       },
     });
   } catch (error: any) {
     console.error('Error proxying file:', error);
-    
-    if (error.name === 'AbortError') {
-      return NextResponse.json(
-        { error: 'Request timed out' },
-        { status: 504 }
-      );
-    }
-    
-    if (error.message === 'File too large') {
-      return NextResponse.json(
-        { error: 'File exceeds size limit' },
-        { status: 413 }
-      );
-    }
-
     return NextResponse.json(
       { error: 'Failed to proxy file', details: error.message },
       { status: 500 }
@@ -94,8 +69,7 @@ export async function OPTIONS(request: NextRequest) {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': '*',
-      'Access-Control-Max-Age': '86400',
+      'Access-Control-Allow-Headers': '*'
     },
   });
 }
