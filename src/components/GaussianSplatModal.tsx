@@ -19,34 +19,27 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
   const animationFrameRef = useRef<number>();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
 
   useEffect(() => {
     if (!isOpen || !containerRef.current) return;
 
-    const containerEl = containerRef.current;
-    const renderWidth = containerEl.clientWidth;
-    const renderHeight = containerEl.clientHeight;
-
     setIsLoading(true);
     setError(null);
-    setLoadingProgress(0);
 
-    // Initialize Three.js setup
+    const containerEl = containerRef.current;
     const renderer = new THREE.WebGLRenderer({ 
       antialias: false,
       powerPreference: 'high-performance',
     });
-    renderer.setSize(renderWidth, renderHeight);
+    renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
     containerEl.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(65, containerEl.clientWidth / containerEl.clientHeight, 0.1, 1000);
     camera.position.set(0, 0, 5);
     camera.up.set(0, 1, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // Create viewer with updated settings
     const viewer = new GaussianSplats3D.Viewer({
       renderer,
       camera,
@@ -54,68 +47,15 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       selfDrivenMode: true,
       gpuAcceleratedSort: true,
       antialiased: true,
-      splatAlphaRemovalThreshold: 0.001,
       maxSplatCount: 500000,
-      showLoadingSpinner: false,
     });
     viewerRef.current = viewer;
 
-    // Load scene with binary handling
-    const loadScene = async () => {
-      try {
-        // Fetch raw binary data
-        const response = await fetch(PROXIED_URL, {
-          headers: {
-            'Accept': 'application/octet-stream'
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // Setup progress tracking
-        const totalSize = parseInt(response.headers.get('content-length') || '0');
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('Stream reader initialization failed');
-        }
-
-        // Read binary data
-        const chunks: Uint8Array[] = [];
-        let loadedSize = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          chunks.push(value);
-          loadedSize += value.length;
-          setLoadingProgress(Math.round((loadedSize / totalSize) * 100));
-        }
-
-        // Combine chunks into a single buffer
-        const completeBuffer = new Uint8Array(loadedSize);
-        let position = 0;
-        for (const chunk of chunks) {
-          completeBuffer.set(chunk, position);
-          position += chunk.length;
-        }
-
-        // Create blob with raw binary type
-        const blob = new Blob([completeBuffer], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-
-        // Load the scene
-        await viewer.addSplatScene(url);
-        
-        // Clean up
-        URL.revokeObjectURL(url);
-
+    // Simplified direct loading
+    viewer.addSplatScene(PROXIED_URL)
+      .then(() => {
         setIsLoading(false);
-        setLoadingProgress(100);
-
-        // Start render loop
+        
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
@@ -123,17 +63,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           }
         };
         animate();
-
-      } catch (err: any) {
+      })
+      .catch((err) => {
         console.error('Failed to load splat scene:', err);
-        setError(
-          `Failed to load the 3D scene: ${err.message || 'Unknown error'}`
-        );
+        setError(`Failed to load the 3D scene: ${err.message}`);
         setIsLoading(false);
-      }
-    };
-
-    loadScene();
+      });
 
     const handleResize = () => {
       if (!containerRef.current || !viewerRef.current || !rendererRef.current) return;
@@ -170,23 +105,18 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
   return (
     <div className="modal-overlay">
       <div className="modal-content">
-        <button className="close-button" onClick={onClose}>
-          ×
-        </button>
+        <button className="close-button" onClick={onClose}>×</button>
         <div ref={containerRef} className="splat-container">
           {isLoading && (
             <div className="loading-overlay">
               <div className="loading-spinner" />
-              <p>Loading 3D Scene ({loadingProgress}%)</p>
+              <p>Loading 3D Scene...</p>
             </div>
           )}
           {error && (
             <div className="error-overlay">
               <p>{error}</p>
-              <button 
-                onClick={onClose}
-                className="bg-white text-black px-4 py-2 rounded mt-4 hover:bg-gray-200"
-              >
+              <button onClick={onClose} className="bg-white text-black px-4 py-2 rounded mt-4 hover:bg-gray-200">
                 Close
               </button>
             </div>
