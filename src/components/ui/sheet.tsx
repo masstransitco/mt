@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { ReactNode } from 'react';
-import { X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import React, { ReactNode, useEffect } from "react";
+import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SheetProps {
   isOpen: boolean;
@@ -13,12 +13,6 @@ interface SheetProps {
   count?: number;
 }
 
-/**
- * Updated Sheet:
- * - If `isOpen` is true => max-h-[70vh].
- * - Otherwise => max-h-0 (fully hidden).
- * - Adds a close (X) button instead of the header being clickable.
- */
 const Sheet = ({
   isOpen,
   onToggle,
@@ -27,12 +21,27 @@ const Sheet = ({
   title,
   count,
 }: SheetProps) => {
+  // Disable page scrolling whenever `isOpen` is true
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      // Restore normal overflow
+      document.body.style.overflow = "";
+    }
+
+    // Cleanup if this component unmounts while open, just in case
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
+
   return (
     <div
       className={cn(
-        'fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm',
-        'overflow-hidden transition-all duration-300 ease-in-out',
-        isOpen ? 'max-h-[50vh]' : 'max-h-0', // Fully closed vs. up to 50% viewport height
+        "fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm",
+        "overflow-hidden transition-all duration-300 ease-in-out",
+        isOpen ? "max-h-[50vh]" : "max-h-0",
         className
       )}
     >
@@ -40,10 +49,8 @@ const Sheet = ({
         {/* Header Section */}
         <div className="flex items-center justify-between p-4 border-b border-border/20">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              {title}
-            </h2>
-            {typeof count === 'number' && (
+            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+            {typeof count === "number" && (
               <p className="text-sm text-muted-foreground">
                 {count} stations found
               </p>
@@ -67,10 +74,8 @@ const Sheet = ({
           </div>
         </div>
 
-        {/* Scrollable content */}
-        <div className="overflow-y-auto">
-          {children}
-        </div>
+        {/* Scrollable content inside the sheet */}
+        <div className="overflow-y-auto">{children}</div>
 
         {/* Optional bottom handle */}
         <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
