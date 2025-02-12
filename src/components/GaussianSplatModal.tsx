@@ -72,21 +72,16 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           const arrayBuffer = await response.arrayBuffer();
           console.log('Received buffer size:', arrayBuffer.byteLength);
           
-          // Try loading the raw buffer
+          // Create blob and try loading
+          const blob = new Blob([arrayBuffer]);
+          const url = URL.createObjectURL(blob);
+          console.log('Created URL:', url);
+          
           try {
-            // @ts-ignore - Assuming there might be an undocumented method
-            if (typeof viewer.loadFromArrayBuffer === 'function') {
-              await viewer.loadFromArrayBuffer(arrayBuffer);
-            } else {
-              // Fall back to blob URL method
-              const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
-              const url = URL.createObjectURL(blob);
-              console.log('Created URL:', url);
-              await viewer.addSplatScene(url);
-              URL.revokeObjectURL(url);
-            }
-          } catch (loadError) {
-            throw new Error(`Load failed: ${loadError.message}`);
+            await viewer.addSplatScene(url);
+            console.log('Proxy load successful');
+          } finally {
+            URL.revokeObjectURL(url);
           }
         }
 
