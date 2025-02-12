@@ -5,6 +5,7 @@ import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { PMREMGenerator } from 'three/examples/jsm/environments/PMREMGenerator.js';
 
+
 interface GaussianSplatModalProps {
   isOpen: boolean;
   onClose: () => void;
