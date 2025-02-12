@@ -46,6 +46,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       gpuAcceleratedSort: true,
       antialiased: true,
       maxSplatCount: 500000,
+      shaderMode: 'highQuality',
+      calcMedian: false // Disable median calculation which might cause issues
     });
     viewerRef.current = viewer;
 
@@ -53,40 +55,34 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       try {
         console.log('Starting to load scene...');
         
-        // Try loading directly from Firebase first
+        // Try direct loading first
         try {
-          console.log('Attempting direct Firebase load...');
           await viewer.addSplatScene(FIREBASE_URL);
           console.log('Direct load successful');
+          setIsLoading(false);
         } catch (directError) {
-          console.log('Direct load failed, trying proxy...', directError);
+          console.log('Direct load failed:', directError);
           
-          // If direct load fails, try through proxy
-          const proxyUrl = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
-          const response = await fetch(proxyUrl);
-          
-          if (!response.ok) {
-            throw new Error(`Proxy fetch failed: ${response.status}`);
-          }
+          // If direct load fails, try loading through fetch
+          const response = await fetch(FIREBASE_URL);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           
           const arrayBuffer = await response.arrayBuffer();
-          console.log('Received buffer size:', arrayBuffer.byteLength);
+          console.log('Fetched buffer size:', arrayBuffer.byteLength);
           
-          // Create blob and try loading
+          // Create a simple blob with no type specification
           const blob = new Blob([arrayBuffer]);
           const url = URL.createObjectURL(blob);
-          console.log('Created URL:', url);
           
-          try {
-            await viewer.addSplatScene(url);
-            console.log('Proxy load successful');
-          } finally {
-            URL.revokeObjectURL(url);
-          }
+          console.log('Attempting to load from blob URL...');
+          await viewer.addSplatScene(url);
+          URL.revokeObjectURL(url);
+          
+          console.log('Load successful');
+          setIsLoading(false);
         }
 
-        setIsLoading(false);
-
+        // Start animation loop
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
