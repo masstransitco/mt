@@ -5,7 +5,6 @@ import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { PMREMGenerator } from 'three/src/extras/PMREMGenerator.js';
 
-
 interface GaussianSplatModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -57,7 +56,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       pmremGenerator.compileEquirectangularShader();
 
       const hdrLoader = new RGBELoader();
-      // Replace this with an actual HDR path if you have one, or comment out if not needed
+      // If you have an HDR file, load it here:
       // const hdrTexture = await hdrLoader.loadAsync("path/to/environment.hdr");
       // const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
       // scene.environment = envMap;
@@ -80,7 +79,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           const numVertices = geometry.attributes.position.count;
           const colors = new Float32Array(numVertices * 3);
           for (let i = 0; i < numVertices; i++) {
-            colors[i * 3] = 1.0;
+            colors[i * 3 + 0] = 1.0;
             colors[i * 3 + 1] = 1.0;
             colors[i * 3 + 2] = 1.0;
           }
@@ -96,8 +95,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         // Simple shader material example
         const material = new THREE.ShaderMaterial({
           uniforms: {
-            // Example: optional environment map
-            envMap: { value: scene.environment || null },
+            // If you set an env map above, reference it here
+            envMap: { value: scene.environment },
           },
           vertexShader: `
             varying vec3 vNormal;
@@ -118,14 +117,13 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
 
             void main() {
               vec3 N = normalize(vNormal);
-              // cameraPosition is built-in in three.js
+              // cameraPosition is built-in in Three.js
               vec3 V = normalize(cameraPosition - vPosition);
               vec3 R = reflect(-V, N);
 
-              vec3 envColor = vec3(0.0);
-              if (envMap != null) {
-                envColor = textureCube(envMap, R).rgb;
-              }
+              // Always sample the envMap
+              vec3 envColor = textureCube(envMap, R).rgb;
+
               vec3 baseColor = vec3(1.0);
               vec3 color = mix(baseColor, envColor, 0.5);
 
@@ -137,7 +135,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           blending: THREE.NormalBlending,
         });
 
-        // Create instanced mesh
+        // Create an instanced mesh
         const numInstances = geometry.attributes.position.count;
         const instancedMesh = new THREE.InstancedMesh(baseGeometry, material, numInstances);
 
@@ -180,7 +178,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     rendererRef.current.render(sceneRef.current, cameraRef.current);
   }, []);
 
-  // Initialize scene once
+  // Initialize scene once the modal is open
   useEffect(() => {
     if (!isOpen) return; // Only init when modal is open
 
