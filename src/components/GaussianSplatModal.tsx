@@ -1,25 +1,20 @@
-// src/components/GaussianSplatModal.tsx
-
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 
 interface GaussianSplatModalProps {
-  /** Whether the modal is open */
   isOpen: boolean;
-  /** Called when the user clicks "×" close button */
   onClose: () => void;
 }
 
-/**
- * Your Firebase-hosted .ply file
- */
 const PLY_FILE_URL = 
   'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
 
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<GaussianSplats3D.Viewer | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !containerRef.current) return;
@@ -28,68 +23,107 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     const renderWidth = containerEl.clientWidth;
     const renderHeight = containerEl.clientHeight;
 
-    // 1) Create a WebGL renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: false });
+    setIsLoading(true);
+    setError(null);
+
+    // Create renderer with preserveDrawingBuffer for Polycam compatibility
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: false,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: true
+    });
     renderer.setSize(renderWidth, renderHeight);
     containerEl.appendChild(renderer.domElement);
 
-    // 2) Create a PerspectiveCamera
-    const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 500);
-    // Example camera positions from the library docs—tweak as needed
-    camera.position.set(-1, -4, 6);
-    camera.up.set(0, -1, -0.6).normalize();
-    camera.lookAt(new THREE.Vector3(0, 4, 0));
+    // Camera setup optimized for Polycam scenes
+    const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 1000);
+    camera.position.set(0, 0, 5); // Start further back for Polycam scenes
+    camera.up.set(0, 1, 0); // Standard up vector for Polycam
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // 3) Create the GaussianSplat3D Viewer
+    // Configure viewer specifically for Polycam SPLAT PLY format
     const viewer = new GaussianSplats3D.Viewer({
       selfDrivenMode: false,
       renderer,
       camera,
-      useBuiltInControls: false,
-      ignoreDevicePixelRatio: false,
+      useBuiltInControls: true,
+      ignoreDevicePixelRatio: true,
       gpuAcceleratedSort: true,
-      enableSIMDInSort: true,
       sharedMemoryForWorkers: true,
       integerBasedSort: true,
       halfPrecisionCovariancesOnGPU: true,
       dynamicScene: false,
       webXRMode: GaussianSplats3D.WebXRMode.None,
       renderMode: GaussianSplats3D.RenderMode.OnChange,
-      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Instant,
-      antialiased: false,
-      focalAdjustment: 1.0,
-      logLevel: GaussianSplats3D.LogLevel.None,
-      sphericalHarmonicsDegree: 0,
-      enableOptionalEffects: false,
-      plyInMemoryCompressionLevel: 2,
-      freeIntermediateSplatData: false,
+      sceneRevealMode: GaussianSplats3D.SceneRevealMode.Progressive,
+      antialiased: true,
+      focalAdjustment: 0.33, // Adjusted for Polycam exports
+      logLevel: GaussianSplats3D.LogLevel.Debug,
+      // Specific settings for Polycam SPLAT PLY
+      splatAlphaRemovalThreshold: 1, // Necessary for Polycam format
+      vertexColorType: GaussianSplats3D.VertexColorType.RGB, // Polycam uses RGB
+      splatQuadric: true, // Enable for Polycam compatibility
+      skipLoaderChecks: true, // Skip some format checks that might fail with Polycam
     });
     viewerRef.current = viewer;
 
-    // Define the animation loop
-    const update = () => {
-      if (!viewerRef.current) return;
-      viewerRef.current.update(); // Renders the splats
-      requestAnimationFrame(update);
+    // Custom loading for Polycam format
+    const loadScene = async () => {
+      try {
+        // Verify file exists
+        const response = await fetch(PLY_FILE_URL, { method: 'HEAD' });
+        if (!response.ok) {
+          throw new Error(`Failed to access file: ${response.statusText}`);
+        }
+
+        // Load the scene with specific options for Polycam
+        await viewer.addSplatScene(PLY_FILE_URL, {
+          splatAlphaRemovalThreshold: 1,
+          rotation: new THREE.Euler(Math.PI, 0, 0), // Adjust orientation if needed
+          scale: 1.0, // Adjust scale if needed
+          position: new THREE.Vector3(0, 0, 0),
+          plyInMemoryCompressionLevel: 0,
+        });
+
+        // Start render loop
+        const update = () => {
+          if (viewerRef.current) {
+            viewerRef.current.update();
+            requestAnimationFrame(update);
+          }
+        };
+        requestAnimationFrame(update);
+        setIsLoading(false);
+      } catch (err: any) {
+        console.error('Failed to load Polycam splat scene:', err);
+        setError(
+          'Failed to load the 3D scene. Please ensure the file is a valid Polycam SPLAT PLY export.'
+        );
+        setIsLoading(false);
+      }
     };
 
-    // 4) Load the .ply file from Firebase
-    viewer
-      .addSplatScene(PLY_FILE_URL)
-      .then(() => {
-        // Once loaded, start rendering
-        requestAnimationFrame(update);
-      })
-      .catch((err: any) => {
-        console.error('Failed to load splat scene:', err);
-      });
+    loadScene();
 
-    // Cleanup when unmounting or closing
+    // Handle window resize
+    const handleResize = () => {
+      if (!containerRef.current || !viewerRef.current) return;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup
     return () => {
-      // Dispose viewer if needed
+      window.removeEventListener('resize', handleResize);
+      if (viewerRef.current) {
+        viewerRef.current.dispose();
+      }
       viewerRef.current = null;
       renderer.dispose();
-      // Remove canvas from DOM
       containerEl.removeChild(renderer.domElement);
     };
   }, [isOpen]);
@@ -102,7 +136,20 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         <button className="close-button" onClick={onClose}>
           ×
         </button>
-        <div ref={containerRef} className="splat-container" />
+        <div ref={containerRef} className="splat-container">
+          {isLoading && (
+            <div className="loading-overlay">
+              <div className="loading-spinner" />
+              <p>Loading 3D Scene...</p>
+            </div>
+          )}
+          {error && (
+            <div className="error-overlay">
+              <p>{error}</p>
+              <button onClick={onClose}>Close</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <style jsx>{`
@@ -139,6 +186,29 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         .splat-container {
           width: 100%;
           height: 100%;
+        }
+        .loading-overlay, .error-overlay {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+        }
+        .loading-spinner {
+          width: 40px;
+          height: 40px;
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #3498db;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin-bottom: 1rem;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>
