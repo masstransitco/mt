@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { LumaSplatsThree } from "@lumaai/luma-web";
+// Import the Lucide "X" icon. Use the correct import for your setup.
+import { X } from "lucide-react"; // or from "react-lucide"
 
 interface LumaSplatModalProps {
   isOpen: boolean;
@@ -50,36 +52,23 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     scene.add(splats);
     splatsRef.current = splats;
 
-    // ------------------------------------------------------------------
-    // 2a. Adjust the orientation of the entire model to stand "upright."
-    // 
-    //   - rotation.z tilts the model side-to-side 
-    //   - rotation.x tilts it forward/backward
-    //   - rotation.y spins it around vertical
-    //
-    // Adjust as needed based on your capture to get the building vertical.
-    // ------------------------------------------------------------------
-    splats.rotation.set(0, 0, 0); // ~17 degrees around Z axis (example)
+    // Rotate/Position config for later:
+    splats.rotation.set(0, 0, 0);
     splats.position.set(0, 0, 0);
 
-    // 2b. Luma’s initial camera transform – optional. 
-    //     You can skip or override if you prefer your own camera.
+    // 2b. Luma’s initial camera transform – optional
     splats.onInitialCameraTransform = (transform) => {
-      // If you do want to honor Luma’s default camera:
       const position = new THREE.Vector3();
       const quaternion = new THREE.Quaternion();
       const scale = new THREE.Vector3();
       transform.decompose(position, quaternion, scale);
       camera.position.copy(position);
       camera.quaternion.copy(quaternion);
-      // Or omit these lines if you prefer a custom camera viewpoint
     };
 
-    // 3. Add a plane with the text "Hong Kong", 
-    //    but rotate it so it lies flat like a ground decal
+    // 3. Add a plane with the text "Hong Kong" (rot/pos all zero for now)
     const textPlane = createTextPlane("Hong Kong");
-    // For a ground-plane orientation in Three.js, normal is +Y:
-    textPlane.position.set(0, 0, 0);    // adjust as needed (X,Z to move around, Y for height)
+    textPlane.position.set(0, 0, 0);
     scene.add(textPlane);
 
     // 4. Start render loop
@@ -112,12 +101,10 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
         splatsRef.current.dispose();
         splatsRef.current = null;
       }
-
       if (rendererRef.current) {
         rendererRef.current.dispose();
         rendererRef.current = null;
       }
-
       if (sceneRef.current) {
         sceneRef.current.traverse((obj) => {
           if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
@@ -139,6 +126,25 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     return null;
   }
 
+  // Circular close button with a Lucide "X" icon
+  const closeButtonStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    zIndex: 1001,
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    // Dark theme background (adjust to your preference)
+    backgroundColor: "rgba(0,0,0,0.8)",
+    color: "#fff",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    border: "none",
+    cursor: "pointer",
+  };
+
   return (
     <div
       style={{
@@ -148,21 +154,8 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
         zIndex: 9999,
       }}
     >
-      <button
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          zIndex: 1001,
-          padding: "8px 16px",
-          background: "rgba(255, 255, 255, 0.1)",
-          color: "#fff",
-          border: "1px solid #fff",
-          cursor: "pointer",
-        }}
-      >
-        Close
+      <button onClick={onClose} style={closeButtonStyle}>
+        <X size={20} />
       </button>
       <div
         ref={mountRef}
@@ -213,7 +206,6 @@ function createTextPlane(text: string): THREE.Mesh {
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  // (No extra rotation here— we’ll rotate in the main code.)
   mesh.scale.setScalar(0.6);
 
   return mesh;
