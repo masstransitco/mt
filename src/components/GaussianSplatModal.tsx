@@ -59,9 +59,12 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       antialiased: true,
       focalAdjustment: 0.33,
       logLevel: GaussianSplats3D.LogLevel.Debug,
-      // Polycam-specific settings
       splatAlphaRemovalThreshold: 1,
-      skipLoaderChecks: true
+      skipLoaderChecks: true,
+      // Set initial transform in viewer config
+      initialScale: 1.0,
+      initialPosition: new THREE.Vector3(0, 0, 0),
+      initialRotation: new THREE.Euler(Math.PI, 0, 0)
     });
     viewerRef.current = viewer;
 
@@ -74,14 +77,8 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           throw new Error(`Failed to access file: ${response.statusText}`);
         }
 
-        // Load the scene with specific options for Polycam
-        await viewer.addSplatScene(PLY_FILE_URL, {
-          splatAlphaRemovalThreshold: 1,
-          rotation: new THREE.Euler(Math.PI, 0, 0), // Adjust if needed
-          scale: 1.0,
-          position: new THREE.Vector3(0, 0, 0),
-          plyInMemoryCompressionLevel: 0
-        });
+        // Load the scene with single parameter
+        await viewer.addSplatScene(PLY_FILE_URL);
 
         // Start render loop
         const update = () => {
