@@ -60,20 +60,28 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     });
     viewerRef.current = viewer;
 
-    // Load scene with improved error handling
+    // Load scene with binary handling
     const loadScene = async () => {
       try {
-        const response = await fetch(PROXIED_URL);
+        // Fetch raw binary data
+        const response = await fetch(PROXIED_URL, {
+          headers: {
+            'Accept': 'application/octet-stream'
+          }
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
+        // Setup progress tracking
         const totalSize = parseInt(response.headers.get('content-length') || '0');
         const reader = response.body?.getReader();
         if (!reader) {
           throw new Error('Stream reader initialization failed');
         }
 
+        // Read binary data
         const chunks: Uint8Array[] = [];
         let loadedSize = 0;
 
@@ -86,6 +94,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           setLoadingProgress(Math.round((loadedSize / totalSize) * 100));
         }
 
+        // Combine chunks into a single buffer
         const completeBuffer = new Uint8Array(loadedSize);
         let position = 0;
         for (const chunk of chunks) {
@@ -93,17 +102,20 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
           position += chunk.length;
         }
 
-        // Create blob and load using addSplatScene
+        // Create blob with raw binary type
         const blob = new Blob([completeBuffer], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
-        
+
+        // Load the scene
         await viewer.addSplatScene(url);
+        
+        // Clean up
         URL.revokeObjectURL(url);
 
         setIsLoading(false);
         setLoadingProgress(100);
 
-        // Start render loop only after successful load
+        // Start render loop
         const animate = () => {
           if (viewerRef.current && isOpen) {
             viewerRef.current.update();
@@ -133,19 +145,15 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     };
     window.addEventListener('resize', handleResize);
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
       
-      // Cancel any pending animation frame
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
       
-      // Clear viewer reference
       viewerRef.current = null;
       
-      // Clean up renderer
       if (rendererRef.current) {
         rendererRef.current.dispose();
         rendererRef.current.forceContextLoss();
