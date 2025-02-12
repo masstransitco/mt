@@ -7,8 +7,12 @@ interface GaussianSplatModalProps {
   onClose: () => void;
 }
 
-const PLY_FILE_URL = 
+// Original Firebase URL that we'll pass through the proxy
+const FIREBASE_URL = 
   'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.ply?alt=media&token=1aa07b53-eb82-48fc-8441-fa386e172312';
+
+// Create the proxied URL
+const PROXIED_PLY_URL = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
 
 const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -27,7 +31,7 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     setIsLoading(true);
     setError(null);
 
-    // Create renderer with preserveDrawingBuffer for Polycam compatibility
+    // Create renderer
     const renderer = new THREE.WebGLRenderer({ 
       antialias: false,
       powerPreference: 'high-performance',
@@ -37,13 +41,13 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
     renderer.setSize(renderWidth, renderHeight);
     containerEl.appendChild(renderer.domElement);
 
-    // Camera setup optimized for Polycam scenes
+    // Camera setup
     const camera = new THREE.PerspectiveCamera(65, renderWidth / renderHeight, 0.1, 1000);
     camera.position.set(0, 0, 5);
     camera.up.set(0, 1, 0);
     camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-    // Configure viewer for Polycam SPLAT PLY format
+    // Configure viewer
     const viewer = new GaussianSplats3D.Viewer({
       selfDrivenMode: false,
       renderer,
@@ -63,24 +67,23 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
       logLevel: GaussianSplats3D.LogLevel.Debug,
       splatAlphaRemovalThreshold: 1,
       skipLoaderChecks: true,
-      // Set initial transform in viewer config
       initialScale: 1.0,
       initialPosition: new THREE.Vector3(0, 0, 0),
       initialRotation: new THREE.Euler(Math.PI, 0, 0)
     });
     viewerRef.current = viewer;
 
-    // Custom loading for Polycam format
+    // Load scene through proxy
     const loadScene = async () => {
       try {
-        // Verify file exists
-        const response = await fetch(PLY_FILE_URL, { method: 'HEAD' });
-        if (!response.ok) {
-          throw new Error(`Failed to access file: ${response.statusText}`);
+        // First verify the proxy endpoint is accessible
+        const checkResponse = await fetch(PROXIED_PLY_URL, { method: 'HEAD' });
+        if (!checkResponse.ok) {
+          throw new Error(`Failed to access proxy: ${checkResponse.statusText}`);
         }
 
-        // Load the scene
-        await viewer.addSplatScene(PLY_FILE_URL);
+        // Load the scene through the proxy
+        await viewer.addSplatScene(PROXIED_PLY_URL);
 
         // Start render loop
         const update = () => {
@@ -92,9 +95,9 @@ const GaussianSplatModal: React.FC<GaussianSplatModalProps> = ({ isOpen, onClose
         requestAnimationFrame(update);
         setIsLoading(false);
       } catch (err: any) {
-        console.error('Failed to load Polycam splat scene:', err);
+        console.error('Failed to load splat scene:', err);
         setError(
-          'Failed to load the 3D scene. Please ensure the file is a valid Polycam SPLAT PLY export.'
+          'Failed to load the 3D scene. Please try again later.'
         );
         setIsLoading(false);
       }
