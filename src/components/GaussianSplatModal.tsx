@@ -9,7 +9,7 @@ interface GaussianSplatModalProps {
 
 // Original Firebase URL that we'll pass through the proxy
 const FIREBASE_URL = 
-  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/icc.splat?alt=media&token=fe72cbcf-4a26-42b4-b307-211fe431f641';
+  'https://firebasestorage.googleapis.com/v0/b/masstransitcompany.firebasestorage.app/o/ifc.ply?alt=media&token=6142be63-a9f9-4651-a993-72c36c2768ce';
 
 // Create the proxied URL
 const PROXIED_PLY_URL = `/api/splat?url=${encodeURIComponent(FIREBASE_URL)}`;
