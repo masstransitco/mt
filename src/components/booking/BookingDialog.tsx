@@ -31,7 +31,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
-// Additional step components (examples)
+// Example step components
 import IDVerificationStep from "./IDVerificationStep";
 import PaymentStep from "./PaymentStep";
 
@@ -67,6 +67,9 @@ export default function BookingDialog() {
 
   // local UI state: whether the dialog is open
   const [open, setOpen] = useState<boolean>(false);
+
+  // Local error message for step 5 (finalizing)
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   /**
    * If the user has:
@@ -117,6 +120,8 @@ export default function BookingDialog() {
    */
   useEffect(() => {
     if (bookingStep === 5) {
+      setBookingError(null); // clear any previous error
+
       const bookingPayload = {
         carId: selectedCarId,
         departureStationId,
@@ -124,13 +129,15 @@ export default function BookingDialog() {
         departureDate,
       };
 
-      // Example POST to your /api/bookings endpoint
       fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bookingPayload),
       })
-        .then((res) => res.json())
+        .then((res) => {
+          // You might check if !res.ok => throw new Error(...)
+          return res.json();
+        })
         .then((data) => {
           console.log("Booking created:", data);
           // Show success message or route user
@@ -139,7 +146,10 @@ export default function BookingDialog() {
         })
         .catch((err) => {
           console.error("Booking creation error:", err);
-          // If error => maybe set step=4 or show a toast, up to you
+          // E.g. store error in local state & remain on step 5
+          setBookingError("Failed to finalize booking. Please try again.");
+          // Optionally fallback to step=4 if you want:
+          // dispatch(advanceBookingStep(4));
         });
     }
   }, [
@@ -193,11 +203,34 @@ export default function BookingDialog() {
         // Payment step
         return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
       case 5:
-        // Step 5 => you can show a loading spinner "Finalizing..."
+        // Step 5 => finalizing => show spinner or error
         return (
           <div className="space-y-4 text-center">
-            <p className="font-medium text-sm">Finalizing your booking...</p>
-            {/* Or a spinner, up to you */}
+            <p className="font-medium text-sm">
+              Finalizing your booking...
+            </p>
+            {/* If there's a bookingError, display it */}
+            {bookingError && (
+              <div className="mt-2 text-sm text-destructive">
+                {bookingError}
+              </div>
+            )}
+            {/* Optionally show a "Retry" button to go back to step 4 */}
+            {bookingError && (
+              <button
+                onClick={() => {
+                  dispatch(advanceBookingStep(4));
+                  setBookingError(null);
+                }}
+                className="
+                  px-4 py-2 text-sm mt-2
+                  bg-muted hover:bg-muted/80
+                  text-foreground rounded
+                "
+              >
+                Go Back & Retry Payment
+              </button>
+            )}
           </div>
         );
       case 6:
@@ -228,7 +261,7 @@ export default function BookingDialog() {
         // Steps 3 & 4 have internal flows (IDVerification, Payment)
         return null;
       case 5:
-        // Step 5 => finalizing => show no buttons or a "Please wait..."
+        // Step 5 => finalizing => show no standard buttons
         return null;
       case 6:
         // Step 6 => Booking complete => user might close
@@ -238,8 +271,6 @@ export default function BookingDialog() {
     }
   };
 
-  // If the user closes the dialog at step>=2, do you want to reset? 
-  // It's up to you, but we'll keep the "Cancel" = handleCancel => reset.
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogContent className="sm:max-w-md">
@@ -251,6 +282,7 @@ export default function BookingDialog() {
         </AlertDialogHeader>
 
         <AlertDialogFooter>
+          {/* "Cancel" always calls handleCancel => resets everything */}
           <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
           {renderFooterButtons()}
         </AlertDialogFooter>
