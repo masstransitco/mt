@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/store";
-import { selectIsSignedIn } from "@/store/userSlice"; // we rely on isSignedIn from Redux
 import {
   selectBookingStep,
-  advanceBookingStep,
   resetBookingFlow,
+  // If you want to revert to step=4 on cancel:
+  advanceBookingStep,
 } from "@/store/bookingSlice";
+import { selectIsSignedIn } from "@/store/userSlice";
 
-// Our UI AlertDialog wrapper
 import {
   AlertDialog,
   AlertDialogContent,
@@ -18,144 +18,147 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
-  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
-// Steps
-import TicketPlanStep from "./TicketPlanStep"; // Step 1
-import PaymentStep from "./PaymentStep";       // Step 3
-import IDVerificationStep from "./IDVerificationStep"; // Step 4
-import SignInModal from "@/components/ui/SignInModal"; // We open this at Step 2
-
-/** Example Step 5: unlock the car. If user not ID verified => step=4 first. */
-function UnlockCarStep({ onUnlock }: { onUnlock: () => void }) {
-  return (
-    <div className="space-y-4">
-      <h3 className="text-xl font-medium">Unlock Car</h3>
-      <p className="text-sm text-muted-foreground">
-        You can now unlock the vehicle. If ID is required and not verified, go back to step 4.
-      </p>
-      <button
-        className="px-4 py-2 text-sm font-medium bg-primary text-white rounded"
-        onClick={onUnlock}
-      >
-        Unlock
-      </button>
-    </div>
-  );
-}
+// Our 5 internal steps in this dialog
+import TicketPlanStep from "./TicketPlanStep";   // Dialog step #1
+import SignInModal from "@/components/ui/SignInModal"; // Shown in dialog step #2 if not signed in
+import PaymentStep from "./PaymentStep";         // Dialog step #3
+import IDVerificationStep from "./IDVerificationStep"; // Dialog step #4
+import UnlockCarStep from "./UnlockCarStep";     // Dialog step #5
 
 export default function BookingDialog() {
   const dispatch = useAppDispatch();
-  const bookingStep = useAppSelector(selectBookingStep);
+
+  // The Redux booking step
+  const globalBookingStep = useAppSelector(selectBookingStep);
+  // For sign-in checks
   const isSignedIn = useAppSelector(selectIsSignedIn);
 
+  // Whether our dialog is open
   const [open, setOpen] = useState(false);
 
-  // We use local state to show or hide the SignInModal in Step 2
-  const [showSignInModal, setShowSignInModal] = useState(false);
+  // The *local* steps for the 5-step flow *inside* this dialog
+  //  1 => TicketPlan
+  //  2 => SignIn
+  //  3 => Payment
+  //  4 => ID Verification
+  //  5 => Unlock
+  const [dialogStep, setDialogStep] = useState(1);
 
-  // Example "ID Verified" status if you store it in Redux or local. 
-  // We'll do local for demonstration. You can store it in Redux if you prefer.
+  // Example: track ID verified
   const [idVerified, setIdVerified] = useState(false);
 
-  /** 
-   * If your "Booking Flow" starts at step=1 
-   * and you want this dialog to appear, 
-   * you can watch bookingStep >= 1. 
+  /**
+   * Whenever bookingSlice.step becomes 5,
+   * we open this dialog and start from our local step=1.
    */
   useEffect(() => {
-    if (bookingStep >= 1) {
+    if (globalBookingStep === 5) {
+      setDialogStep(1);
       setOpen(true);
+    } else {
+      // If global step is not 5, ensure we close the dialog
+      setOpen(false);
     }
-  }, [bookingStep]);
+  }, [globalBookingStep]);
 
-  // Step transitions
+  // If user clicks the "Cancel" button in the dialog:
   const handleCancel = () => {
     setOpen(false);
-    // Also reset the booking flow
+    // Option 1: reset the entire booking flow
     dispatch(resetBookingFlow());
-    // If you store ID verified, or car selection, etc., reset it here
+
+    // Or Option 2: revert to step=4 if you want them to pick arrival again
+    // dispatch(advanceBookingStep(4));
+
+    setDialogStep(1);
     setIdVerified(false);
   };
 
-  /* ---------------- Step 1: Ticket Plan ---------------- */
-  const handlePlanSelected = (plan: "single" | "paygo") => {
-    // Could store plan in Redux if you want
+  // Step #1 => user picks single vs paygo
+  const handlePlanConfirm = (plan: "single" | "paygo") => {
+    // e.g., store plan in Redux if needed
     // dispatch(setTicketPlan(plan));
-    // Next => Step 2 (Sign-In)
-    dispatch(advanceBookingStep(2));
+    // Next => local step=2 => sign in
+    setDialogStep(2);
   };
 
-  /* 
-    Step 2: If the user is already signed in, skip. 
-    Otherwise, show the SignInModal. Once they sign in, step=3.
-  */
+  // Step #2 => user sign-in
+  // We'll open a SignInModal as part of the flow,
+  // or skip if already signed in
+  const [showSignInModal, setShowSignInModal] = useState(false);
+
+  // If we are on step=2, check sign in
   useEffect(() => {
-    if (bookingStep === 2) {
-      // Check sign-in
+    if (dialogStep === 2) {
       if (isSignedIn) {
-        // skip sign-in => step=3
-        dispatch(advanceBookingStep(3));
+        // Already signed in => skip to step=3
+        setDialogStep(3);
       } else {
-        // show sign-in modal
+        // show sign in modal
         setShowSignInModal(true);
       }
+    } else {
+      setShowSignInModal(false);
     }
-  }, [bookingStep, isSignedIn, dispatch]);
+  }, [dialogStep, isSignedIn]);
 
-  // Once user finishes sign-in, we close the modal & proceed to step=3
+  // Called when user finishes sign-in
   const handleSignInComplete = () => {
     setShowSignInModal(false);
-    dispatch(advanceBookingStep(3));
+    // Proceed to step=3
+    setDialogStep(3);
   };
 
-  /* ---------------- Step 3: Payment ---------------- */
+  // Step #3 => Payment
   const handlePaymentComplete = () => {
-    // Next => Step 4 => ID Verification
-    dispatch(advanceBookingStep(4));
+    // Next => step=4 => ID
+    setDialogStep(4);
   };
 
-  /* ---------------- Step 4: ID Verification ---------------- */
+  // Step #4 => ID Verification
   const handleIDVerified = () => {
     setIdVerified(true);
-    // Next => step=5 => Unlock Car
-    dispatch(advanceBookingStep(5));
+    setDialogStep(5);
   };
   const handleSkipID = () => {
-    // If user wants to skip ID for now => step=5
-    dispatch(advanceBookingStep(5));
+    setDialogStep(5);
   };
 
-  /* ---------------- Step 5: Unlock Car ---------------- */
-  const handleUnlockCar = () => {
-    // If not verified => go back to step=4
+  // Step #5 => Unlock
+  const handleUnlock = () => {
     if (!idVerified) {
-      dispatch(advanceBookingStep(4));
+      // If user isn't verified => back to step=4
+      setDialogStep(4);
       return;
     }
     console.log("Car unlocked!");
-    // Possibly close the booking
+    // Done => close the dialog
     setOpen(false);
-    dispatch(resetBookingFlow());
+    // If you want to reset the global slice or move to step=6, do so:
+    // dispatch(advanceBookingStep(6));
   };
 
-  // Render content per step
-  const renderStepContent = () => {
-    switch (bookingStep) {
+  // Render *local* step content
+  const renderDialogContent = () => {
+    switch (dialogStep) {
       case 1:
         return (
           <TicketPlanStep
             isUserSignedIn={isSignedIn}
-            onPlanConfirm={handlePlanSelected}
+            onPlanConfirm={handlePlanConfirm}
             onCancel={handleCancel}
           />
         );
       case 2:
-        // Actually handled by signInModal. We'll just show a placeholder
         return (
-          <div className="p-6 text-white">
-            <p>Loading Sign-In Modal...</p>
+          <div className="p-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Please sign in to continue.
+            </p>
+            <p className="text-sm">Loading Sign-In Modal...</p>
+            {/* If user is already signed in, skip automatically */}
           </div>
         );
       case 3:
@@ -165,44 +168,41 @@ export default function BookingDialog() {
           <IDVerificationStep onVerified={handleIDVerified} onSkip={handleSkipID} />
         );
       case 5:
-        return <UnlockCarStep onUnlock={handleUnlockCar} />;
+        return <UnlockCarStep onUnlock={handleUnlock} />;
       default:
         return null;
     }
   };
 
-  // Usually steps handle their own next/cancel, so we omit standard "action" buttons
-  const renderFooterButtons = () => null;
-
   return (
     <>
-      {/* The main booking flow dialog */}
       <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Booking Flow</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              {renderStepContent()}
+              {renderDialogContent()}
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
-            {renderFooterButtons()}
+            <AlertDialogCancel onClick={handleCancel}>
+              Cancel
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Step 2: The SignInModal if user is not signed in */}
+      {/* The step=2 sign-in modal (only if dialogStep===2 and not signed in) */}
       <SignInModal
         isOpen={showSignInModal}
         onClose={() => {
           setShowSignInModal(false);
-          // If user is still not signed in after closing,
-          // you might revert to step=1 or step=0
+          // If user closes sign in modal w/o signing in => step=1 or close entire dialog
           if (!isSignedIn) {
-            dispatch(resetBookingFlow());
-            setOpen(false);
+            // revert to step=1 or cancel
+            setDialogStep(1);
+          } else {
+            handleSignInComplete();
           }
         }}
       />
