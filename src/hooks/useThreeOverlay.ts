@@ -96,8 +96,8 @@ export function useThreeOverlay(
     return () => {
       // Remove overlay from map
       if (overlayRef.current) {
-        overlayRef.current.setMap(null);
-        overlayRef.current = null;
+        (overlayRef.current as any).setMap(null);
+      overlayRef.current = null;
       }
       // Dispose all geometry/material
       scene.traverse((obj) => {
