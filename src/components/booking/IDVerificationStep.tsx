@@ -1,22 +1,26 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { AlertDialogAction } from '@/components/ui/alert-dialog';
+import React, { useState } from "react";
+import { AlertDialogAction } from "@/components/ui/alert-dialog";
 
 interface IDVerificationStepProps {
   onVerified: () => void;
+  onSkip?: () => void; // optional skip handler
 }
 
-export default function IDVerificationStep({ onVerified }: IDVerificationStepProps) {
-  const [hkid, setHkid] = useState('');
-  const [license, setLicense] = useState('');
+export default function IDVerificationStep({
+  onVerified,
+  onSkip,
+}: IDVerificationStepProps) {
+  const [hkid, setHkid] = useState("");
+  const [license, setLicense] = useState("");
 
   const handleVerify = () => {
     // TODO: Real verification logic
     if (hkid && license) {
       onVerified();
     } else {
-      alert('Please provide both HKID and Driver License details');
+      alert("Please provide both HKID and Driver License details");
     }
   };
 
@@ -43,12 +47,25 @@ export default function IDVerificationStep({ onVerified }: IDVerificationStepPro
         />
       </div>
 
-      <AlertDialogAction
-        onClick={handleVerify}
-        className="bg-primary hover:bg-primary/90"
-      >
-        Verify ID
-      </AlertDialogAction>
+      <div className="flex items-center gap-3">
+        {/* Verify ID Button */}
+        <AlertDialogAction
+          onClick={handleVerify}
+          className="bg-primary hover:bg-primary/90"
+        >
+          Verify ID
+        </AlertDialogAction>
+
+        {/* Optional Skip Button */}
+        {onSkip && (
+          <AlertDialogAction
+            onClick={onSkip}
+            className="bg-muted hover:bg-muted/80 text-foreground"
+          >
+            Skip
+          </AlertDialogAction>
+        )}
+      </div>
     </div>
   );
 }
