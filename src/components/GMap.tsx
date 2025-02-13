@@ -47,7 +47,7 @@ import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
 import GaussianSplatModal from "@/components/GaussianSplatModal";
-import TicketOptions from "@/components/booking/TicketOptions"; // <-- Import the new component
+import TicketOptions from "@/components/booking/TicketOptions"; // For step=5 modal
 
 // Constants
 import {
@@ -70,8 +70,6 @@ interface GMapProps {
 type OpenSheetType = "none" | "car" | "list" | "detail";
 
 export default function GMap({ googleApiKey }: GMapProps) {
-  // We'll store the map in a piece of state so that once it's non-null,
-  // React re-renders and the hook sees a valid map object.
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
 
   // Local UI states
@@ -112,10 +110,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Use the Three.js overlay hook, passing `actualMap`.
+  // Use the Three.js overlay hook
   const { overlayRef, stationCubesRef } = useThreeOverlay(actualMap, stations);
 
-  // Map + icon setup
+  // Once Google Maps is ready
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -146,7 +144,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Error check
+  // Handle errors
   const hasError = stationsError || carsError || loadError;
   if (hasError) {
     return (
@@ -196,7 +194,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Handle address search => pan to location, sort stations
+  // Address search => pan + sort
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -271,7 +269,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // "Locate me"
+  // "Locate me" button
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -307,16 +305,26 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Station click => departure or arrival
+  /**
+   * Station click => logic for departure or arrival
+   * If currently step=3 (selecting arrival), we immediately move to step=4 (selected arrival).
+   */
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep < 3) {
+        // For departure flow
         dispatch({ type: "user/selectDepartureStation", payload: station.id });
       } else {
+        // Arrival flow
         dispatch({ type: "user/selectArrivalStation", payload: station.id });
+        if (bookingStep === 3) {
+          dispatch(advanceBookingStep(4)); // step=4 => selected_arrival_station
+          toast.success("Arrival station selected!");
+        }
       }
-      setDetailKey((prev) => prev + 1);
 
+      // Then open the detail sheet
+      setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
       setOpenSheet("detail");
       setPreviousSheet("none");
@@ -334,15 +342,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch({ type: "user/selectDepartureStation", payload: station.id });
     } else {
       dispatch({ type: "user/selectArrivalStation", payload: station.id });
+      if (bookingStep === 3) {
+        dispatch(advanceBookingStep(4));
+        toast.success("Arrival station selected!");
+      }
     }
-    setDetailKey((prev) => prev + 1);
 
+    setDetailKey((prev) => prev + 1);
     setForceSheetOpen(true);
     setOpenSheet("detail");
     setPreviousSheet("none");
   };
 
-  // Confirm departure => step 3
+  // Confirm departure => step=3
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setOpenSheet("none");
@@ -350,18 +362,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setForceSheetOpen(false);
   };
 
-  // Cleanup forceSheetOpen
   useEffect(() => {
     return () => {
       setForceSheetOpen(false);
     };
   }, []);
 
-  // On map load => bounding & set state
+  // On map load => fit bounds
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       console.log("[GMap] handleMapLoad => map loaded");
-      setActualMap(map); // <--- Store the map in state
+      setActualMap(map);
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -379,7 +390,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
-  // Which station is currently selected
+  // Which station is currently selected, depending on step
   const hasStationSelected =
     bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
@@ -391,13 +402,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
-  // Handlers for TicketOptions
+  // Payment plan modal logic (step=5)
   const handleSelectSingleJourney = () => {
     toast.success("You chose Single Journey. Fare calculation TBD.");
-    // Possibly dispatch(advanceBookingStep(6)) if that’s your final step...
+    // e.g. dispatch(advanceBookingStep(6));
   };
   const handleSelectPayAsYouGo = () => {
-    toast.success("You chose Pay-as-you-go. We'll store that soon!");
+    toast.success("You chose Pay-as-you-go!");
   };
 
   return (
@@ -409,15 +420,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
           center={userLocation || DEFAULT_CENTER}
           zoom={DEFAULT_ZOOM}
           options={mapOptions || {}}
-          onLoad={handleMapLoad} // sets actualMap, triggers overlay effect
+          onLoad={handleMapLoad}
         >
           {/* User Location Marker */}
           {userLocation && markerIcons && (
-            <Marker
-              position={userLocation}
-              icon={markerIcons.user}
-              clickable={false}
-            />
+            <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
           )}
 
           {/* Example special marker */}
@@ -483,10 +490,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </button>
       </div>
 
-      {/* Car Sheet (Always in DOM, but toggled) */}
+      {/* Car Sheet */}
       <CarSheet isOpen={isCarOpen} onToggle={handleCarToggle} />
 
-      {/* Station list sheet (Always in DOM, but toggled) */}
+      {/* Station list sheet */}
       <Sheet
         isOpen={isListOpen}
         onToggle={closeCurrentSheet}
@@ -508,7 +515,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </div>
       </Sheet>
 
-      {/* Station detail sheet (Always in DOM, but toggled) */}
+      {/* Station detail sheet */}
       <Sheet
         key={detailKey}
         isOpen={isDetailOpen}
@@ -538,9 +545,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
           onSelectSingleJourney={handleSelectSingleJourney}
           onSelectPayAsYouGo={handleSelectPayAsYouGo}
           onClose={() => {
-            // If you want a "close" button:
             toast("Closed payment options");
-            // e.g. dispatch(advanceBookingStep(6)) or set some local state
+            // e.g. dispatch(advanceBookingStep(6));
           }}
         />
       )}
