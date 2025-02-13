@@ -599,25 +599,30 @@ export default function GMap({ googleApiKey }: GMapProps) {
       {/* Station list sheet */}
       {openSheet === 'list' && (
         <Sheet
-          isOpen
-          onToggle={closeCurrentSheet}
-          title="Nearby Stations"
-          count={sortedStations.length}
-        >
-          <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-            {sortedStations.map((station, idx) => (
-              <StationListItem
-                key={station.id}
-                index={idx}
-                style={{}}
-                data={{
-                  items: sortedStations,
-                  onStationSelected: () => handleStationSelectedFromList(station),
-                }}
-              />
-            ))}
-          </div>
-        </Sheet>
+      isOpen={openSheet === 'list'}
+      onToggle={closeCurrentSheet}
+      title="Nearby Stations"
+      count={sortedStations.length}
+    >
+      <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+        {sortedStations.map(...) /* ... */}
+      </div>
+    </Sheet>
+
+    {/* Always render the station detail Sheet */}
+    <Sheet
+      isOpen={openSheet === 'detail' || forceSheetOpen}
+      onToggle={closeCurrentSheet}
+      title="Station Details"
+      count={(searchLocation ? sortedStations : stations).length}
+    >
+      <StationDetail
+        key={detailKey}
+        stations={searchLocation ? sortedStations : stations}
+        activeStation={stationToShow}
+        onConfirmDeparture={handleConfirmDeparture}
+      />
+    </Sheet>
       )}
 
       {/* Station detail sheet */}
