@@ -11,6 +11,7 @@ interface SheetProps {
   className?: string;
   title?: string;
   count?: number;
+  countLabel?: string;
 }
 
 const Sheet = ({
