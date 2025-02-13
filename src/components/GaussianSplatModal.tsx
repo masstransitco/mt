@@ -2,8 +2,7 @@ import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { LumaSplatsThree } from "@lumaai/luma-web";
-// Import the Lucide "X" icon. Use the correct import for your setup.
-import { X } from "lucide-react"; // or from "react-lucide"
+import { X } from "lucide-react"; 
 
 interface LumaSplatModalProps {
   isOpen: boolean;
