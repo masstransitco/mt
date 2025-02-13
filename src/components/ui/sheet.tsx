@@ -21,15 +21,12 @@ const Sheet = ({
   className,
   title,
   count,
+  countLabel,  // ← Make sure to destructure this
 }: SheetProps) => {
-  // Disable page scrolling whenever `isOpen` is true
+  // Disable scrolling
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      // Restore normal overflow
-      document.body.style.overflow = "";
-    }
+    if (isOpen) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
     return () => {
       document.body.style.overflow = "";
     };
@@ -39,11 +36,8 @@ const Sheet = ({
     <div
       className={cn(
         "fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm",
-        // ↑ Overflow hidden so we can animate the max-height smoothly
         "overflow-hidden",
-        // ↓ Animate only the max-height property, over 0.5s with an ease-in-out curve
         "transition-[max-height] duration-500 ease-in-out",
-        // If open => max-height is 50vh; if closed => max-height is 0
         isOpen ? "max-h-[50vh]" : "max-h-0",
         className
       )}
@@ -61,12 +55,9 @@ const Sheet = ({
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Example "Sort by" button */}
             <button className="px-4 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
               Sort by
             </button>
-
-            {/* X button to close */}
             <button
               onClick={onToggle}
               className="p-2 rounded-full hover:bg-muted transition-colors"
@@ -77,7 +68,7 @@ const Sheet = ({
           </div>
         </div>
 
-        {/* Scrollable content inside the sheet */}
+        {/* Content */}
         <div className="overflow-y-auto">{children}</div>
 
         {/* Optional bottom handle */}
