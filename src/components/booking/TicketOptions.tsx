@@ -3,15 +3,18 @@
 "use client";
 
 import React, { useState } from "react";
-import SignInModal from "@/components/ui/SignInModal";  // <-- Updated import path
+import SignInModal from "@/components/ui/SignInModal";
 
 interface TicketOptionsProps {
   isUserSignedIn: boolean; // Are we signed in?
   onSelectSingleJourney: () => void;
   onSelectPayAsYouGo: () => void;
   onClose?: () => void;
-  onProceed?: () => void; // Called if user is signed in & chooses a plan
+  onProceed?: () => void; // Called if user is signed in & wants to finalize
 }
+
+/** Possible plans */
+type PlanChoice = "single" | "paygo" | null;
 
 export default function TicketOptions({
   isUserSignedIn,
@@ -21,24 +24,27 @@ export default function TicketOptions({
   onProceed,
 }: TicketOptionsProps) {
   const [showSignInModal, setShowSignInModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanChoice>(null);
 
-  // When user clicks an option
   const handleSelectSingleJourney = () => {
     onSelectSingleJourney();
-    tryProceed();
+    setSelectedPlan("single");
   };
 
   const handleSelectPayAsYouGo = () => {
     onSelectPayAsYouGo();
-    tryProceed();
+    setSelectedPlan("paygo");
   };
 
-  // Check if user is signed in. If not, show signInModal. If yes, proceed.
-  const tryProceed = () => {
+  /** Called when user presses "Continue" after plan selection */
+  const handleContinue = () => {
+    if (!selectedPlan) return; // no plan selected => do nothing
+
     if (!isUserSignedIn) {
+      // Show sign-in first
       setShowSignInModal(true);
     } else {
-      // Already signed in => proceed to step 6
+      // Already signed in => proceed
       onProceed?.();
     }
   };
@@ -53,7 +59,11 @@ export default function TicketOptions({
           {/* Option 1: Single Journey */}
           <button
             onClick={handleSelectSingleJourney}
-            className="w-full p-4 mb-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-left"
+            className={`w-full p-4 mb-3 rounded-lg text-left
+              ${selectedPlan === "single"
+                ? "bg-neutral-700"
+                : "bg-neutral-800 hover:bg-neutral-700"}
+            `}
           >
             <div className="font-medium">Single Journey</div>
             <ul className="mt-1 text-sm list-disc ml-4">
@@ -68,7 +78,11 @@ export default function TicketOptions({
           {/* Option 2: Pay-as-you-go */}
           <button
             onClick={handleSelectPayAsYouGo}
-            className="w-full p-4 mb-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-left"
+            className={`w-full p-4 mb-3 rounded-lg text-left
+              ${selectedPlan === "paygo"
+                ? "bg-neutral-700"
+                : "bg-neutral-800 hover:bg-neutral-700"}
+            `}
           >
             <div className="font-medium">Pay-as-you-go</div>
             <ul className="mt-1 text-sm list-disc ml-4">
@@ -77,11 +91,22 @@ export default function TicketOptions({
             </ul>
           </button>
 
+          {/* "Continue" button is visible once a plan is selected */}
+          {selectedPlan && (
+            <button
+              onClick={handleContinue}
+              className="w-full mb-3 p-3 rounded-lg bg-blue-600
+                         hover:bg-blue-500 text-white font-medium transition"
+            >
+              Continue
+            </button>
+          )}
+
           {/* Optional close/cancel button */}
           {onClose && (
             <button
               onClick={onClose}
-              className="w-full mt-3 p-2 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-sm"
+              className="w-full p-2 rounded-lg bg-neutral-700 hover:bg-neutral-600 text-sm"
             >
               Cancel
             </button>
@@ -94,9 +119,10 @@ export default function TicketOptions({
         isOpen={showSignInModal}
         onClose={() => {
           setShowSignInModal(false);
-          // If user signed in successfully => onAuthStateChanged closes SignInModal => 
-          // then your parent can check Redux isSignedIn, or you can
-          // call onProceed automatically if you like.
+          // If user signed in successfully => onAuthStateChanged closes SignInModal
+          // Then your parent (GMap, etc.) can check Redux isSignedIn,
+          // you can also automatically call onProceed?.() if you want
+          // once you detect Redux changed to isSignedIn = true.
         }}
       />
     </>
