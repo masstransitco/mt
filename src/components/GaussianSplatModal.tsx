@@ -169,7 +169,7 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
 };
 
 /** Helper: Creates a plane geometry with text that says `Hong Kong`. */
-function createTextPlane(text: string): THREE.Mesh {
+function createTextPlane(): THREE.Mesh {
   // 1. Create a canvas and draw text on it
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
@@ -177,24 +177,36 @@ function createTextPlane(text: string): THREE.Mesh {
   canvas.height = 512;
 
   // Transparent background
-  ctx.fillStyle = "rgba(255, 255, 255, 0)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Draw text
-  ctx.fillStyle = "white";
-  ctx.font = "200px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.lineWidth = 5;
+
+  // Title: "ICC", 70% of 200px -> 140px
+  ctx.fillStyle = "white";
   ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.lineWidth = 5;
+  ctx.font = "140px Helvetica"; // or "Helvetica, sans-serif"
 
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-  ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+  // Center of canvas
+  const centerX = canvas.width / 2;
+  let centerY = canvas.height / 2;
 
+  // Draw "ICC"
+  ctx.fillText("ICC", centerX, centerY);
+  ctx.strokeText("ICC", centerX, centerY);
+
+  // Subtitle: "1 Austin Road", 50% of 140px -> 70px
+  ctx.font = "70px Helvetica";
+  centerY += 100; // move down to avoid overlapping, tweak as needed
+  ctx.fillText("1 Austin Road", centerX, centerY);
+  ctx.strokeText("1 Austin Road", centerX, centerY);
+
+  // 2. Create a texture from the canvas
   const texture = new THREE.Texture(canvas);
   texture.needsUpdate = true;
 
-  // 2. Create plane geometry & material
+  // 3. Plane geometry & material
   const geometry = new THREE.PlaneGeometry(5, 2.5);
   const material = new THREE.MeshStandardMaterial({
     map: texture,
@@ -207,7 +219,6 @@ function createTextPlane(text: string): THREE.Mesh {
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.scale.setScalar(0.6);
-
   return mesh;
 }
 
