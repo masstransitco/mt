@@ -1,21 +1,21 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-// import { Filter } from 'lucide-react'; // We'll comment out the filter usage
+import React, { useEffect, useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+// import { Filter } from "lucide-react"; // We'll comment out the filter usage
 
-import { useAppDispatch, useAppSelector } from '@/store/store';
-import { selectCar } from '@/store/userSlice';
-import { selectAllCars, fetchCars } from '@/store/carSlice'; 
-import { selectViewState } from '@/store/uiSlice';
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { selectCar } from "@/store/userSlice";
+import { selectAllCars, fetchCars } from "@/store/carSlice";
+import { selectViewState } from "@/store/uiSlice";
 
-import CarCard from './CarCard'; // The CarCard component above
+import CarCard from "./CarCard"; // The CarCard component
 
 interface CarGridProps {
   className?: string;
 }
 
-export default function CarGrid({ className = '' }: CarGridProps) {
+export default function CarGrid({ className = "" }: CarGridProps) {
   const dispatch = useAppDispatch();
 
   // We fetch cars from Redux store (carSlice)
@@ -27,8 +27,8 @@ export default function CarGrid({ className = '' }: CarGridProps) {
   // UI: which screen are we on? (uiSlice)
   const viewState = useAppSelector(selectViewState);
 
-  // We’ll keep these states in case we add them back later
-  const [filterType, setFilterType] = useState('all');
+  // We'll keep these states in case we add them back later
+  const [filterType, setFilterType] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
 
   // On mount, fetch cars if needed
@@ -36,23 +36,38 @@ export default function CarGrid({ className = '' }: CarGridProps) {
     dispatch(fetchCars());
   }, [dispatch]);
 
+  // Log the fetched cars on mount or whenever they change
+  useEffect(() => {
+    if (allCars.length > 0) {
+      console.log("[CarGrid] Fetched cars:", allCars);
+    }
+  }, [allCars]);
+
   // If no car is selected, default to the first available car
   useEffect(() => {
     if (!selectedCarId && allCars.length > 0) {
+      console.log("[CarGrid] No car selected yet. Defaulting to first car:", allCars[0]);
       dispatch(selectCar(allCars[0].id));
     }
   }, [allCars, dispatch, selectedCarId]);
+
+  // Log whenever the selectedCarId changes
+  useEffect(() => {
+    if (selectedCarId) {
+      console.log("[CarGrid] selectedCarId changed to:", selectedCarId);
+    } else {
+      console.log("[CarGrid] selectedCarId is null (no car selected)");
+    }
+  }, [selectedCarId]);
 
   // Filter logic for the car list
   const { selectedCar, otherCars } = useMemo(() => {
     const carData = allCars;
 
     const filtered =
-      filterType === 'all'
+      filterType === "all"
         ? carData
-        : carData.filter(
-            (car) => car.type.toLowerCase() === filterType.toLowerCase()
-          );
+        : carData.filter((car) => car.type.toLowerCase() === filterType.toLowerCase());
 
     return {
       selectedCar: filtered.find((car) => car.id === selectedCarId),
@@ -64,53 +79,18 @@ export default function CarGrid({ className = '' }: CarGridProps) {
     dispatch(selectCar(carId));
   };
 
-  // Example filter options (currently unused since we commented out the filter UI)
-  // const filterOptions = [
-  //   { value: 'all', label: 'All Types' },
-  //   { value: 'electric', label: 'Electric' },
-  //   { value: 'hybrid', label: 'Hybrid' },
-  //   { value: 'lpg', label: 'LPG' },
-  // ];
-
   // Hide/show this grid based on `viewState`
-  const isVisible = viewState === 'showCar';
+  const isVisible = viewState === "showCar";
 
   return (
     <div
       className={`space-y-6 ${className} transition-all duration-300`}
       style={{
-        display: isVisible ? 'block' : 'none',
-        visibility: isVisible ? 'visible' : 'hidden',
+        display: isVisible ? "block" : "none",
+        visibility: isVisible ? "visible" : "hidden",
       }}
     >
-      {/* 
-        Header with filters removed:
-        - Removed the <h2> title
-        - Commented out the filter button
-      */}
-      <div className="flex flex-col gap-4">
-        {/* 
-          Example of commenting out the heading and filter:
-          
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">
-              Select a car to begin booking
-            </h2>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-full
-                         bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-            >
-              <Filter size={16} />
-              <span>
-                {filterType === 'all'
-                  ? 'Filters'
-                  : filterOptions.find((opt) => opt.value === filterType)?.label}
-              </span>
-            </button>
-          </div>
-        */}
-      </div>
+      {/* (Header with filters commented out) */}
 
       {/* Car grid with selected car on top */}
       <div className="space-y-6">
@@ -166,15 +146,6 @@ export default function CarGrid({ className = '' }: CarGridProps) {
             <p className="text-muted-foreground">
               No vehicles found matching your criteria.
             </p>
-            {/* 
-              If you want to reintroduce filters, uncomment this:
-              <button
-                onClick={() => setFilterType('all')}
-                className="mt-4 text-sm text-accent hover:underline"
-              >
-                Clear filters
-              </button> 
-            */}
           </motion.div>
         )}
       </div>
