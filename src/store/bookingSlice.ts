@@ -1,8 +1,9 @@
-// src/store/bookingSlice.ts
-
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 import { StationFeature } from './stationsSlice';
+
+/** The user’s chosen ticket plan. */
+type TicketPlan = 'single' | 'paygo' | null;
 
 interface RouteInfo {
   /** distance in meters */
@@ -37,6 +38,11 @@ export interface BookingState {
   routeStatus: string;
   /** Optional field for error messages when fetching route data. */
   routeError: string | null;
+
+  /**
+   * The user’s selected ticket plan: 'single' or 'paygo' (or null if not chosen).
+   */
+  ticketPlan: TicketPlan;
 }
 
 /**
@@ -75,18 +81,18 @@ export const fetchRoute = createAsyncThunk<
       }
 
       const route = response.routes[0];
-const leg = route.legs?.[0];
-if (!leg || !leg.distance || !leg.duration) {
-  return rejectWithValue('Incomplete route data');
-}
+      const leg = route.legs?.[0];
+      if (!leg || !leg.distance || !leg.duration) {
+        return rejectWithValue('Incomplete route data');
+      }
 
-const distance = leg.distance.value; // meters
-const duration = leg.duration.value; // seconds
+      const distance = leg.distance.value; // meters
+      const duration = leg.duration.value; // seconds
 
-// If overview_polyline is typed as a string, just use it directly.
-const polyline = route.overview_polyline || '';
+      // If overview_polyline is typed as a string, just use it directly.
+      const polyline = route.overview_polyline || '';
 
-return { distance, duration, polyline };
+      return { distance, duration, polyline };
     } catch (err) {
       console.error(err);
       return rejectWithValue('Directions request failed');
@@ -101,6 +107,7 @@ const initialState: BookingState = {
   route: null,
   routeStatus: 'idle',
   routeError: null,
+  ticketPlan: null, // NEW FIELD
 };
 
 export const bookingSlice = createSlice({
@@ -156,6 +163,16 @@ export const bookingSlice = createSlice({
       state.route = null;
       state.routeStatus = 'idle';
       state.routeError = null;
+      // Reset ticket plan
+      state.ticketPlan = null;
+    },
+
+    /**
+     * NEW: sets the user's chosen ticket plan 
+     * (e.g., 'single' or 'paygo').
+     */
+    setTicketPlan: (state, action: PayloadAction<TicketPlan>) => {
+      state.ticketPlan = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -183,6 +200,7 @@ export const {
   setDepartureDate,
   advanceBookingStep,
   resetBookingFlow,
+  setTicketPlan, // NEW
 } = bookingSlice.actions;
 
 // Export the reducer
@@ -197,3 +215,6 @@ export const selectDepartureDate = (state: RootState) => state.booking.departure
 export const selectRoute = (state: RootState) => state.booking.route;
 export const selectRouteStatus = (state: RootState) => state.booking.routeStatus;
 export const selectRouteError = (state: RootState) => state.booking.routeError;
+
+/** NEW: Ticket plan selector */
+export const selectTicketPlan = (state: RootState) => state.booking.ticketPlan;
