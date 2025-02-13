@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import React, { useEffect, useCallback, useRef, useState } from 'react';
-import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-import { toast } from 'react-hot-toast';
-import { Car, Locate } from 'lucide-react';
-import * as THREE from 'three';
-import { ThreeJSOverlayView } from '@googlemaps/three';
+import React, { useEffect, useCallback, useRef, useState } from "react";
+import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { toast } from "react-hot-toast";
+import { Car, Locate } from "lucide-react";
+import * as THREE from "three";
+import { ThreeJSOverlayView } from "@googlemaps/three";
 
-import { useAppDispatch, useAppSelector } from '@/store/store';
+import { useAppDispatch, useAppSelector } from "@/store/store";
 
 import {
   fetchStations,
@@ -15,13 +15,13 @@ import {
   selectStationsLoading,
   selectStationsError,
   StationFeature,
-} from '@/store/stationsSlice';
+} from "@/store/stationsSlice";
 import {
   fetchCars,
   selectAllCars,
   selectCarsLoading,
   selectCarsError,
-} from '@/store/carSlice';
+} from "@/store/carSlice";
 import {
   selectUserLocation,
   setUserLocation,
@@ -29,26 +29,26 @@ import {
   selectArrivalStationId,
   clearDepartureStation,
   clearArrivalStation,
-} from '@/store/userSlice';
-import { toggleSheet, selectIsSheetMinimized } from '@/store/uiSlice';
+} from "@/store/userSlice";
+import { toggleSheet, selectIsSheetMinimized } from "@/store/uiSlice";
 import {
   selectBookingStep,
   advanceBookingStep,
   fetchRoute,
-} from '@/store/bookingSlice';
+} from "@/store/bookingSlice";
 import {
   fetchStations3D,
   selectStations3D,
-} from '@/store/stations3DSlice';
+} from "@/store/stations3DSlice";
 
 // UI
-import Sheet from '@/components/ui/sheet';
-import StationSelector from './StationSelector';
-import { LoadingSpinner } from './LoadingSpinner';
-import CarSheet from '@/components/booking/CarSheet';
-import StationDetail from './StationDetail';
-import { StationListItem } from './StationListItem';
-import GaussianSplatModal from '@/components/GaussianSplatModal';
+import Sheet from "@/components/ui/sheet";
+import StationSelector from "./StationSelector";
+import { LoadingSpinner } from "./LoadingSpinner";
+import CarSheet from "@/components/booking/CarSheet";
+import StationDetail from "./StationDetail";
+import { StationListItem } from "./StationListItem";
+import GaussianSplatModal from "@/components/GaussianSplatModal";
 
 // Map config
 import {
@@ -58,15 +58,15 @@ import {
   DEFAULT_ZOOM,
   createMapOptions,
   createMarkerIcons,
-  DISPATCH_HUB,    // <-- Added import
-  INTER_CC,        // <-- Added import
-} from '@/constants/map';
+  DISPATCH_HUB,
+  INTER_CC,
+} from "@/constants/map";
 
 interface GMapProps {
   googleApiKey: string;
 }
 
-type OpenSheetType = 'none' | 'car' | 'list' | 'detail';
+type OpenSheetType = "none" | "car" | "list" | "detail";
 
 export default function GMap({ googleApiKey }: GMapProps) {
   // Refs
@@ -83,8 +83,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
   // Which sheet is open?
-  const [openSheet, setOpenSheet] = useState<OpenSheetType>('car');
-  const [previousSheet, setPreviousSheet] = useState<OpenSheetType>('none');
+  const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
+  const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [detailKey, setDetailKey] = useState(0);
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
@@ -108,9 +108,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Load Google Maps
   const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
+    id: "google-map-script",
     googleMapsApiKey: googleApiKey,
-    version: 'beta',
+    version: "beta",
     libraries: LIBRARIES,
   });
 
@@ -131,8 +131,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
           dispatch(fetchCars()).unwrap(),
         ]);
       } catch (err) {
-        console.error('Error fetching data:', err);
-        toast.error('Failed to load map data');
+        console.error("Error fetching data:", err);
+        toast.error("Failed to load map data");
       }
     })();
   }, [dispatch]);
@@ -173,7 +173,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // Sort stations
+  // Sort stations by distance
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -216,28 +216,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
-    toast.success('Departure station cleared');
+    toast.success("Departure station cleared");
 
-    if (openSheet === 'detail') {
-      setOpenSheet('none');
-      setPreviousSheet('none');
+    if (openSheet === "detail") {
+      setOpenSheet("none");
+      setPreviousSheet("none");
     }
   };
 
   const handleClearArrivalInSelector = () => {
     dispatch(clearArrivalStation());
     dispatch(advanceBookingStep(3));
-    toast.success('Arrival station cleared');
+    toast.success("Arrival station cleared");
 
-    if (openSheet === 'detail') {
-      setOpenSheet('none');
-      setPreviousSheet('none');
+    if (openSheet === "detail") {
+      setOpenSheet("none");
+      setPreviousSheet("none");
     }
   };
 
   // openNewSheet
   const openNewSheet = (newSheet: OpenSheetType) => {
-    if (newSheet !== 'detail') {
+    if (newSheet !== "detail") {
       setForceSheetOpen(false);
     }
     if (openSheet !== newSheet) {
@@ -249,27 +249,30 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // closeCurrentSheet
   const closeCurrentSheet = () => {
     const old = openSheet;
-    if (old === 'detail') {
+    if (old === "detail") {
       // If user closes detail in step 2 => forcibly unselect
       if (bookingStep === 2) {
         dispatch(clearDepartureStation());
         dispatch(advanceBookingStep(1));
-        toast.success('Departure station unselected (sheet closed)');
+        toast.success("Departure station unselected (sheet closed)");
       }
-      setOpenSheet('none');
-      setPreviousSheet('none');
+      setOpenSheet("none");
+      setPreviousSheet("none");
       setForceSheetOpen(false);
+
+      // Ensure 3D overlay can redraw if needed
       overlayRef.current?.requestRedraw();
     } else {
+      // For "car" or "list", revert to the previous sheet
       setOpenSheet(previousSheet);
-      setPreviousSheet('none');
+      setPreviousSheet("none");
     }
   };
 
   // "Locate me"
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocation not supported.');
+      toast.error("Geolocation not supported.");
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -283,22 +286,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const sorted = sortStationsByDistanceToPoint(loc, stations);
         setSearchLocation(loc);
         setSortedStations(sorted);
-        openNewSheet('list');
-        toast.success('Location found!');
+        openNewSheet("list");
+        toast.success("Location found!");
       },
       (err) => {
-        console.error('Geolocation error:', err);
-        toast.error('Unable to retrieve location.');
+        console.error("Geolocation error:", err);
+        toast.error("Unable to retrieve location.");
       }
     );
   };
 
   // "Car" sheet toggle
   const handleCarToggle = () => {
-    if (openSheet === 'car') {
+    if (openSheet === "car") {
       closeCurrentSheet();
     } else {
-      openNewSheet('car');
+      openNewSheet("car");
     }
   };
 
@@ -306,16 +309,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep < 3) {
-        dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+        dispatch({ type: "user/selectDepartureStation", payload: station.id });
       } else {
-        dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+        dispatch({ type: "user/selectArrivalStation", payload: station.id });
       }
       setDetailKey((prev) => prev + 1);
 
-      // Force sheet to open
+      // Force sheet to open the detail
       setForceSheetOpen(true);
-      setOpenSheet('detail');
-      setPreviousSheet('none');
+      setOpenSheet("detail");
+      setPreviousSheet("none");
 
       if (isSheetMinimized) {
         dispatch(toggleSheet());
@@ -326,15 +329,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep < 3) {
-      dispatch({ type: 'user/selectDepartureStation', payload: station.id });
+      dispatch({ type: "user/selectDepartureStation", payload: station.id });
     } else {
-      dispatch({ type: 'user/selectArrivalStation', payload: station.id });
+      dispatch({ type: "user/selectArrivalStation", payload: station.id });
     }
     setDetailKey((prev) => prev + 1);
 
     setForceSheetOpen(true);
-    setOpenSheet('detail');
-    setPreviousSheet('none');
+    setOpenSheet("detail");
+    setPreviousSheet("none");
   };
 
   // 3D overlay click logic
@@ -345,7 +348,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     function onOverlayClick(event: MouseEvent) {
       const canvas =
         (overlayRef.current && (overlayRef.current as any).canvas) ||
-        document.querySelector('canvas');
+        document.querySelector("canvas");
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
@@ -367,11 +370,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
     const canvas =
       (overlayRef.current && (overlayRef.current as any).canvas) ||
-      document.querySelector('canvas');
+      document.querySelector("canvas");
     if (canvas) {
-      canvas.addEventListener('click', onOverlayClick, false);
+      canvas.addEventListener("click", onOverlayClick, false);
       return () => {
-        canvas.removeEventListener('click', onOverlayClick);
+        canvas.removeEventListener("click", onOverlayClick);
       };
     }
   }, [handleStationClick]);
@@ -379,8 +382,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Confirm departure => step 2 -> step 3
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
-    setOpenSheet('none');
-    setPreviousSheet('none');
+    setOpenSheet("none");
+    setPreviousSheet("none");
     setForceSheetOpen(false);
   };
 
@@ -410,11 +413,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
       scene.add(ambientLight);
+
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.25);
       directionalLight.position.set(0, 10, 50);
       scene.add(directionalLight);
 
-      // Use DISPATCH_HUB instead of hongKongCenter
       const overlay = new ThreeJSOverlayView({
         map,
         scene,
@@ -424,7 +427,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       });
       overlayRef.current = overlay;
 
-      // Renamed dummyCube -> dispatchCube
+      // dispatchCube
       const dispatchCubeGeo = new THREE.BoxGeometry(50, 50, 50);
       const dispatchCubeMat = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
@@ -433,7 +436,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       });
       const dispatchCube = new THREE.Mesh(dispatchCubeGeo, dispatchCubeMat);
 
-      // Position the dispatchCube relative to DISPATCH_HUB
       const dispatchCubePos = overlay.latLngAltitudeToVector3({
         lat: DISPATCH_HUB.lat,
         lng: DISPATCH_HUB.lng,
@@ -530,10 +532,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* 
-            We also render a special marker at the INTER_CC location
-            using the new 'icc' icon from createMarkerIcons. 
-          */}
+          {/* Special marker at the INTER_CC location */}
           {markerIcons && (
             <Marker
               position={INTER_CC}
@@ -592,41 +591,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
       </div>
 
       {/* Car Sheet */}
-      {openSheet === 'car' && (
+      {openSheet === "car" && (
         <CarSheet isOpen onToggle={handleCarToggle} />
       )}
 
       {/* Station list sheet */}
-      {openSheet === 'list' && (
+      {openSheet === "list" && (
         <Sheet
-      isOpen={openSheet === 'list'}
-      onToggle={closeCurrentSheet}
-      title="Nearby Stations"
-      count={sortedStations.length}
-    >
-      <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-        {sortedStations.map(...) /* ... */}
-      </div>
-    </Sheet>
-
-    {/* Always render the station detail Sheet */}
-    <Sheet
-      isOpen={openSheet === 'detail' || forceSheetOpen}
-      onToggle={closeCurrentSheet}
-      title="Station Details"
-      count={(searchLocation ? sortedStations : stations).length}
-    >
-      <StationDetail
-        key={detailKey}
-        stations={searchLocation ? sortedStations : stations}
-        activeStation={stationToShow}
-        onConfirmDeparture={handleConfirmDeparture}
-      />
-    </Sheet>
+          isOpen
+          onToggle={closeCurrentSheet}
+          title="Nearby Stations"
+          count={sortedStations.length}
+        >
+          <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+            {sortedStations.map((station, idx) => (
+              <StationListItem
+                key={station.id}
+                index={idx}
+                style={{}}
+                data={{
+                  items: sortedStations,
+                  onStationSelected: () => handleStationSelectedFromList(station),
+                }}
+              />
+            ))}
+          </div>
+        </Sheet>
       )}
 
       {/* Station detail sheet */}
-      {(openSheet === 'detail' || forceSheetOpen) && stationToShow && (
+      {(openSheet === "detail" || forceSheetOpen) && stationToShow && (
         <Sheet
           key={detailKey}
           isOpen
@@ -642,7 +636,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
           />
         </Sheet>
       )}
-       {/* Finally, render the GaussianSplatModal */}
+
+      {/* GaussianSplatModal */}
       <GaussianSplatModal
         isOpen={isSplatModalOpen}
         onClose={() => setIsSplatModalOpen(false)}
