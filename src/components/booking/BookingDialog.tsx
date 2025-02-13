@@ -33,12 +33,12 @@ import {
   setDepartureDate,
 } from "@/store/bookingSlice";
 
-// Example steps:
+// Example steps
 import IDVerificationStep from "./IDVerificationStep";
 import PaymentStep from "./PaymentStep";
 import TicketPlanStep from "./TicketPlanStep"; // Your new ticket plan UI
 
-/** Optional final step: displays a success message. */
+/** Optional final step: displays a success or summary screen. */
 function BookingCompleteStep() {
   return (
     <div className="space-y-4">
@@ -74,15 +74,21 @@ export default function BookingDialog() {
   const [bookingError, setBookingError] = useState<string | null>(null);
 
   /**
-   * Automatically open the dialog if:
+   * Only open the dialog if:
    *  - A car is selected
    *  - We have departureStationId and arrivalStationId
+   *  - The user has advanced to at least step=5 (Confirmed Arrival)
    */
   useEffect(() => {
-    if (selectedCarId && departureStationId && arrivalStationId) {
+    if (
+      selectedCarId &&
+      departureStationId &&
+      arrivalStationId &&
+      bookingStep >= 5
+    ) {
       setOpen(true);
     }
-  }, [selectedCarId, departureStationId, arrivalStationId]);
+  }, [selectedCarId, departureStationId, arrivalStationId, bookingStep]);
 
   /**
    * If user clicks Cancel or closes the dialog,
@@ -134,7 +140,7 @@ export default function BookingDialog() {
         departureStationId,
         arrivalStationId,
         departureDate,
-        // plan: ticketPlan (if you stored it in Redux)
+        // plan: ticketPlan (if you store it in Redux)
       };
 
       fetch("/api/bookings", {
@@ -231,13 +237,13 @@ export default function BookingDialog() {
             {bookingError && (
               <button
                 onClick={() => {
-                  // Optionally go back to step 5 for ticket plan or step 4 for payment
+                  // Optionally revert to step 5 for ticket plan or step 4 for payment
                   dispatch(advanceBookingStep(5));
                   setBookingError(null);
                 }}
                 className="px-4 py-2 text-sm bg-muted hover:bg-muted/80 rounded"
               >
-                Go Back & Retry
+                Go Back &amp; Retry
               </button>
             )}
           </div>
@@ -266,7 +272,7 @@ export default function BookingDialog() {
             Confirm Details
           </AlertDialogAction>
         );
-      // Steps 3-8 have custom sub-components or no direct "action" button
+      // Steps 3-8 use internal flows or no standard "action" button
       default:
         return null;
     }
