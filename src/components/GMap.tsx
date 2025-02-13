@@ -27,6 +27,7 @@ import {
   selectArrivalStationId,
   clearDepartureStation,
   clearArrivalStation,
+  selectIsSignedIn,
 } from "@/store/userSlice";
 import { toggleSheet, selectIsSheetMinimized } from "@/store/uiSlice";
 import {
@@ -108,6 +109,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
+  const isUserSignedIn = useAppSelector(selectIsSignedIn);
 
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
@@ -534,6 +536,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       {/* Ticket Options => only shows if step === 5 */}
       {bookingStep === 5 && (
         <TicketOptions
+          isUserSignedIn={isUserSignedIn}
           onSelectSingleJourney={handleSelectSingleJourney}
           onSelectPayAsYouGo={handleSelectPayAsYouGo}
           onClose={handleTicketOptionsClose}
