@@ -23,6 +23,7 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
       onToggle={onToggle}
       title="Available Cars"
       count={cars.length}
+      countLabel="cars found"
     >
       <div className="px-4 py-2">
         {selectedCarId ? (
