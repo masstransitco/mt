@@ -1,27 +1,28 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
-} from '@/components/ui/dialog';
-import { Loader2, X } from 'lucide-react';
+} from "@/components/ui/dialog";
+import { Loader2, X } from "lucide-react";
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
   onAuthStateChanged,
   ConfirmationResult,
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import Image from 'next/image';
-import PhoneInput from './PhoneInput';
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import Image from "next/image";
+import PhoneInput from "./PhoneInput";
 
-// 1) Import your userSlice actions
-import { useAppDispatch } from '@/store/store';
-import { setAuthUser } from '@/store/userSlice'; // <--- Must exist in your userSlice
+// Note: If you want to dispatch the user info to Redux,
+// import { useAppDispatch } from "@/store/store";
+// import { setAuthUser } from "@/store/userSlice";
+// Then do dispatch(setAuthUser(...)) in onAuthStateChanged.
 
-type AuthStep = 'welcome' | 'phone' | 'verify';
+type AuthStep = "welcome" | "phone" | "verify";
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -35,14 +36,108 @@ declare global {
   }
 }
 
-/* StepIndicator, PinInput same as before... */
+/* -------------------------------------
+ * A simple step indicator (dots) for your multi-step flow
+ * ------------------------------------- */
+function StepIndicator({
+  currentStep,
+  totalSteps,
+}: {
+  currentStep: number;
+  totalSteps: number;
+}) {
+  return (
+    <div className="flex items-center justify-center space-x-2 py-2">
+      {Array.from({ length: totalSteps }, (_, index) => {
+        const isActive = index + 1 === currentStep;
+        return (
+          <div
+            key={index}
+            className={`h-2 w-2 rounded-full transition-colors ${
+              isActive ? "bg-blue-500 scale-110" : "bg-gray-500"
+            }`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------
+ * PinInput: 6-digit fields for the verification code
+ * ------------------------------------- */
+function PinInput({
+  length,
+  loading,
+  onChange,
+}: {
+  length: number;
+  loading: boolean;
+  onChange: (code: string) => void;
+}) {
+  const [values, setValues] = useState<string[]>(Array(length).fill(""));
+  const inputRefs = useRef<HTMLInputElement[]>([]);
+
+  const handleChange = (index: number, value: string) => {
+    // Only allow digits
+    if (!/^\d*$/.test(value)) return;
+
+    const newValues = [...values];
+    newValues[index] = value;
+    setValues(newValues);
+    onChange(newValues.join(""));
+
+    // Move focus to the next field if a digit was entered
+    if (value && index < length - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === "Backspace" && !values[index] && index > 0) {
+      // Move focus backward if current is empty
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Reset code if we exit or re-enter verification
+  useEffect(() => {
+    if (!loading) {
+      setValues(Array(length).fill(""));
+    }
+  }, [loading, length]);
+
+  return (
+    <div className="flex space-x-2">
+      {Array.from({ length }, (_, i) => (
+        <input
+          key={i}
+          type="text"
+          maxLength={1}
+          value={values[i]}
+          disabled={loading}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          ref={(el) => {
+            if (el) inputRefs.current[i] = el;
+          }}
+          className="w-10 h-12 text-center border border-border bg-background
+                     text-white text-xl rounded-md focus:outline-none
+                     focus:ring focus:ring-blue-500 disabled:opacity-50"
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
-  const dispatch = useAppDispatch(); // <-- We'll dispatch setAuthUser here
-
-  const [step, setStep] = useState<AuthStep>('welcome');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
+  // Steps: 'welcome' => 'phone' => 'verify'
+  const [step, setStep] = useState<AuthStep>("welcome");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,12 +145,55 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
+  /**
+   * If user is already signed in, close the modal (or dispatch to Redux).
+   * This is optional; if you do want to store user in Redux:
+   *
+   *   import { useAppDispatch } from "@/store/store";
+   *   import { setAuthUser } from "@/store/userSlice";
+   *
+   * Then inside onAuthStateChanged:
+   *   if (firebaseUser) {
+   *     dispatch(setAuthUser({ uid: firebaseUser.uid, ... }));
+   *     handleClose();
+   *   }
+   *
+   */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // If you want to store user in Redux, do so here
+        // e.g. dispatch(setAuthUser(...));
+        handleClose();
+      }
+    });
+    return () => {
+      unsubscribe();
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        delete window.recaptchaVerifier;
+      }
+    };
+  }, []);
+
+  // Cleanup states & close
+  const handleClose = () => {
+    setStep("welcome");
+    setPhoneNumber("");
+    setVerificationCode("");
+    setError(null);
+    setLoading(false);
+    setResendTimer(30);
+    setCanResend(false);
+    onClose();
+  };
+
   /* -------------------------------------
-   * Handle countdown for re-sending code
+   * Resend code countdown
    * ------------------------------------- */
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
-    if (!canResend && step === 'verify') {
+    if (!canResend && step === "verify") {
       timerId = setInterval(() => {
         setResendTimer((prev) => {
           if (prev <= 1) {
@@ -72,59 +210,190 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, [canResend, step]);
 
-  /* -------------------------------------
-   * If user is already signed in, close
-   * the modal, but also store user in Redux
-   * ------------------------------------- */
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // 2) Extract the fields you want from firebaseUser
-        const { uid, phoneNumber, email, displayName } = firebaseUser;
+  /* Step=welcome => user sees a short message or video => "Continue" => step=phone */
+  const renderWelcomeContent = () => {
+    return (
+      <div
+        key="welcome"
+        className="flex flex-col h-full overflow-hidden transition-opacity duration-300"
+      >
+        <div className="relative w-full h-[28vh] shrink-0">
+          <video
+            src="/brand/drive.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)",
+            }}
+          />
+          <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
+            <h2 className="text-[28px] font-semibold text-white leading-tight mb-2">
+              Welcome to Mass Transit
+            </h2>
+          </div>
+        </div>
 
-        // 3) Dispatch setAuthUser to Redux
-        dispatch(
-          setAuthUser({
-            uid,
-            phoneNumber: phoneNumber ?? undefined,
-            email: email ?? undefined,
-            displayName: displayName ?? undefined,
-          })
-        );
-
-        // Then close the modal
-        handleClose();
-      } else {
-        // If user is null => optional: dispatch setAuthUser(null)
-        // dispatch(setAuthUser(null));
-      }
-    });
-    return () => {
-      unsubscribe();
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        delete window.recaptchaVerifier;
-      }
-    };
-  }, [dispatch]);
-
-  /* Close modal => reset states */
-  const handleClose = () => {
-    setStep('welcome');
-    setPhoneNumber('');
-    setVerificationCode('');
-    setError(null);
-    setLoading(false);
-    setResendTimer(30);
-    setCanResend(false);
-
-    // Finally call parent's onClose
-    onClose();
+        <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 text-white/80">
+          <div className="space-y-2 text-[15px] leading-snug">
+            <p>• Drive the MG4 Electric, Maxus MIFA7, and the Cyberquad.</p>
+            <p>• Access 150+ stations with seamless entry and exit.</p>
+            <p>• No deposits. Daily fares capped at $400.</p>
+          </div>
+          <p className="text-[13px] text-white/60 leading-relaxed">
+            By clicking "Continue," you confirm you're 18 or older with a valid
+            driver’s license or permit. Trip and driving data may be collected
+            to improve services. See our{" "}
+            <a
+              href="/privacy"
+              className="text-[#0080ff] underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Privacy Policy
+            </a>{" "}
+            for details.
+          </p>
+          <button
+            onClick={() => setStep("phone")}
+            disabled={loading}
+            className="w-full py-3.5 mt-1 rounded-xl bg-[#0080ff]
+                       text-white text-[15px] font-medium
+                       active:opacity-90 disabled:opacity-50"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
   };
 
-  /* -------------------------------------
-   * Step: Phone Number -> Send SMS
-   * ------------------------------------- */
+  /* Step=phone => user enters phone => press "Send Code" => handlePhoneSignIn */
+  const renderPhoneInput = () => {
+    const currentStepNumber = 1;
+    const totalSteps = 2;
+    return (
+      <div
+        key="phone-input"
+        className="flex flex-col h-full transition-opacity duration-300"
+      >
+        <div className="flex-1 p-6 space-y-4">
+          <h3 className="text-xl font-semibold text-white">
+            Enter Your Phone Number
+          </h3>
+          <StepIndicator currentStep={currentStepNumber} totalSteps={totalSteps} />
+          <p className="text-sm text-gray-300">
+            We’ll text you a verification code to ensure it’s really you.
+          </p>
+          <PhoneInput value={phoneNumber} onChange={setPhoneNumber} disabled={loading} />
+          {error && (
+            <div className="p-3 text-sm text-red-400 bg-red-500/10 rounded-lg">
+              {error}
+            </div>
+          )}
+          <div id="recaptcha-container" />
+        </div>
+
+        <div className="p-6 pt-0 space-y-3">
+          <button
+            onClick={handlePhoneSignIn}
+            disabled={loading || !phoneNumber || phoneNumber.length < 8}
+            className="w-full p-4 rounded-lg bg-primary
+                       text-primary-foreground hover:bg-primary/90
+                       disabled:opacity-50 transition-colors"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+            ) : (
+              "Send Code"
+            )}
+          </button>
+          <button
+            onClick={() => setStep("welcome")}
+            disabled={loading}
+            className="w-full p-3 text-sm
+                       text-gray-400 hover:text-gray-200
+                       disabled:opacity-50"
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /* Step=verify => user enters code => handleVerifyCode => onAuthStateChanged => done */
+  const renderVerification = () => {
+    const currentStepNumber = 2;
+    const totalSteps = 2;
+    return (
+      <div
+        key="verification"
+        className="flex flex-col h-full transition-opacity duration-300"
+      >
+        <div className="flex-1 p-6 space-y-4">
+          <h3 className="text-xl font-semibold text-white">Verify Your Number</h3>
+          <StepIndicator currentStep={currentStepNumber} totalSteps={totalSteps} />
+          <p className="text-sm text-gray-300">
+            Enter the 6-digit code we sent to{" "}
+            <span className="font-medium">{phoneNumber}</span>.
+          </p>
+
+          <PinInput length={6} loading={loading} onChange={(code) => setVerificationCode(code)} />
+
+          {error && (
+            <div className="p-3 text-sm text-red-400 bg-red-500/10 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {!canResend && (
+            <p className="text-xs text-gray-400">
+              If you don’t receive the code, you can resend in {resendTimer}s
+            </p>
+          )}
+          {canResend && (
+            <button onClick={handleResendCode} className="text-sm underline text-blue-400">
+              Resend code
+            </button>
+          )}
+        </div>
+
+        <div className="p-6 pt-0 space-y-3">
+          <button
+            onClick={handleVerifyCode}
+            disabled={loading || verificationCode.length !== 6}
+            className="w-full p-4 rounded-lg bg-primary
+                       text-primary-foreground hover:bg-primary/90
+                       disabled:opacity-50 transition-colors"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+            ) : (
+              "Verify Code"
+            )}
+          </button>
+          <button
+            onClick={() => setStep("phone")}
+            disabled={loading}
+            className="w-full p-3 text-sm
+                       text-gray-400 hover:text-gray-200
+                       disabled:opacity-50"
+          >
+            Change Phone Number
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  /* ------------- PHONE SIGN-IN ------------- */
   const handlePhoneSignIn = async () => {
     try {
       setLoading(true);
@@ -135,20 +404,16 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         window.recaptchaVerifier.clear();
       }
 
-      window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,
-        'recaptcha-container',
-        {
-          size: 'invisible',
-          callback: () => {
-            // reCAPTCHA solved, proceed
-          },
-          'expired-callback': () => {
-            setError('reCAPTCHA expired. Please try again.');
-            setLoading(false);
-          },
-        }
-      );
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        size: "invisible",
+        callback: () => {
+          // reCAPTCHA solved, proceed
+        },
+        "expired-callback": () => {
+          setError("reCAPTCHA expired. Please try again.");
+          setLoading(false);
+        },
+      });
 
       // Send SMS
       const confirmationResult = await signInWithPhoneNumber(
@@ -158,87 +423,58 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       );
       window.confirmationResult = confirmationResult;
 
-      // Move to verify step
-      setStep('verify');
+      setStep("verify");
       setResendTimer(30);
       setCanResend(false);
     } catch (err: any) {
-      console.error('Phone sign-in error:', err);
+      console.error("Phone sign-in error:", err);
       let errorMessage =
-        'We could not send the verification code. Please check your number and try again.';
+        "We could not send the verification code. Please check your number and try again.";
 
-      if (err.code === 'auth/invalid-phone-number') {
-        errorMessage = 'Invalid phone number. Please enter a valid number.';
-      } else if (err.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many attempts. Please try again later.';
+      if (err.code === "auth/invalid-phone-number") {
+        errorMessage = "Invalid phone number. Please enter a valid number.";
+      } else if (err.code === "auth/too-many-requests") {
+        errorMessage = "Too many attempts. Please try again later.";
       }
       setError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
 
-  /* -------------------------------------
-   * Step: Verify code
-   * ------------------------------------- */
+  /* ------------- VERIFY CODE ------------- */
   const handleVerifyCode = async () => {
     try {
       setLoading(true);
       setError(null);
 
       if (!window.confirmationResult) {
-        throw new Error('No verification code was sent.');
+        throw new Error("No verification code was sent.");
       }
 
       await window.confirmationResult.confirm(verificationCode);
-      // onAuthStateChanged will handle success => dispatch + handleClose
+      // onAuthStateChanged sees success => user is logged in => closes
     } catch (err: any) {
-      console.error('Code verification error:', err);
-      let errorMessage = 'Failed to verify code. Please check and try again.';
+      console.error("Code verification error:", err);
+      let errorMessage = "Failed to verify code. Please check and try again.";
 
-      if (err.code === 'auth/invalid-verification-code') {
-        errorMessage = 'Invalid code. Please check and try again.';
-      } else if (err.code === 'auth/code-expired') {
-        errorMessage = 'Code expired. Please request a new one.';
+      if (err.code === "auth/invalid-verification-code") {
+        errorMessage = "Invalid code. Please check and try again.";
+      } else if (err.code === "auth/code-expired") {
+        errorMessage = "Code expired. Please request a new one.";
       }
       setError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
 
-  /* -------------------------------------
-   * Step: Resend Code
-   * ------------------------------------- */
+  /* ------------- RESEND CODE ------------- */
   const handleResendCode = () => {
-    setVerificationCode('');
-    setStep('phone');
+    setVerificationCode("");
+    setStep("phone");
   };
 
-  /* Step indicators */
-  const currentStepNumber = step === 'welcome' ? 1 : step === 'phone' ? 1 : 2;
-  const totalSteps = 2; // phone + verify
-
-  /* -------------------------------------
-   * RENDER: Welcome Step
-   * ------------------------------------- */
-  const renderWelcomeContent = () => {
-    // ... same as your code ...
-  };
-
-  /* -------------------------------------
-   * RENDER: Phone Input Step
-   * ------------------------------------- */
-  const renderPhoneInput = () => {
-    // ... same as your code ...
-  };
-
-  /* -------------------------------------
-   * RENDER: Code Verification Step
-   * ------------------------------------- */
-  const renderVerification = () => {
-    // ... same as your code ...
-  };
+  /* Final UI */
+  const currentStepNumber = step === "welcome" ? 1 : step === "phone" ? 1 : 2;
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -262,9 +498,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           </button>
         </DialogHeader>
 
-        {step === 'welcome' && renderWelcomeContent()}
-        {step === 'phone' && renderPhoneInput()}
-        {step === 'verify' && renderVerification()}
+        {step === "welcome" && renderWelcomeContent()}
+        {step === "phone" && renderPhoneInput()}
+        {step === "verify" && renderVerification()}
       </DialogContent>
     </Dialog>
   );
