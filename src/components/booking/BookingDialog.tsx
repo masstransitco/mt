@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/store";
-import { format } from "date-fns";
 
 // UI: AlertDialog
 import {
@@ -18,34 +17,40 @@ import {
 
 // userSlice
 import {
-  resetUserSelections,
-  selectDepartureStationId,
-  selectArrivalStationId,
   selectIsSignedIn,
+  resetUserSelections,
 } from "@/store/userSlice";
 
 // bookingSlice
 import {
-  advanceBookingStep,
   selectBookingStep,
-  selectDepartureDate,
+  advanceBookingStep,
   resetBookingFlow,
-  setDepartureDate,
 } from "@/store/bookingSlice";
 
-// Example steps
-import IDVerificationStep from "./IDVerificationStep";
+// Steps
+import TicketPlanStep from "./TicketPlanStep";
+import SignInStep from "./SignInStep";
 import PaymentStep from "./PaymentStep";
-import TicketPlanStep from "./TicketPlanStep"; // Your new ticket plan UI
+import IDVerificationStep from "./IDVerificationStep";
 
-/** Optional final step: displays a success or summary screen. */
-function BookingCompleteStep() {
+/** 
+ * If you need a final "unlock" step that checks ID verification, 
+ * you can store a boolean like "idVerified" in Redux, or do a separate check.
+ */
+function UnlockCarStep({ onUnlock }: { onUnlock: () => void }) {
   return (
     <div className="space-y-4">
-      <h3 className="text-xl font-medium">Booking Complete</h3>
+      <h3 className="text-xl font-medium">Unlock Car</h3>
       <p className="text-sm text-muted-foreground">
-        Your booking has been successfully created.
+        You are ready to unlock the vehicle. Make sure you have your ID verified.
       </p>
+      <button
+        className="bg-primary text-white px-4 py-2 rounded"
+        onClick={onUnlock}
+      >
+        Unlock Now
+      </button>
     </div>
   );
 }
@@ -53,243 +58,133 @@ function BookingCompleteStep() {
 export default function BookingDialog() {
   const dispatch = useAppDispatch();
 
-  // If you store selectedCarId in userSlice
-  const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
-
-  // Station IDs
-  const departureStationId = useAppSelector(selectDepartureStationId);
-  const arrivalStationId = useAppSelector(selectArrivalStationId);
-
-  // bookingSlice state
+  // Example booking steps (1..5)
   const bookingStep = useAppSelector(selectBookingStep);
-  const departureDate = useAppSelector(selectDepartureDate);
+  const isSignedIn = useAppSelector(selectIsSignedIn);
 
-  // Check if the user is signed in from Redux
-  const isUserSignedIn = useAppSelector(selectIsSignedIn);
-
-  // Local state to control the AlertDialog's open/close
+  // Whether to show the AlertDialog
   const [open, setOpen] = useState(false);
 
-  // Local error message for finalizing (step=7)
-  const [bookingError, setBookingError] = useState<string | null>(null);
-
-  /**
-   * Only open the dialog if:
-   *  - A car is selected
-   *  - We have departureStationId and arrivalStationId
-   *  - The user has advanced to at least step=5 (Confirmed Arrival)
-   */
   useEffect(() => {
-    if (
-      selectedCarId &&
-      departureStationId &&
-      arrivalStationId &&
-      bookingStep >= 5
-    ) {
+    // If you want to open the dialog as soon as user enters step=1 or more:
+    if (bookingStep >= 1) {
       setOpen(true);
     }
-  }, [selectedCarId, departureStationId, arrivalStationId, bookingStep]);
+  }, [bookingStep]);
 
-  /**
-   * If user clicks Cancel or closes the dialog,
-   * we reset everything in the booking + user selections.
-   */
   const handleCancel = () => {
     setOpen(false);
+    // Reset all
     dispatch(resetUserSelections());
     dispatch(resetBookingFlow());
   };
 
-  /* ---------------- STEP 1: User picks a date/time ---------------- */
-  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newDate = new Date(e.target.value);
-    dispatch(setDepartureDate(newDate));
+  /* ---------------- Step 1: Ticket Plan ---------------- */
+  const handleTicketPlanSelected = (plan: "single" | "paygo") => {
+    // You can store plan in Redux if needed
+    // dispatch(setTicketPlan(plan));
+    // Next step => step=2 => sign in check
     dispatch(advanceBookingStep(2));
   };
 
-  /* ---------------- STEP 2: Confirm booking details --------------- */
-  const handleConfirmBookingDetails = () => {
-    dispatch(advanceBookingStep(3)); // move to ID verification
+  /* ---------------- Step 2: Sign In if not signed in ---------------- */
+  const handleSignInComplete = () => {
+    // If user was not signed in, they sign in here => step=3
+    dispatch(advanceBookingStep(3));
   };
 
-  /* ---------------- STEP 3: ID Verification ------------------------ */
-  const handleIDVerified = () => {
-    dispatch(advanceBookingStep(4)); // move to payment
-  };
+  /* 
+    Possibly skip sign-in if user is already signed in. 
+    That could happen automatically if bookingStep=2 and isSignedIn => step=3
+  */
+  useEffect(() => {
+    if (bookingStep === 2 && isSignedIn) {
+      dispatch(advanceBookingStep(3));
+    }
+  }, [bookingStep, isSignedIn, dispatch]);
 
-  /* ---------------- STEP 4: Payment -------------------------------- */
+  /* ---------------- Step 3: Payment ---------------- */
   const handlePaymentComplete = () => {
-    // After payment, proceed to ticket plan
+    dispatch(advanceBookingStep(4));
+  };
+
+  /* ---------------- Step 4: ID Verification (optional) ---------------- */
+  const handleIDVerificationDone = () => {
+    // If user verified ID
     dispatch(advanceBookingStep(5));
   };
 
-  /* ---------------- STEP 5: Ticket Plan Selection ------------------ */
-  const handleTicketPlanSelected = (plan: "single" | "paygo") => {
-    // Optionally store plan in Redux (setTicketPlan(plan))
-    // Then skip step 6 (if not used) and finalize in step 7
-    dispatch(advanceBookingStep(7));
+  const handleSkipID = () => {
+    // If user wants to skip for now
+    dispatch(advanceBookingStep(5));
   };
 
-  /* ---------------- STEP 7: Finalize booking => call API ---------- */
-  useEffect(() => {
-    if (bookingStep === 7) {
-      setBookingError(null);
+  /* ---------------- Step 5: Unlock Car ---------------- */
+  const handleUnlockCar = () => {
+    // Check if ID is verified, else go back to step=4
+    // if (!idVerified) {
+    //   dispatch(advanceBookingStep(4));
+    //   return;
+    // }
 
-      const bookingPayload = {
-        carId: selectedCarId,
-        departureStationId,
-        arrivalStationId,
-        departureDate,
-        // plan: ticketPlan (if you store it in Redux)
-      };
+    // Otherwise, do the unlock logic
+    console.log("Car unlocked!");
+    // Possibly close the dialog or final step
+    setOpen(false);
+    dispatch(resetBookingFlow());
+    dispatch(resetUserSelections());
+  };
 
-      fetch("/api/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bookingPayload),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          console.log("Booking created:", data);
-          // success => step=8 => booking complete
-          dispatch(advanceBookingStep(8));
-        })
-        .catch((err) => {
-          console.error("Booking creation error:", err);
-          setBookingError("Failed to finalize booking. Please try again.");
-          // Optionally fallback to step=5 or step=4
-          // dispatch(advanceBookingStep(5));
-        });
-    }
-  }, [
-    bookingStep,
-    selectedCarId,
-    departureStationId,
-    arrivalStationId,
-    departureDate,
-    dispatch,
-  ]);
-
-  /**
-   * Renders the step-specific content.
-   * Steps: 
-   *   1 => pick date
-   *   2 => confirm details
-   *   3 => ID verification
-   *   4 => payment
-   *   5 => ticket plan
-   *   6 => (optional)
-   *   7 => finalizing
-   *   8 => complete
-   */
   const renderStepContent = () => {
     switch (bookingStep) {
       case 1:
         return (
-          <div className="space-y-4">
-            <h3 className="text-xl font-medium">Select Departure Time</h3>
-            <input
-              type="datetime-local"
-              onChange={handleDateSelect}
-              min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
-              className="w-full p-2 rounded border border-border
-                         bg-background text-foreground"
-            />
-          </div>
-        );
-      case 2:
-        if (!departureDate) return null;
-        return (
-          <div className="space-y-4">
-            <h3 className="text-xl font-medium">Confirm Booking Details</h3>
-            <div className="p-4 space-y-2 bg-accent/10 rounded">
-              <p>Vehicle: Car #{selectedCarId}</p>
-              <p>Departure Station: #{departureStationId}</p>
-              <p>Arrival Station: #{arrivalStationId}</p>
-              <p>Departure: {format(departureDate, "PPpp")}</p>
-            </div>
-          </div>
-        );
-      case 3:
-        return <IDVerificationStep onVerified={handleIDVerified} />;
-      case 4:
-        return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
-      case 5:
-        // Show the ticket plan choice (single vs paygo)
-        return (
           <TicketPlanStep
-            isUserSignedIn={isUserSignedIn}
+            // If user is not signed in, sign in eventually
+            isUserSignedIn={isSignedIn}
             onPlanConfirm={handleTicketPlanSelected}
-            onCancel={handleCancel} // optional
+            onCancel={handleCancel}
           />
         );
-      case 6:
-        // If you want an extra step, place it here
-        return <p>Step 6 (placeholder)</p>;
-      case 7:
-        // Finalizing => show spinner or error
+      case 2:
         return (
-          <div className="text-center space-y-4">
-            <p className="font-medium">Finalizing your booking...</p>
-            {bookingError && (
-              <div className="text-destructive text-sm">{bookingError}</div>
-            )}
-            {bookingError && (
-              <button
-                onClick={() => {
-                  // Optionally revert to step 5 for ticket plan or step 4 for payment
-                  dispatch(advanceBookingStep(5));
-                  setBookingError(null);
-                }}
-                className="px-4 py-2 text-sm bg-muted hover:bg-muted/80 rounded"
-              >
-                Go Back &amp; Retry
-              </button>
-            )}
-          </div>
+          <SignInStep
+            // Once user signs in => handleSignInComplete
+            onSignInComplete={handleSignInComplete}
+            onCancel={handleCancel}
+          />
         );
-      case 8:
-        // Booking complete
-        return <BookingCompleteStep />;
+      case 3:
+        return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
+      case 4:
+        return (
+          <IDVerificationStep
+            onVerified={handleIDVerificationDone}
+            onSkip={handleSkipID}
+          />
+        );
+      case 5:
+        return <UnlockCarStep onUnlock={handleUnlockCar} />;
       default:
         return null;
     }
   };
 
-  /** Renders the footer’s (Cancel / Confirm) buttons per step */
-  const renderFooterButtons = () => {
-    switch (bookingStep) {
-      case 1:
-        // Step 1 => user picks date/time => we auto-advance after selection
-        return null;
-      case 2:
-        // Step 2 => confirm booking details
-        return (
-          <AlertDialogAction
-            onClick={handleConfirmBookingDetails}
-            className="bg-primary hover:bg-primary/90"
-          >
-            Confirm Details
-          </AlertDialogAction>
-        );
-      // Steps 3-8 use internal flows or no standard "action" button
-      default:
-        return null;
-    }
-  };
+  // Typically, each step uses internal logic or a sub-component with 
+  // its own confirm/cancel buttons. So we won't provide footer buttons here:
+  const renderFooterButtons = () => null;
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogContent className="sm:max-w-md">
         <AlertDialogHeader>
-          <AlertDialogTitle>Complete Your Booking</AlertDialogTitle>
+          <AlertDialogTitle>Booking Flow</AlertDialogTitle>
           <AlertDialogDescription asChild>
             {renderStepContent()}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <AlertDialogFooter>
-          {/* Cancel button => resets everything */}
           <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
           {renderFooterButtons()}
         </AlertDialogFooter>
