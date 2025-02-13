@@ -7,30 +7,30 @@ import { StationFeature } from "@/store/stationsSlice";
 import { DISPATCH_HUB } from "@/constants/map";
 
 /**
- * Custom hook that sets up the Three.js overlay whenever a map instance is ready,
- * plus a list of stations to display as cubes.
- *
- * Returns references to the overlay, the scene, and an array of station-cube meshes.
- * Usage:
- *   const { overlayRef, sceneRef, stationCubesRef } =
- *       useThreeOverlay(mapRef.current, stations);
+ * Encapsulates all Three.js overlay creation & disposal:
+ *  - Lights
+ *  - Dispatch Cube
+ *  - Station Cubes
+ * 
+ * We pass in the google Map instance + station data, 
+ * and this hook sets up the overlay.
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
   stations: StationFeature[]
 ) {
-  // Refs to hold overlay, scene, and station cubes
+  // Refs to store the Three.js objects
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
   useEffect(() => {
-    // If no map or no stations, do nothing
+    // If no map or no stations, bail out
     if (!googleMap || stations.length === 0) return;
 
-    // 1) Create the Scene
+    // 1) Create Scene
     const scene = new THREE.Scene();
-    scene.background = null; // Make it transparent
+    scene.background = null;
     sceneRef.current = scene;
 
     // 2) Lights
@@ -40,7 +40,7 @@ export function useThreeOverlay(
     directionalLight.position.set(0, 10, 50);
     scene.add(directionalLight);
 
-    // 3) Create the overlay
+    // 3) Create Overlay
     const overlay = new ThreeJSOverlayView({
       map: googleMap,
       scene,
@@ -50,7 +50,7 @@ export function useThreeOverlay(
     });
     overlayRef.current = overlay;
 
-    // 4) Add a "dispatch cube" at DISPATCH_HUB
+    // 4) Dispatch Cube
     const dispatchCubeGeo = new THREE.BoxGeometry(50, 50, 50);
     const dispatchCubeMat = new THREE.MeshPhongMaterial({
       color: 0x00ff00,
@@ -68,7 +68,7 @@ export function useThreeOverlay(
     dispatchCube.scale.set(3, 3, 3);
     scene.add(dispatchCube);
 
-    // 5) For each station, add a "station cube"
+    // 5) Station Cubes
     const cubes: THREE.Mesh[] = [];
     stations.forEach((station) => {
       const [lng, lat] = station.geometry.coordinates;
@@ -77,7 +77,6 @@ export function useThreeOverlay(
         lng,
         altitude: DISPATCH_HUB.altitude + 50,
       });
-
       const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
       const stationCubeMat = new THREE.MeshPhongMaterial({
         color: 0xcccccc,
@@ -85,7 +84,6 @@ export function useThreeOverlay(
         transparent: true,
       });
       const stationCube = new THREE.Mesh(stationCubeGeo, stationCubeMat);
-
       stationCube.position.copy(stationCubePos);
       stationCube.scale.set(2.1, 2.1, 2.1);
       stationCube.userData = { station };
@@ -94,22 +92,21 @@ export function useThreeOverlay(
     });
     stationCubesRef.current = cubes;
 
-    // CLEANUP when component unmounts or map/stations changes
+    // Cleanup when stations/map changes or unmount
     return () => {
-      // Remove the overlay from the map
+      // Remove overlay from map
       if (overlayRef.current) {
         overlayRef.current.setMap(null);
         overlayRef.current = null;
       }
-
-      // Dispose geometry/materials
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
-          object.geometry.dispose();
-          if (Array.isArray(object.material)) {
-            object.material.forEach((mat) => mat.dispose());
-          } else if (object.material instanceof THREE.Material) {
-            object.material.dispose();
+      // Dispose all geometry/material
+      scene.traverse((obj) => {
+        if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+          obj.geometry.dispose();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((mat) => mat.dispose());
+          } else if (obj.material instanceof THREE.Material) {
+            obj.material.dispose();
           }
         }
       });
