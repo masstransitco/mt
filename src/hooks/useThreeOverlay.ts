@@ -101,6 +101,7 @@ export function useThreeOverlay(
       console.log("[useThreeOverlay] Cleaning up overlay...");
       // Remove overlay from map
       if (overlayRef.current) {
+          // @ts-ignore
         overlayRef.current.setMap(null);
         overlayRef.current = null;
       }
