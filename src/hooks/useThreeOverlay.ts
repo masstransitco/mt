@@ -49,6 +49,7 @@ export function useThreeOverlay(
       map: googleMap,
       scene,
       anchor: DISPATCH_HUB,
+      // @ts-expect-error 'THREE' not in the official type def
       THREE: THREE, // Provide the imported module as "THREE"
     });
     overlayRef.current = overlay;
