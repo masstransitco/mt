@@ -1,18 +1,16 @@
-// TicketOptions.tsx
+// src/components/booking/TicketOptions.tsx
 
 "use client";
 
 import React, { useState } from "react";
-import SignInModal from "@/components/SignInModal"; 
-// or wherever your SignInModal is located
-// Make sure it opens/closes properly.
+import SignInModal from "@/components/ui/SignInModal";  // <-- Updated import path
 
 interface TicketOptionsProps {
-  isUserSignedIn: boolean;                 // ← Are we signed in?
+  isUserSignedIn: boolean; // Are we signed in?
   onSelectSingleJourney: () => void;
   onSelectPayAsYouGo: () => void;
   onClose?: () => void;
-  onProceed?: () => void;                 // ← Called if user is signed in & chooses a plan
+  onProceed?: () => void; // Called if user is signed in & chooses a plan
 }
 
 export default function TicketOptions({
@@ -97,8 +95,8 @@ export default function TicketOptions({
         onClose={() => {
           setShowSignInModal(false);
           // If user signed in successfully => onAuthStateChanged closes SignInModal => 
-          // you can see if isUserSignedIn changed in Redux. Then the user can 
-          // re-click the plan or you can call onProceed automatically if you want. 
+          // then your parent can check Redux isSignedIn, or you can
+          // call onProceed automatically if you like.
         }}
       />
     </>
