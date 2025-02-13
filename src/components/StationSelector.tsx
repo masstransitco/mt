@@ -312,7 +312,7 @@ export default function StationSelector({
             selectedStation={departureStation}
           />
 
-          {departureStation && (
+          {departureStation && step < 3 && (
             <button
               onClick={() => {
                 // Instead of dispatching directly here, we call the parent's callback.
