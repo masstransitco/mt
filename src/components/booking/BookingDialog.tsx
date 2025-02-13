@@ -3,24 +3,46 @@
 import React, { useState, useEffect } from "react";
 import { useAppSelector, useAppDispatch } from "@/store/store";
 import { format } from "date-fns";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
+
+// UI: AlertDialog
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 // userSlice
-import { resetUserSelections, selectDepartureStationId, selectArrivalStationId, selectIsSignedIn } from "@/store/userSlice";
-// bookingSlice
-import { advanceBookingStep, selectBookingStep, selectDepartureDate, setDepartureDate, resetBookingFlow } from "@/store/bookingSlice";
+import {
+  resetUserSelections,
+  selectDepartureStationId,
+  selectArrivalStationId,
+  selectIsSignedIn,
+} from "@/store/userSlice";
 
+// bookingSlice
+import {
+  advanceBookingStep,
+  selectBookingStep,
+  selectDepartureDate,
+  resetBookingFlow,
+  setDepartureDate,
+} from "@/store/bookingSlice";
+
+// Example steps:
 import IDVerificationStep from "./IDVerificationStep";
 import PaymentStep from "./PaymentStep";
+import TicketPlanStep from "./TicketPlanStep"; // Your new ticket plan UI
 
-// Our new ticket plan step
-import TicketPlanStep from "./TicketPlanStep";
-
-/** Step 8: The "complete" or success screen */
+/** Optional final step: displays a success message. */
 function BookingCompleteStep() {
   return (
     <div className="space-y-4">
-      <h3 className="font-medium text-xl">Booking Complete</h3>
+      <h3 className="text-xl font-medium">Booking Complete</h3>
       <p className="text-sm text-muted-foreground">
         Your booking has been successfully created.
       </p>
@@ -42,21 +64,19 @@ export default function BookingDialog() {
   const bookingStep = useAppSelector(selectBookingStep);
   const departureDate = useAppSelector(selectDepartureDate);
 
-  // Check sign-in from Redux
+  // Check if the user is signed in from Redux
   const isUserSignedIn = useAppSelector(selectIsSignedIn);
 
-  // local UI state: whether the dialog is open
-  const [open, setOpen] = useState<boolean>(false);
+  // Local state to control the AlertDialog's open/close
+  const [open, setOpen] = useState(false);
 
-  // Local error message for finalizing (step 7)
+  // Local error message for finalizing (step=7)
   const [bookingError, setBookingError] = useState<string | null>(null);
 
-  /** 
-   * If the user has:
-   * - selected a car
-   * - selected a departure station
-   * - selected an arrival station
-   * => automatically open the booking dialog.
+  /**
+   * Automatically open the dialog if:
+   *  - A car is selected
+   *  - We have departureStationId and arrivalStationId
    */
   useEffect(() => {
     if (selectedCarId && departureStationId && arrivalStationId) {
@@ -64,46 +84,47 @@ export default function BookingDialog() {
     }
   }, [selectedCarId, departureStationId, arrivalStationId]);
 
-  /* -------------- CANCEL / CLOSE -------------- */
+  /**
+   * If user clicks Cancel or closes the dialog,
+   * we reset everything in the booking + user selections.
+   */
   const handleCancel = () => {
     setOpen(false);
-    // Clear out user selections + booking flow
     dispatch(resetUserSelections());
     dispatch(resetBookingFlow());
   };
 
-  /* -------------- STEP 1: Set departure date/time -------------- */
+  /* ---------------- STEP 1: User picks a date/time ---------------- */
   const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    dispatch(setDepartureDate(new Date(e.target.value)));
+    const newDate = new Date(e.target.value);
+    dispatch(setDepartureDate(newDate));
     dispatch(advanceBookingStep(2));
   };
 
-  /* -------------- STEP 2: Confirm booking details -------------- */
+  /* ---------------- STEP 2: Confirm booking details --------------- */
   const handleConfirmBookingDetails = () => {
-    dispatch(advanceBookingStep(3)); // Next step: ID verification
+    dispatch(advanceBookingStep(3)); // move to ID verification
   };
 
-  /* -------------- STEP 3: ID Verification -------------- */
+  /* ---------------- STEP 3: ID Verification ------------------------ */
   const handleIDVerified = () => {
-    dispatch(advanceBookingStep(4)); // Next step: Payment
+    dispatch(advanceBookingStep(4)); // move to payment
   };
 
-  /* -------------- STEP 4: Payment -------------- */
+  /* ---------------- STEP 4: Payment -------------------------------- */
   const handlePaymentComplete = () => {
-    // Payment done -> go to ticket plan
+    // After payment, proceed to ticket plan
     dispatch(advanceBookingStep(5));
   };
 
-  /* -------------- STEP 5: Ticket Plan -------------- */
+  /* ---------------- STEP 5: Ticket Plan Selection ------------------ */
   const handleTicketPlanSelected = (plan: "single" | "paygo") => {
-    // Here you can store the plan in Redux if you want:
-    // dispatch(setTicketPlan(plan)); // if you have a new field
-    // Then proceed to step 7 => finalizing
-    // Or if you want an extra step 6 for something else, do `advanceBookingStep(6)`.
+    // Optionally store plan in Redux (setTicketPlan(plan))
+    // Then skip step 6 (if not used) and finalize in step 7
     dispatch(advanceBookingStep(7));
   };
 
-  /* -------------- STEP 7: Finalizing => POST booking -------------- */
+  /* ---------------- STEP 7: Finalize booking => call API ---------- */
   useEffect(() => {
     if (bookingStep === 7) {
       setBookingError(null);
@@ -113,7 +134,7 @@ export default function BookingDialog() {
         departureStationId,
         arrivalStationId,
         departureDate,
-        // plan: ticketPlan // if you stored it above
+        // plan: ticketPlan (if you stored it in Redux)
       };
 
       fetch("/api/bookings", {
@@ -124,29 +145,49 @@ export default function BookingDialog() {
         .then((res) => res.json())
         .then((data) => {
           console.log("Booking created:", data);
-          dispatch(advanceBookingStep(8)); // Step 8 => complete
+          // success => step=8 => booking complete
+          dispatch(advanceBookingStep(8));
         })
         .catch((err) => {
           console.error("Booking creation error:", err);
           setBookingError("Failed to finalize booking. Please try again.");
-          // Optionally fallback to step=5 for ticket plan, or step=4 for payment
+          // Optionally fallback to step=5 or step=4
           // dispatch(advanceBookingStep(5));
         });
     }
-  }, [bookingStep, selectedCarId, departureStationId, arrivalStationId, departureDate, dispatch]);
+  }, [
+    bookingStep,
+    selectedCarId,
+    departureStationId,
+    arrivalStationId,
+    departureDate,
+    dispatch,
+  ]);
 
-  /* -------------- RENDER UI PER STEP -------------- */
+  /**
+   * Renders the step-specific content.
+   * Steps: 
+   *   1 => pick date
+   *   2 => confirm details
+   *   3 => ID verification
+   *   4 => payment
+   *   5 => ticket plan
+   *   6 => (optional)
+   *   7 => finalizing
+   *   8 => complete
+   */
   const renderStepContent = () => {
     switch (bookingStep) {
       case 1:
         return (
           <div className="space-y-4">
-            <h3 className="font-medium text-xl">Select Departure Time</h3>
+            <h3 className="text-xl font-medium">Select Departure Time</h3>
             <input
               type="datetime-local"
-              className="w-full p-2 rounded border border-border bg-background text-foreground"
               onChange={handleDateSelect}
               min={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+              className="w-full p-2 rounded border border-border
+                         bg-background text-foreground"
             />
           </div>
         );
@@ -154,18 +195,12 @@ export default function BookingDialog() {
         if (!departureDate) return null;
         return (
           <div className="space-y-4">
-            <h3 className="font-medium text-xl">Confirm Booking Details</h3>
-            <div className="bg-accent/10 p-4 rounded space-y-2">
-              <p className="text-foreground">Vehicle: Car #{selectedCarId}</p>
-              <p className="text-foreground">
-                Departure Station: #{departureStationId}
-              </p>
-              <p className="text-foreground">
-                Arrival Station: #{arrivalStationId}
-              </p>
-              <p className="text-foreground">
-                Departure: {format(departureDate, "PPpp")}
-              </p>
+            <h3 className="text-xl font-medium">Confirm Booking Details</h3>
+            <div className="p-4 space-y-2 bg-accent/10 rounded">
+              <p>Vehicle: Car #{selectedCarId}</p>
+              <p>Departure Station: #{departureStationId}</p>
+              <p>Arrival Station: #{arrivalStationId}</p>
+              <p>Departure: {format(departureDate, "PPpp")}</p>
             </div>
           </div>
         );
@@ -174,6 +209,7 @@ export default function BookingDialog() {
       case 4:
         return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
       case 5:
+        // Show the ticket plan choice (single vs paygo)
         return (
           <TicketPlanStep
             isUserSignedIn={isUserSignedIn}
@@ -182,45 +218,46 @@ export default function BookingDialog() {
           />
         );
       case 6:
-        // If you want an extra step 6, put something here.
-        // Otherwise, if skipping 6, your code might jump from 5 => 7
-        return <p>Some extra step 6 here, if needed</p>;
+        // If you want an extra step, place it here
+        return <p>Step 6 (placeholder)</p>;
       case 7:
-        // Step 7 => finalizing => show spinner or error
+        // Finalizing => show spinner or error
         return (
-          <div className="space-y-4 text-center">
-            <p className="font-medium text-sm">Finalizing your booking...</p>
+          <div className="text-center space-y-4">
+            <p className="font-medium">Finalizing your booking...</p>
             {bookingError && (
-              <div className="mt-2 text-sm text-destructive">{bookingError}</div>
+              <div className="text-destructive text-sm">{bookingError}</div>
             )}
             {bookingError && (
               <button
                 onClick={() => {
+                  // Optionally go back to step 5 for ticket plan or step 4 for payment
                   dispatch(advanceBookingStep(5));
                   setBookingError(null);
                 }}
-                className="px-4 py-2 text-sm mt-2 bg-muted hover:bg-muted/80 text-foreground rounded"
+                className="px-4 py-2 text-sm bg-muted hover:bg-muted/80 rounded"
               >
-                Go Back &amp; Retry
+                Go Back & Retry
               </button>
             )}
           </div>
         );
       case 8:
-        // Step 8 => booking complete
+        // Booking complete
         return <BookingCompleteStep />;
       default:
         return null;
     }
   };
 
-  /* -------------- RENDER FOOTER BUTTONS -------------- */
+  /** Renders the footer’s (Cancel / Confirm) buttons per step */
   const renderFooterButtons = () => {
     switch (bookingStep) {
       case 1:
-        // Step 1 => user picks date/time => we advance automatically
+        // Step 1 => user picks date/time => we auto-advance after selection
         return null;
       case 2:
+        // Step 2 => confirm booking details
         return (
           <AlertDialogAction
             onClick={handleConfirmBookingDetails}
@@ -229,14 +266,7 @@ export default function BookingDialog() {
             Confirm Details
           </AlertDialogAction>
         );
-      case 3:
-      case 4:
-      case 5:
-      case 6:
-      case 7:
-      case 8:
-        // Steps after 2 are custom flows. Rely on sub-components or no standard button
-        return null;
+      // Steps 3-8 have custom sub-components or no direct "action" button
       default:
         return null;
     }
@@ -253,6 +283,7 @@ export default function BookingDialog() {
         </AlertDialogHeader>
 
         <AlertDialogFooter>
+          {/* Cancel button => resets everything */}
           <AlertDialogCancel onClick={handleCancel}>Cancel</AlertDialogCancel>
           {renderFooterButtons()}
         </AlertDialogFooter>
