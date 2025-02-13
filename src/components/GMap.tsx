@@ -47,6 +47,7 @@ import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
 import GaussianSplatModal from "@/components/GaussianSplatModal";
+import TicketOptions from "@/components/booking/TicketOptions"; // <-- Import the new component
 
 // Constants
 import {
@@ -112,10 +113,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   });
 
   // Use the Three.js overlay hook, passing `actualMap`.
-  const { overlayRef, stationCubesRef } = useThreeOverlay(
-    actualMap,
-    stations
-  );
+  const { overlayRef, stationCubesRef } = useThreeOverlay(actualMap, stations);
 
   // Map + icon setup
   useEffect(() => {
@@ -344,7 +342,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // Confirm departure
+  // Confirm departure => step 3
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setOpenSheet("none");
@@ -393,7 +391,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
-  // Render
+  // Handlers for TicketOptions
+  const handleSelectSingleJourney = () => {
+    toast.success("You chose Single Journey. Fare calculation TBD.");
+    // Possibly dispatch(advanceBookingStep(6)) if that’s your final step...
+  };
+  const handleSelectPayAsYouGo = () => {
+    toast.success("You chose Pay-as-you-go. We'll store that soon!");
+  };
+
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Main Google Map */}
@@ -525,6 +531,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
         isOpen={isSplatModalOpen}
         onClose={() => setIsSplatModalOpen(false)}
       />
+
+      {/* Ticket Options => only shows if step === 5 */}
+      {bookingStep === 5 && (
+        <TicketOptions
+          onSelectSingleJourney={handleSelectSingleJourney}
+          onSelectPayAsYouGo={handleSelectPayAsYouGo}
+          onClose={() => {
+            // If you want a "close" button:
+            toast("Closed payment options");
+            // e.g. dispatch(advanceBookingStep(6)) or set some local state
+          }}
+        />
+      )}
     </div>
   );
 }
