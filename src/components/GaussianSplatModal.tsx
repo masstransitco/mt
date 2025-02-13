@@ -67,7 +67,7 @@ const LumaSplatModal: React.FC<LumaSplatModalProps> = ({ isOpen, onClose }) => {
     };
 
     // 3. Add a plane with the text "Hong Kong" (rot/pos all zero for now)
-    const textPlane = createTextPlane("Hong Kong");
+    const textPlane = createTextPlane();
     textPlane.position.set(0, 0, 0);
     scene.add(textPlane);
 
