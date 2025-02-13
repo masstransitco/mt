@@ -115,7 +115,11 @@ export default function BookingDialog() {
       })
         .then((res) => res.json())
         .then((data) => {
+          
           console.log('Booking created:', data);
+          setOpen(false);
+          dispatch(resetUserSelections());
+          dispatch(resetBookingFlow());
           // Show success message or route user
         })
         .catch((err) => {
