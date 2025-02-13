@@ -11,9 +11,9 @@ import { DISPATCH_HUB } from "@/constants/map";
  *  - Lights
  *  - Dispatch Cube
  *  - Station Cubes
- * 
- * We pass in the google Map instance + station data, 
- * and this hook sets up the overlay.
+ *
+ * We pass in the google Map instance + station data,
+ * and this hook sets up the overlay once both are ready.
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -25,32 +25,35 @@ export function useThreeOverlay(
   const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
   useEffect(() => {
-    // If no map or no stations, bail out
+    // 1) If no map or no stations, skip initialization
     if (!googleMap || stations.length === 0) return;
 
-    // 1) Create Scene
+    console.log("[useThreeOverlay] Initializing overlay...");
+
+    // 2) Create a new Scene
     const scene = new THREE.Scene();
     scene.background = null;
     sceneRef.current = scene;
 
-    // 2) Lights
+    // 3) Basic Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.25);
     directionalLight.position.set(0, 10, 50);
     scene.add(directionalLight);
 
-    // 3) Create Overlay
+    // 4) Create Overlay
+    //    Here we explicitly pass `THREE: typeof THREE`
+    //    so we don't need @ts-expect-error
     const overlay = new ThreeJSOverlayView({
       map: googleMap,
       scene,
       anchor: DISPATCH_HUB,
-      // @ts-expect-error
-      THREE,
+      THREE: THREE, // Provide the imported module as "THREE"
     });
     overlayRef.current = overlay;
 
-    // 4) Dispatch Cube
+    // 5) Dispatch Cube
     const dispatchCubeGeo = new THREE.BoxGeometry(50, 50, 50);
     const dispatchCubeMat = new THREE.MeshPhongMaterial({
       color: 0x00ff00,
@@ -68,7 +71,7 @@ export function useThreeOverlay(
     dispatchCube.scale.set(3, 3, 3);
     scene.add(dispatchCube);
 
-    // 5) Station Cubes
+    // 6) Station Cubes
     const cubes: THREE.Mesh[] = [];
     stations.forEach((station) => {
       const [lng, lat] = station.geometry.coordinates;
@@ -92,14 +95,15 @@ export function useThreeOverlay(
     });
     stationCubesRef.current = cubes;
 
-    // Cleanup when stations/map changes or unmount
+    // 7) Cleanup when stations/map changes or unmount
     return () => {
+      console.log("[useThreeOverlay] Cleaning up overlay...");
       // Remove overlay from map
       if (overlayRef.current) {
-        (overlayRef.current as any).setMap(null);
-      overlayRef.current = null;
+        overlayRef.current.setMap(null);
+        overlayRef.current = null;
       }
-      // Dispose all geometry/material
+      // Dispose geometry/material
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
           obj.geometry.dispose();
