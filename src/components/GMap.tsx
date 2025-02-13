@@ -251,12 +251,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const closeCurrentSheet = () => {
     const old = openSheet;
     if (old === "detail") {
-      // If user closes detail in step 2 => forcibly unselect
-      if (bookingStep === 2) {
-        dispatch(clearDepartureStation());
-        dispatch(advanceBookingStep(1));
-        toast.success("Departure station unselected (sheet closed)");
-      }
       setOpenSheet("none");
       setPreviousSheet("none");
       setForceSheetOpen(false);
