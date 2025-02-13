@@ -27,7 +27,6 @@ import {
   selectArrivalStationId,
   clearDepartureStation,
   clearArrivalStation,
-  selectIsSignedIn,
 } from "@/store/userSlice";
 import { toggleSheet, selectIsSheetMinimized } from "@/store/uiSlice";
 import {
@@ -48,7 +47,6 @@ import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
 import GaussianSplatModal from "./GaussianSplatModal";
-import TicketOptions from "@/components/booking/TicketOptions"; // For step=5 modal
 
 // Constants
 import {
@@ -84,13 +82,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
 
-  // This key forces StationDetail to re-mount if we switch to a new station
-  const [detailKey, setDetailKey] = useState(0);
-
-  // Force station detail open if user picks a station, ignoring prior sheet
+  // Force station detail to open if user picks a station
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
 
-  // Example modal for the special marker
+  // Used to force re-mounting StationDetail if user picks a new station
+  const [detailKey, setDetailKey] = useState(0);
+
+  // Example modal for a special marker
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
   const dispatch = useAppDispatch();
@@ -109,7 +107,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
   const bookingStep = useAppSelector(selectBookingStep);
-  const isUserSignedIn = useAppSelector(selectIsSignedIn);
 
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
@@ -246,7 +243,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // openNewSheet
+  // Open a new sheet
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -257,7 +254,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // closeCurrentSheet
+  // Close the current sheet
   const closeCurrentSheet = () => {
     const old = openSheet;
     if (old === "detail") {
@@ -359,22 +356,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setForceSheetOpen(false);
   };
 
-  // If user closes the TicketOptions => revert from step=5 to step=4
-  const handleTicketOptionsClose = () => {
-    toast("Closed payment options, returning to step=4");
-    dispatch(advanceBookingStep(4));
-  };
-
-  // Payment selections (step=5)
-  const handleSelectSingleJourney = () => {
-    toast.success("You chose Single Journey (placeholder).");
-    // Possibly dispatch(advanceBookingStep(6)) if that’s your next step
-  };
-  const handleSelectPayAsYouGo = () => {
-    toast.success("You chose Pay-as-you-go (placeholder).");
-  };
-
-  // On map load => fit bounds
+  // On map load => fit bounds to all station markers
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       setActualMap(map);
@@ -532,16 +514,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         isOpen={isSplatModalOpen}
         onClose={() => setIsSplatModalOpen(false)}
       />
-
-      {/* Ticket Options => only shows if step === 5 */}
-      {bookingStep === 5 && (
-        <TicketOptions
-          isUserSignedIn={isUserSignedIn}
-          onSelectSingleJourney={handleSelectSingleJourney}
-          onSelectPayAsYouGo={handleSelectPayAsYouGo}
-          onClose={handleTicketOptionsClose}
-        />
-      )}
     </div>
   );
 }
