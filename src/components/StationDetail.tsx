@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { memo } from 'react';
 import { MapPin, Navigation, Zap, Clock } from 'lucide-react';
@@ -19,9 +19,10 @@ import { StationFeature } from '@/store/stationsSlice';
 interface StationDetailProps {
   stations: StationFeature[];
   activeStation: StationFeature | null;
+
   /**
-   * If the parent wants to perform additional logic
-   * after confirming a departure station, pass this callback.
+   * Called if the user confirms departure in step=1 or step=2.
+   * For arrival, we handle it directly here.
    */
   onConfirmDeparture?: () => void;
 }
@@ -32,6 +33,7 @@ interface StationDetailProps {
  *  2 = selected_departure_station
  *  3 = selecting_arrival_station
  *  4 = selected_arrival_station
+ *  5 = payment
  */
 export const StationDetail = memo<StationDetailProps>((props) => {
   const { stations, activeStation, onConfirmDeparture } = props;
@@ -69,7 +71,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     );
   }
 
-  // Choose icon based on flow
+  // Icon based on flow
   const Icon = isDepartureFlow ? MapPin : Navigation;
 
   // If a route object is available, show distance/time
@@ -83,6 +85,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
   // Confirm station selection
   const handleConfirm = () => {
     if (isDepartureFlow) {
+      // DEPARTURE FLOW
       dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
 
       if (step === 1) {
@@ -98,19 +101,14 @@ export const StationDetail = memo<StationDetailProps>((props) => {
       // If parent wants extra logic on confirm
       onConfirmDeparture?.();
     } else {
-      // Arrival flow
+      // ARRIVAL FLOW
       dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
-
-      if (step === 3) {
-        // Step 3 => selected_arrival_station
-        dispatch(advanceBookingStep(4));
-        toast.success('Arrival station selected.');
-      } else if (step === 4) {
-        // Step 4 => step 5 (payment) or final steps
+      // Step=3 => step=4 is handled by GMap, so if we got here:
+      // we are likely in step=4 => we "Confirm Arrival" => step=5 => payment
+      if (step === 4) {
         dispatch(advanceBookingStep(5));
-        toast.success('Route confirmed! Next: payment or finalizing.');
+        toast.success('Arrival station confirmed! Opening payment options...');
       }
-      // If you had an onConfirmArrival prop, you’d call it here
     }
   };
 
