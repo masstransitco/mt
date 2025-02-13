@@ -69,8 +69,9 @@ interface GMapProps {
 type OpenSheetType = "none" | "car" | "list" | "detail";
 
 export default function GMap({ googleApiKey }: GMapProps) {
-  // Google Map ref
-  const mapRef = useRef<google.maps.Map | null>(null);
+  // We'll store the map in a piece of state so that once it's non-null,
+  // React re-renders and the hook sees a valid map object.
+  const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
 
   // Local UI states
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -110,9 +111,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Use the Three.js overlay hook
+  // Use the Three.js overlay hook, passing `actualMap`.
   const { overlayRef, stationCubesRef } = useThreeOverlay(
-    mapRef.current,
+    actualMap,
     stations
   );
 
@@ -200,9 +201,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Handle address search => pan to location, sort stations
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
-      if (!mapRef.current) return;
-      mapRef.current.panTo(location);
-      mapRef.current.setZoom(15);
+      if (!actualMap) return;
+      actualMap.panTo(location);
+      actualMap.setZoom(15);
 
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSearchLocation(location);
@@ -212,7 +213,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         dispatch(toggleSheet());
       }
     },
-    [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
+    [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint, actualMap]
   );
 
   // Clear departure => step 1
@@ -282,9 +283,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         dispatch(setUserLocation(loc));
-        if (mapRef.current) {
-          mapRef.current.panTo(loc);
-          mapRef.current.setZoom(15);
+        if (actualMap) {
+          actualMap.panTo(loc);
+          actualMap.setZoom(15);
         }
         const sorted = sortStationsByDistanceToPoint(loc, stations);
         setSearchLocation(loc);
@@ -343,49 +344,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // Raycasting effect for 3D cubes
-  useEffect(() => {
-    if (!overlayRef.current) return;
-
-    // We must import THREE here or at the top:
-    // But often you can just do it at the top:
-    // import * as THREE from 'three';
-    // Doing it inline for clarity in this snippet:
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const THREE = require("three");
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function onOverlayClick(event: MouseEvent) {
-      const canvas = (overlayRef.current as any).canvas || document.querySelector("canvas");
-      if (!canvas) return;
-
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-      const camera = (overlayRef.current as any)?.camera;
-      if (!camera) return;
-
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObjects(stationCubesRef.current, true);
-      if (intersects.length > 0) {
-        const station = intersects[0].object.userData.station;
-        if (station) {
-          handleStationClick(station);
-        }
-      }
-    }
-
-    const canvas = (overlayRef.current as any).canvas || document.querySelector("canvas");
-    if (canvas) {
-      canvas.addEventListener("click", onOverlayClick, false);
-      return () => {
-        canvas.removeEventListener("click", onOverlayClick);
-      };
-    }
-  }, [overlayRef, stationCubesRef, handleStationClick]);
-
   // Confirm departure
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
@@ -401,10 +359,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, []);
 
-  // On map load => bounding
+  // On map load => bounding & set state
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
-      mapRef.current = map;
+      console.log("[GMap] handleMapLoad => map loaded");
+      setActualMap(map); // <--- Store the map in state
       if (stations.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         stations.forEach((station) => {
@@ -444,7 +403,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           center={userLocation || DEFAULT_CENTER}
           zoom={DEFAULT_ZOOM}
           options={mapOptions || {}}
-          onLoad={handleMapLoad}
+          onLoad={handleMapLoad} // sets actualMap, triggers overlay effect
         >
           {/* User Location Marker */}
           {userLocation && markerIcons && (
