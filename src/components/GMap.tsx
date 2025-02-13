@@ -41,7 +41,6 @@ import {
   selectStations3D,
 } from "@/store/stations3DSlice";
 
-// UI
 import Sheet from "@/components/ui/sheet";
 import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -50,7 +49,6 @@ import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
 import GaussianSplatModal from "@/components/GaussianSplatModal";
 
-// Map config
 import {
   LIBRARIES,
   MAP_CONTAINER_STYLE,
@@ -69,7 +67,6 @@ interface GMapProps {
 type OpenSheetType = "none" | "car" | "list" | "detail";
 
 export default function GMap({ googleApiKey }: GMapProps) {
-  // Refs
   const mapRef = useRef<google.maps.Map | null>(null);
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -82,7 +79,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Which sheet is open?
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [detailKey, setDetailKey] = useState(0);
@@ -106,7 +102,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Load Google Maps
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: googleApiKey,
@@ -121,7 +116,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Fetch stations, cars, 3D
   useEffect(() => {
     (async () => {
       try {
@@ -137,14 +131,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Hide overlay once stations/cars are loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Error check
   const hasError = stationsError || carsError || loadError;
   if (hasError) {
     return (
@@ -162,7 +154,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Auto-fetch route if departure & arrival
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -194,7 +185,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // StationSelector => onAddressSearch
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!mapRef.current) return;
@@ -212,7 +202,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Clear station from StationSelector
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
@@ -235,7 +224,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // openNewSheet
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -246,11 +234,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // closeCurrentSheet
   const closeCurrentSheet = () => {
     const old = openSheet;
     if (old === "detail") {
-      // If user closes detail in step 2 => forcibly unselect
+      // if user closes detail in step 2 => forcibly unselect
       if (bookingStep === 2) {
         dispatch(clearDepartureStation());
         dispatch(advanceBookingStep(1));
@@ -259,17 +246,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setOpenSheet("none");
       setPreviousSheet("none");
       setForceSheetOpen(false);
-
-      // Ensure 3D overlay can redraw if needed
       overlayRef.current?.requestRedraw();
     } else {
-      // For "car" or "list", revert to the previous sheet
       setOpenSheet(previousSheet);
       setPreviousSheet("none");
     }
   };
 
-  // "Locate me"
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -296,7 +279,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // "Car" sheet toggle
   const handleCarToggle = () => {
     if (openSheet === "car") {
       closeCurrentSheet();
@@ -305,7 +287,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Station selection (marker or list)
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep < 3) {
@@ -315,7 +296,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       }
       setDetailKey((prev) => prev + 1);
 
-      // Force sheet to open the detail
       setForceSheetOpen(true);
       setOpenSheet("detail");
       setPreviousSheet("none");
@@ -340,7 +320,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // 3D overlay click logic
   useEffect(() => {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -379,7 +358,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [handleStationClick]);
 
-  // Confirm departure => step 2 -> step 3
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setOpenSheet("none");
@@ -393,7 +371,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, []);
 
-  // Setup map & 3D
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
@@ -445,7 +422,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatchCube.scale.set(3, 3, 3);
       scene.add(dispatchCube);
 
-      // Station cubes
       stations.forEach((station) => {
         const [lng, lat] = station.geometry.coordinates;
         const stationCubePos = overlay.latLngAltitudeToVector3({
@@ -470,7 +446,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [stations]
   );
 
-  // Clean up 3D on unmount
   useEffect(() => {
     return () => {
       if (overlayRef.current) {
@@ -494,7 +469,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     };
   }, []);
 
-  // Marker icons
   const getStationIcon = (station: StationFeature) => {
     if (!markerIcons) return undefined;
     if (station.id === departureStationId) return markerIcons.departureStation;
@@ -511,6 +485,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
+
+  // We'll keep each sheet in the DOM but toggle `isOpen`.
+  const isCarOpen = openSheet === "car";
+  const isListOpen = openSheet === "list";
+  // For detail sheet, we also check `forceSheetOpen` & that we have a station
+  const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -532,7 +512,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Special marker at the INTER_CC location */}
           {markerIcons && (
             <Marker
               position={INTER_CC}
@@ -542,7 +521,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Station Markers */}
           {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
             return (
@@ -555,7 +533,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             );
           })}
 
-          {/* Car Markers */}
           {cars.map((car) => (
             <Marker
               key={car.id}
@@ -590,52 +567,52 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </button>
       </div>
 
-      {/* Car Sheet */}
-      {openSheet === "car" && (
-        <CarSheet isOpen onToggle={handleCarToggle} />
-      )}
+      {/* Car Sheet (Always in DOM, but toggled) */}
+      <CarSheet
+        isOpen={isCarOpen}
+        onToggle={handleCarToggle}
+      />
 
-      {/* Station list sheet */}
-      {openSheet === "list" && (
-        <Sheet
-          isOpen
-          onToggle={closeCurrentSheet}
-          title="Nearby Stations"
-          count={sortedStations.length}
-        >
-          <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-            {sortedStations.map((station, idx) => (
-              <StationListItem
-                key={station.id}
-                index={idx}
-                style={{}}
-                data={{
-                  items: sortedStations,
-                  onStationSelected: () => handleStationSelectedFromList(station),
-                }}
-              />
-            ))}
-          </div>
-        </Sheet>
-      )}
+      {/* Station list sheet (Always in DOM, but toggled) */}
+      <Sheet
+        isOpen={isListOpen}
+        onToggle={closeCurrentSheet}
+        title="Nearby Stations"
+        count={sortedStations.length}
+      >
+        <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+          {sortedStations.map((station, idx) => (
+            <StationListItem
+              key={station.id}
+              index={idx}
+              style={{}}
+              data={{
+                items: sortedStations,
+                onStationSelected: () => handleStationSelectedFromList(station),
+              }}
+            />
+          ))}
+        </div>
+      </Sheet>
 
-      {/* Station detail sheet */}
-      {(openSheet === "detail" || forceSheetOpen) && stationToShow && (
-        <Sheet
-          key={detailKey}
-          isOpen
-          onToggle={closeCurrentSheet}
-          title="Station Details"
-          count={(searchLocation ? sortedStations : stations).length}
-        >
+      {/* Station detail sheet (Always in DOM, but toggled) */}
+      <Sheet
+        key={detailKey}
+        isOpen={isDetailOpen}
+        onToggle={closeCurrentSheet}
+        title="Station Details"
+        count={(searchLocation ? sortedStations : stations).length}
+      >
+        {/* If stationToShow is null, you might want fallback UI */}
+        {stationToShow && (
           <StationDetail
             key={detailKey}
             stations={searchLocation ? sortedStations : stations}
             activeStation={stationToShow}
             onConfirmDeparture={handleConfirmDeparture}
           />
-        </Sheet>
-      )}
+        )}
+      </Sheet>
 
       {/* GaussianSplatModal */}
       <GaussianSplatModal
