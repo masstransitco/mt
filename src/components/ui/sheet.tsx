@@ -29,8 +29,6 @@ const Sheet = ({
       // Restore normal overflow
       document.body.style.overflow = "";
     }
-
-    // Cleanup if this component unmounts while open, just in case
     return () => {
       document.body.style.overflow = "";
     };
@@ -40,7 +38,11 @@ const Sheet = ({
     <div
       className={cn(
         "fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm",
-        "overflow-hidden transition-all duration-300 ease-in-out",
+        // ↑ Overflow hidden so we can animate the max-height smoothly
+        "overflow-hidden",
+        // ↓ Animate only the max-height property, over 0.5s with an ease-in-out curve
+        "transition-[max-height] duration-500 ease-in-out",
+        // If open => max-height is 50vh; if closed => max-height is 0
         isOpen ? "max-h-[50vh]" : "max-h-0",
         className
       )}
