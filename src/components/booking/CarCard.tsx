@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 
 import { Battery, Gauge, Check } from 'lucide-react';
-import type { Car } from '@/types/cars'; // Ensure this matches where your Car type is exported
+import type { Car } from '@/types/cars';
 
 // Dynamically load the 3D viewer for performance
 const Car3DViewer = dynamic(() => import('./Car3DViewer'), {
@@ -34,7 +34,7 @@ function CarCardComponent({
   const [shouldLoad3D, setShouldLoad3D] = useState(false);
 
   useEffect(() => {
-    // Only load 3D model if the car is selected
+    // Only load 3D model if selected
     if (selected && !shouldLoad3D) {
       setShouldLoad3D(true);
     }
@@ -70,12 +70,13 @@ function CarCardComponent({
       <div
         className={`
           relative w-full transition-all duration-300
-          ${selected ? 'aspect-[16/9]' : 'aspect-square'}
+          // --- CHANGED HERE: bigger ratio => about 30% less height ---
+          ${selected ? 'aspect-[5/2]' : 'aspect-[3/2]'}
         `}
       >
         {isVisible && (
           <>
-            {/* Show placeholder image if not selected or 3D not loaded */}
+            {/* If not selected or 3D not loaded, show the image */}
             {(!selected || !shouldLoad3D) && (
               <div className="absolute inset-0">
                 <Image
@@ -93,7 +94,7 @@ function CarCardComponent({
               </div>
             )}
 
-            {/* Load 3D viewer only when selected */}
+            {/* If selected & 3D loaded, show the 3D viewer */}
             {shouldLoad3D && selected && (
               <div className="absolute inset-0 transition-opacity duration-300">
                 <Car3DViewer
@@ -110,7 +111,7 @@ function CarCardComponent({
         )}
       </div>
 
-      {/* Car information */}
+      {/* Car details */}
       <div className={`p-${isSmall ? '3' : '4'}`}>
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -164,5 +165,5 @@ function CarCardComponent({
   );
 }
 
-// Wrap with React.memo for slight performance improvement
+// Wrap in React.memo for performance
 export default memo(CarCardComponent);
