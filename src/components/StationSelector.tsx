@@ -308,7 +308,7 @@ export default function StationSelector({
           <AddressSearch
             onAddressSelect={onAddressSearch}
             disabled={step >= 3} // disable if user is picking arrival
-            placeholder="Search for departure station"
+            placeholder="Search here"
             selectedStation={departureStation}
           />
 
@@ -344,7 +344,7 @@ export default function StationSelector({
             <AddressSearch
               onAddressSelect={onAddressSearch}
               disabled={step < 3}
-              placeholder="Search for arrival station"
+              placeholder="Search here"
               selectedStation={arrivalStation}
             />
 
