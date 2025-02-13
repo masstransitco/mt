@@ -1,22 +1,25 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useAppSelector, useAppDispatch } from '@/store/store';
+import React, { useState, useEffect } from "react";
+import { useAppSelector, useAppDispatch } from "@/store/store";
 
-// userSlice: we assume you have two station IDs now
-import { resetUserSelections } from '@/store/userSlice';
-import { selectDepartureStationId, selectArrivalStationId } from '@/store/userSlice';
+// userSlice
+import { resetUserSelections } from "@/store/userSlice";
+import {
+  selectDepartureStationId,
+  selectArrivalStationId,
+} from "@/store/userSlice";
 
-// bookingSlice: step flow, departure date, etc.
+// bookingSlice
 import {
   advanceBookingStep,
   selectBookingStep,
   selectDepartureDate,
   setDepartureDate,
   resetBookingFlow,
-} from '@/store/bookingSlice';
+} from "@/store/bookingSlice";
 
-import { format } from 'date-fns';
+import { format } from "date-fns";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -26,11 +29,27 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
   AlertDialogAction,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 
-// Example: Additional step components for ID verification + payment
-import IDVerificationStep from './IDVerificationStep';
-import PaymentStep from './PaymentStep';
+// Additional step components (examples)
+import IDVerificationStep from "./IDVerificationStep";
+import PaymentStep from "./PaymentStep";
+
+/** 
+ * Optional step 6: show a success or summary screen. 
+ * You can replace this with a redirect, or simply 
+ * not have a step 6 if you prefer.
+ */
+function BookingCompleteStep() {
+  return (
+    <div className="space-y-4">
+      <h3 className="font-medium">Booking Complete</h3>
+      <p className="text-sm text-muted-foreground">
+        Your booking has been successfully created.
+      </p>
+    </div>
+  );
+}
 
 export default function BookingDialog() {
   const dispatch = useAppDispatch();
@@ -38,7 +57,7 @@ export default function BookingDialog() {
   // If you store selectedCarId in userSlice
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
-  // The two-station approach: departure + arrival
+  // Station IDs
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
@@ -50,11 +69,11 @@ export default function BookingDialog() {
   const [open, setOpen] = useState<boolean>(false);
 
   /**
-   * When the user has:
+   * If the user has:
    * - selected a car
    * - selected a departure station
    * - selected an arrival station
-   * We automatically open the booking dialog.
+   * => automatically open the booking dialog.
    */
   useEffect(() => {
     if (selectedCarId && departureStationId && arrivalStationId) {
@@ -93,9 +112,8 @@ export default function BookingDialog() {
   };
 
   /**
-   * STEP 5: Finalizing the booking
-   * If bookingStep=5, we create the booking in an effect
-   * so it runs once.
+   * STEP 5: Finalizing the booking => We'll create the booking 
+   * only once when entering step 5. Then move to step 6 (success).
    */
   useEffect(() => {
     if (bookingStep === 5) {
@@ -104,32 +122,24 @@ export default function BookingDialog() {
         departureStationId,
         arrivalStationId,
         departureDate,
-        // e.g. ID docs, payment method, etc. if in bookingSlice
       };
 
       // Example POST to your /api/bookings endpoint
-      fetch('/api/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bookingPayload),
       })
         .then((res) => res.json())
         .then((data) => {
-          
-          console.log('Booking created:', data);
-          setOpen(false);
-          dispatch(resetUserSelections());
-          dispatch(resetBookingFlow());
+          console.log("Booking created:", data);
           // Show success message or route user
+          // Move to step 6 => "Booking complete"
+          dispatch(advanceBookingStep(6));
         })
         .catch((err) => {
-          console.error('Booking creation error:', err);
-        })
-        .finally(() => {
-          // Close dialog & reset
-          setOpen(false);
-          dispatch(resetUserSelections());
-          dispatch(resetBookingFlow());
+          console.error("Booking creation error:", err);
+          // If error => maybe set step=4 or show a toast, up to you
         });
     }
   }, [
@@ -158,22 +168,23 @@ export default function BookingDialog() {
         );
       case 2:
         // Show summary of car & stations & date
+        if (!departureDate) return null;
         return (
-          departureDate && (
-            <div className="space-y-4">
-              <h3 className="font-medium">Confirm Booking Details</h3>
-              <div className="bg-accent/10 p-4 rounded space-y-2">
-                <p className="text-foreground">Vehicle: Car #{selectedCarId}</p>
-                <p className="text-foreground">
-                  Departure Station: #{departureStationId}
-                </p>
-                <p className="text-foreground">Arrival Station: #{arrivalStationId}</p>
-                <p className="text-foreground">
-                  Departure: {format(departureDate, 'PPpp')}
-                </p>
-              </div>
+          <div className="space-y-4">
+            <h3 className="font-medium">Confirm Booking Details</h3>
+            <div className="bg-accent/10 p-4 rounded space-y-2">
+              <p className="text-foreground">Vehicle: Car #{selectedCarId}</p>
+              <p className="text-foreground">
+                Departure Station: #{departureStationId}
+              </p>
+              <p className="text-foreground">
+                Arrival Station: #{arrivalStationId}
+              </p>
+              <p className="text-foreground">
+                Departure: {format(departureDate, "PPpp")}
+              </p>
             </div>
-          )
+          </div>
         );
       case 3:
         // ID Verification step
@@ -181,6 +192,17 @@ export default function BookingDialog() {
       case 4:
         // Payment step
         return <PaymentStep onPaymentComplete={handlePaymentComplete} />;
+      case 5:
+        // Step 5 => you can show a loading spinner "Finalizing..."
+        return (
+          <div className="space-y-4 text-center">
+            <p className="font-medium text-sm">Finalizing your booking...</p>
+            {/* Or a spinner, up to you */}
+          </div>
+        );
+      case 6:
+        // Step 6 => booking complete
+        return <BookingCompleteStep />;
       default:
         return null;
     }
@@ -190,7 +212,7 @@ export default function BookingDialog() {
   const renderFooterButtons = () => {
     switch (bookingStep) {
       case 1:
-        // Step 1 auto-advances after user picks date/time
+        // Step 1 => date/time => auto-advance after user picks date
         return null;
       case 2:
         return (
@@ -203,13 +225,21 @@ export default function BookingDialog() {
         );
       case 3:
       case 4:
-        // Steps 3 & 4 have their own internal flows
+        // Steps 3 & 4 have internal flows (IDVerification, Payment)
+        return null;
+      case 5:
+        // Step 5 => finalizing => show no buttons or a "Please wait..."
+        return null;
+      case 6:
+        // Step 6 => Booking complete => user might close
         return null;
       default:
         return null;
     }
   };
 
+  // If the user closes the dialog at step>=2, do you want to reset? 
+  // It's up to you, but we'll keep the "Cancel" = handleCancel => reset.
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogContent className="sm:max-w-md">
