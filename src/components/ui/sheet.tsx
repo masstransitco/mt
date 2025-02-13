@@ -54,7 +54,7 @@ const Sheet = ({
             <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             {typeof count === "number" && (
               <p className="text-sm text-muted-foreground">
-                {count} stations found
+                {count} {countLabel ?? "stations found"}
               </p>
             )}
           </div>
