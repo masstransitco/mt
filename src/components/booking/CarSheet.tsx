@@ -21,7 +21,7 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
     <Sheet
       isOpen={isOpen}
       onToggle={onToggle}
-      title="Available Cars"
+      title="Choose a car"
       count={cars.length}
       countLabel="cars available for dispatch"
     >
