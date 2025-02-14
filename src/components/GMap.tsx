@@ -197,6 +197,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           -((event.clientY - rect.top) / rect.height) * 2 + 1
         );
         const intersections = overlayRef.current!.raycast(mouse);
+        console.log("Intersections:", intersections);
         if (intersections.length > 0) {
           const intersected = intersections[0].object;
           const station = intersected.userData.station;
