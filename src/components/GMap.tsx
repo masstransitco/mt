@@ -121,7 +121,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   });
 
   // Use the Three.js overlay hook
-  const { overlayRef } = useThreeOverlay(actualMap, stations);
+  const { overlayRef } = useThreeOverlay(
+  actualMap,
+  stations,
+  departureStationId,
+  arrivalStationId
+);
 
    // Station click => departure or arrival
   const handleStationClick = useCallback(
