@@ -7,7 +7,8 @@ import { selectCar } from "@/store/userSlice";
 import { fetchCars } from "@/store/carSlice";
 import { selectViewState } from "@/store/uiSlice";
 import CarCard from "./CarCard";
-import { useAvailableCarsForDispatch } from "@/lib/dispatchManager"; // <-- Import the custom hook
+import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
+import { fetchDispatchLocations } from "@/store/dispatchSlice";
 
 interface CarGridProps {
   className?: string;
@@ -16,8 +17,13 @@ interface CarGridProps {
 export default function CarGrid({ className = "" }: CarGridProps) {
   const dispatch = useAppDispatch();
 
-  // Get available cars for dispatch via the custom hook.
-  // This hook calculates and updates the Redux store using dispatch locations.
+  // Ensure both cars and dispatch locations are loaded:
+  useEffect(() => {
+    dispatch(fetchCars());
+    dispatch(fetchDispatchLocations());
+  }, [dispatch]);
+
+  // Use the custom hook which filters cars based on dispatch locations.
   const availableCars = useAvailableCarsForDispatch();
 
   // Which car is currently selected? (from userSlice)
@@ -25,11 +31,6 @@ export default function CarGrid({ className = "" }: CarGridProps) {
 
   // UI: which screen are we on? (from uiSlice)
   const viewState = useAppSelector(selectViewState);
-
-  // On mount, fetch the full list of cars
-  useEffect(() => {
-    dispatch(fetchCars());
-  }, [dispatch]);
 
   // Log available cars when they change
   useEffect(() => {
@@ -67,7 +68,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     dispatch(selectCar(carId));
   };
 
-  // Hide/show this grid based on the view state
+  // Hide/show this grid based on the current view state
   const isVisible = viewState === "showCar";
 
   return (
@@ -121,7 +122,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
           </AnimatePresence>
         </div>
 
-        {/* If no cars found */}
+        {/* Fallback when no cars match the criteria */}
         {!selectedCar && otherCars.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
