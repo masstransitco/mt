@@ -1,15 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-// import { Filter } from "lucide-react"; // We'll comment out the filter usage
-
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectCar } from "@/store/userSlice";
-import { selectAllCars, fetchCars } from "@/store/carSlice";
+import { fetchCars, selectAvailableForDispatch } from "@/store/carSlice";
 import { selectViewState } from "@/store/uiSlice";
-
-import CarCard from "./CarCard"; // The CarCard component
+import CarCard from "./CarCard";
 
 interface CarGridProps {
   className?: string;
@@ -18,18 +15,14 @@ interface CarGridProps {
 export default function CarGrid({ className = "" }: CarGridProps) {
   const dispatch = useAppDispatch();
 
-  // We fetch cars from Redux store (carSlice)
-  const allCars = useAppSelector(selectAllCars);
+  // Fetch available cars for dispatch from Redux store
+  const availableCars = useAppSelector(selectAvailableForDispatch);
 
   // Which car is currently selected? (userSlice)
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
   // UI: which screen are we on? (uiSlice)
   const viewState = useAppSelector(selectViewState);
-
-  // We'll keep these states in case we add them back later
-  const [filterType, setFilterType] = useState("all");
-  const [showFilters, setShowFilters] = useState(false);
 
   // On mount, fetch cars if needed
   useEffect(() => {
@@ -38,18 +31,18 @@ export default function CarGrid({ className = "" }: CarGridProps) {
 
   // Log the fetched cars on mount or whenever they change
   useEffect(() => {
-    if (allCars.length > 0) {
-      console.log("[CarGrid] Fetched cars:", allCars);
+    if (availableCars.length > 0) {
+      console.log("[CarGrid] Available cars for dispatch:", availableCars);
     }
-  }, [allCars]);
+  }, [availableCars]);
 
   // If no car is selected, default to the first available car
   useEffect(() => {
-    if (!selectedCarId && allCars.length > 0) {
-      console.log("[CarGrid] No car selected yet. Defaulting to first car:", allCars[0]);
-      dispatch(selectCar(allCars[0].id));
+    if (!selectedCarId && availableCars.length > 0) {
+      console.log("[CarGrid] No car selected yet. Defaulting to first car:", availableCars[0]);
+      dispatch(selectCar(availableCars[0].id));
     }
-  }, [allCars, dispatch, selectedCarId]);
+  }, [availableCars, dispatch, selectedCarId]);
 
   // Log whenever the selectedCarId changes
   useEffect(() => {
@@ -62,18 +55,11 @@ export default function CarGrid({ className = "" }: CarGridProps) {
 
   // Filter logic for the car list
   const { selectedCar, otherCars } = useMemo(() => {
-    const carData = allCars;
-
-    const filtered =
-      filterType === "all"
-        ? carData
-        : carData.filter((car) => car.type.toLowerCase() === filterType.toLowerCase());
-
     return {
-      selectedCar: filtered.find((car) => car.id === selectedCarId),
-      otherCars: filtered.filter((car) => car.id !== selectedCarId),
+      selectedCar: availableCars.find((car) => car.id === selectedCarId),
+      otherCars: availableCars.filter((car) => car.id !== selectedCarId),
     };
-  }, [allCars, filterType, selectedCarId]);
+  }, [availableCars, selectedCarId]);
 
   const handleSelectCar = (carId: number) => {
     dispatch(selectCar(carId));
@@ -90,9 +76,6 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         visibility: isVisible ? "visible" : "hidden",
       }}
     >
-      {/* (Header with filters commented out) */}
-
-      {/* Car grid with selected car on top */}
       <div className="space-y-6">
         {/* Selected Car */}
         {selectedCar && (
