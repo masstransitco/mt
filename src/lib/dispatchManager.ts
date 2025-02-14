@@ -5,6 +5,12 @@ import { useEffect } from "react";
 
 const RADIUS_METERS = 150;
 
+interface DispatchLocation {
+  id: number;
+  lat: number;
+  lng: number;
+}
+
 export function useAvailableCarsForDispatch() {
   const cars = useAppSelector(selectAllCars);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
@@ -12,7 +18,7 @@ export function useAvailableCarsForDispatch() {
 
   useEffect(() => {
     const availableCars = cars.filter((car) => {
-      return dispatchLocations.some((dispatch) => {
+      return dispatchLocations.some((dispatch: DispatchLocation) => {
         const distance = calculateDistance(car.lat, car.lng, dispatch.lat, dispatch.lng);
         return distance <= RADIUS_METERS;
       });
