@@ -3,7 +3,7 @@
 import React, { memo } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Battery, Gauge, Check } from "lucide-react";
+import { Check, Gauge } from "lucide-react";
 import type { Car } from "@/types/cars";
 
 // Dynamically load the 3D viewer for performance; also ensure Car3DViewer is memoized
@@ -29,8 +29,6 @@ function CarCardComponent({
   isVisible = true,
   size = "large",
 }: CarCardProps) {
-  // We can unify to a fixed aspect ratio for consistent sizing
-  // Starting scale: 0.98. If the card is selected, it scales to 1.0
   return (
     <motion.div
       initial={{ scale: 0.98 }}
@@ -42,12 +40,7 @@ function CarCardComponent({
         transition-all duration-300
         border border-border/50
         hover:border-border
-        ${
-          selected
-            ? // White glow highlight
-              "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white"
-            : ""
-        }
+        ${selected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
       `}
     >
       {/* "Selected" badge in top-right corner */}
@@ -78,38 +71,26 @@ function CarCardComponent({
       {/* Car details */}
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
+          {/* Left side: Car name + Odometer */}
           <div>
             <h3 className="font-semibold text-foreground text-base">
               {car.name}
             </h3>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <Battery className="w-4 h-4" />
-              <span>{car.type}</span>
+              {/* Odometer display (replace battery icon) */}
+              <Gauge className="w-4 h-4" />
+              <span>{car.odometer} km</span>
             </div>
           </div>
+
+          {/* Right side: Model + Year */}
           <div className="text-right">
-            <p className="font-bold text-foreground text-lg">${car.price}</p>
-            <p className="text-sm text-muted-foreground">per day</p>
+            {/* Replace price with the car.model */}
+            <p className="font-bold text-foreground text-lg">{car.model}</p>
+            {/* Replace "per day" with the car.year */}
+            <p className="text-sm text-muted-foreground">{car.year}</p>
           </div>
         </div>
-
-        {/* Optional feature details */}
-        {car.features && (
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {car.features.range && (
-              <div className="flex items-center gap-1">
-                <Gauge className="w-3.5 h-3.5" />
-                <span>{car.features.range} mi</span>
-              </div>
-            )}
-            {car.features.charging && (
-              <div className="flex items-center gap-1">
-                <Battery className="w-3.5 h-3.5" />
-                <span>{car.features.charging}</span>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </motion.div>
   );
