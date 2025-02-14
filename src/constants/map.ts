@@ -134,8 +134,8 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   zoomControl: false, // hide zoom controls
   gestureHandling: 'greedy',
   backgroundColor: '#212121',
-  maxZoom: 18,
-  minZoom: 8,
+  maxZoom: 19,
+  minZoom: 6,
   clickableIcons: false,
   styles: MAP_STYLES,
   mapId: 'c7d03d22763bc313',
