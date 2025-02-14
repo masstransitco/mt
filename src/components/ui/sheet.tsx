@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useLayoutEffect, useMemo, useRef, useEffect } from "react";
+import React, { ReactNode, useLayoutEffect, useMemo, useRef, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
@@ -49,7 +49,7 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>();
 
-  const animate = (currentTime: number) => {
+  const animate = useCallback((currentTime: number) => {
     if (!startTimeRef.current) startTimeRef.current = currentTime;
     if (!stripRef.current) return;
 
@@ -88,22 +88,24 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
     } else if (progress < 0.7) {
       // Rest period
       scale = ANIMATION_PARAMS.scales.min;
+      color = ANIMATION_PARAMS.colors.primary;
       opacity = 0.8;
       shadowIntensity = 0.3;
     }
 
-    stripRef.current.style.transform = `scale(${scale})`;  // Fixed from scale(${scale})
+    stripRef.current.style.transform = `scale(${scale})`;
     stripRef.current.style.backgroundColor = color;
     stripRef.current.style.opacity = opacity.toString();
-    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0, 0, 0, ${shadowIntensity})`; // Fixed missing backticks
+    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0, 0, 0, ${shadowIntensity})`;
 
     animationRef.current = requestAnimationFrame(animate);
-  };
+  }, []);
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     
     if (!prefersReducedMotion) {
+      startTimeRef.current = undefined; // Reset the start time
       animationRef.current = requestAnimationFrame(animate);
     }
 
@@ -112,7 +114,7 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [animate]);
 
   const styles = useMemo(() => ({
     width: '99%',
@@ -120,7 +122,8 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
     borderRadius: '1.5px',
     backgroundColor: ANIMATION_PARAMS.colors.primary,
     willChange: 'transform, opacity, box-shadow',
-    transition: 'transform 0.05s ease-out'
+    transition: 'transform 0.05s ease-out',
+    transformOrigin: 'center' // Added to ensure scaling happens from center
   }), []);
 
   return (
