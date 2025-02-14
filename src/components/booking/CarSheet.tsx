@@ -25,7 +25,7 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
       count={cars.length}
       countLabel="cars available for dispatch"
     >
-      <div className="px-4 py-2">
+      <div className="px-2 py-0">
         <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
       </div>
     </Sheet>
