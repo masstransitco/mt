@@ -223,23 +223,40 @@ export default function GMap({ googleApiKey }: GMapProps) {
 };
 
         const onCanvasTouchEnd = (event: TouchEvent) => {
-          const touch = event.changedTouches[0];
-          const rect = canvas.getBoundingClientRect();
-          const mouse = new THREE.Vector2(
-  ((event.clientX - rect.left + window.scrollX) / rect.width) * 2 - 1,
-  -((event.clientY - rect.top + window.scrollY) / rect.height) * 2 + 1
-);
-          raycaster.setFromCamera(mouse, camera);
-          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
-          console.log("Intersections (touch):", intersections);
-          if (intersections.length > 0) {
-            const intersected = intersections[0].object;
-            const station = intersected.userData.station;
-            if (station) {
-              handleStationClick(station);
-            }
-          }
-        };
+  event.preventDefault(); // Prevent default touch behavior
+  
+  const touch = event.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  
+  // Use touch.clientX and touch.clientY instead of event.clientX/clientY
+  const mouse = new THREE.Vector2(
+    ((touch.clientX - rect.left + window.scrollX) / rect.width) * 2 - 1,
+    -((touch.clientY - rect.top + window.scrollY) / rect.height) * 2 + 1
+  );
+
+  // Add debug logging
+  console.log("Touch coordinates:", { x: touch.clientX, y: touch.clientY });
+  console.log("Normalized touch coords:", mouse);
+  console.log("Camera:", {
+    position: camera.position,
+    rotation: camera.rotation
+  });
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
+
+  console.log("Number of cubes:", stationCubesRef.current.length);
+  console.log("Intersections found:", intersections.length);
+
+  if (intersections.length > 0) {
+    const intersected = intersections[0].object;
+    console.log("Intersected object:", intersected);
+    const station = intersected.userData.station;
+    if (station) {
+      handleStationClick(station);
+    }
+  }
+};
 
         canvas.addEventListener("click", onCanvasClick);
         canvas.addEventListener("touchend", onCanvasTouchEnd);
