@@ -18,6 +18,28 @@ import { setAuthUser, signOutUser } from '@/store/userSlice';
 const inter = Inter({ subsets: ['latin'] });
 
 /**
+ * Component to disable pinch-to-zoom.
+ * It listens for touchmove events and, if more than one finger is detected,
+ * prevents the default behavior.
+ */
+function DisablePinchZoom() {
+  useEffect(() => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      document.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
+  return null;
+}
+
+/**
  * Child component that lives INSIDE the ReduxProvider,
  * so it can safely call useAppDispatch / useAppSelector.
  */
@@ -79,6 +101,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className={`${inter.className} h-full overflow-x-hidden bg-background`}>
+        {/* Disable pinch-to-zoom on mobile browsers */}
+        <DisablePinchZoom />
         {/* Provide Redux to all child components */}
         <ReduxProvider>
           <LayoutInner>{children}</LayoutInner>
