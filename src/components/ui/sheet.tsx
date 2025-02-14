@@ -5,8 +5,27 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
+// Define types for animation values
+type AnimationColor = string;
+type Scale = number;
+
+interface AnimationParams {
+  duration: number;
+  colors: {
+    primary: AnimationColor;
+    secondary: AnimationColor;
+    tertiary: AnimationColor;
+  };
+  scales: {
+    min: Scale;
+    max: Scale;
+    mid: Scale;
+    soft: Scale;
+  };
+}
+
 // Animation parameters memoized to prevent recreation
-const ANIMATION_PARAMS = {
+const ANIMATION_PARAMS: AnimationParams = {
   duration: 1400, // 1.4s in milliseconds
   colors: {
     primary: '#2171ec',
@@ -19,11 +38,7 @@ const ANIMATION_PARAMS = {
     mid: 0.97,
     soft: 1.02
   }
-} as const;
-
-// Define type for animation parameters
-type AnimationParams = typeof ANIMATION_PARAMS;
-type Scale = number;
+};
 
 interface PulsatingStripProps {
   className?: string;
@@ -43,7 +58,7 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
 
     // Calculate animation values based on progress
     let scale: Scale = ANIMATION_PARAMS.scales.min;
-    let color = ANIMATION_PARAMS.colors.primary;
+    let color: AnimationColor = ANIMATION_PARAMS.colors.primary;
     let opacity = 1;
     let shadowIntensity = 0.3;
 
@@ -118,7 +133,7 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
 PulsatingStrip.displayName = 'PulsatingStrip';
 
 // Linear interpolation helper with proper typing
-const lerp = (start: number, end: number, progress: number): number => {
+const lerp = (start: Scale, end: Scale, progress: number): Scale => {
   return start + (end - start) * progress;
 };
 
