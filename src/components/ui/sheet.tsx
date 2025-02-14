@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode, useEffect } from "react";
+import React, { ReactNode, useLayoutEffect } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,12 +21,15 @@ const Sheet = ({
   className,
   title,
   count,
-  countLabel,  // ← Make sure to destructure this
+  countLabel,
 }: SheetProps) => {
-  // Disable scrolling
-  useEffect(() => {
-    if (isOpen) document.body.style.overflow = "hidden";
-    else document.body.style.overflow = "";
+  // Disable scrolling immediately on mount/update using useLayoutEffect
+  useLayoutEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
     return () => {
       document.body.style.overflow = "";
     };
