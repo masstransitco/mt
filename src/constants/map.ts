@@ -10,10 +10,10 @@ export const MAP_CONTAINER_STYLE = {
 
 export const DEFAULT_CENTER = {
   lat: 22.3,
-  lng: 114.0,
+  lng: 114.2,
 };
 
-export const DEFAULT_ZOOM = 14;
+export const DEFAULT_ZOOM = 12;
 
 export const LIBRARIES: Libraries = ['geometry', 'places'];
 
