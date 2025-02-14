@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useState } from "react";
+import React, { useEffect, useCallback, useState, useRef } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
@@ -119,6 +119,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
+  // Ref to store the last click/touch position (in normalized device coordinates)
+  const clickPositionRef = useRef<THREE.Vector2 | null>(null);
+
   // Station click => departure or arrival
   const handleStationClick = useCallback(
     (station: StationFeature) => {
@@ -173,13 +176,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Manual raycaster effect for station cubes.
-  // We wait for the overlay's camera and renderer to be available.
+  // Set up event listeners on the overlay's canvas and schedule raycasting in onBeforeDraw.
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay || !stationCubesRef.current) return;
 
-    // Check every 300ms if the overlay's renderer & camera are set
+    // Wait until the overlay's renderer and camera are available.
     const intervalId = setInterval(() => {
       const renderer = (overlay as any).renderer;
       const camera = (overlay as any).camera;
@@ -187,8 +189,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
       if (renderer && camera) {
         clearInterval(intervalId);
 
-        // Ensure the canvas is topmost and receives pointer events
-        const canvas = renderer.domElement;
+        const canvas: HTMLCanvasElement = renderer.domElement;
+        // Ensure the canvas is on top and receives pointer events.
         canvas.style.position = "absolute";
         canvas.style.top = "0";
         canvas.style.left = "0";
@@ -197,71 +199,58 @@ export default function GMap({ googleApiKey }: GMapProps) {
         canvas.style.zIndex = "9999";
         canvas.style.pointerEvents = "auto";
 
-        const raycaster = new THREE.Raycaster();
-
-        // Helper: convert event coords to normalized device coords
+        // Helper to convert event coordinates to normalized device coordinates.
         const getNDC = (x: number, y: number) => {
-          // Get real rendering size in device pixels
           const size = new THREE.Vector2();
           renderer.getSize(size);
-
-          return new THREE.Vector2(
-            (x / size.x) * 2 - 1,
-            -(y / size.y) * 2 + 1
-          );
+          return new THREE.Vector2((x / size.x) * 2 - 1, -(y / size.y) * 2 + 1);
         };
 
+        // Instead of raycasting immediately on click, we just record the position.
         const onCanvasClick = (event: MouseEvent) => {
           event.preventDefault();
           const rect = canvas.getBoundingClientRect();
-
-          // Mouse coords relative to top-left of the canvas
           const offsetX = event.clientX - rect.left;
           const offsetY = event.clientY - rect.top;
-
-          const mouse = getNDC(offsetX, offsetY);
-          raycaster.setFromCamera(mouse, camera);
-
-          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
-
-          if (intersections.length > 0) {
-            const intersected = intersections[0].object;
-            const station = intersected.userData.station;
-            if (station) {
-              handleStationClick(station);
-            }
-          }
+          clickPositionRef.current = getNDC(offsetX, offsetY);
+          overlay.requestRedraw();
         };
 
         const onCanvasTouchEnd = (event: TouchEvent) => {
           event.preventDefault();
           if (!event.changedTouches.length) return;
-
           const touch = event.changedTouches[0];
           const rect = canvas.getBoundingClientRect();
-
-          // Touch coords relative to top-left of the canvas
           const offsetX = touch.clientX - rect.left;
           const offsetY = touch.clientY - rect.top;
-
-          const mouse = getNDC(offsetX, offsetY);
-          raycaster.setFromCamera(mouse, camera);
-
-          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
-
-          if (intersections.length > 0) {
-            const intersected = intersections[0].object;
-            const station = intersected.userData.station;
-            if (station) {
-              handleStationClick(station);
-            }
-          }
+          clickPositionRef.current = getNDC(offsetX, offsetY);
+          overlay.requestRedraw();
         };
 
         canvas.addEventListener("click", onCanvasClick);
         canvas.addEventListener("touchend", onCanvasTouchEnd);
 
-        // Cleanup
+        // Use the overlay's onBeforeDraw callback to perform the raycast.
+        overlay.onBeforeDraw = () => {
+          // Only perform raycast if a click/touch occurred.
+          if (clickPositionRef.current) {
+            const intersections = overlay.raycast(
+              clickPositionRef.current,
+              stationCubesRef.current,
+              { recursive: true }
+            );
+            if (intersections.length > 0) {
+              const station = intersections[0].object.userData.station;
+              if (station) {
+                handleStationClick(station);
+              }
+            }
+            // Reset the click position so it only fires once.
+            clickPositionRef.current = null;
+          }
+        };
+
+        // Cleanup: remove event listeners when overlay is disposed.
         return () => {
           canvas.removeEventListener("click", onCanvasClick);
           canvas.removeEventListener("touchend", onCanvasTouchEnd);
