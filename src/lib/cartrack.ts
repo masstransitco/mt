@@ -1,7 +1,7 @@
 /**
  * src/lib/cartrack.ts
  *
- * Demonstrates calling /vehicles/status to retrieve a vehicle's location (lat/lng),
+ * Demonstrates calling /vehicles to retrieve a vehicle list,
  * with optional local asset mapping and optional plus-code retrieval.
  */
 
@@ -10,8 +10,8 @@
 // -----------------------------------------------------------------------------
 
 // Demo credentials (store securely in production!)
-const USERNAME = 'URBA00001';
-const API_PASSWORD = 'fd58cd26fefc8c2b2ba1f7f52b33221a65f645790a43ff9b8da35db7da6e1f33';
+const USERNAME = "URBA00001";
+const API_PASSWORD = "fd58cd26fefc8c2b2ba1f7f52b33221a65f645790a43ff9b8da35db7da6e1f33";
 
 // Encode username:password into Base64 for Basic Auth
 const base64Auth = btoa(`${USERNAME}:${API_PASSWORD}`);
@@ -20,16 +20,16 @@ const base64Auth = btoa(`${USERNAME}:${API_PASSWORD}`);
  * Creates Fetch options with Basic Auth headers
  */
 function getRequestOptions(
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'
+  method: "GET" | "POST" | "PUT" | "DELETE" = "GET"
 ): RequestInit {
   const headers = new Headers();
-  headers.append('Authorization', `Basic ${base64Auth}`);
-  headers.append('Content-Type', 'application/json');
+  headers.append("Authorization", `Basic ${base64Auth}`);
+  headers.append("Content-Type", "application/json");
 
   return {
     method,
     headers,
-    redirect: 'manual',
+    redirect: "manual",
   };
 }
 
@@ -43,8 +43,8 @@ function getRequestOptions(
  */
 const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
   ABC123: {
-    modelUrl: '/cars/car1.glb',
-    image: '/cars/car1.png',
+    modelUrl: "/cars/car1.glb",
+    image: "/cars/car1.png",
   },
 };
 
@@ -57,8 +57,8 @@ function getLocalAssetsForRegistration(
 ): { modelUrl: string; image: string } {
   if (!registration) {
     return {
-      modelUrl: '/cars/defaultModel.glb',
-      image: '/cars/defaultImage.png',
+      modelUrl: "/cars/defaultModel.glb",
+      image: "/cars/defaultImage.png",
     };
   }
   const assets = LOCAL_ASSETS_MAP[registration];
@@ -66,98 +66,139 @@ function getLocalAssetsForRegistration(
     return assets;
   }
   return {
-    modelUrl: '/cars/defaultModel.glb',
-    image: '/cars/defaultImage.png',
+    modelUrl: "/cars/defaultModel.glb",
+    image: "/cars/defaultImage.png",
   };
 }
 
 // -----------------------------------------------------------------------------
-// 3. fetchVehicleList calling /vehicles/status
+// 3. fetchVehicleList calling /vehicles
 // -----------------------------------------------------------------------------
 
+/**
+ * Optional params interface to pass query filters, page, limit, etc.
+ * Adjust keys to match your API's valid filter fields.
+ */
 export interface FetchVehicleListParams {
   registration?: string;
-  shouldRetrievePlusCode?: boolean; // renamed to avoid conflict with function call
+  manufacturer?: string;
+  model_year?: number;
+  colour?: string;
+  chassis_number?: string;
+  page?: number;
+  limit?: number;
+  shouldRetrievePlusCode?: boolean;
 }
 
 /**
- * Replaces old "fetchVehicleList" with a call to /vehicles/status.
- *  - If `registration` is provided, appends ?filter[registration]=<reg>
- *  - Extracts vehicle.location -> lat/lng
- *  - Applies local modelUrl/image mapping
- *  - Optionally calls retrievePlusCodeFn
+ * Calls /rest/vehicles with optional filters:
+ *   e.g. /rest/vehicles?filter[registration]=ABC123&filter[manufacturer]=MG
  *
  * Returns an array of vehicles, each with:
- *   { registration, lat, lng, modelUrl, image, plus_code?, etc. }
+ *   { registration, vehicle_id, model_year, odometer, location?, etc. }
  */
 export async function fetchVehicleList(
   params: FetchVehicleListParams = {}
 ): Promise<any[]> {
   try {
-    const { registration, shouldRetrievePlusCode } = params;
+    // 1) Construct the base URL
+    let url = "https://fleetapi-hk.cartrack.com/rest/vehicles";
 
-    // 1) Construct the URL to /vehicles/status
-    let url = 'https://fleetapi-hk.cartrack.com/rest/vehicles/status';
-    if (registration) {
-      url += `?filter[registration]=${registration}`;
+    // 2) Collect query params
+    //    The new endpoint allows e.g. filter[registration], filter[manufacturer], etc.
+    //    We'll build them into the query string if they're provided.
+    const filters: Record<string, string | number> = {};
+
+    if (params.registration) {
+      filters["filter[registration]"] = params.registration;
+    }
+    if (params.manufacturer) {
+      filters["filter[manufacturer]"] = params.manufacturer;
+    }
+    if (params.model_year) {
+      filters["filter[model_year]"] = params.model_year;
+    }
+    if (params.colour) {
+      filters["filter[colour]"] = params.colour;
+    }
+    if (params.chassis_number) {
+      filters["filter[chassis_number]"] = params.chassis_number;
+    }
+    if (params.page) {
+      filters["page"] = params.page;
+    }
+    if (params.limit) {
+      filters["limit"] = params.limit;
     }
 
-    // 2) Make the request
-    const res = await fetch(url, getRequestOptions('GET'));
+    // Build the query string
+    const queryString = new URLSearchParams(filters as any).toString();
+    if (queryString) {
+      url += `?${queryString}`;
+    }
+
+    // 3) Make the request
+    const res = await fetch(url, getRequestOptions("GET"));
     if (!res.ok) {
       throw new Error(`fetchVehicleList failed: ${res.status} ${res.statusText}`);
     }
     const response = await res.json();
 
-    // 3) Optionally filter data by registration in JS
-    if (registration && response?.data?.length) {
-      response.data = response.data.filter(
-        (item: any) => item.registration === registration
-      );
-    }
-
-    // 4) Transform each vehicle to include lat/lng + local assets
+    // 4) Transform each vehicle to match your Car shape
+    //    If the response has { data: [...] }, we proceed.
     if (response?.data?.length) {
       response.data = response.data.map((vehicle: any) => {
+        // Extract local assets by registration
         const { modelUrl, image } = getLocalAssetsForRegistration(
           vehicle.registration
         );
+
+        // Convert odometer from meters => kilometers
+        const odometerKm = vehicle.odometer
+          ? Math.round(vehicle.odometer / 1000)
+          : 0;
+
+        // If location fields exist, store them (or fallback to 0)
         const lat = vehicle.location?.latitude ?? 0;
         const lng = vehicle.location?.longitude ?? 0;
 
+        // Return an object that lines up with your Car interface
         return {
           ...vehicle,
+
+          // Overwrite or add your custom fields
           modelUrl,
           image,
           lat,
           lng,
-
-          // NEW: If your API returns these fields differently, adjust here:
-          model: vehicle.model ?? 'Unknown Model',
-          year: vehicle.year ?? 0,
-          odometer: vehicle.odometer ?? 0,
+          // For example:
+          id: vehicle.vehicle_id ?? 0,
+          name: vehicle.registration ?? "Unknown Name",
+          model: vehicle.manufacturer ?? "Unknown Model",
+          year: vehicle.model_year ?? 0,
+          odometer: odometerKm,
         };
       });
     }
 
-    // 5) If we want plus-code for the first vehicle, call retrievePlusCodeFn
-    if (shouldRetrievePlusCode && response?.data?.length) {
-      const v = response.data[0];
-      if (v.location) {
+    // 5) Optionally retrieve plus code for the first vehicle
+    if (params.shouldRetrievePlusCode && response?.data?.length) {
+      const firstVehicle = response.data[0];
+      if (firstVehicle.location) {
         const codeRes = await retrievePlusCodeFn(
-          v.location.latitude,
-          v.location.longitude
+          firstVehicle.location.latitude,
+          firstVehicle.location.longitude
         );
-        if (codeRes?.status === 'OK' && codeRes.plus_code) {
-          v.plus_code = codeRes.plus_code;
+        if (codeRes?.status === "OK" && codeRes.plus_code) {
+          firstVehicle.plus_code = codeRes.plus_code;
         }
       }
     }
 
-    // Return an array of vehicles or empty array
+    // 6) Return the final array
     return response.data || [];
   } catch (error) {
-    console.error('fetchVehicleList (status) error:', error);
+    console.error("fetchVehicleList error:", error);
     throw error;
   }
 }
@@ -166,16 +207,12 @@ export async function fetchVehicleList(
 // 4. Example: Helper to retrieve plus code (optional function)
 // -----------------------------------------------------------------------------
 
-/**
- * Example function to fetch a plus code for a given lat/lng.
- * If you don't need plus codes, remove or replace with your real logic.
- */
-async function retrievePlusCodeFn(latitude: number, longitude: number): Promise<any> {
-  // e.g., call an external API
+async function retrievePlusCodeFn(latitude: number, longitude: number) {
+  // e.g., call an external API to get plus code
   // We'll just mock a response:
   return {
-    status: 'OK',
-    plus_code: '8Q7X+FQ Hong Kong',
+    status: "OK",
+    plus_code: "8Q7X+FQ Hong Kong",
   };
 }
 
@@ -185,16 +222,14 @@ async function retrievePlusCodeFn(latitude: number, longitude: number): Promise<
 
 /**
  * Example function demonstrating how you'd call fetchVehicleList
- * for a specific registration or all vehicles.
+ * with a specific registration or multiple filters.
  */
 export async function getVehicleStatusOrAll(registration?: string) {
   try {
-    // If registration is provided, fetch that vehicle's status
-    // otherwise fetch all vehicles in /vehicles/status
     const data = await fetchVehicleList({ registration });
     return data;
   } catch (err) {
-    console.error('getVehicleStatusOrAll error:', err);
+    console.error("getVehicleStatusOrAll error:", err);
     throw err;
   }
 }
