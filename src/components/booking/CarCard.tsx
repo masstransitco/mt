@@ -72,8 +72,6 @@ function CarCardComponent({
               <Car3DViewer
                 modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
                 imageUrl={car.image}
-                selected={selected} 
-                // The key prop: pass whether or not this card is interactive
                 interactive={selected} 
                 height="100%"
                 width="100%"
