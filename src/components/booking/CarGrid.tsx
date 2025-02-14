@@ -73,10 +73,11 @@ export default function CarGrid({ className = "" }: CarGridProps) {
 
   return (
     <div
-      className={`space-y-6 ${className} transition-all duration-300`}
+      className={`space-y-6 ${className} transition-all duration-300 overflow-y-auto`}
       style={{
         display: isVisible ? "block" : "none",
         visibility: isVisible ? "visible" : "hidden",
+        maxHeight: "80vh", // adjust this value as needed for your layout
       }}
     >
       <div className="space-y-6">
