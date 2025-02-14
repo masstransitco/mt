@@ -102,12 +102,9 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
   }, []);
 
   useEffect(() => {
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    
-    if (!prefersReducedMotion) {
-      startTimeRef.current = undefined; // Reset the start time
-      animationRef.current = requestAnimationFrame(animate);
-    }
+    // Always run the animation, regardless of reduced motion settings.
+    startTimeRef.current = undefined; // Reset the start time
+    animationRef.current = requestAnimationFrame(animate);
 
     return () => {
       if (animationRef.current) {
@@ -117,13 +114,13 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
   }, [animate]);
 
   const styles = useMemo(() => ({
-    width: '99%',
-    height: '3.2px',
-    borderRadius: '1.5px',
+    width: '110%',
+    height: '2.5px',
+    borderRadius: '1px',
     backgroundColor: ANIMATION_PARAMS.colors.primary,
     willChange: 'transform, opacity, box-shadow',
     transition: 'transform 0.05s ease-out',
-    transformOrigin: 'center' // Added to ensure scaling happens from center
+    transformOrigin: 'center' // Ensure scaling happens from center
   }), []);
 
   return (
