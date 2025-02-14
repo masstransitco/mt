@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, memo } from 'react';
-import { motion } from 'framer-motion';
-import dynamic from 'next/dynamic';
-import Image from 'next/image';
+import React, { memo } from "react";
+import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import Image from "next/image";
 
-import { Battery, Gauge, Check } from 'lucide-react';
-import type { Car } from '@/types/cars';
+import { Battery, Gauge, Check } from "lucide-react";
+import type { Car } from "@/types/cars";
 
 // Dynamically load the 3D viewer for performance
-const Car3DViewer = dynamic(() => import('./Car3DViewer'), {
+const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full bg-card animate-pulse rounded-2xl" />
@@ -21,7 +21,7 @@ interface CarCardProps {
   selected: boolean;
   onClick: () => void;
   isVisible?: boolean;
-  size?: 'small' | 'large';
+  size?: "small" | "large";
 }
 
 function CarCardComponent({
@@ -29,29 +29,21 @@ function CarCardComponent({
   selected,
   onClick,
   isVisible = true,
-  size = 'large',
+  size = "large",
 }: CarCardProps) {
-  const [shouldLoad3D, setShouldLoad3D] = useState(false);
-
-  useEffect(() => {
-    // Only load 3D model if selected
-    if (selected && !shouldLoad3D) {
-      setShouldLoad3D(true);
-    }
-  }, [selected, shouldLoad3D]);
-
-  const isSmall = size === 'small';
+  const isSmall = size === "small";
 
   return (
     <motion.div
       whileHover={{ y: isSmall ? -2 : -5 }}
-      transition={{ type: 'tween', duration: 0.2 }}
+      transition={{ type: "tween", duration: 0.2 }}
       className={`
         relative overflow-hidden rounded-2xl bg-card
         transition-all duration-300 w-full cursor-pointer
-        ${selected 
-          ? 'border-2 border-blue-500 shadow-lg'
-          : 'border border-border/50 hover:border-border'
+        ${
+          selected
+            ? "border-2 border-blue-500 shadow-lg"
+            : "border border-border/50 hover:border-border"
         }
       `}
       onClick={onClick}
@@ -70,80 +62,64 @@ function CarCardComponent({
       <div
         className={`
           relative w-full transition-all duration-300
-          // --- CHANGED HERE: bigger ratio => about 30% less height ---
-          ${selected ? 'aspect-[5/2]' : 'aspect-[3/2]'}
+          ${selected ? "aspect-[5/2]" : "aspect-[3/2]"}
         `}
       >
         {isVisible && (
           <>
-            {/* If not selected or 3D not loaded, show the image */}
-            {(!selected || !shouldLoad3D) && (
-              <div className="absolute inset-0">
-                <Image
-                  src={car.image}
-                  alt={car.name}
-                  fill
-                  className="object-contain p-4"
-                  sizes={
-                    isSmall
-                      ? '(max-width: 768px) 33vw, 25vw'
-                      : '(max-width: 768px) 100vw, 50vw'
-                  }
-                  priority={selected}
-                />
-              </div>
-            )}
-
-            {/* If selected & 3D loaded, show the 3D viewer */}
-            {shouldLoad3D && selected && (
-              <div className="absolute inset-0 transition-opacity duration-300">
-                <Car3DViewer
-                  modelUrl={car.modelUrl || ''}
-                  imageUrl={car.image}
-                  selected={selected}
-                  height="100%"
-                  width="100%"
-                  isVisible={selected}
-                />
-              </div>
-            )}
+            {/* Always render the 3D Viewer for every card */}
+            <div className="absolute inset-0 transition-opacity duration-300">
+              <Car3DViewer
+                modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
+                imageUrl={car.image}
+                selected={selected} 
+                // The key prop: pass whether or not this card is interactive
+                interactive={selected} 
+                height="100%"
+                width="100%"
+                isVisible={isVisible}
+              />
+            </div>
           </>
         )}
       </div>
 
       {/* Car details */}
-      <div className={`p-${isSmall ? '3' : '4'}`}>
+      <div className={`p-${isSmall ? "3" : "4"}`}>
         <div className="flex items-start justify-between mb-2">
           <div>
             <h3
               className={`font-semibold text-foreground ${
-                isSmall ? 'text-sm' : 'text-base'
+                isSmall ? "text-sm" : "text-base"
               }`}
             >
               {car.name}
             </h3>
             <div
               className={`flex items-center gap-1 ${
-                isSmall ? 'text-xs' : 'text-sm'
+                isSmall ? "text-xs" : "text-sm"
               } text-muted-foreground`}
             >
-              <Battery className={`${isSmall ? 'w-3 h-3' : 'w-4 h-4'}`} />
+              <Battery className={`${isSmall ? "w-3 h-3" : "w-4 h-4"}`} />
               <span>{car.type}</span>
             </div>
           </div>
           <div className="text-right">
             <p
               className={`font-bold text-foreground ${
-                isSmall ? 'text-base' : 'text-lg'
+                isSmall ? "text-base" : "text-lg"
               }`}
             >
               ${car.price}
             </p>
-            <p className={`${isSmall ? 'text-xs' : 'text-sm'} text-muted-foreground`}>
+            <p
+              className={`${isSmall ? "text-xs" : "text-sm"} text-muted-foreground`}
+            >
               per day
             </p>
           </div>
         </div>
+
         {!isSmall && car.features && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {car.features.range && (
@@ -165,5 +141,4 @@ function CarCardComponent({
   );
 }
 
-// Wrap in React.memo for performance
 export default memo(CarCardComponent);
