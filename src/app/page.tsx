@@ -25,7 +25,7 @@ export default function Page() {
   return (
     <>
       <Head>
-        {/* This meta tag disables zooming by setting maximum-scale to 1.0 and user-scalable to no */}
+        {/* This meta tag disables zooming by setting maximum-scale=1.0 and user-scalable=no */}
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
@@ -34,9 +34,9 @@ export default function Page() {
       <main className="min-h-screen bg-background flex flex-col overflow-hidden">
         {/* Header */}
         <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-[50px] select-none">
-          <div className="flex items-center justify-between h-full px-2">
-            {/* Left: Logo */}
-            <div className="flex items-center">
+          <div className="relative h-full flex items-center justify-between px-0">
+            {/* Left: Logo with 8px left margin */}
+            <div className="flex items-center ml-2">
               <Image
                 src="/brand/logo.png"
                 alt="Logo"
@@ -45,8 +45,8 @@ export default function Page() {
                 className="object-contain"
               />
             </div>
-            {/* Right Icons */}
-            <div className="flex items-center space-x-2">
+            {/* Right Icons with 8px right margin */}
+            <div className="flex items-center space-x-2 mr-2">
               <button
                 onClick={() => setIsScannerOpen(true)}
                 className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
