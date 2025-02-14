@@ -3,6 +3,7 @@ import type { RootState } from "./store";
 import { fetchVehicleList } from "@/lib/cartrack";
 import type { Car } from "@/types/cars";
 
+// Define the shape of our CarState
 interface CarState {
   cars: Car[];
   availableForDispatch: Car[];
@@ -10,18 +11,25 @@ interface CarState {
   error: string | null;
 }
 
+// Fetch cars from the API, transform them to match the Car interface
 export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   "car/fetchCars",
   async (_, { rejectWithValue }) => {
     try {
+      // rawVehicles will be the array of vehicles from /rest/vehicles
       const rawVehicles = await fetchVehicleList();
 
+      // Transform each raw vehicle into a Car
       const transformed: Car[] = rawVehicles.map((v: any) => {
-        const carId = v.id ?? v.registration ?? v.model;
-        const displayName = v.model ?? v.registration ?? "Unknown Vehicle";
+        // Convert odometer from meters → kilometers
+        const odometerKm = v.odometer ? Math.round(v.odometer / 1000) : 0;
+
+        // We assume the API returns: v.vehicle_id, v.registration, v.manufacturer,
+        // v.model_year, v.location?.latitude, v.location?.longitude, etc.
+        // If your API uses different fields, adjust as needed.
         return {
-          id: carId,
-          name: displayName,
+          id: v.vehicle_id ?? 0,
+          name: v.registration ?? "Unknown Vehicle",
           type: "Electric",
           price: 600,
           modelUrl: v.modelUrl,
@@ -32,13 +40,13 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
             charging: "",
             acceleration: "",
           },
-          lat: v.lat,
-          lng: v.lng,
+          lat: v.location?.latitude ?? 0,
+          lng: v.location?.longitude ?? 0,
 
-          // NEW FIELDS
-          model: v.model ?? "Unknown Model",
-          year: v.year ?? 0,
-          odometer: v.odometer ?? 0,
+          // Additional fields for model, year, odometer
+          model: v.manufacturer ?? "Unknown Model",
+          year: v.model_year ?? 0,
+          odometer: odometerKm,
         };
       });
 
@@ -49,6 +57,7 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   }
 );
 
+// Initial state
 const initialState: CarState = {
   cars: [],
   availableForDispatch: [],
@@ -56,10 +65,12 @@ const initialState: CarState = {
   error: null,
 };
 
+// Create the car slice
 const carSlice = createSlice({
   name: "car",
   initialState,
   reducers: {
+    // Example of a custom reducer for setting "availableForDispatch"
     setAvailableForDispatch(state, action: PayloadAction<Car[]>) {
       state.availableForDispatch = action.payload;
     },
@@ -81,12 +92,12 @@ const carSlice = createSlice({
   },
 });
 
+// Export actions and reducer
 export const { setAvailableForDispatch } = carSlice.actions;
 export default carSlice.reducer;
 
-// Selectors
+// Selector helpers
 export const selectAllCars = (state: RootState) => state.car.cars;
-export const selectAvailableForDispatch = (state: RootState) =>
-  state.car.availableForDispatch;
+export const selectAvailableForDispatch = (state: RootState) => state.car.availableForDispatch;
 export const selectCarsLoading = (state: RootState) => state.car.loading;
 export const selectCarsError = (state: RootState) => state.car.error;
