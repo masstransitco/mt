@@ -155,6 +155,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
 export const DISPATCH_HUB = {
   lat: 22.298,
   lng: 114.177,
+  altitude: 0,
 };
 
 /**
