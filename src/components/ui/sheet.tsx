@@ -197,7 +197,7 @@ const Sheet = ({
         "overflow-hidden", // needed for smooth max-height transition
         "transition-[max-height] duration-500 ease-in-out",
         // Expand up to 80% of the viewport or collapse to 0
-        isOpen ? "max-h-[60vh]" : "max-h-0",
+        isOpen ? "max-h-[75vh]" : "max-h-0",
         className
       )}
       // Optional: For accessibility, you could also track aria-hidden, etc.
