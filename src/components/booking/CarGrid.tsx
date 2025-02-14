@@ -4,9 +4,10 @@ import React, { useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectCar } from "@/store/userSlice";
-import { fetchCars, selectAvailableForDispatch } from "@/store/carSlice";
+import { fetchCars } from "@/store/carSlice";
 import { selectViewState } from "@/store/uiSlice";
 import CarCard from "./CarCard";
+import { useAvailableCarsForDispatch } from "@/lib/dispatchManager"; // <-- Import the custom hook
 
 interface CarGridProps {
   className?: string;
@@ -15,21 +16,22 @@ interface CarGridProps {
 export default function CarGrid({ className = "" }: CarGridProps) {
   const dispatch = useAppDispatch();
 
-  // Fetch available cars for dispatch from Redux store
-  const availableCars = useAppSelector(selectAvailableForDispatch);
+  // Get available cars for dispatch via the custom hook.
+  // This hook calculates and updates the Redux store using dispatch locations.
+  const availableCars = useAvailableCarsForDispatch();
 
-  // Which car is currently selected? (userSlice)
+  // Which car is currently selected? (from userSlice)
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
-  // UI: which screen are we on? (uiSlice)
+  // UI: which screen are we on? (from uiSlice)
   const viewState = useAppSelector(selectViewState);
 
-  // On mount, fetch cars if needed
+  // On mount, fetch the full list of cars
   useEffect(() => {
     dispatch(fetchCars());
   }, [dispatch]);
 
-  // Log the fetched cars on mount or whenever they change
+  // Log available cars when they change
   useEffect(() => {
     if (availableCars.length > 0) {
       console.log("[CarGrid] Available cars for dispatch:", availableCars);
@@ -53,7 +55,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }
   }, [selectedCarId]);
 
-  // Filter logic for the car list
+  // Separate the selected car from the rest of the available cars
   const { selectedCar, otherCars } = useMemo(() => {
     return {
       selectedCar: availableCars.find((car) => car.id === selectedCarId),
@@ -65,7 +67,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     dispatch(selectCar(carId));
   };
 
-  // Hide/show this grid based on `viewState`
+  // Hide/show this grid based on the view state
   const isVisible = viewState === "showCar";
 
   return (
@@ -119,7 +121,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
           </AnimatePresence>
         </div>
 
-        {/* If no cars found (filtered out) */}
+        {/* If no cars found */}
         {!selectedCar && otherCars.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
