@@ -26,15 +26,6 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
       countLabel="cars available for dispatch"
     >
       <div className="px-4 py-2">
-        {selectedCarId ? (
-          <p className="text-sm text-muted-foreground mb-4">
-            Selected car #{selectedCarId}. Select a charging station to continue.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground mb-4">
-            Select a car to begin booking.
-          </p>
-        )}
         <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
       </div>
     </Sheet>
