@@ -15,6 +15,7 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   async (_, { rejectWithValue }) => {
     try {
       const rawVehicles = await fetchVehicleList();
+
       const transformed: Car[] = rawVehicles.map((v: any) => {
         const carId = v.id ?? v.registration ?? v.model;
         const displayName = v.model ?? v.registration ?? "Unknown Vehicle";
@@ -33,8 +34,14 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
           },
           lat: v.lat,
           lng: v.lng,
+
+          // NEW FIELDS
+          model: v.model ?? "Unknown Model",
+          year: v.year ?? 0,
+          odometer: v.odometer ?? 0,
         };
       });
+
       return transformed;
     } catch (error: any) {
       return rejectWithValue(error.message);
@@ -77,7 +84,9 @@ const carSlice = createSlice({
 export const { setAvailableForDispatch } = carSlice.actions;
 export default carSlice.reducer;
 
+// Selectors
 export const selectAllCars = (state: RootState) => state.car.cars;
-export const selectAvailableForDispatch = (state: RootState) => state.car.availableForDispatch;
+export const selectAvailableForDispatch = (state: RootState) =>
+  state.car.availableForDispatch;
 export const selectCarsLoading = (state: RootState) => state.car.loading;
 export const selectCarsError = (state: RootState) => state.car.error;
