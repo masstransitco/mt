@@ -7,8 +7,8 @@ import userReducer from './userSlice';
 import stationsReducer from './stationsSlice';
 import carReducer from './carSlice';
 import bookingReducer from './bookingSlice';
-// NEW: Import the 3D slice reducer
 import stations3DReducer from './stations3DSlice';
+import dispatchReducer from './dispatchSlice';
 
 export const store = configureStore({
   reducer: {
@@ -16,10 +16,10 @@ export const store = configureStore({
     ui: uiReducer,
     user: userReducer,
     stations: stationsReducer,
-    // ADD the new 3D stations reducer here
     stations3D: stations3DReducer,
     car: carReducer,
     booking: bookingReducer,
+    dispatch: dispatchReducer,  // Add the dispatch reducer
   },
 });
 
