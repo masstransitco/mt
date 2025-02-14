@@ -216,7 +216,7 @@ const AddressSearch = ({
           disabled={disabled}
           placeholder={placeholder}
           className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed
-                     placeholder:text-muted-foreground/60 p-1 text-sm"
+                     placeholder:text-muted-foreground/60 p-1 text-base"
         />
         {searchText && (
           <button
