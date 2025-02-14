@@ -1,8 +1,7 @@
-'use client';
+"use client";
 
-import React, { Suspense, useRef, useEffect, useMemo, memo } from 'react';
-import Image from 'next/image';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, useRef, useEffect, useMemo, memo } from "react";
+import { Canvas } from "@react-three/fiber";
 import {
   OrbitControls,
   useGLTF,
@@ -12,22 +11,28 @@ import {
   AdaptiveDpr,
   AdaptiveEvents,
   useProgress,
-} from '@react-three/drei';
-import * as THREE from 'three';
-import { EffectComposer, SSAO } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
+} from "@react-three/drei";
+import * as THREE from "three";
+import { EffectComposer, SSAO } from "@react-three/postprocessing";
+import { BlendFunction } from "postprocessing";
 
-import LoadingOverlay from '@/components/ui/loading-overlay';
+import LoadingOverlay from "@/components/ui/loading-overlay";
 
+// -------------------------------------
+// Types
+// -------------------------------------
 interface Car3DViewerProps {
-  modelUrl: string;
-  imageUrl: string;
+  modelUrl: string;           // Path to the model
+  imageUrl: string;           // Unused now, but kept if you still want it
   width?: string | number;
   height?: string | number;
-  selected?: boolean;
-  isVisible?: boolean;
+  isVisible?: boolean;        // If false, completely hide the component
+  interactive?: boolean;      // <--- NEW: controls orbit/panning/zoom
 }
 
+// -------------------------------------
+// Loading State
+// -------------------------------------
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -37,14 +42,21 @@ function LoadingScreen() {
   );
 }
 
+// -------------------------------------
+// The main 3D model component
+// -------------------------------------
 function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
-  const { scene: originalScene } = useGLTF(url, '/draco/', true) as any;
+
+  // Load the scene from cache or fetch if not loaded
+  const { scene: originalScene } = useGLTF(url, "/draco/", true) as any;
+
+  // Make a clone so each card can have its own transformation if needed
   const scene = useMemo(() => originalScene.clone(), [originalScene]);
 
+  // Initial setup of the model
   useEffect(() => {
     if (!scene) return;
-    // Initial rotation and material adjustments.
     scene.position.set(0, -0.2, 0);
     scene.rotation.y = Math.PI / 2;
     scene.traverse((child: THREE.Object3D) => {
@@ -62,21 +74,27 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
+// -------------------------------------
+// Camera + Controls
+// -------------------------------------
 function CameraSetup({ interactive }: { interactive: boolean }) {
-  const { camera, scene } = useMemo(() => {
-    // Return the default camera and scene from the fiber context.
-    return { camera: new THREE.PerspectiveCamera(), scene: new THREE.Scene() };
-  }, []);
-  return <OrbitControls
-  enableDamping
-  dampingFactor={0.05}
-  enableZoom={false}
-  minPolarAngle={0}
-  maxPolarAngle={Math.PI / 2}
-  enablePan={false}   // Disable panning
-/>;
+  return (
+    <OrbitControls
+      enableDamping
+      dampingFactor={0.05}
+      // Make these props conditional on "interactive"
+      enabled={interactive}
+      enableZoom={interactive}
+      enablePan={false} // Keep panning disabled or conditionally set it
+      minPolarAngle={0}
+      maxPolarAngle={Math.PI / 2}
+    />
+  );
 }
 
+// -------------------------------------
+// Scene Lighting
+// -------------------------------------
 function SceneLighting() {
   return (
     <>
@@ -93,16 +111,33 @@ function SceneLighting() {
         shadow-camera-top={10}
         shadow-camera-bottom={-10}
       />
-      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" castShadow={false} />
-      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" castShadow={false} />
+      <directionalLight
+        position={[-5, 5, -5]}
+        intensity={0.25}
+        color="#FFE4B5"
+        castShadow={false}
+      />
+      <directionalLight
+        position={[0, -5, 0]}
+        intensity={0.15}
+        color="#4169E1"
+        castShadow={false}
+      />
       <ambientLight intensity={0.3} />
     </>
   );
 }
 
+// -------------------------------------
+// PostProcessing
+// -------------------------------------
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
-    <EffectComposer multisampling={interactive ? 4 : 0} enabled={interactive} enableNormalPass>
+    <EffectComposer
+      multisampling={interactive ? 4 : 0}
+      enabled={interactive}
+      enableNormalPass
+    >
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
         samples={interactive ? 16 : 0}
@@ -121,95 +156,96 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-// Use a simple cache to avoid reloading the same model.
+// -------------------------------------
+// Optional: simple cache to avoid repeated preload calls
+// -------------------------------------
 const modelsCache = new Map<string, boolean>();
 
+/**
+ * Car3DViewer: Always renders the 3D model, only interactive if `interactive={true}`.
+ */
 function Car3DViewer({
   modelUrl,
-  imageUrl,
-  width = '100%',
-  height = '300px',
-  selected = false,
+  imageUrl, // no longer used in this example
+  width = "100%",
+  height = "300px",
   isVisible = true,
+  interactive = false,
 }: Car3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Create isolated WebGL settings with a unique id.
-  const glSettings = useMemo(
-    () => ({
-      antialias: true,
-      toneMapping: THREE.ACESFilmicToneMapping,
-      toneMappingExposure: 1.0,
-      preserveDrawingBuffer: false,
-      powerPreference: 'high-performance' as WebGLPowerPreference,
-      premultipliedAlpha: false,
-      logarithmicDepthBuffer: true,
-      // Generate a unique id based on the modelUrl.
-      id: `car-3d-viewer-${modelUrl.split('/').pop()}`,
-    }),
-    [modelUrl]
-  );
-
+  // Once we see a modelUrl, optionally preload it if not in cache:
   useEffect(() => {
-    if (selected && !modelsCache.has(modelUrl)) {
-      // Preload the model if selected.
-      // (Assumes useGLTF.preload is available.)
-      // @ts-ignore
-      useGLTF.preload(modelUrl);
-      modelsCache.set(modelUrl, true);
+    if (!modelsCache.has(modelUrl)) {
+      try {
+        // @ts-ignore - if you have useGLTF.preload
+        useGLTF.preload(modelUrl);
+        modelsCache.set(modelUrl, true);
+      } catch (err) {
+        console.warn("Preload not available or failed: ", err);
+      }
     }
-  }, [modelUrl, selected]);
+  }, [modelUrl]);
 
   const containerStyles = useMemo<React.CSSProperties>(
     () => ({
       width,
       height,
-      overflow: selected ? 'hidden' : 'auto',
-      pointerEvents: 'auto',
-      display: isVisible ? 'block' : 'none',
-      position: 'relative',
+      overflow: "hidden",
+      pointerEvents: "auto",
+      display: isVisible ? "block" : "none",
+      position: "relative",
     }),
-    [width, height, selected, isVisible]
+    [width, height, isVisible]
   );
 
+  // If not visible, return null to remove from layout
   if (!isVisible) {
     return null;
   }
 
-  if (!selected) {
-    return (
-      <div style={containerStyles}>
-        <Image
-          src={imageUrl}
-          alt="Car preview"
-          fill
-          className="object-cover rounded-lg"
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          priority={!selected}
-        />
-      </div>
-    );
-  }
-
+  // Render the 3D scene in a <Canvas> for *all* cards,
+  // with user interaction only if `interactive` is true.
   return (
     <div style={containerStyles}>
       <Canvas
         ref={canvasRef}
-        gl={glSettings}
+        gl={{
+          antialias: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.0,
+          preserveDrawingBuffer: false,
+          powerPreference: "high-performance",
+          premultipliedAlpha: false,
+          logarithmicDepthBuffer: true,
+        }}
         shadows
-        orthographic={false}
         camera={{ position: [0, 2, 3], fov: 15 }}
         dpr={[1, 1.2]}
       >
+        {/* Adaptive performance */}
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
+
+        {/* Lights */}
         <SceneLighting />
-        <PostProcessing interactive={true} />
+
+        {/* Optional post-processing. Enabled only when interactive=true */}
+        <PostProcessing interactive={interactive} />
+
+        {/* Env + background */}
         <Environment preset="sunset" background={false} />
-        <color attach="background" args={['#1a1a1a']} />
+        <color attach="background" args={["#1a1a1a"]} />
+
+        {/* Suspense handles model loading progress */}
         <Suspense fallback={<LoadingScreen />}>
-          <CameraSetup interactive={true} />
-          <CarModel url={modelUrl} interactive={true} />
+          {/* Only interactive if user says so */}
+          <CameraSetup interactive={interactive} />
+
+          {/* The model itself */}
+          <CarModel url={modelUrl} interactive={interactive} />
+
+          {/* Preload sub-assets in the GLTF */}
           <Preload all />
         </Suspense>
       </Canvas>
@@ -219,12 +255,20 @@ function Car3DViewer({
 
 export default memo(Car3DViewer);
 
+/**
+ * Optional utility if you want to preload multiple model URLs at once
+ * without having to rely on each card's effect:
+ */
 export function preloadCarModels(urls: string[]) {
   urls.forEach((url) => {
     if (!modelsCache.has(url)) {
-      // @ts-ignore
-      useGLTF.preload(url);
-      modelsCache.set(url, true);
+      try {
+        // @ts-ignore
+        useGLTF.preload(url);
+        modelsCache.set(url, true);
+      } catch (err) {
+        console.warn("Preload not available or failed: ", err);
+      }
     }
   });
 }
