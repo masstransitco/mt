@@ -1,8 +1,9 @@
 /**
  * src/lib/cartrack.ts
  *
- * Demonstrates calling /vehicles to retrieve a vehicle list,
- * with optional local asset mapping and optional plus-code retrieval.
+ * Demonstrates calling /vehicles/status to retrieve a vehicle's location (lat/lng),
+ * with optional local asset mapping and optional plus-code retrieval,
+ * plus the new model/year/odometer fields if they exist in the response.
  */
 
 // -----------------------------------------------------------------------------
@@ -72,108 +73,80 @@ function getLocalAssetsForRegistration(
 }
 
 // -----------------------------------------------------------------------------
-// 3. fetchVehicleList calling /vehicles
+// 3. fetchVehicleList calling /vehicles/status
 // -----------------------------------------------------------------------------
 
 /**
- * Optional params interface to pass query filters, page, limit, etc.
- * Adjust keys to match your API's valid filter fields.
+ * Optional interface if you want to filter by registration or retrieve plus-code.
  */
 export interface FetchVehicleListParams {
   registration?: string;
-  manufacturer?: string;
-  model_year?: number;
-  colour?: string;
-  chassis_number?: string;
-  page?: number;
-  limit?: number;
-  shouldRetrievePlusCode?: boolean;
+  shouldRetrievePlusCode?: boolean; // renamed to avoid conflict with function call
 }
 
 /**
- * Calls /rest/vehicles with optional filters:
- *   e.g. /rest/vehicles?filter[registration]=ABC123&filter[manufacturer]=MG
+ * Calls /vehicles/status. 
+ * 
+ * - If `registration` is provided, appends ?filter[registration]=<reg>
+ * - Extracts vehicle.location -> lat/lng
+ * - Applies local modelUrl/image mapping
+ * - Optionally calls retrievePlusCodeFn (if shouldRetrievePlusCode)
  *
  * Returns an array of vehicles, each with:
- *   { registration, vehicle_id, model_year, odometer, location?, etc. }
+ *   { registration, lat, lng, modelUrl, image, plus_code?, model?, year?, odometer? etc. }
  */
 export async function fetchVehicleList(
   params: FetchVehicleListParams = {}
 ): Promise<any[]> {
   try {
-    // 1) Construct the base URL
-    let url = "https://fleetapi-hk.cartrack.com/rest/vehicles";
+    const { registration, shouldRetrievePlusCode } = params;
 
-    // 2) Collect query params
-    //    The new endpoint allows e.g. filter[registration], filter[manufacturer], etc.
-    //    We'll build them into the query string if they're provided.
-    const filters: Record<string, string | number> = {};
-
-    if (params.registration) {
-      filters["filter[registration]"] = params.registration;
-    }
-    if (params.manufacturer) {
-      filters["filter[manufacturer]"] = params.manufacturer;
-    }
-    if (params.model_year) {
-      filters["filter[model_year]"] = params.model_year;
-    }
-    if (params.colour) {
-      filters["filter[colour]"] = params.colour;
-    }
-    if (params.chassis_number) {
-      filters["filter[chassis_number]"] = params.chassis_number;
-    }
-    if (params.page) {
-      filters["page"] = params.page;
-    }
-    if (params.limit) {
-      filters["limit"] = params.limit;
+    // 1) Construct the URL to /vehicles/status
+    let url = "https://fleetapi-hk.cartrack.com/rest/vehicles/status";
+    if (registration) {
+      url += `?filter[registration]=${registration}`;
     }
 
-    // Build the query string
-    const queryString = new URLSearchParams(filters as any).toString();
-    if (queryString) {
-      url += `?${queryString}`;
-    }
-
-    // 3) Make the request
+    // 2) Make the request
     const res = await fetch(url, getRequestOptions("GET"));
     if (!res.ok) {
       throw new Error(`fetchVehicleList failed: ${res.status} ${res.statusText}`);
     }
     const response = await res.json();
 
-    // 4) Transform each vehicle to match your Car shape
-    //    If the response has { data: [...] }, we proceed.
-    if (response?.data?.length) {
+    // 3) Optionally filter data by registration in JS
+    if (registration && Array.isArray(response?.data)) {
+      response.data = response.data.filter(
+        (item: any) => item.registration === registration
+      );
+    }
+
+    // 4) Transform each vehicle to include lat/lng + local assets
+    if (Array.isArray(response?.data) && response.data.length > 0) {
       response.data = response.data.map((vehicle: any) => {
-        // Extract local assets by registration
         const { modelUrl, image } = getLocalAssetsForRegistration(
           vehicle.registration
         );
-
-        // Convert odometer from meters => kilometers
-        const odometerKm = vehicle.odometer
-          ? Math.round(vehicle.odometer / 1000)
-          : 0;
-
-        // If location fields exist, store them (or fallback to 0)
         const lat = vehicle.location?.latitude ?? 0;
         const lng = vehicle.location?.longitude ?? 0;
 
-        // Return an object that lines up with your Car interface
+        // If the /vehicles/status response has fields like 'manufacturer', 'model_year',
+        // or 'odometer' in meters, add them here. If not, you'll see placeholders or 0.
+        // e.g., we convert odometer from meters -> km
+        let odometerKm = 0;
+        if (vehicle.odometer) {
+          odometerKm = Math.round(vehicle.odometer / 1000);
+        }
+
         return {
           ...vehicle,
-
-          // Overwrite or add your custom fields
+          // local asset mapping
           modelUrl,
           image,
+          // lat/lng from location
           lat,
           lng,
-          // For example:
-          id: vehicle.vehicle_id ?? 0,
-          name: vehicle.registration ?? "Unknown Name",
+          // new fields if present in the /vehicles/status data
           model: vehicle.manufacturer ?? "Unknown Model",
           year: vehicle.model_year ?? 0,
           odometer: odometerKm,
@@ -181,24 +154,24 @@ export async function fetchVehicleList(
       });
     }
 
-    // 5) Optionally retrieve plus code for the first vehicle
-    if (params.shouldRetrievePlusCode && response?.data?.length) {
-      const firstVehicle = response.data[0];
-      if (firstVehicle.location) {
+    // 5) If we want plus-code for the first vehicle, call retrievePlusCodeFn
+    if (shouldRetrievePlusCode && Array.isArray(response?.data) && response.data.length > 0) {
+      const v = response.data[0];
+      if (v.location) {
         const codeRes = await retrievePlusCodeFn(
-          firstVehicle.location.latitude,
-          firstVehicle.location.longitude
+          v.location.latitude,
+          v.location.longitude
         );
         if (codeRes?.status === "OK" && codeRes.plus_code) {
-          firstVehicle.plus_code = codeRes.plus_code;
+          v.plus_code = codeRes.plus_code;
         }
       }
     }
 
-    // 6) Return the final array
-    return response.data || [];
+    // Return an array of vehicles or empty array
+    return Array.isArray(response?.data) ? response.data : [];
   } catch (error) {
-    console.error("fetchVehicleList error:", error);
+    console.error("fetchVehicleList (status) error:", error);
     throw error;
   }
 }
@@ -207,8 +180,12 @@ export async function fetchVehicleList(
 // 4. Example: Helper to retrieve plus code (optional function)
 // -----------------------------------------------------------------------------
 
-async function retrievePlusCodeFn(latitude: number, longitude: number) {
-  // e.g., call an external API to get plus code
+/**
+ * Example function to fetch a plus code for a given lat/lng.
+ * If you don't need plus codes, remove or replace with your real logic.
+ */
+async function retrievePlusCodeFn(latitude: number, longitude: number): Promise<any> {
+  // e.g., call an external API
   // We'll just mock a response:
   return {
     status: "OK",
@@ -222,10 +199,12 @@ async function retrievePlusCodeFn(latitude: number, longitude: number) {
 
 /**
  * Example function demonstrating how you'd call fetchVehicleList
- * with a specific registration or multiple filters.
+ * for a specific registration or all vehicles.
  */
 export async function getVehicleStatusOrAll(registration?: string) {
   try {
+    // If registration is provided, fetch that vehicle's status
+    // otherwise fetch all vehicles in /vehicles/status
     const data = await fetchVehicleList({ registration });
     return data;
   } catch (err) {
