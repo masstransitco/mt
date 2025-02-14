@@ -21,6 +21,10 @@ const ANIMATION_PARAMS = {
   }
 } as const;
 
+// Define type for animation parameters
+type AnimationParams = typeof ANIMATION_PARAMS;
+type Scale = number;
+
 interface PulsatingStripProps {
   className?: string;
 }
@@ -38,7 +42,7 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
     const progress = (elapsed % ANIMATION_PARAMS.duration) / ANIMATION_PARAMS.duration;
 
     // Calculate animation values based on progress
-    let scale = ANIMATION_PARAMS.scales.min;
+    let scale: Scale = ANIMATION_PARAMS.scales.min;
     let color = ANIMATION_PARAMS.colors.primary;
     let opacity = 1;
     let shadowIntensity = 0.3;
@@ -113,8 +117,8 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
 
 PulsatingStrip.displayName = 'PulsatingStrip';
 
-// Linear interpolation helper
-const lerp = (start: number, end: number, progress: number) => {
+// Linear interpolation helper with proper typing
+const lerp = (start: number, end: number, progress: number): number => {
   return start + (end - start) * progress;
 };
 
