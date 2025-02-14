@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
@@ -71,25 +71,16 @@ type OpenSheetType = "none" | "car" | "list" | "detail";
 
 export default function GMap({ googleApiKey }: GMapProps) {
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
-
-  // Local UI states
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Which sheet is open?
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
-
-  // Force station detail to open if user picks a station
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
-
-  // Used to force re-mounting StationDetail if user picks a new station
   const [detailKey, setDetailKey] = useState(0);
-
-  // Example modal for a special marker
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
   const dispatch = useAppDispatch();
@@ -120,8 +111,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Use the Three.js overlay hook, passing in selected station IDs
-  const { overlayRef } = useThreeOverlay(
+  // Use the Three.js overlay hook, passing in selected station IDs.
+  // Destructure both overlayRef and stationCubesRef.
+  const { overlayRef, stationCubesRef } = useThreeOverlay(
     actualMap,
     stations,
     departureStationId,
@@ -153,7 +145,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [bookingStep, dispatch, isSheetMinimized]
   );
 
-  // 1) Initialize map options & marker icons once Google Maps is loaded
+  // Initialize map options & marker icons when Maps is loaded
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -161,7 +153,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // 2) Fetch data: stations, stations3D, cars
+  // Fetch data: stations, stations3D, cars
   useEffect(() => {
     (async () => {
       try {
@@ -177,22 +169,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Once stations & cars are loaded, hide overlay spinner
+  // Hide overlay spinner once data is loaded
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Raycasting effect for the Three.js overlay:
+  // Use a manual THREE.Raycaster for the overlay interaction.
   useEffect(() => {
-    if (overlayRef.current) {
-      const renderer = (overlayRef.current as any)["renderer"];
-      if (!renderer) return;
+    if (overlayRef.current && stationCubesRef.current) {
+      // Access the renderer and camera from the overlay instance.
+      const renderer = (overlayRef.current as any).renderer;
+      const camera = (overlayRef.current as any).camera;
+      if (!renderer || !camera) return;
       const canvas = renderer.domElement;
-
-      // Ensure the canvas is interactive
       canvas.style.pointerEvents = "auto";
+
+      const raycaster = new THREE.Raycaster();
 
       const onCanvasClick = (event: MouseEvent) => {
         const rect = canvas.getBoundingClientRect();
@@ -200,7 +194,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
           ((event.clientX - rect.left) / rect.width) * 2 - 1,
           -((event.clientY - rect.top) / rect.height) * 2 + 1
         );
-        const intersections = overlayRef.current!.raycast(mouse);
+        raycaster.setFromCamera(mouse, camera);
+        const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
         console.log("Intersections:", intersections);
         if (intersections.length > 0) {
           const intersected = intersections[0].object;
@@ -218,7 +213,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
           ((touch.clientX - rect.left) / rect.width) * 2 - 1,
           -((touch.clientY - rect.top) / rect.height) * 2 + 1
         );
-        const intersections = overlayRef.current!.raycast(mouse);
+        raycaster.setFromCamera(mouse, camera);
+        const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
         console.log("Intersections (touch):", intersections);
         if (intersections.length > 0) {
           const intersected = intersections[0].object;
@@ -237,7 +233,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         canvas.removeEventListener("touchend", onCanvasTouchEnd);
       };
     }
-  }, [overlayRef, handleStationClick]);
+  }, [overlayRef, stationCubesRef, handleStationClick]);
 
   // Handle errors
   const hasError = stationsError || carsError || loadError;
@@ -257,7 +253,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Auto-fetch route if departure & arrival
+  // Auto-fetch route if departure & arrival are set
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -268,7 +264,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // Sorting logic
+  // Sorting logic for stations
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -307,7 +303,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Clear departure => step=1
+  // Clear departure
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
@@ -318,7 +314,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Clear arrival => step=3
+  // Clear arrival
   const handleClearArrivalInSelector = () => {
     dispatch(clearArrivalStation());
     dispatch(advanceBookingStep(3));
@@ -342,12 +338,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Close the current sheet
   const closeCurrentSheet = () => {
-    const old = openSheet;
-    if (old === "detail") {
+    if (openSheet === "detail") {
       setOpenSheet("none");
       setPreviousSheet("none");
       setForceSheetOpen(false);
-
       overlayRef.current?.requestRedraw();
     } else {
       setOpenSheet(previousSheet);
@@ -355,7 +349,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // "Locate me"
+  // "Locate me" handler
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -391,7 +385,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Station from list => same logic
+  // Station selection from list
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep < 3) {
       dispatch({ type: "user/selectDepartureStation", payload: station.id });
@@ -409,7 +403,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // Confirm departure => step=3
+  // Confirm departure
   const handleConfirmDeparture = () => {
     dispatch(advanceBookingStep(3));
     setOpenSheet("none");
@@ -417,7 +411,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setForceSheetOpen(false);
   };
 
-  // On map load => fit bounds to all station markers
+  // On map load, fit bounds to all station markers
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       setActualMap(map);
@@ -437,7 +431,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
-  // Which station is selected? (depends on step)
+  // Determine currently selected station (for detail sheet)
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
