@@ -214,11 +214,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             return;
           }
 
-          // Highlight the intersected cube (using a highlight color of 0x00ff00)
-          highlightedCube = intersections[0].object as THREE.Mesh;
-          (highlightedCube.material as THREE.MeshPhongMaterial).color.setHex(0x00ff00);
-          actualMap.setOptions({ draggableCursor: "pointer" });
-        };
 
         // Handle click events on the map.
         actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
