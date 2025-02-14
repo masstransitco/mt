@@ -14,10 +14,16 @@ import { DISPATCH_HUB } from "@/constants/map";
  *
  * We pass in the google Map instance + station data,
  * and this hook sets up the overlay once both are ready.
+ *
+ * Now also accepts selected station IDs to update cube colours:
+ *  - Departure: blue (0x0000ff)
+ *  - Arrival: red (0xff0000)
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
-  stations: StationFeature[]
+  stations: StationFeature[],
+  departureStationId: number | null,
+  arrivalStationId: number | null
 ) {
   // Refs to store the Three.js objects
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
@@ -83,13 +89,14 @@ export function useThreeOverlay(
       });
       const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
       const stationCubeMat = new THREE.MeshPhongMaterial({
-        color: 0xcccccc,
+        color: 0xcccccc, // default grey
         opacity: 0.8,
         transparent: true,
       });
       const stationCube = new THREE.Mesh(stationCubeGeo, stationCubeMat);
       stationCube.position.copy(stationCubePos);
       stationCube.scale.set(2.1, 2.1, 2.1);
+      // Store the station data for later reference (e.g. raycasting)
       stationCube.userData = { station };
       scene.add(stationCube);
       cubes.push(stationCube);
@@ -101,7 +108,7 @@ export function useThreeOverlay(
       console.log("[useThreeOverlay] Cleaning up overlay...");
       // Remove overlay from map
       if (overlayRef.current) {
-          // @ts-ignore
+        // @ts-ignore
         overlayRef.current.setMap(null);
         overlayRef.current = null;
       }
@@ -121,6 +128,26 @@ export function useThreeOverlay(
       stationCubesRef.current = [];
     };
   }, [googleMap, stations]);
+
+  // New: Effect to update cube colours based on selected stations
+  useEffect(() => {
+    if (!stationCubesRef.current) return;
+    stationCubesRef.current.forEach((cube) => {
+      const station = cube.userData?.station;
+      if (!station) return;
+      // If this cube's station is the selected departure, set blue.
+      if (departureStationId !== null && station.id === departureStationId) {
+        (cube.material as THREE.MeshPhongMaterial).color.set(0x0000ff); // blue
+      }
+      // If this cube's station is the selected arrival, set red.
+      else if (arrivalStationId !== null && station.id === arrivalStationId) {
+        (cube.material as THREE.MeshPhongMaterial).color.set(0xff0000); // red
+      } else {
+        // Otherwise, revert to default grey.
+        (cube.material as THREE.MeshPhongMaterial).color.set(0xcccccc);
+      }
+    });
+  }, [departureStationId, arrivalStationId]);
 
   return {
     overlayRef,
