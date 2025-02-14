@@ -112,7 +112,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   });
 
   // Use the Three.js overlay hook, passing in selected station IDs.
-  // Destructure both overlayRef and stationCubesRef.
   const { overlayRef, stationCubesRef } = useThreeOverlay(
     actualMap,
     stations,
@@ -180,94 +179,95 @@ export default function GMap({ googleApiKey }: GMapProps) {
     const overlay = overlayRef.current;
     if (!overlay || !stationCubesRef.current) return;
 
-    // Poll until the camera and renderer are ready.
+    // Check every 300ms if the overlay's renderer & camera are set
     const intervalId = setInterval(() => {
       const renderer = (overlay as any).renderer;
       const camera = (overlay as any).camera;
+
       if (renderer && camera) {
         clearInterval(intervalId);
+
+        // Ensure the canvas is topmost and receives pointer events
         const canvas = renderer.domElement;
+        canvas.style.position = "absolute";
+        canvas.style.top = "0";
+        canvas.style.left = "0";
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        canvas.style.zIndex = "9999";
         canvas.style.pointerEvents = "auto";
-        canvas.style.zIndex = "1";
 
         const raycaster = new THREE.Raycaster();
 
+        // Helper: convert event coords to normalized device coords
+        const getNDC = (x: number, y: number) => {
+          // Get real rendering size in device pixels
+          const size = new THREE.Vector2();
+          renderer.getSize(size);
+
+          return new THREE.Vector2(
+            (x / size.x) * 2 - 1,
+            -(y / size.y) * 2 + 1
+          );
+        };
+
         const onCanvasClick = (event: MouseEvent) => {
-  const rect = canvas.getBoundingClientRect();
-  const mouse = new THREE.Vector2(
-    ((event.clientX - rect.left + window.scrollX) / rect.width) * 2 - 1,
-    -((event.clientY - rect.top + window.scrollY) / rect.height) * 2 + 1
-  );
-  
-  console.log("Click coordinates:", { x: event.clientX, y: event.clientY });
-  console.log("Normalized mouse coords:", mouse);
-  console.log("Camera:", { 
-    position: camera.position,
-    rotation: camera.rotation
-  });
-  
-  raycaster.setFromCamera(mouse, camera);
-  const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
-  
-  console.log("Number of cubes:", stationCubesRef.current.length);
-  console.log("Intersections found:", intersections.length);
-  
-  if (intersections.length > 0) {
-    const intersected = intersections[0].object;
-    console.log("Intersected object:", intersected);
-    const station = intersected.userData.station;
-    if (station) {
-      handleStationClick(station);
-    }
-  }
-};
+          event.preventDefault();
+          const rect = canvas.getBoundingClientRect();
+
+          // Mouse coords relative to top-left of the canvas
+          const offsetX = event.clientX - rect.left;
+          const offsetY = event.clientY - rect.top;
+
+          const mouse = getNDC(offsetX, offsetY);
+          raycaster.setFromCamera(mouse, camera);
+
+          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
+
+          if (intersections.length > 0) {
+            const intersected = intersections[0].object;
+            const station = intersected.userData.station;
+            if (station) {
+              handleStationClick(station);
+            }
+          }
+        };
 
         const onCanvasTouchEnd = (event: TouchEvent) => {
-  event.preventDefault(); // Prevent default touch behavior
-  
-  const touch = event.changedTouches[0];
-  const rect = canvas.getBoundingClientRect();
-  
-  // Use touch.clientX and touch.clientY instead of event.clientX/clientY
-  const mouse = new THREE.Vector2(
-    ((touch.clientX - rect.left + window.scrollX) / rect.width) * 2 - 1,
-    -((touch.clientY - rect.top + window.scrollY) / rect.height) * 2 + 1
-  );
+          event.preventDefault();
+          if (!event.changedTouches.length) return;
 
-  // Add debug logging
-  console.log("Touch coordinates:", { x: touch.clientX, y: touch.clientY });
-  console.log("Normalized touch coords:", mouse);
-  console.log("Camera:", {
-    position: camera.position,
-    rotation: camera.rotation
-  });
+          const touch = event.changedTouches[0];
+          const rect = canvas.getBoundingClientRect();
 
-  raycaster.setFromCamera(mouse, camera);
-  const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
+          // Touch coords relative to top-left of the canvas
+          const offsetX = touch.clientX - rect.left;
+          const offsetY = touch.clientY - rect.top;
 
-  console.log("Number of cubes:", stationCubesRef.current.length);
-  console.log("Intersections found:", intersections.length);
+          const mouse = getNDC(offsetX, offsetY);
+          raycaster.setFromCamera(mouse, camera);
 
-  if (intersections.length > 0) {
-    const intersected = intersections[0].object;
-    console.log("Intersected object:", intersected);
-    const station = intersected.userData.station;
-    if (station) {
-      handleStationClick(station);
-    }
-  }
-};
+          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
+
+          if (intersections.length > 0) {
+            const intersected = intersections[0].object;
+            const station = intersected.userData.station;
+            if (station) {
+              handleStationClick(station);
+            }
+          }
+        };
 
         canvas.addEventListener("click", onCanvasClick);
         canvas.addEventListener("touchend", onCanvasTouchEnd);
 
-        // Cleanup function
+        // Cleanup
         return () => {
           canvas.removeEventListener("click", onCanvasClick);
           canvas.removeEventListener("touchend", onCanvasTouchEnd);
         };
       }
-    }, 500);
+    }, 300);
 
     return () => clearInterval(intervalId);
   }, [overlayRef, stationCubesRef, handleStationClick]);
