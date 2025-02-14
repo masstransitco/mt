@@ -1,6 +1,4 @@
-/**
- * Core interfaces for car data
- */
+// src/types/cars.ts
 export interface CarFeatures {
   range: number;
   charging: string;
@@ -8,23 +6,17 @@ export interface CarFeatures {
 }
 
 export interface Car {
-  id: number;
-  name: string;
+  id: number;       // e.g. mapped from vehicle_id
+  name: string;     // e.g. mapped from registration
+  model: string;    // e.g. mapped from manufacturer
+  year: number;     // e.g. mapped from model_year
+  odometer: number; // converted from meters to km
   type: string;
   price: number;
   image: string;
   modelUrl?: string;
   available: boolean;
   features: CarFeatures;
-
-  // New fields for mapping / geolocation
   lat: number;
   lng: number;
-
-  // ────────────────────────────────────────────
-  // NEW: model, year, odometer
-  // ────────────────────────────────────────────
-  model: string;
-  year: number;
-  odometer: number;
 }
