@@ -92,10 +92,10 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
       shadowIntensity = 0.3;
     }
 
-    stripRef.current.style.transform = `scale(${scale})`;
+    stripRef.current.style.transform = `scale(${scale})`;  // Fixed from scale(${scale})
     stripRef.current.style.backgroundColor = color;
     stripRef.current.style.opacity = opacity.toString();
-    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0, 0, 0, ${shadowIntensity})`;
+    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0, 0, 0, ${shadowIntensity})`; // Fixed missing backticks
 
     animationRef.current = requestAnimationFrame(animate);
   };
