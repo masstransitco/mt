@@ -120,15 +120,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Use the Three.js overlay hook
+  // Use the Three.js overlay hook, passing in selected station IDs
   const { overlayRef } = useThreeOverlay(
-  actualMap,
-  stations,
-  departureStationId,
-  arrivalStationId
-);
+    actualMap,
+    stations,
+    departureStationId,
+    arrivalStationId
+  );
 
-   // Station click => departure or arrival
+  // Station click => departure or arrival
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep < 3) {
@@ -184,11 +184,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // NEW: Raycasting effect for the Three.js overlay.
+  // Raycasting effect for the Three.js overlay:
   useEffect(() => {
     if (overlayRef.current) {
       const renderer = (overlayRef.current as any)["renderer"];
+      if (!renderer) return;
       const canvas = renderer.domElement;
+
+      // Ensure the canvas is interactive
+      canvas.style.pointerEvents = "auto";
 
       const onCanvasClick = (event: MouseEvent) => {
         const rect = canvas.getBoundingClientRect();
@@ -202,15 +206,35 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const intersected = intersections[0].object;
           const station = intersected.userData.station;
           if (station) {
-            // Trigger the same handler as marker click
+            handleStationClick(station);
+          }
+        }
+      };
+
+      const onCanvasTouchEnd = (event: TouchEvent) => {
+        const touch = event.changedTouches[0];
+        const rect = canvas.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((touch.clientX - rect.left) / rect.width) * 2 - 1,
+          -((touch.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const intersections = overlayRef.current!.raycast(mouse);
+        console.log("Intersections (touch):", intersections);
+        if (intersections.length > 0) {
+          const intersected = intersections[0].object;
+          const station = intersected.userData.station;
+          if (station) {
             handleStationClick(station);
           }
         }
       };
 
       canvas.addEventListener("click", onCanvasClick);
+      canvas.addEventListener("touchend", onCanvasTouchEnd);
+
       return () => {
         canvas.removeEventListener("click", onCanvasClick);
+        canvas.removeEventListener("touchend", onCanvasTouchEnd);
       };
     }
   }, [overlayRef, handleStationClick]);
@@ -367,8 +391,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
- 
-
   // Station from list => same logic
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep < 3) {
@@ -411,7 +433,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [stations]
   );
 
-  // If still overlay visible => show spinner
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
