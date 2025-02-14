@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Menu as MenuIcon, QrCode } from 'lucide-react';
+import Image from 'next/image';
 
 import GMapWithErrorBoundary from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
@@ -23,21 +24,34 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-[57px]">
-        <div className="h-full px-4 flex items-center justify-between">
-          <button
-            onClick={toggleMenu}
-            className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
-          >
-            <MenuIcon className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border h-[50px]">
+        <div className="relative h-full flex items-center px-2">
+          {/* Right Icons */}
+          <div className="absolute right-2 flex items-center space-x-2">
             <button
               onClick={() => setIsScannerOpen(true)}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
             >
               <QrCode className="w-5 h-5" />
             </button>
+            {/* Vertical Divider */}
+            <div className="w-px h-6 bg-gray-500" />
+            <button
+              onClick={toggleMenu}
+              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
+            >
+              <MenuIcon className="w-5 h-5" />
+            </button>
+          </div>
+          {/* Centered Logo */}
+          <div className="flex-grow flex justify-center">
+            <Image
+              src="/brand/logo.png"
+              alt="Logo"
+              width={20}
+              height={20}
+              className="object-contain"
+            />
           </div>
         </div>
       </header>
