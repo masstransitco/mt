@@ -1,24 +1,27 @@
-import { selectAllCars } from "@/store/carSlice";
+import { selectAllCars, setAvailableForDispatch } from "@/store/carSlice";
 import { selectAllDispatchLocations } from "@/store/dispatchSlice";
-import { useAppSelector } from "@/store/store";
-import { useMemo } from "react";
+import { useAppSelector, useAppDispatch } from "@/store/store";
+import { useEffect } from "react";
 
 const RADIUS_METERS = 150;
 
 export function useAvailableCarsForDispatch() {
   const cars = useAppSelector(selectAllCars);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
+  const dispatch = useAppDispatch();
 
-  const availableCars = useMemo(() => {
-    return cars.filter((car) => {
+  useEffect(() => {
+    const availableCars = cars.filter((car) => {
       return dispatchLocations.some((dispatch) => {
         const distance = calculateDistance(car.lat, car.lng, dispatch.lat, dispatch.lng);
         return distance <= RADIUS_METERS;
       });
     });
-  }, [cars, dispatchLocations]);
 
-  return availableCars;
+    dispatch(setAvailableForDispatch(availableCars));
+  }, [cars, dispatchLocations, dispatch]);
+
+  return useAppSelector(selectAvailableForDispatch);
 }
 
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
