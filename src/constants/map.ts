@@ -139,7 +139,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   clickableIcons: false,
   styles: MAP_STYLES,
   mapTypeId: 'roadmap',
-  renderingType: google.maps.RenderingType.VECTOR
+  renderingType: google.maps.RenderingType.VECTOR,
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
