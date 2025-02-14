@@ -62,7 +62,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
                 layout
                 // Subtle fade/scale animation when cards appear or disappear
                 initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 0.35 }}
+                animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
               >
