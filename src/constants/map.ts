@@ -203,9 +203,9 @@ export const createMarkerIcons = () => {
   return {
     // 1) User Location
     user: {
-      path: userPinPath,
+      path: google?.maps?.SymbolPath?.CIRCLE,
       scale: 10,
-      fillColor: '#93C5FD',   // Light blue
+      fillColor: '#0717f5',   // Light blue
       fillOpacity: 1,
       strokeWeight: 2,
       strokeColor: '#FFFFFF', 
@@ -231,7 +231,7 @@ export const createMarkerIcons = () => {
     },
     // 4) Departure station
     departureStation: {
-      path: google?.maps?.SymbolPath?.CIRCLE,
+      path: userPinPath,
       scale: 9,
       fillColor: '#0717f5',
       fillOpacity: 1,
@@ -240,7 +240,7 @@ export const createMarkerIcons = () => {
     },
     // 5) Arrival station
     arrivalStation: {
-      path: google?.maps?.SymbolPath?.CIRCLE,
+      path: userPinPath,
       scale: 9,
       fillColor: '#A8161B',
       fillOpacity: 1,
