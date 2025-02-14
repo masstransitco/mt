@@ -3,10 +3,10 @@
 import React, { memo } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import Image from "next/image";
 import { Battery, Gauge, Check } from "lucide-react";
 import type { Car } from "@/types/cars";
 
+// Dynamically load the 3D viewer for performance; also ensure Car3DViewer is memoized
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => (
@@ -29,20 +29,19 @@ function CarCardComponent({
   isVisible = true,
   size = "large",
 }: CarCardProps) {
-  // We can ignore `size` or unify it. Let's unify to a single approach:
-  // e.g. a fixed aspect ratio or fixed height. We'll do an aspect ratio for this demo.
-  
+  // We can unify to a fixed aspect ratio for consistent sizing
+  // Starting scale: 0.98. If the card is selected, it scales to 1.0
   return (
     <motion.div
-      // Subtle scale effect for selected vs. unselected
-      animate={{ scale: selected ? 1.02 : 1 }}
+      initial={{ scale: 0.98 }}
+      animate={{ scale: selected ? 1.0 : 0.98 }}
       transition={{ type: "tween", duration: 0.3 }}
       onClick={onClick}
       className={`
         relative overflow-hidden rounded-2xl bg-card cursor-pointer
         transition-all duration-300
-        border border-border/50 
-        hover:border-border 
+        border border-border/50
+        hover:border-border
         ${
           selected
             ? // White glow highlight
@@ -80,7 +79,9 @@ function CarCardComponent({
       <div className="p-4">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h3 className="font-semibold text-foreground text-base">{car.name}</h3>
+            <h3 className="font-semibold text-foreground text-base">
+              {car.name}
+            </h3>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <Battery className="w-4 h-4" />
               <span>{car.type}</span>
@@ -114,4 +115,5 @@ function CarCardComponent({
   );
 }
 
+// Wrap in React.memo for performance: re-render only if props change
 export default memo(CarCardComponent);
