@@ -207,10 +207,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             recursive: true,
           });
 
-          // Reset previous highlight color (using a default color of 0xcccccc)
-          if (highlightedCube) {
-            (highlightedCube.material as THREE.MeshPhongMaterial).color.setHex(0xcccccc);
-          }
 
           if (intersections.length === 0) {
             actualMap.setOptions({ draggableCursor: null });
