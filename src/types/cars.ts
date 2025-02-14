@@ -1,4 +1,3 @@
-// src/types/cars.ts
 export interface CarFeatures {
   range: number;
   charging: string;
@@ -6,11 +5,11 @@ export interface CarFeatures {
 }
 
 export interface Car {
-  id: number;       // e.g. mapped from vehicle_id
-  name: string;     // e.g. mapped from registration
-  model: string;    // e.g. mapped from manufacturer
-  year: number;     // e.g. mapped from model_year
-  odometer: number; // converted from meters to km
+  id: number;
+  name: string;
+  model: string;
+  year: number;
+  odometer: number; 
   type: string;
   price: number;
   image: string;
