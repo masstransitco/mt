@@ -170,7 +170,7 @@ const Sheet = ({
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm",
+        "fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm rounded-t-lg", // Rounded top corners added here
         "overflow-hidden",
         "transition-[max-height] duration-500 ease-in-out",
         isOpen ? "max-h-[50vh]" : "max-h-0",
@@ -189,10 +189,8 @@ const Sheet = ({
             )}
           </div>
 
-          <div className="flex items-center gap-4">
-            <button className="px-4 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
-              Sort by
-            </button>
+          <div className="flex items-center">
+            {/* Removed the "Sort by" button */}
             <button
               onClick={onToggle}
               className="p-2 rounded-full hover:bg-muted transition-colors"
