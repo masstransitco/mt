@@ -11,42 +11,50 @@ interface CarState {
   error: string | null;
 }
 
-// Fetch cars from the API, transform them to match the Car interface
+// Thunk to fetch cars and transform them
 export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   "car/fetchCars",
   async (_, { rejectWithValue }) => {
     try {
-      // rawVehicles will be the array of vehicles from /rest/vehicles
+      // rawVehicles is the array from /vehicles/status
       const rawVehicles = await fetchVehicleList();
 
       // Transform each raw vehicle into a Car
       const transformed: Car[] = rawVehicles.map((v: any) => {
-        // Convert odometer from meters → kilometers
-        const odometerKm = v.odometer ? Math.round(v.odometer / 1000) : 0;
+        // If the API includes v.vehicle_id, v.registration, etc., map them here
+        // Convert odometer from meters → kilometers if not already done
+        const odometerKm = v.odometer ? v.odometer : 0; // it's already km if we did it above
 
-        // We assume the API returns: v.vehicle_id, v.registration, v.manufacturer,
-        // v.model_year, v.location?.latitude, v.location?.longitude, etc.
-        // If your API uses different fields, adjust as needed.
         return {
+          // We'll assume the 'vehicle_id' is the unique ID
           id: v.vehicle_id ?? 0,
+          // name from v.registration or fallback
           name: v.registration ?? "Unknown Vehicle",
+          // EV type (or "Unknown" if you prefer)
           type: "Electric",
+          // hard-coded price example
           price: 600,
+
+          // local assets or from the API
           modelUrl: v.modelUrl,
           image: v.image,
           available: true,
+
+          // default features
           features: {
             range: 0,
             charging: "",
             acceleration: "",
           },
-          lat: v.location?.latitude ?? 0,
-          lng: v.location?.longitude ?? 0,
 
-          // Additional fields for model, year, odometer
-          model: v.manufacturer ?? "Unknown Model",
-          year: v.model_year ?? 0,
-          odometer: odometerKm,
+          // lat/lng from the v.location (already extracted in fetchVehicleList)
+          lat: v.lat ?? 0,
+          lng: v.lng ?? 0,
+
+          // Additional fields
+          model: v.model ?? "Unknown Model",     // was v.manufacturer if needed
+          year: v.year ?? 0,                     // was v.model_year
+          odometer: odometerKm,                  // in km
         };
       });
 
@@ -96,7 +104,7 @@ const carSlice = createSlice({
 export const { setAvailableForDispatch } = carSlice.actions;
 export default carSlice.reducer;
 
-// Selector helpers
+// Selectors
 export const selectAllCars = (state: RootState) => state.car.cars;
 export const selectAvailableForDispatch = (state: RootState) => state.car.availableForDispatch;
 export const selectCarsLoading = (state: RootState) => state.car.loading;
