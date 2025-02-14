@@ -123,6 +123,31 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Use the Three.js overlay hook
   const { overlayRef } = useThreeOverlay(actualMap, stations);
 
+   // Station click => departure or arrival
+  const handleStationClick = useCallback(
+    (station: StationFeature) => {
+      if (bookingStep < 3) {
+        dispatch({ type: "user/selectDepartureStation", payload: station.id });
+      } else {
+        dispatch({ type: "user/selectArrivalStation", payload: station.id });
+        if (bookingStep === 3) {
+          dispatch(advanceBookingStep(4));
+          toast.success("Arrival station selected!");
+        }
+      }
+
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+      setPreviousSheet("none");
+
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    },
+    [bookingStep, dispatch, isSheetMinimized]
+  );
+
   // 1) Initialize map options & marker icons once Google Maps is loaded
   useEffect(() => {
     if (isLoaded && window.google) {
@@ -336,30 +361,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Station click => departure or arrival
-  const handleStationClick = useCallback(
-    (station: StationFeature) => {
-      if (bookingStep < 3) {
-        dispatch({ type: "user/selectDepartureStation", payload: station.id });
-      } else {
-        dispatch({ type: "user/selectArrivalStation", payload: station.id });
-        if (bookingStep === 3) {
-          dispatch(advanceBookingStep(4));
-          toast.success("Arrival station selected!");
-        }
-      }
-
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setPreviousSheet("none");
-
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [bookingStep, dispatch, isSheetMinimized]
-  );
+ 
 
   // Station from list => same logic
   const handleStationSelectedFromList = (station: StationFeature) => {
