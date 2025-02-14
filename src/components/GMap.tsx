@@ -4,6 +4,7 @@ import React, { useEffect, useCallback, useRef, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
+import * as THREE from "three";
 
 import { useAppDispatch, useAppSelector } from "@/store/store";
 
@@ -152,6 +153,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
+
+  // NEW: Raycasting effect for the Three.js overlay.
+  useEffect(() => {
+    if (overlayRef.current) {
+      const renderer = overlayRef.current.getRenderer();
+      const canvas = renderer.domElement;
+
+      const onCanvasClick = (event: MouseEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouse = new THREE.Vector2(
+          ((event.clientX - rect.left) / rect.width) * 2 - 1,
+          -((event.clientY - rect.top) / rect.height) * 2 + 1
+        );
+        const intersections = overlayRef.current!.raycast(mouse);
+        if (intersections.length > 0) {
+          const intersected = intersections[0].object;
+          const station = intersected.userData.station;
+          if (station) {
+            // Trigger the same handler as marker click
+            handleStationClick(station);
+          }
+        }
+      };
+
+      canvas.addEventListener("click", onCanvasClick);
+      return () => {
+        canvas.removeEventListener("click", onCanvasClick);
+      };
+    }
+  }, [overlayRef, handleStationClick]);
 
   // Handle errors
   const hasError = stationsError || carsError || loadError;
