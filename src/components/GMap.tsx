@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useState, useRef } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
@@ -119,9 +119,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // Ref to store the last click/touch position (in normalized device coordinates)
-  const clickPositionRef = useRef<THREE.Vector2 | null>(null);
-
   // Station click => departure or arrival
   const handleStationClick = useCallback(
     (station: StationFeature) => {
@@ -176,12 +173,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Set up event listeners on the overlay's canvas and schedule raycasting in onBeforeDraw.
+  // Raycasting effect based on the map's events and using the overlay's raycast.
   useEffect(() => {
     const overlay = overlayRef.current;
-    if (!overlay || !stationCubesRef.current) return;
+    if (!overlay || !stationCubesRef.current || !actualMap) return;
 
-    // Wait until the overlay's renderer and camera are available.
     const intervalId = setInterval(() => {
       const renderer = (overlay as any).renderer;
       const camera = (overlay as any).camera;
@@ -189,91 +185,68 @@ export default function GMap({ googleApiKey }: GMapProps) {
       if (renderer && camera) {
         clearInterval(intervalId);
 
-        const canvas: HTMLCanvasElement = renderer.domElement;
-        // Ensure the canvas is on top and receives pointer events.
-        canvas.style.position = "absolute";
-        canvas.style.top = "0";
-        canvas.style.left = "0";
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-        canvas.style.zIndex = "9999";
-        canvas.style.pointerEvents = "auto";
+        const mapDiv = actualMap.getDiv();
+        const mousePosition = new THREE.Vector2();
 
-        /**
-         * Helper to convert click/touch coordinates to normalized device coordinates.
-         * We compute the offsets from the map's bounding rect (rather than the canvas rect),
-         * but still use the renderer's actual size to scale the coordinates to NDC.
-         */
-        const getNDCFromEvent = (clientX: number, clientY: number) => {
-          if (!actualMap) return null;
-          const mapRect = actualMap.getDiv().getBoundingClientRect();
-          const offsetX = clientX - mapRect.left;
-          const offsetY = clientY - mapRect.top;
+        // Listen to mouse movements on the map div.
+        actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
+          const domEvent = ev.domEvent as MouseEvent;
+          const { left, top, width, height } = mapDiv.getBoundingClientRect();
+          const x = domEvent.clientX - left;
+          const y = domEvent.clientY - top;
+          mousePosition.x = 2 * (x / width) - 1;
+          mousePosition.y = 1 - 2 * (y / height);
+          overlay.requestRedraw();
+        });
 
-          // Get the overlay's actual rendering size (in px).
-          const size = new THREE.Vector2();
-          renderer.getSize(size);
+        let highlightedCube: THREE.Mesh | null = null;
 
-          // Convert to NDC
-          const ndcX = (offsetX / size.x) * 2 - 1;
-          const ndcY = -(offsetY / size.y) * 2 + 1;
-          return new THREE.Vector2(ndcX, ndcY);
-        };
-
-        // Instead of raycasting immediately on click, we just record the position.
-        const onCanvasClick = (event: MouseEvent) => {
-          event.preventDefault();
-          const ndc = getNDCFromEvent(event.clientX, event.clientY);
-          if (ndc) {
-            clickPositionRef.current = ndc;
-            overlay.requestRedraw();
-          }
-        };
-
-        const onCanvasTouchEnd = (event: TouchEvent) => {
-          event.preventDefault();
-          if (!event.changedTouches.length) return;
-          const touch = event.changedTouches[0];
-          const ndc = getNDCFromEvent(touch.clientX, touch.clientY);
-          if (ndc) {
-            clickPositionRef.current = ndc;
-            overlay.requestRedraw();
-          }
-        };
-
-        canvas.addEventListener("click", onCanvasClick);
-        canvas.addEventListener("touchend", onCanvasTouchEnd);
-
-        // Use the overlay's onBeforeDraw callback to perform the raycast.
+        // Continuous raycasting using overlay.onBeforeDraw ensures the camera is updated.
         overlay.onBeforeDraw = () => {
-          // Only perform raycast if a click/touch occurred.
-          if (clickPositionRef.current) {
-            const intersections = overlay.raycast(
-              clickPositionRef.current,
-              stationCubesRef.current,
-              { recursive: true }
-            );
-            if (intersections.length > 0) {
-              const station = intersections[0].object.userData.station;
-              if (station) {
-                handleStationClick(station);
-              }
-            }
-            // Reset the click position so it only fires once.
-            clickPositionRef.current = null;
+          const intersections = overlay.raycast(mousePosition, stationCubesRef.current, {
+            recursive: true,
+          });
+
+          // Reset previous highlight color (using a default color of 0xcccccc)
+          if (highlightedCube) {
+            (highlightedCube.material as THREE.MeshPhongMaterial).color.setHex(0xcccccc);
           }
+
+          if (intersections.length === 0) {
+            actualMap.setOptions({ draggableCursor: null });
+            highlightedCube = null;
+            return;
+          }
+
+          // Highlight the intersected cube (using a highlight color of 0x00ff00)
+          highlightedCube = intersections[0].object as THREE.Mesh;
+          (highlightedCube.material as THREE.MeshPhongMaterial).color.setHex(0x00ff00);
+          actualMap.setOptions({ draggableCursor: "pointer" });
         };
 
-        // Cleanup: remove event listeners when overlay is disposed or this effect re-runs.
-        return () => {
-          canvas.removeEventListener("click", onCanvasClick);
-          canvas.removeEventListener("touchend", onCanvasTouchEnd);
-        };
+        // Handle click events on the map.
+        actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
+          const domEvent = ev.domEvent as MouseEvent;
+          const { left, top, width, height } = mapDiv.getBoundingClientRect();
+          mousePosition.x = 2 * ((domEvent.clientX - left) / width) - 1;
+          mousePosition.y = 1 - 2 * ((domEvent.clientY - top) / height);
+
+          const intersections = overlay.raycast(mousePosition, stationCubesRef.current, {
+            recursive: true,
+          });
+
+          if (intersections.length > 0) {
+            const station = intersections[0].object.userData.station;
+            if (station) {
+              handleStationClick(station);
+            }
+          }
+        });
       }
     }, 300);
 
     return () => clearInterval(intervalId);
-  }, [overlayRef, stationCubesRef, handleStationClick, actualMap]);
+  }, [overlayRef, stationCubesRef, actualMap, handleStationClick]);
 
   // Handle errors
   const hasError = stationsError || carsError || loadError;
