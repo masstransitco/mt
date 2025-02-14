@@ -19,7 +19,9 @@ const base64Auth = btoa(`${USERNAME}:${API_PASSWORD}`);
 /**
  * Creates Fetch options with Basic Auth headers
  */
-function getRequestOptions(method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'): RequestInit {
+function getRequestOptions(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET'
+): RequestInit {
   const headers = new Headers();
   headers.append('Authorization', `Basic ${base64Auth}`);
   headers.append('Content-Type', 'application/json');
@@ -73,10 +75,6 @@ function getLocalAssetsForRegistration(
 // 3. fetchVehicleList calling /vehicles/status
 // -----------------------------------------------------------------------------
 
-/**
- * Optional interface if you only need registration filter
- * or plus-code retrieval. Extend if you want more parameters.
- */
 export interface FetchVehicleListParams {
   registration?: string;
   shouldRetrievePlusCode?: boolean; // renamed to avoid conflict with function call
@@ -92,7 +90,9 @@ export interface FetchVehicleListParams {
  * Returns an array of vehicles, each with:
  *   { registration, lat, lng, modelUrl, image, plus_code?, etc. }
  */
-export async function fetchVehicleList(params: FetchVehicleListParams = {}): Promise<any[]> {
+export async function fetchVehicleList(
+  params: FetchVehicleListParams = {}
+): Promise<any[]> {
   try {
     const { registration, shouldRetrievePlusCode } = params;
 
@@ -111,13 +111,17 @@ export async function fetchVehicleList(params: FetchVehicleListParams = {}): Pro
 
     // 3) Optionally filter data by registration in JS
     if (registration && response?.data?.length) {
-      response.data = response.data.filter((item: any) => item.registration === registration);
+      response.data = response.data.filter(
+        (item: any) => item.registration === registration
+      );
     }
 
     // 4) Transform each vehicle to include lat/lng + local assets
     if (response?.data?.length) {
       response.data = response.data.map((vehicle: any) => {
-        const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+        const { modelUrl, image } = getLocalAssetsForRegistration(
+          vehicle.registration
+        );
         const lat = vehicle.location?.latitude ?? 0;
         const lng = vehicle.location?.longitude ?? 0;
 
@@ -127,6 +131,11 @@ export async function fetchVehicleList(params: FetchVehicleListParams = {}): Pro
           image,
           lat,
           lng,
+
+          // NEW: If your API returns these fields differently, adjust here:
+          model: vehicle.model ?? 'Unknown Model',
+          year: vehicle.year ?? 0,
+          odometer: vehicle.odometer ?? 0,
         };
       });
     }
@@ -135,7 +144,10 @@ export async function fetchVehicleList(params: FetchVehicleListParams = {}): Pro
     if (shouldRetrievePlusCode && response?.data?.length) {
       const v = response.data[0];
       if (v.location) {
-        const codeRes = await retrievePlusCodeFn(v.location.latitude, v.location.longitude);
+        const codeRes = await retrievePlusCodeFn(
+          v.location.latitude,
+          v.location.longitude
+        );
         if (codeRes?.status === 'OK' && codeRes.plus_code) {
           v.plus_code = codeRes.plus_code;
         }
