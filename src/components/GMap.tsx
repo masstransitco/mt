@@ -213,6 +213,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             highlightedCube = null;
             return;
           }
+           };
 
 
         // Handle click events on the map.
