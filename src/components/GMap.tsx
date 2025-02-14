@@ -199,32 +199,46 @@ export default function GMap({ googleApiKey }: GMapProps) {
         canvas.style.zIndex = "9999";
         canvas.style.pointerEvents = "auto";
 
-        // Helper to convert event coordinates to normalized device coordinates.
-        const getNDC = (x: number, y: number) => {
+        /**
+         * Helper to convert click/touch coordinates to normalized device coordinates.
+         * We compute the offsets from the map's bounding rect (rather than the canvas rect),
+         * but still use the renderer's actual size to scale the coordinates to NDC.
+         */
+        const getNDCFromEvent = (clientX: number, clientY: number) => {
+          if (!actualMap) return null;
+          const mapRect = actualMap.getDiv().getBoundingClientRect();
+          const offsetX = clientX - mapRect.left;
+          const offsetY = clientY - mapRect.top;
+
+          // Get the overlay's actual rendering size (in px).
           const size = new THREE.Vector2();
           renderer.getSize(size);
-          return new THREE.Vector2((x / size.x) * 2 - 1, -(y / size.y) * 2 + 1);
+
+          // Convert to NDC
+          const ndcX = (offsetX / size.x) * 2 - 1;
+          const ndcY = -(offsetY / size.y) * 2 + 1;
+          return new THREE.Vector2(ndcX, ndcY);
         };
 
         // Instead of raycasting immediately on click, we just record the position.
         const onCanvasClick = (event: MouseEvent) => {
           event.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          const offsetX = event.clientX - rect.left;
-          const offsetY = event.clientY - rect.top;
-          clickPositionRef.current = getNDC(offsetX, offsetY);
-          overlay.requestRedraw();
+          const ndc = getNDCFromEvent(event.clientX, event.clientY);
+          if (ndc) {
+            clickPositionRef.current = ndc;
+            overlay.requestRedraw();
+          }
         };
 
         const onCanvasTouchEnd = (event: TouchEvent) => {
           event.preventDefault();
           if (!event.changedTouches.length) return;
           const touch = event.changedTouches[0];
-          const rect = canvas.getBoundingClientRect();
-          const offsetX = touch.clientX - rect.left;
-          const offsetY = touch.clientY - rect.top;
-          clickPositionRef.current = getNDC(offsetX, offsetY);
-          overlay.requestRedraw();
+          const ndc = getNDCFromEvent(touch.clientX, touch.clientY);
+          if (ndc) {
+            clickPositionRef.current = ndc;
+            overlay.requestRedraw();
+          }
         };
 
         canvas.addEventListener("click", onCanvasClick);
@@ -250,7 +264,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           }
         };
 
-        // Cleanup: remove event listeners when overlay is disposed.
+        // Cleanup: remove event listeners when overlay is disposed or this effect re-runs.
         return () => {
           canvas.removeEventListener("click", onCanvasClick);
           canvas.removeEventListener("touchend", onCanvasTouchEnd);
@@ -259,7 +273,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }, 300);
 
     return () => clearInterval(intervalId);
-  }, [overlayRef, stationCubesRef, handleStationClick]);
+  }, [overlayRef, stationCubesRef, handleStationClick, actualMap]);
 
   // Handle errors
   const hasError = stationsError || carsError || loadError;
