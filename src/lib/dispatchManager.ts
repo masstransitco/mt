@@ -1,4 +1,4 @@
-import { selectAllCars, setAvailableForDispatch } from "@/store/carSlice";
+import { selectAllCars, setAvailableForDispatch, selectAvailableForDispatch } from "@/store/carSlice";
 import { selectAllDispatchLocations } from "@/store/dispatchSlice";
 import { useAppSelector, useAppDispatch } from "@/store/store";
 import { useEffect } from "react";
