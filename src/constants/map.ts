@@ -138,8 +138,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   minZoom: 8,
   clickableIcons: false,
   styles: MAP_STYLES,
-  mapTypeId: 'roadmap',
-  renderingType: google.maps.RenderingType.VECTOR,
+  mapId: 'c7d03d22763bc313',
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
