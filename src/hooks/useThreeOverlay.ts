@@ -147,6 +147,8 @@ export function useThreeOverlay(
         (cube.material as THREE.MeshPhongMaterial).color.set(0xcccccc);
       }
     });
+    // Request a redraw so that the updated colours are applied.
+    overlayRef.current?.requestRedraw();
   }, [departureStationId, arrivalStationId]);
 
   return {
