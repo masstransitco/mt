@@ -132,12 +132,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
           toast.success("Arrival station selected!");
         }
       }
-
       setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
       setOpenSheet("detail");
       setPreviousSheet("none");
-
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
@@ -176,63 +174,72 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Use a manual THREE.Raycaster for the overlay interaction.
+  // Manual raycaster effect for station cubes.
+  // We wait for the overlay's camera and renderer to be available.
   useEffect(() => {
-    if (overlayRef.current && stationCubesRef.current) {
-      // Access the renderer and camera from the overlay instance.
-      const renderer = (overlayRef.current as any).renderer;
-      const camera = (overlayRef.current as any).camera;
-      if (!renderer || !camera) return;
-      const canvas = renderer.domElement;
-      canvas.style.pointerEvents = "auto";
+    const overlay = overlayRef.current;
+    if (!overlay || !stationCubesRef.current) return;
 
-      const raycaster = new THREE.Raycaster();
+    // Poll until the camera and renderer are ready.
+    const intervalId = setInterval(() => {
+      const renderer = (overlay as any).renderer;
+      const camera = (overlay as any).camera;
+      if (renderer && camera) {
+        clearInterval(intervalId);
+        const canvas = renderer.domElement;
+        canvas.style.pointerEvents = "auto";
 
-      const onCanvasClick = (event: MouseEvent) => {
-        const rect = canvas.getBoundingClientRect();
-        const mouse = new THREE.Vector2(
-          ((event.clientX - rect.left) / rect.width) * 2 - 1,
-          -((event.clientY - rect.top) / rect.height) * 2 + 1
-        );
-        raycaster.setFromCamera(mouse, camera);
-        const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
-        console.log("Intersections:", intersections);
-        if (intersections.length > 0) {
-          const intersected = intersections[0].object;
-          const station = intersected.userData.station;
-          if (station) {
-            handleStationClick(station);
+        const raycaster = new THREE.Raycaster();
+
+        const onCanvasClick = (event: MouseEvent) => {
+          const rect = canvas.getBoundingClientRect();
+          const mouse = new THREE.Vector2(
+            ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            -((event.clientY - rect.top) / rect.height) * 2 + 1
+          );
+          raycaster.setFromCamera(mouse, camera);
+          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
+          console.log("Intersections:", intersections);
+          if (intersections.length > 0) {
+            const intersected = intersections[0].object;
+            const station = intersected.userData.station;
+            if (station) {
+              handleStationClick(station);
+            }
           }
-        }
-      };
+        };
 
-      const onCanvasTouchEnd = (event: TouchEvent) => {
-        const touch = event.changedTouches[0];
-        const rect = canvas.getBoundingClientRect();
-        const mouse = new THREE.Vector2(
-          ((touch.clientX - rect.left) / rect.width) * 2 - 1,
-          -((touch.clientY - rect.top) / rect.height) * 2 + 1
-        );
-        raycaster.setFromCamera(mouse, camera);
-        const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
-        console.log("Intersections (touch):", intersections);
-        if (intersections.length > 0) {
-          const intersected = intersections[0].object;
-          const station = intersected.userData.station;
-          if (station) {
-            handleStationClick(station);
+        const onCanvasTouchEnd = (event: TouchEvent) => {
+          const touch = event.changedTouches[0];
+          const rect = canvas.getBoundingClientRect();
+          const mouse = new THREE.Vector2(
+            ((touch.clientX - rect.left) / rect.width) * 2 - 1,
+            -((touch.clientY - rect.top) / rect.height) * 2 + 1
+          );
+          raycaster.setFromCamera(mouse, camera);
+          const intersections = raycaster.intersectObjects(stationCubesRef.current, true);
+          console.log("Intersections (touch):", intersections);
+          if (intersections.length > 0) {
+            const intersected = intersections[0].object;
+            const station = intersected.userData.station;
+            if (station) {
+              handleStationClick(station);
+            }
           }
-        }
-      };
+        };
 
-      canvas.addEventListener("click", onCanvasClick);
-      canvas.addEventListener("touchend", onCanvasTouchEnd);
+        canvas.addEventListener("click", onCanvasClick);
+        canvas.addEventListener("touchend", onCanvasTouchEnd);
 
-      return () => {
-        canvas.removeEventListener("click", onCanvasClick);
-        canvas.removeEventListener("touchend", onCanvasTouchEnd);
-      };
-    }
+        // Cleanup function
+        return () => {
+          canvas.removeEventListener("click", onCanvasClick);
+          canvas.removeEventListener("touchend", onCanvasTouchEnd);
+        };
+      }
+    }, 500);
+
+    return () => clearInterval(intervalId);
   }, [overlayRef, stationCubesRef, handleStationClick]);
 
   // Handle errors
@@ -285,7 +292,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Address search => pan & zoom => sort stations
+  // Address search: pan & zoom, then sort stations.
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -396,7 +403,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast.success("Arrival station selected!");
       }
     }
-
     setDetailKey((prev) => prev + 1);
     setForceSheetOpen(true);
     setOpenSheet("detail");
@@ -411,7 +417,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setForceSheetOpen(false);
   };
 
-  // On map load, fit bounds to all station markers
+  // On map load: fit bounds to all station markers
   const handleMapLoad = useCallback(
     (map: google.maps.Map) => {
       setActualMap(map);
@@ -431,7 +437,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
-  // Determine currently selected station (for detail sheet)
+  // Determine the currently selected station (for detail sheet)
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
