@@ -63,7 +63,7 @@ function CarCardComponent({
             interactive={selected}
             height="100%"
             width="100%"
-            isVisible={true}
+            isVisible
           />
         )}
       </div>
@@ -77,7 +77,7 @@ function CarCardComponent({
               {car.name}
             </h3>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              {/* Odometer display (replace battery icon) */}
+              {/* Odometer display (replacing battery info) */}
               <Gauge className="w-4 h-4" />
               <span>{car.odometer} km</span>
             </div>
@@ -96,5 +96,4 @@ function CarCardComponent({
   );
 }
 
-// Wrap in React.memo for performance: re-render only if props change
 export default memo(CarCardComponent);
