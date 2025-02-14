@@ -3,6 +3,7 @@
 import React, { ReactNode, useLayoutEffect } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
 interface SheetProps {
   isOpen: boolean;
@@ -23,15 +24,15 @@ const Sheet = ({
   count,
   countLabel,
 }: SheetProps) => {
-  // Disable scrolling immediately on mount/update using useLayoutEffect
+  // Use a shared mechanism for scroll-locking
   useLayoutEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+      incrementOpenSheets();
     }
     return () => {
-      document.body.style.overflow = "";
+      if (isOpen) {
+        decrementOpenSheets();
+      }
     };
   }, [isOpen]);
 
