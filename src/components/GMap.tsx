@@ -157,7 +157,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // NEW: Raycasting effect for the Three.js overlay.
   useEffect(() => {
     if (overlayRef.current) {
-      const renderer = overlayRef.current.getRenderer();
+      const renderer = (overlayRef.current as any).getRenderer();
       const canvas = renderer.domElement;
 
       const onCanvasClick = (event: MouseEvent) => {
