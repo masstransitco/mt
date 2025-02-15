@@ -172,9 +172,18 @@ interface SheetProps {
    */
   title?: string;
   /**
-   * A subtitle below the title (e.g. "Pick up the car from this station")
+   * A subtitle below the title
+   * (e.g. "Pick up the car from this station" or "Return the car at this station")
    */
   subtitle?: string;
+  /**
+   * If you want to display the number of results (e.g. "12 stations found")
+   */
+  count?: number;
+  /**
+   * The label that follows the numeric count, e.g. "stations found"
+   */
+  countLabel?: string;
 }
 
 /**
@@ -190,6 +199,8 @@ const Sheet = ({
   className,
   title,
   subtitle,
+  count,
+  countLabel,
 }: SheetProps) => {
   // Lock body scrolling if isOpen
   useLayoutEffect(() => {
@@ -214,11 +225,19 @@ const Sheet = ({
         {/* Header */}
         <div className="flex items-center justify-between p-4">
           <div>
+            {/* e.g. "Departure"/"Arrival" */}
             {title && (
               <h2 className="text-lg font-semibold text-foreground">{title}</h2>
             )}
+            {/* e.g. "Pick up the car from this station" */}
             {subtitle && (
               <p className="text-sm text-muted-foreground">{subtitle}</p>
+            )}
+            {/* e.g. "12 stations found" */}
+            {typeof count === "number" && (
+              <p className="text-sm text-muted-foreground">
+                {count} {countLabel ?? "stations found"}
+              </p>
             )}
           </div>
           <div className="flex items-center">
