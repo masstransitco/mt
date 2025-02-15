@@ -551,7 +551,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
               style={{}}
               data={{
                 items: sortedStations,
-                onStationSelected: () => handleStationSelectedFromList(station),
               }}
             />
           ))}
