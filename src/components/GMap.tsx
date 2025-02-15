@@ -135,7 +135,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch({ type: "user/selectArrivalStation", payload: station.id });
       dispatch(advanceBookingStep(4));
       toast.success("Arrival station selected!");
-    }
+    
       }
       setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
