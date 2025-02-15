@@ -216,9 +216,10 @@ export const createMarkerIcons = () => {
       path: hexagonPath,
       scale: 9,
       fillColor: '#C9C9C9',
-      fillOpacity: 1,
+      fillOpacity: 0,   // <--- temporary hiding the station markers
       strokeWeight: 2,
       strokeColor: '#1C1C1F',
+      strokeOpacity: 0,
     },
     // 3) Previously 'activeStation' -> now 'icc'
     icc: {
