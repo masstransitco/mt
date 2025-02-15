@@ -1,18 +1,17 @@
 "use client";
 
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useMemo } from "react";
 import { ListChildComponentProps } from "react-window";
 import { MapPin, Navigation, Zap } from "lucide-react";
+
 import { toast } from "react-hot-toast";
 
-import { useAppDispatch, useAppSelector } from "@/store/store";
+import { useAppSelector } from "@/store/store";
 import { StationFeature } from "@/store/stationsSlice";
 import { selectBookingStep } from "@/store/bookingSlice";
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-  selectDepartureStation as setDepartureStation,
-  selectArrivalStation as setArrivalStation,
 } from "@/store/userSlice";
 
 /**
@@ -24,6 +23,10 @@ import {
 interface StationListItemData {
   items: StationFeature[];
   searchLocation?: google.maps.LatLngLiteral | null;
+  /** 
+   * We no longer do the direct dispatch in the child. 
+   * We rely on the parent's callback if they want to set departure/arrival.
+   */
   onStationSelected?: (station: StationFeature) => void;
 }
 
@@ -35,65 +38,52 @@ interface StationListItemProps extends ListChildComponentProps {
   data: StationListItemData;
 }
 
+/**
+ * A single row item in the station list. 
+ * We no longer dispatch setDepartureStation / setArrivalStation here.
+ * Instead, we call onStationSelected(station) and let the parent do it.
+ */
 export const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const { items: stations, searchLocation, onStationSelected } = data;
 
+  // The station corresponding to this list row
   const station = stations[index];
-  const dispatch = useAppDispatch();
 
-  // Current booking step:
-  // Steps 1–2 => departure flow
-  // Steps 3–4 => arrival flow
-  const step = useAppSelector(selectBookingStep);
-
+  // We read from Redux if we want to highlight current departure/arrival,
+  // but we do NOT update them from here.
+  const bookingStep = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // Is this station the current departure or arrival?
   const isSelected = station.id === departureId || station.id === arrivalId;
-  const isDeparture = station.id === departureId; // For icon display
+  const isDeparture = station.id === departureId; // for icon display
 
-  // Optionally compute distance if searchLocation is provided
-  const distance = React.useMemo(() => {
+  // Optionally compute distance if we have a searchLocation
+  const distance = useMemo(() => {
     if (!searchLocation || !google?.maps?.geometry?.spherical) {
-      // fallback to station.distance if it exists
-      return station.distance;
+      return station.distance; // fallback to station.distance if present
     }
     const [lng, lat] = station.geometry.coordinates;
     const distMeters = google.maps.geometry.spherical.computeDistanceBetween(
       new google.maps.LatLng(lat, lng),
       new google.maps.LatLng(searchLocation.lat, searchLocation.lng)
     );
-    return distMeters / 1000; // convert to kilometers
+    return distMeters / 1000; // kilometers
   }, [station, searchLocation]);
 
-  // On click => set departure/arrival, then optionally call parent's onStationSelected
+  /**
+   * onClick => just call onStationSelected from parent.
+   * We do not do any direct dispatch or step logic here anymore.
+   */
   const handleClick = useCallback(() => {
-    if (step <= 2) {
-      // We’re in DEPARTURE flow (step 1 or 2).
-      if (station.id === arrivalId) {
-        toast.error("Cannot select the same station for departure and arrival");
-        return;
-      }
-      dispatch(setDepartureStation(station.id));
-      toast.success("Departure station selected!");
-    } else if (step === 3 || step === 4) {
-      // ARRIVAL flow
-      if (station.id === departureId) {
-        toast.error("Cannot select the same station for arrival and departure");
-        return;
-      }
-      dispatch(setArrivalStation(station.id));
-      toast.success("Arrival station selected!");
-    } else {
-      // Steps beyond 4 might be final/purchase flow
-      toast("Cannot select stations at this step (" + step + ")");
+    if (!onStationSelected) {
+      // If no callback, just show a toast or do nothing
+      toast("No onStationSelected callback provided");
+      return;
     }
-
-    // If parent provided a callback, call it
-    onStationSelected?.(station);
-  }, [dispatch, step, station, departureId, arrivalId, onStationSelected]);
+    onStationSelected(station);
+  }, [onStationSelected, station]);
 
   return (
     <div
@@ -128,7 +118,7 @@ export const StationListItem = memo<StationListItemProps>((props) => {
             <span>{station.properties.availableSpots} Available</span>
           </div>
         </div>
-        {distance !== undefined && (
+        {typeof distance === "number" && (
           <div className="px-3 py-1.5 rounded-full bg-muted/50 text-sm text-muted-foreground">
             {distance.toFixed(1)} km
           </div>
