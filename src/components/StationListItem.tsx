@@ -3,7 +3,6 @@
 import React, { memo, useCallback, useMemo } from "react";
 import { ListChildComponentProps } from "react-window";
 import { MapPin, Navigation, Zap } from "lucide-react";
-
 import { toast } from "react-hot-toast";
 
 import { useAppSelector } from "@/store/store";
@@ -23,8 +22,8 @@ import {
 interface StationListItemData {
   items: StationFeature[];
   searchLocation?: google.maps.LatLngLiteral | null;
-  /** 
-   * We no longer do the direct dispatch in the child. 
+  /**
+   * We no longer do the direct dispatch in the child.
    * We rely on the parent's callback if they want to set departure/arrival.
    */
   onStationSelected?: (station: StationFeature) => void;
@@ -39,30 +38,29 @@ interface StationListItemProps extends ListChildComponentProps {
 }
 
 /**
- * A single row item in the station list. 
- * We no longer dispatch setDepartureStation / setArrivalStation here.
- * Instead, we call onStationSelected(station) and let the parent do it.
+ * A single row item in the station list.
+ * We do NOT dispatch from here. Instead, we call `onStationSelected(station)`
+ * and let the parent decide whether it’s departure or arrival.
  */
-export const StationListItem = memo<StationListItemProps>((props) => {
+const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
   const { items: stations, searchLocation, onStationSelected } = data;
 
-  // The station corresponding to this list row
+  // The station corresponding to this row
   const station = stations[index];
 
-  // We read from Redux if we want to highlight current departure/arrival,
-  // but we do NOT update them from here.
+  // Only read from Redux to highlight the currently selected departure/arrival
   const bookingStep = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
   const isSelected = station.id === departureId || station.id === arrivalId;
-  const isDeparture = station.id === departureId; // for icon display
+  const isDeparture = station.id === departureId; // For icon display if selected
 
   // Optionally compute distance if we have a searchLocation
   const distance = useMemo(() => {
     if (!searchLocation || !google?.maps?.geometry?.spherical) {
-      return station.distance; // fallback to station.distance if present
+      return station.distance; // fallback if station.distance is available
     }
     const [lng, lat] = station.geometry.coordinates;
     const distMeters = google.maps.geometry.spherical.computeDistanceBetween(
@@ -72,13 +70,9 @@ export const StationListItem = memo<StationListItemProps>((props) => {
     return distMeters / 1000; // kilometers
   }, [station, searchLocation]);
 
-  /**
-   * onClick => just call onStationSelected from parent.
-   * We do not do any direct dispatch or step logic here anymore.
-   */
+  // onClick => call parent's callback. No dispatch or step logic here.
   const handleClick = useCallback(() => {
     if (!onStationSelected) {
-      // If no callback, just show a toast or do nothing
       toast("No onStationSelected callback provided");
       return;
     }
@@ -129,4 +123,5 @@ export const StationListItem = memo<StationListItemProps>((props) => {
 });
 
 StationListItem.displayName = "StationListItem";
+
 export default StationListItem;
