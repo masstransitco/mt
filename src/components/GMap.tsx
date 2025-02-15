@@ -122,31 +122,32 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Station click => departure or arrival
   const handleStationClick = useCallback(
   (station: StationFeature) => {
-    // EXPLICIT STEP CHECK:
+    // Step 1: Selecting departure
     if (bookingStep === 1) {
-      // Step 1: Selecting departure
       dispatch({ type: "user/selectDepartureStation", payload: station.id });
-      // Optionally advance to step 2 immediately:
       dispatch(advanceBookingStep(2));
       toast.success("Departure station selected!");
-    } 
-    else if (bookingStep === 3) {
-      // Step 3: Selecting arrival
+    }
+    // Step 3 or 4: Selecting/updating arrival
+    else if (bookingStep === 3 || bookingStep === 4) {
       dispatch({ type: "user/selectArrivalStation", payload: station.id });
-      dispatch(advanceBookingStep(4));
+      // Only advance to step 4 if we were on step 3
+      if (bookingStep === 3) {
+        dispatch(advanceBookingStep(4));
+      }
       toast.success("Arrival station selected!");
-    
-      }
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setPreviousSheet("none");
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [bookingStep, dispatch, isSheetMinimized]
-  );
+    }
+
+    setDetailKey((prev) => prev + 1);
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    setPreviousSheet("none");
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  },
+  [bookingStep, dispatch, isSheetMinimized]
+);
 
   // Initialize map options & marker icons when Maps is loaded
   useEffect(() => {
