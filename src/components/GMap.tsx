@@ -130,35 +130,44 @@ export default function GMap({ googleApiKey }: GMapProps) {
    * Steps 2 & 4 remain the same until user confirms in StationDetail
    */
   const handleStationClick = useCallback(
-    (station: StationFeature) => {
+  (station: StationFeature) => {
+    if (bookingStep === 1 || bookingStep === 2) {
+      // DEPARTURE flow
+      dispatch({ type: "user/selectDepartureStation", payload: station.id });
+      // If we’re at step=1 => move to step=2.
+      // If we’re already at step=2, remain at step=2 (just replace departure).
       if (bookingStep === 1) {
-        // step 1 => set departure => step 2
-        dispatch({ type: "user/selectDepartureStation", payload: station.id });
         dispatch(advanceBookingStep(2));
-        toast.success("Departure station selected! (Confirm in station detail.)");
-      } else if (bookingStep === 3) {
-        // step 3 => set arrival => step 4
-        dispatch({ type: "user/selectArrivalStation", payload: station.id });
-        dispatch(advanceBookingStep(4));
-        toast.success("Arrival station selected! (Confirm in station detail.)");
-      } else {
-        // For step 2 or 4, they've already chosen a station but not confirmed yet.
-        // Or step 5+ means we're beyond arrival selection. 
-        // You could optionally allow re-selection:
-        toast("Station clicked but no action—already in step " + bookingStep);
       }
+      toast.success("Departure station selected! (Confirm in station detail.)");
 
-      // Show detail sheet with new station
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setPreviousSheet("none");
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
+    } else if (bookingStep === 3 || bookingStep === 4) {
+      // ARRIVAL flow
+      dispatch({ type: "user/selectArrivalStation", payload: station.id });
+      // If we’re at step=3 => move to step=4.
+      // If we’re already at step=4, remain at step=4 (just replace arrival).
+      if (bookingStep === 3) {
+        dispatch(advanceBookingStep(4));
       }
-    },
-    [bookingStep, dispatch, isSheetMinimized]
-  );
+      toast.success("Arrival station selected! (Confirm in station detail.)");
+
+    } else {
+      // Steps beyond 4 might be final or payment flows...
+      toast("Station clicked, but no action—already at step " + bookingStep);
+    }
+
+    // Show detail sheet with new station
+    setDetailKey((prev) => prev + 1);
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    setPreviousSheet("none");
+
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  },
+  [bookingStep, dispatch, isSheetMinimized]
+);
 
   // Initialize map options & marker icons
   useEffect(() => {
