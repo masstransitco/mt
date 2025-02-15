@@ -8,7 +8,7 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-import { SquareChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   incrementOpenSheets,
@@ -221,7 +221,7 @@ const Sheet = ({
               className="p-2 rounded-full hover:bg-muted transition-colors"
               aria-label="Close sheet"
             >
-              <SquareChevronDown className="w-5 h-5 text-muted-foreground" />
+              <ChevronDown className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
         </div>
