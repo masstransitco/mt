@@ -1,44 +1,24 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { X, AlertCircle } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { useAppDispatch, useAppSelector } from '@/store/store';
+import React, { useState, useRef, useEffect } from "react";
+import { X, AlertCircle } from "lucide-react";
+import { toast } from "react-hot-toast";
+import debounce from "lodash/debounce";
+
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
-  advanceBookingStep,
   selectRoute,
-} from '@/store/bookingSlice';
+} from "@/store/bookingSlice";
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-  // We'll call onClearDeparture / onClearArrival from the parent,
-  // so no direct usage of clearDepartureStation / clearArrivalStation here.
-} from '@/store/userSlice';
-import { selectStationsWithDistance, StationFeature } from '@/store/stationsSlice';
-import debounce from 'lodash/debounce';
+} from "@/store/userSlice";
+import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 
-interface StationSelectorProps {
-  /** Called when the user searches/selects an address on the map. */
-  onAddressSearch: (location: google.maps.LatLngLiteral) => void;
-
-  /**
-   * If the user presses the "X" button on
-   * the departure or arrival input, we call these.
-   * GMap can then decide how to clear Redux + close StationDetail.
-   */
-  onClearDeparture?: () => void;
-  onClearArrival?: () => void;
-}
-
-interface AddressSearchProps {
-  onAddressSelect: (location: google.maps.LatLngLiteral) => void;
-  disabled?: boolean;
-  placeholder: string;
-  selectedStation?: StationFeature;
-}
-
-/** DepartureIcon */
+/* -----------------------------------------------------------
+    Reusable icons, same as before
+   ----------------------------------------------------------- */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
@@ -49,7 +29,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
       strokeWidth={0.7}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
+      className={`w-5 h-5 ${highlight ? "text-primary" : "text-muted-foreground"}`}
     >
       <g transform="translate(3, 0)">
         <path
@@ -77,7 +57,6 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
   );
 }
 
-/** ArrivalIcon */
 function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
@@ -88,7 +67,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
       strokeWidth={0.7}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}
+      className={`w-5 h-5 ${highlight ? "text-primary" : "text-muted-foreground"}`}
     >
       <g transform="translate(3, 0)">
         <path
@@ -116,26 +95,29 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
   );
 }
 
-/**
- * AddressSearch component
- * Uses AutocompleteService but type-casts to keep `componentRestrictions`.
- * Also uses `types: ['establishment', 'geocode']` for broader building recognition.
- */
+/* -----------------------------------------------------------
+   AddressSearch (unchanged except for formatting)
+   ----------------------------------------------------------- */
+interface AddressSearchProps {
+  onAddressSelect: (location: google.maps.LatLngLiteral) => void;
+  disabled?: boolean;
+  placeholder: string;
+  selectedStation?: StationFeature;
+}
+
 const AddressSearch = ({
   onAddressSelect,
   disabled,
   placeholder,
   selectedStation,
 }: AddressSearchProps) => {
-  const [searchText, setSearchText] = useState('');
-  const [predictions, setPredictions] = useState<
-    google.maps.places.AutocompletePrediction[]
-  >([]);
+  const [searchText, setSearchText] = useState("");
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>(
+    []
+  );
   const [showResults, setShowResults] = useState(false);
 
-  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(
-    null
-  );
+  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const geocoder = useRef<google.maps.Geocoder | null>(null);
 
   useEffect(() => {
@@ -145,7 +127,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If a station is already selected, display its name (and disable input)
+  // If station is selected, just display name + disable
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -158,46 +140,41 @@ const AddressSearch = ({
     if (!input.trim() || !autocompleteService.current) return;
 
     try {
-      // 1) Create a base request
       const request = {
         input,
-        // More inclusive than just 'address':
-        types: ['establishment', 'geocode'],
+        types: ["establishment", "geocode"],
       } as google.maps.places.AutocompleteRequest;
 
-      // 2) Cast to any to add componentRestrictions
-      (request as any).componentRestrictions = { country: 'HK' };
+      (request as any).componentRestrictions = { country: "HK" };
 
-      // Then fetch predictions
       const response = await autocompleteService.current.getPlacePredictions(request);
       setPredictions(response.predictions);
       setShowResults(true);
     } catch (error) {
-      console.error('Error fetching predictions:', error);
+      console.error("Error fetching predictions:", error);
       setPredictions([]);
     }
   }, 300);
 
-  // Select a prediction => geocode => call onAddressSelect
-  const handleSelect = async (
-    prediction: google.maps.places.AutocompletePrediction
-  ) => {
+  // On selecting a prediction => geocode => callback
+  const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
 
     try {
       const response = await geocoder.current.geocode({
         placeId: prediction.place_id,
       });
-      if (response.results[0]?.geometry?.location) {
-        const { lat, lng } = response.results[0].geometry.location;
+      const result = response.results[0];
+      if (result?.geometry?.location) {
+        const { lat, lng } = result.geometry.location;
         onAddressSelect({ lat: lat(), lng: lng() });
         setSearchText(prediction.structured_formatting.main_text);
         setPredictions([]);
         setShowResults(false);
       }
     } catch (error) {
-      console.error('Geocoding error:', error);
-      toast.error('Unable to locate address');
+      console.error("Geocoding error:", error);
+      toast.error("Unable to locate address");
     }
   };
 
@@ -221,7 +198,7 @@ const AddressSearch = ({
         {searchText && (
           <button
             onClick={() => {
-              setSearchText('');
+              setSearchText("");
               setPredictions([]);
             }}
             className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
@@ -256,10 +233,15 @@ const AddressSearch = ({
   );
 };
 
-/**
- * StationSelector
- * Wraps both the departure and (conditionally) the arrival inputs, plus step info.
- */
+/* -----------------------------------------------------------
+    StationSelector
+   ----------------------------------------------------------- */
+interface StationSelectorProps {
+  onAddressSearch: (location: google.maps.LatLngLiteral) => void;
+  onClearDeparture?: () => void;
+  onClearArrival?: () => void;
+}
+
 export default function StationSelector({
   onAddressSearch,
   onClearDeparture,
@@ -277,11 +259,11 @@ export default function StationSelector({
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // Retrieve the route info from Redux (distance & duration)
+  // Route info
   const route = useAppSelector(selectRoute);
   const distanceInKm = route ? (route.distance / 1000).toFixed(1) : null;
 
-  // Step logic: step < 3 => "Step 1 of 2" (departure), step >= 3 => "Step 2 of 2" (arrival)
+  // Step logic: step<3 => "Step 1 of 2" (departure), else "Step 2 of 2" (arrival)
   const uiStepNumber = step < 3 ? 1 : 2;
   const highlightDeparture = step < 3;
   const highlightArrival = step >= 3;
@@ -292,35 +274,38 @@ export default function StationSelector({
                  bg-background/90 backdrop-blur-sm
                  border-b border-border
                  rounded-md"
-      style={{ overscrollBehavior: 'none', touchAction: 'none' }}
+      style={{ overscrollBehavior: "none", touchAction: "none" }}
     >
       <div className="px-2 py-2 space-y-2">
-        {/* Departure Input */}
+
+        {/* ------------------ DEPARTURE INPUT ------------------ */}
         <div
           className={`
             flex items-center gap-2 rounded-md transition-all duration-200
-            ${highlightDeparture ? 'ring-1 ring-primary bg-background' : ''}
-            ${departureStation ? 'bg-accent/10' : 'bg-muted/50'}
+            ${highlightDeparture ? "ring-1 ring-primary bg-background" : ""}
+            ${departureStation ? "bg-accent/10" : "bg-muted/50"}
           `}
         >
           <DepartureIcon highlight={highlightDeparture} />
 
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step >= 3} // disable if user is picking arrival
+            disabled={step >= 3} // Once we hit step=3 or beyond, user cannot re-search departure
             placeholder="Search here"
             selectedStation={departureStation}
           />
 
-          {departureStation && step < 4 && (
+          {/** 
+           * Only show the 'X' if we do have a departure station, 
+           * and we haven't moved beyond step=2 yet. 
+           */}
+          {departureStation && step <= 2 && (
             <button
               onClick={() => {
-                // Instead of dispatching directly here, we call the parent's callback.
                 if (onClearDeparture) {
                   onClearDeparture();
                 } else {
-                  // Fallback if no callback is provided (optional)
-                  toast.success('Departure station cleared (fallback logic)');
+                  toast.success("Departure station cleared (fallback logic)");
                 }
               }}
               className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
@@ -330,32 +315,37 @@ export default function StationSelector({
           )}
         </div>
 
-        {/* Arrival Input: only render once user is in step 3 or beyond */}
+        {/* ------------------ ARRIVAL INPUT (step >= 3) ------------------ */}
         {step >= 3 && (
           <div
             className={`
               flex items-center gap-2 rounded-md transition-all duration-200
-              ${highlightArrival ? 'ring-1 ring-primary bg-background' : ''}
-              ${arrivalStation ? 'bg-accent/10' : 'bg-muted/50'}
+              ${highlightArrival ? "ring-1 ring-primary bg-background" : ""}
+              ${arrivalStation ? "bg-accent/10" : "bg-muted/50"}
             `}
           >
             <ArrivalIcon highlight={highlightArrival} />
 
             <AddressSearch
               onAddressSelect={onAddressSearch}
-              disabled={step < 3}
+              disabled={step < 3} // Shouldn't happen, but keeps logic consistent
               placeholder="Search here"
               selectedStation={arrivalStation}
             />
 
-            {arrivalStation && (
+            {/** 
+             * Show 'X' if an arrival station is chosen 
+             * and we haven't confirmed arrival (step=5) yet.
+             * Typically step=4 => "arrival chosen but not confirmed" 
+             * so the user can revert if needed. 
+             */}
+            {arrivalStation && step <= 4 && (
               <button
                 onClick={() => {
                   if (onClearArrival) {
                     onClearArrival();
                   } else {
-                    // Fallback logic
-                    toast.success('Arrival station cleared (fallback logic)');
+                    toast.success("Arrival station cleared (fallback logic)");
                   }
                 }}
                 className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
@@ -372,8 +362,8 @@ export default function StationSelector({
             <span>Step {uiStepNumber} of 2</span>
             <span>•</span>
             {uiStepNumber === 1
-              ? 'Select departure station'
-              : 'Select arrival station'}
+              ? "Select departure station"
+              : "Select arrival station"}
           </div>
 
           {/* Show route distance if both stations chosen & we have route data */}
@@ -384,7 +374,7 @@ export default function StationSelector({
           )}
         </div>
 
-        {/* Validation Messages */}
+        {/* Validation: same-station error */}
         {departureId && arrivalId && departureId === arrivalId && (
           <div className="flex items-center gap-2 px-1 py-1 text-xs text-destructive">
             <AlertCircle className="w-4 h-4" />
