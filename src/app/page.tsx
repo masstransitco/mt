@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import Head from 'next/head';
-import { Menu as MenuIcon, QrCode } from 'lucide-react';
+import { Menu as MenuIcon, ScanLine } from 'lucide-react';
 import Image from 'next/image';
 
 import GMapWithErrorBoundary from '@/components/GMap';
@@ -51,7 +51,7 @@ export default function Page() {
                 onClick={() => setIsScannerOpen(true)}
                 className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-gray-200 hover:bg-gray-700 active:bg-gray-600 transition-colors"
               >
-                <QrCode className="w-5 h-5" />
+                <ScanLine className="w-5 h-5" />
               </button>
               {/* Vertical Divider */}
               <div className="w-px h-6 bg-gray-500" />
