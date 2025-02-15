@@ -2,7 +2,7 @@
  * src/lib/cartrack.ts
  *
  * Calls /vehicles/status to retrieve each vehicle's lat/lng (vehicle.location),
- * plus merges additional fields (model, year, odometer) if present.
+ * plus merges additional fields (hardcoded model, year, etc.).
  */
 
 // -----------------------------------------------------------------------------
@@ -29,36 +29,7 @@ function getRequestOptions(
 }
 
 // -----------------------------------------------------------------------------
-// 2. Local Asset Mapping (registration -> modelUrl, image)
-// -----------------------------------------------------------------------------
-const LOCAL_ASSETS_MAP: Record<string, { modelUrl: string; image: string }> = {
-  ABC123: {
-    modelUrl: "/cars/car1.glb",
-    image: "/cars/car1.png",
-  },
-};
-
-function getLocalAssetsForRegistration(
-  registration: string | undefined
-): { modelUrl: string; image: string } {
-  if (!registration) {
-    return {
-      modelUrl: "/cars/defaultModel.glb",
-      image: "/cars/defaultImage.png",
-    };
-  }
-  const assets = LOCAL_ASSETS_MAP[registration];
-  if (assets) {
-    return assets;
-  }
-  return {
-    modelUrl: "/cars/defaultModel.glb",
-    image: "/cars/defaultImage.png",
-  };
-}
-
-// -----------------------------------------------------------------------------
-// 3. fetchVehicleList calling /vehicles/status
+// 2. fetchVehicleList calling /vehicles/status
 // -----------------------------------------------------------------------------
 
 export interface FetchVehicleListParams {
@@ -68,9 +39,9 @@ export interface FetchVehicleListParams {
 
 /**
  * Calls /vehicles/status:
- *  - Extracts vehicle.location -> lat/lng
- *  - Merges manufacturer, model_year, odometer if present
- *  - Applies local modelUrl/image mapping
+ *  - Extracts vehicle.location -> lat, lng
+ *  - Hardcodes model to MG4, year to 2023, modelUrl to /cars/car1.glb
+ *  - Flattens relevant fields (engine_type, bearing, speed, etc.)
  *  - Optionally retrieves plus-code
  */
 export async function fetchVehicleList(
@@ -79,7 +50,7 @@ export async function fetchVehicleList(
   try {
     const { registration, shouldRetrievePlusCode } = params;
 
-    // 1) Base URL for location data
+    // 1) Base URL
     let url = "https://fleetapi-hk.cartrack.com/rest/vehicles/status";
     if (registration) {
       url += `?filter[registration]=${registration}`;
@@ -92,7 +63,7 @@ export async function fetchVehicleList(
     }
     const response = await res.json();
 
-    // 3) Optionally filter by registration in JS
+    // 3) Client-side filter (optional, if multiple records are returned)
     if (registration && Array.isArray(response?.data)) {
       response.data = response.data.filter(
         (item: any) => item.registration === registration
@@ -100,45 +71,70 @@ export async function fetchVehicleList(
     }
 
     // 4) Transform each vehicle
-    if (Array.isArray(response?.data) && response.data.length) {
-      response.data = response.data.map((vehicle: any) => {
-        const { modelUrl, image } = getLocalAssetsForRegistration(vehicle.registration);
+    let vehicles: any[] = [];
+    if (Array.isArray(response?.data)) {
+      vehicles = response.data.map((vehicle: any) => {
+        // Flatten some nested fields
         const lat = vehicle.location?.latitude ?? 0;
         const lng = vehicle.location?.longitude ?? 0;
+        const locationUpdated = vehicle.location?.updated ?? null;
+        const positionDescription = vehicle.location?.position_description ?? null;
 
-        // If you have 'manufacturer', 'model_year', 'odometer' (in meters), map them here
-        // Odometer conversion: meters → km
+        // Convert odometer from meters to kilometers
         const odometerKm = vehicle.odometer ? Math.round(vehicle.odometer / 1000) : 0;
 
         return {
+          // Keep existing vehicle fields in case you need them
           ...vehicle,
-          modelUrl,
-          image,
+
+          // Hardcode model, year, modelUrl
+          model: "MG4",
+          year: 2023,
+          modelUrl: "/cars/car1.glb",
+
+          // Flatten location fields
           lat,
           lng,
-          // For convenience, rename fields to e.g. 'model', 'year' if they exist
-          model: vehicle.manufacturer ?? "Unknown Model",
-          year: vehicle.model_year ?? 0,
+          location_updated: locationUpdated,
+          location_position_description: positionDescription,
+
+          // Flatten electric battery fields
+          electric_battery_percentage_left: vehicle.electric?.battery_percentage_left ?? null,
+          electric_battery_ts: vehicle.electric?.battery_ts ?? null,
+
+          // Convert odometer to km
           odometer: odometerKm,
+
+          // The rest of the requested fields should already be present at top-level
+          // or you can default them if needed:
+          registration: vehicle.registration ?? "",
+          engine_type: vehicle.engine_type ?? "",
+          bearing: vehicle.bearing ?? 0,
+          speed: vehicle.speed ?? 0,
+          ignition: vehicle.ignition ?? false,
+          idling: vehicle.idling ?? false,
+          altitude: vehicle.altitude ?? 0,
+          temp1: vehicle.temp1 ?? null,
+          dynamic1: vehicle.dynamic1 ?? null,
+          dynamic2: vehicle.dynamic2 ?? null,
+          dynamic3: vehicle.dynamic3 ?? null,
+          dynamic4: vehicle.dynamic4 ?? null,
         };
       });
     }
 
-    // 5) Optionally get plus-code for first vehicle
-    if (shouldRetrievePlusCode && Array.isArray(response?.data) && response.data.length > 0) {
-      const first = response.data[0];
-      if (first.location) {
-        const codeRes = await retrievePlusCodeFn(
-          first.location.latitude,
-          first.location.longitude
-        );
+    // 5) Optionally retrieve plus-code for the first vehicle
+    if (shouldRetrievePlusCode && vehicles.length > 0) {
+      const first = vehicles[0];
+      if (first.lat && first.lng) {
+        const codeRes = await retrievePlusCodeFn(first.lat, first.lng);
         if (codeRes?.status === "OK" && codeRes.plus_code) {
           first.plus_code = codeRes.plus_code;
         }
       }
     }
 
-    return Array.isArray(response?.data) ? response.data : [];
+    return vehicles;
   } catch (error) {
     console.error("fetchVehicleList (status) error:", error);
     throw error;
