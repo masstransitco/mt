@@ -23,7 +23,7 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
 }
 
-export const StationDetail = memo<StationDetailProps>((props) => {
+function StationDetailComponent(props: StationDetailProps) {
   const { stations, activeStation, onConfirmDeparture } = props;
   const dispatch = useAppDispatch();
 
@@ -39,7 +39,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     console.log("[StationDetail] arrivalId=", arrivalId);
   }, [step, departureId, arrivalId]);
 
-  // If step <= 2 => we are picking a departure station; else => arrival station
+  // If step <= 2 => picking a departure station; else => arrival station
   const isDepartureFlow = step <= 2;
 
   // If there's no active station, show instructions
@@ -81,7 +81,9 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     if (isDepartureFlow) {
       if (step === 2) {
         dispatch(advanceBookingStep(3));
-        toast.success("Departure station confirmed! Now select your arrival station.");
+        toast.success(
+          "Departure station confirmed! Now select your arrival station."
+        );
         onConfirmDeparture?.();
       }
     } else {
@@ -124,7 +126,9 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Est. Wait Time</span>
-            <span className="font-medium">{activeStation.properties.waitTime} min</span>
+            <span className="font-medium">
+              {activeStation.properties.waitTime} min
+            </span>
           </div>
         )}
 
@@ -136,7 +140,9 @@ export const StationDetail = memo<StationDetailProps>((props) => {
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Estimated Drive Time</span>
+              <span className="text-muted-foreground">
+                Estimated Drive Time
+              </span>
               <span className="font-medium">{routeDurationMin} min</span>
             </div>
           </>
@@ -174,6 +180,12 @@ export const StationDetail = memo<StationDetailProps>((props) => {
       </div>
     </div>
   );
-});
+}
 
+// We wrap the component in `memo` to help avoid unnecessary re-renders
+const StationDetail = memo(StationDetailComponent);
+
+// Give the component a display name for debugging
 StationDetail.displayName = "StationDetail";
+
+export default StationDetail; // <-- Default Export
