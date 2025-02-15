@@ -299,7 +299,7 @@ export default function StationSelector({
            * Only show the 'X' if we do have a departure station, 
            * and we haven't moved beyond step=2 yet. 
            */}
-          {departureStation && step <= 2 && (
+          {departureStation && step <= 4 && (
             <button
               onClick={() => {
                 if (onClearDeparture) {
