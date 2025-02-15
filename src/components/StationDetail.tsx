@@ -33,16 +33,16 @@ function StationDetailComponent(props: StationDetailProps) {
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
+  // For internal logic: are we selecting departure or arrival?
+  const isDepartureFlow = step <= 2;
+
   useEffect(() => {
     console.log("[StationDetail] step=", step);
     console.log("[StationDetail] departureId=", departureId);
     console.log("[StationDetail] arrivalId=", arrivalId);
   }, [step, departureId, arrivalId]);
 
-  // If step <= 2 => picking a departure station; else => arrival station
-  const isDepartureFlow = step <= 2;
-
-  // If there's no active station, show instructions
+  // If there's no active station, show instructions or an empty state
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -65,9 +65,6 @@ function StationDetailComponent(props: StationDetailProps) {
     );
   }
 
-  // Icon for the station header (MapPin for departure, Navigation for arrival)
-  const Icon = isDepartureFlow ? MapPin : Navigation;
-
   // If we have route info, display distance & duration
   let routeDistanceKm: string | null = null;
   let routeDurationMin: string | null = null;
@@ -76,9 +73,10 @@ function StationDetailComponent(props: StationDetailProps) {
     routeDurationMin = Math.round(route.duration / 60).toString();
   }
 
-  // Confirm button logic:
+  // Confirm button logic
   const handleConfirm = () => {
     if (isDepartureFlow) {
+      // Confirm departure flow
       if (step === 2) {
         dispatch(advanceBookingStep(3));
         toast.success(
@@ -87,6 +85,7 @@ function StationDetailComponent(props: StationDetailProps) {
         onConfirmDeparture?.();
       }
     } else {
+      // Confirm arrival flow
       if (step === 4) {
         dispatch(advanceBookingStep(5));
         toast.success("Arrival station confirmed! Proceeding to payment...");
@@ -96,23 +95,8 @@ function StationDetailComponent(props: StationDetailProps) {
 
   return (
     <div className="p-4 space-y-4">
-      {/* === Header: "Departure"/"Arrival" + subtext === */}
-      <div className="flex items-start gap-3">
-        <Icon className="w-5 h-5 mt-1 text-primary" />
-        <div className="flex-1">
-          <h3 className="font-medium">
-            {isDepartureFlow ? "Departure" : "Arrival"}
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {isDepartureFlow
-              ? "Pick up the car from this station"
-              : "Return the car at this station"}
-          </p>
-        </div>
-      </div>
-
       {/* === Station Name + Address === */}
-      <div className="pl-8 space-y-1">
+      <div className="pl-0 space-y-1">
         <h4 className="text-base font-semibold">
           {activeStation.properties.Place}
         </h4>
@@ -122,7 +106,7 @@ function StationDetailComponent(props: StationDetailProps) {
       </div>
 
       {/* === Station Details (removing AvailableSpots & maxPower) === */}
-      <div className="pl-8 space-y-2">
+      <div className="space-y-2">
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Est. Wait Time</span>
@@ -140,9 +124,7 @@ function StationDetailComponent(props: StationDetailProps) {
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                Estimated Drive Time
-              </span>
+              <span className="text-muted-foreground">Estimated Drive Time</span>
               <span className="font-medium">{routeDurationMin} min</span>
             </div>
           </>
@@ -182,10 +164,7 @@ function StationDetailComponent(props: StationDetailProps) {
   );
 }
 
-// We wrap the component in `memo` to help avoid unnecessary re-renders
 const StationDetail = memo(StationDetailComponent);
-
-// Give the component a display name for debugging
 StationDetail.displayName = "StationDetail";
 
-export default StationDetail; // <-- Default Export
+export default StationDetail;
