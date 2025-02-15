@@ -46,7 +46,7 @@ import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
-import StationListItem from "./StationListItem";
+import { StationListItem } from "./StationListItem";
 import GaussianSplatModal from "./GaussianSplatModal";
 
 // Constants
@@ -444,8 +444,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
-  const [showStationMarkers, setShowStationMarkers] = useState(false);
-
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Main Google Map */}
@@ -483,9 +481,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
           )}
 
           {/* Station Markers */}
-          {showStationMarkers && (searchLocation ? sortedStations : stations).map((station) => {
+          {(searchLocation ? sortedStations : stations).map((station) => {
             const [lng, lat] = station.geometry.coordinates;
-            
             return (
               <Marker
                 key={station.id}
