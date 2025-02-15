@@ -90,7 +90,7 @@ export async function fetchVehicleList(
           // Hardcode model, year, modelUrl
           model: "MG4",
           year: 2023,
-          modelUrl: "/cars/car1.glb",
+          modelUrl: vehicle.modelUrl ?? null,
 
           // Flatten location fields
           lat,
