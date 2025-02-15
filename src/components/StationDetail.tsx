@@ -1,24 +1,25 @@
 "use client";
 
-import React, { memo, useEffect } from 'react';
-import { MapPin, Navigation, Zap, Clock } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import React, { memo, useEffect } from "react";
+import { MapPin, Navigation, Zap, Clock } from "lucide-react";
+import { toast } from "react-hot-toast";
 
-import { useAppDispatch, useAppSelector } from '@/store/store';
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
   advanceBookingStep,
   selectRoute,
-} from '@/store/bookingSlice';
+} from "@/store/bookingSlice";
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-} from '@/store/userSlice';
-import { StationFeature } from '@/store/stationsSlice';
+} from "@/store/userSlice";
+import { StationFeature } from "@/store/stationsSlice";
 
 interface StationDetailProps {
   stations: StationFeature[];
   activeStation: StationFeature | null;
+  /** Optional callback triggered after confirming departure in the UI. */
   onConfirmDeparture?: () => void;
 }
 
@@ -33,24 +34,24 @@ export const StationDetail = memo<StationDetailProps>((props) => {
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // Debug logs: show whenever the component renders
+  // Debug logs (optional)
   useEffect(() => {
-    console.log('[StationDetail] Current Step:', step);
-    console.log('[StationDetail] Departure ID:', departureId);
-    console.log('[StationDetail] Arrival ID:', arrivalId);
+    console.log("[StationDetail] step=", step);
+    console.log("[StationDetail] departureId=", departureId);
+    console.log("[StationDetail] arrivalId=", arrivalId);
   }, [step, departureId, arrivalId]);
 
-  // If step <= 2 => departure flow, else arrival flow
+  // If step <= 2 => departure flow, else => arrival flow
   const isDepartureFlow = step <= 2;
 
-  // If no station is active, show instructions
+  // If there's no active station, show instructions
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
         <div className="text-sm text-muted-foreground">
           {isDepartureFlow
-            ? 'Select a departure station from the map or list below.'
-            : 'Select an arrival station from the map or list below.'}
+            ? "Select a departure station from the map or list below."
+            : "Select an arrival station from the map or list below."}
         </div>
         <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
           <div className="p-3 rounded-lg bg-muted/10 flex items-center gap-2">
@@ -66,10 +67,10 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     );
   }
 
-  // Choose which icon to show
+  // Determine which icon to show
   const Icon = isDepartureFlow ? MapPin : Navigation;
 
-  // If a route object is available, show distance/time
+  // If we have route info, display distance & duration
   let routeDistanceKm: string | null = null;
   let routeDurationMin: string | null = null;
   if (route && departureId && arrivalId) {
@@ -77,30 +78,25 @@ export const StationDetail = memo<StationDetailProps>((props) => {
     routeDurationMin = Math.round(route.duration / 60).toString();
   }
 
-  // Confirm station selection
+  // Confirm button logic:
+  // Step 2 => 3, or Step 4 => 5
   const handleConfirm = () => {
+    // If we're in departure flow, maybe step=1 or 2. But we only do confirm for step=2.
     if (isDepartureFlow) {
-      // DEPARTURE FLOW
-      dispatch({ type: 'user/selectDepartureStation', payload: activeStation.id });
-
-      if (step === 1) {
-        dispatch(advanceBookingStep(2));
-        toast.success('Departure station selected.');
-      } else if (step === 2) {
-        dispatch(advanceBookingStep(3));
-        toast.success('Departure station confirmed. Now select your arrival station.');
+      if (step === 2) {
+        dispatch(advanceBookingStep(3)); // selected_departure => selecting_arrival
+        toast.success("Departure station confirmed! Now select your arrival station.");
       }
-
+      // Optionally handle step=1, but from your spec, step=1→2 happens on the map click
+      // so we do nothing else here.
       onConfirmDeparture?.();
     } else {
-      // ARRIVAL FLOW
-      dispatch({ type: 'user/selectArrivalStation', payload: activeStation.id });
-
-      // If we're in step=4 => user pressed "Confirm Arrival" => move to step=5
+      // arrival flow => step=3 or 4. We only confirm at step=4 => 5
       if (step === 4) {
-        dispatch(advanceBookingStep(5));
-        toast.success('Arrival station confirmed! Opening payment options...');
+        dispatch(advanceBookingStep(5)); // arrival selected => final/purchase flow
+        toast.success("Arrival station confirmed! Proceeding to payment...");
       }
+      // step=3 => 4 is done by map click, so do nothing else here.
     }
   };
 
@@ -112,7 +108,7 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         <div className="flex-1">
           <h3 className="font-medium">{activeStation.properties.Place}</h3>
           <p className="text-sm text-muted-foreground">
-            {isDepartureFlow ? 'Departure Station' : 'Arrival Station'}
+            {isDepartureFlow ? "Departure Station" : "Arrival Station"}
           </p>
         </div>
       </div>
@@ -130,20 +126,16 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Max Power</span>
-          <span className="font-medium">
-            {activeStation.properties.maxPower} kW
-          </span>
+          <span className="font-medium">{activeStation.properties.maxPower} kW</span>
         </div>
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Est. Wait Time</span>
-            <span className="font-medium">
-              {activeStation.properties.waitTime} min
-            </span>
+            <span className="font-medium">{activeStation.properties.waitTime} min</span>
           </div>
         )}
 
-        {/* Driving distance/time if route is available */}
+        {/* If route is available, show distance/time */}
         {routeDistanceKm && routeDurationMin ? (
           <>
             <div className="flex justify-between text-sm">
@@ -156,7 +148,6 @@ export const StationDetail = memo<StationDetailProps>((props) => {
             </div>
           </>
         ) : (
-          // Otherwise show distance from user if available
           activeStation.distance !== undefined && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Distance from You</span>
@@ -168,20 +159,24 @@ export const StationDetail = memo<StationDetailProps>((props) => {
         )}
       </div>
 
-      {/* Single Action Button => Confirm */}
+      {/* Confirm Button */}
       <div className="pt-2">
         <button
           onClick={handleConfirm}
+          // If we haven't actually advanced to step=2 or 4 yet (i.e. still step=1 or 3),
+          // we can disable the button. Or you can choose to hide it, etc.
+          disabled={!(step === 2 || step === 4)}
           className="w-full px-4 py-2 text-sm font-medium text-white
-                     bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+                     bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed
+                     rounded-lg transition-colors"
         >
-          {isDepartureFlow ? 'Confirm Departure' : 'Confirm Arrival'}
+          {isDepartureFlow ? "Confirm Departure" : "Confirm Arrival"}
         </button>
       </div>
     </div>
   );
 });
 
-StationDetail.displayName = 'StationDetail';
+StationDetail.displayName = "StationDetail";
 
 export default StationDetail;
