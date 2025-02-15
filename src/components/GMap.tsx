@@ -558,22 +558,37 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </div>
       </Sheet>
 
-      {/* Station detail sheet */}
-      <Sheet
-        key={detailKey}
-        isOpen={isDetailOpen}
-        onToggle={closeCurrentSheet}
-        title="Station Details"
-        count={(searchLocation ? sortedStations : stations).length}
-      >
-        {stationToShow && (
-          <StationDetail
-            key={detailKey}
-            stations={searchLocation ? sortedStations : stations}
-            activeStation={stationToShow}
-          />
-        )}
-      </Sheet>
+     {/* Station detail sheet */}
+<Sheet
+  key={detailKey}
+  isOpen={isDetailOpen}
+  onToggle={closeCurrentSheet}
+
+  // Replace the old hard-coded title with dynamic logic:
+  // If we're in departure flow (step <= 2), show "Departure";
+  // else (step >= 3) show "Arrival".
+  title={bookingStep <= 2 ? "Departure" : "Arrival"}
+
+  // Replace the old `[count] stations found` text with dynamic subtitle:
+  // If departure flow => "Pick up the car from this station";
+  // else => "Return the car at this station".
+  subtitle={
+    bookingStep <= 2
+      ? "Pick up the car from this station"
+      : "Return the car at this station"
+  }
+
+  // Optionally remove count if you don't need it:
+  // count={(searchLocation ? sortedStations : stations).length}
+>
+  {stationToShow && (
+    <StationDetail
+      key={detailKey}
+      stations={searchLocation ? sortedStations : stations}
+      activeStation={stationToShow}
+    />
+  )}
+</Sheet>
 
       {/* GaussianSplatModal */}
       <GaussianSplatModal
