@@ -3,7 +3,7 @@
 import React, { memo } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Check, Gauge } from "lucide-react";
+import { Check, Gauge, Battery } from "lucide-react";
 import type { Car } from "@/types/cars";
 
 // Dynamically load the 3D viewer for performance; also ensure Car3DViewer is memoized
@@ -70,24 +70,38 @@ function CarCardComponent({
 
       {/* Car details */}
       <div className="p-4">
-        <div className="flex items-start justify-between mb-2">
-          {/* Left side: Car name + Odometer */}
+        {/* 
+          Responsive layout:
+          - On small screens, items stack (flex-col).
+          - On larger screens (sm+), show left/right (flex-row).
+        */}
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+          {/* Left side: Car name, Odometer, Battery */}
           <div>
             <h3 className="font-semibold text-foreground text-base">
               {car.name}
             </h3>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              {/* Odometer display (replacing battery info) */}
-              <Gauge className="w-4 h-4" />
-              <span>{car.odometer} km</span>
+            {/* Odometer reading and battery info go together */}
+            <div className="mt-1 space-y-1">
+              {/* Odometer display */}
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Gauge className="w-4 h-4" />
+                <span>{car.odometer} km</span>
+              </div>
+
+              {/* Battery percentage (only if we have a valid number) */}
+              {typeof car.electric_battery_percentage_left === "number" && (
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Battery className="w-4 h-4" />
+                  <span>{car.electric_battery_percentage_left}%</span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Right side: Model + Year */}
           <div className="text-right">
-            {/* Replace price with the car.model */}
             <p className="font-bold text-foreground text-lg">{car.model}</p>
-            {/* Replace "per day" with the car.year */}
             <p className="text-sm text-muted-foreground">{car.year}</p>
           </div>
         </div>
