@@ -46,7 +46,7 @@ import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
-import { StationListItem } from "./StationListItem";
+import StationListItem from "./StationListItem";
 import GaussianSplatModal from "./GaussianSplatModal";
 
 // Constants
