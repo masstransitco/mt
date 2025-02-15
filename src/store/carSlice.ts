@@ -1,3 +1,5 @@
+// src/store/carSlice.ts
+
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
 import { fetchVehicleList } from "@/lib/cartrack";
@@ -21,40 +23,52 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
 
       // Transform each raw vehicle into a Car
       const transformed: Car[] = rawVehicles.map((v: any) => {
-        // If the API includes v.vehicle_id, v.registration, etc., map them here
-        // Convert odometer from meters → kilometers if not already done
-        const odometerKm = v.odometer ? v.odometer : 0; // it's already km if we did it above
+        // If the API includes v.vehicle_id, v.registration, etc., map them here.
+        // By the time data reaches here, `v.odometer` should already be in km.
+        const odometerKm = v.odometer ?? 0;
 
         return {
-          // We'll assume the 'vehicle_id' is the unique ID
+          // Basic fields
           id: v.vehicle_id ?? 0,
-          // name from v.registration or fallback
           name: v.registration ?? "Unknown Vehicle",
-          // EV type (or "Unknown" if you prefer)
-          type: "Electric",
-          // hard-coded price example
-          price: 600,
-
-          // local assets or from the API
+          type: v.engine_type ?? "Unknown", // or "Electric" if you prefer
+          price: 600,                       // Hard-coded example
           modelUrl: v.modelUrl,
           image: v.image,
           available: true,
 
-          // default features
+          // Default features (can be customized if needed)
           features: {
             range: 0,
             charging: "",
             acceleration: "",
           },
 
-          // lat/lng from the v.location (already extracted in fetchVehicleList)
+          // Coordinates
           lat: v.lat ?? 0,
           lng: v.lng ?? 0,
 
           // Additional fields
-          model: v.model ?? "Unknown Model",     // was v.manufacturer if needed
-          year: v.year ?? 0,                     // was v.model_year
-          odometer: odometerKm,                  // in km
+          model: v.model ?? "Unknown Model", // Hardcoded as "MG4" in fetchVehicleList if you prefer
+          year: v.year ?? 0,                // Hardcoded as 2023 in fetchVehicleList
+          odometer: odometerKm,             // in km
+
+          // New fields from the CarTrack response
+          engine_type: v.engine_type ?? "",
+          bearing: v.bearing ?? 0,
+          speed: v.speed ?? 0,
+          ignition: v.ignition ?? false,
+          idling: v.idling ?? false,
+          altitude: v.altitude ?? 0,
+          temp1: v.temp1 ?? null,
+          dynamic1: v.dynamic1 ?? null,
+          dynamic2: v.dynamic2 ?? null,
+          dynamic3: v.dynamic3 ?? null,
+          dynamic4: v.dynamic4 ?? null,
+          electric_battery_percentage_left: v.electric_battery_percentage_left ?? null,
+          electric_battery_ts: v.electric_battery_ts ?? null,
+          location_updated: v.location_updated ?? null,
+          location_position_description: v.location_position_description ?? null,
         };
       });
 
