@@ -45,39 +45,47 @@ export default function CarGrid({ className = "" }: CarGridProps) {
 
   return (
     <div
-      className={`transition-all duration-300 overflow-y-auto ${className}`}
+      className={`transition-all duration-300 ${className}`}
       style={{
         display: isVisible ? "block" : "none",
         visibility: isVisible ? "visible" : "hidden",
-        maxHeight: "80vh",
       }}
     >
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        <AnimatePresence mode="popLayout">
-          {availableCars.map((car) => {
-            const isSelected = car.id === selectedCarId;
-            return (
-              <motion.div
-                key={car.id}
-                layout
-                // Subtle fade/scale animation when cards appear or disappear
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 0.975 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-              >
-                <CarCard
-                  car={car}
-                  selected={isSelected}
-                  onClick={() => handleSelectCar(car.id)}
-                  isVisible={isVisible}
-                  // You can remove "size" entirely if you prefer
-                  size="large"
-                />
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
+      {/* 
+        Outer container with padding + horizontal scrolling enabled.
+        You can adjust the maxHeight or remove it if not needed.
+      */}
+      <div className="overflow-x-auto px-4" style={{ maxHeight: "80vh" }}>
+        {/* 
+          Flex container for a single row of cards.
+          gap-3 for spacing between cards 
+        */}
+        <div className="flex gap-3 py-2">
+          <AnimatePresence mode="popLayout">
+            {availableCars.map((car) => {
+              const isSelected = car.id === selectedCarId;
+              return (
+                <motion.div
+                  key={car.id}
+                  layout
+                  // Subtle fade/scale animation when cards appear or disappear
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 0.975 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <CarCard
+                    car={car}
+                    selected={isSelected}
+                    onClick={() => handleSelectCar(car.id)}
+                    isVisible={isVisible}
+                    size="large"
+                  />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Fallback when no cars match the criteria */}
@@ -85,7 +93,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="py-12 text-center rounded-2xl bg-card mt-4"
+          className="py-12 text-center rounded-2xl bg-card mt-4 mx-4"
         >
           <p className="text-muted-foreground">
             No vehicles found matching your criteria.
