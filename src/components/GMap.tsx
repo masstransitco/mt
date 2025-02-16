@@ -34,9 +34,7 @@ import {
   selectBookingStep,
   advanceBookingStep,
   fetchRoute,
-  selectRoute,            // <-- import route selector
-  selectRouteStatus,      // optional, if you want to handle route loading
-  selectRouteError,       // optional, if you want to handle route errors
+  selectRoute,
 } from "@/store/bookingSlice";
 import {
   fetchStations3D,
@@ -61,7 +59,7 @@ import {
   createMapOptions,
   createMarkerIcons,
   INTER_CC,
-  ROUTE_LINE_OPTIONS,  // <-- import the new route line options
+  ROUTE_LINE_OPTIONS,
 } from "@/constants/map";
 
 // Our custom hook that creates & disposes the Three.js overlay
@@ -107,7 +105,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Get route data (distance, duration, polyline) from Redux
+  // Route data (distance, duration, polyline)
   const route = useAppSelector(selectRoute);
 
   // Load Google Maps
@@ -118,7 +116,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Use the Three.js overlay hook
+  // Three.js overlay hook
   const { overlayRef, stationCubesRef } = useThreeOverlay(
     actualMap,
     stations,
@@ -128,17 +126,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   /**
    * handleStationClick
-   * Triggered when a user clicks a station marker on the map.
+   * Triggered when a user clicks a station marker on the map (the 2D marker).
    */
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep === 1 || bookingStep === 2) {
+        // departure flow
         dispatch({ type: "user/selectDepartureStation", payload: station.id });
         if (bookingStep === 1) {
           dispatch(advanceBookingStep(2));
         }
         toast.success("Departure station selected! (Confirm in station detail.)");
       } else if (bookingStep === 3 || bookingStep === 4) {
+        // arrival flow
         dispatch({ type: "user/selectArrivalStation", payload: station.id });
         if (bookingStep === 3) {
           dispatch(advanceBookingStep(4));
@@ -205,6 +205,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const mapDiv = actualMap.getDiv();
         const mousePosition = new THREE.Vector2();
 
+        // Track mouse move
         actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent as MouseEvent;
           const { left, top, width, height } = mapDiv.getBoundingClientRect();
@@ -221,10 +222,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
           });
           if (intersections.length === 0) {
             actualMap.setOptions({ draggableCursor: null });
-            return;
           }
         };
 
+        // Map click for 3D station cubes
         actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent as MouseEvent;
           const { left, top, width, height } = mapDiv.getBoundingClientRect();
@@ -234,7 +235,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const intersections = overlay.raycast(mousePosition, stationCubesRef.current, {
             recursive: true,
           });
-
           if (intersections.length > 0) {
             const station = intersections[0].object.userData.station;
             if (station) {
@@ -277,18 +277,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // --- NEW: decode the route polyline if available ---
+  // Decode the route polyline if available
   const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
 
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
-      // If there's no route or we can't decode it, clear the path
       setDecodedPath([]);
       return;
     }
     // Decode the overview_polyline
     const path = google.maps.geometry.encoding.decodePath(route.polyline);
-    // Convert each LatLng to a simple {lat, lng} object
     const latLngArray = path.map((latLng) => latLng.toJSON());
     setDecodedPath(latLngArray);
   }, [route]);
@@ -297,7 +295,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
-      return [...stationsToSort].sort((a, b) => {
+      const newStations = [...stationsToSort];
+      return newStations.sort((a, b) => {
         const [lngA, latA] = a.geometry.coordinates;
         const [lngB, latB] = b.geometry.coordinates;
         const distA = google.maps.geometry.spherical.computeDistanceBetween(
@@ -314,7 +313,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Handle address search => pan/zoom => sort stations
+  // Address search => pan/zoom => sort
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -332,29 +331,47 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Clear departure => step=1
+  // =============== Clear departure logic ===============
   const handleClearDepartureInSelector = () => {
-    dispatch(clearDepartureStation());
-    dispatch(advanceBookingStep(1));
-    toast.success("Departure station cleared. (Back to selecting departure.)");
+    // Revert to step=1 only if step <= 3, else no-op or do a fallback
+    if (bookingStep === 2 || bookingStep === 3) {
+      dispatch(clearDepartureStation());
+      dispatch(advanceBookingStep(1));
+      toast.success("Departure station cleared. (Back to selecting departure.)");
+    } else {
+      // fallback if you're at step=1 or 4 or beyond
+      dispatch(clearDepartureStation());
+      dispatch(advanceBookingStep(1));
+      toast.success("Departure station cleared. (Reverted to step 1.)");
+    }
+
     if (openSheet === "detail") {
       setOpenSheet("none");
       setPreviousSheet("none");
     }
   };
 
-  // Clear arrival => step=3
+  // =============== Clear arrival logic ===============
   const handleClearArrivalInSelector = () => {
-    dispatch(clearArrivalStation());
-    dispatch(advanceBookingStep(3));
-    toast.success("Arrival station cleared. (Back to selecting arrival.)");
+    // Revert to step=3 only if you're at step=4
+    if (bookingStep === 4) {
+      dispatch(clearArrivalStation());
+      dispatch(advanceBookingStep(3));
+      toast.success("Arrival station cleared. (Back to selecting arrival.)");
+    } else {
+      // fallback if you're at step=3 or beyond
+      dispatch(clearArrivalStation());
+      dispatch(advanceBookingStep(3));
+      toast.success("Arrival station cleared. (Reverted to step 3.)");
+    }
+
     if (openSheet === "detail") {
       setOpenSheet("none");
       setPreviousSheet("none");
     }
   };
 
-  // Open a new sheet
+  // Open/close sheet logic
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -365,7 +382,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Close the current sheet
   const closeCurrentSheet = () => {
     if (openSheet === "detail") {
       setOpenSheet("none");
@@ -416,36 +432,32 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Station selection from station list
   const handleStationSelectedFromList = (station: StationFeature) => {
-  if (bookingStep === 1 || bookingStep === 2) {
-    // user is in "selecting departure" or "already selected departure"
-    dispatch({ type: "user/selectDepartureStation", payload: station.id });
-    // If previously at step 1, move to step 2; if already 2, stay in 2
-    if (bookingStep === 1) {
-      dispatch(advanceBookingStep(2));
+    if (bookingStep === 1 || bookingStep === 2) {
+      // departure
+      dispatch({ type: "user/selectDepartureStation", payload: station.id });
+      if (bookingStep === 1) {
+        dispatch(advanceBookingStep(2));
+      }
+      toast.success("Departure station selected!");
+    } else if (bookingStep === 3 || bookingStep === 4) {
+      // arrival
+      dispatch({ type: "user/selectArrivalStation", payload: station.id });
+      if (bookingStep === 3) {
+        dispatch(advanceBookingStep(4));
+      }
+      toast.success("Arrival station selected!");
+    } else {
+      toast(`Selected station but no step update (current: ${bookingStep})`);
     }
-    toast.success("Departure station selected!");
 
-  } else if (bookingStep === 3 || bookingStep === 4) {
-    // user is in "selecting arrival" or "already selected arrival"
-    dispatch({ type: "user/selectArrivalStation", payload: station.id });
-    // If previously at step 3, move to step 4; if already 4, stay in 4
-    if (bookingStep === 3) {
-      dispatch(advanceBookingStep(4));
-    }
-    toast.success("Arrival station selected!");
+    // Then open station detail
+    setDetailKey((prev) => prev + 1);
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    setPreviousSheet("none");
+  };
 
-  } else {
-    // If you only have steps up to 4, maybe show toast
-    toast(`Selected station but not changing step (current: ${bookingStep})`);
-  }
-
-  // Then open the detail sheet
-  setDetailKey((prev) => prev + 1);
-  setForceSheetOpen(true);
-  setOpenSheet("detail");
-  setPreviousSheet("none");
-};
-
+  // Which station is selected for the detail?
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
@@ -495,10 +507,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* 
-            Draw the route polyline if we have a decodedPath
-            from route.overview_polyline. 
-          */}
+          {/* Polyline for route, if any */}
           {decodedPath.length > 0 && (
             <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS} />
           )}
