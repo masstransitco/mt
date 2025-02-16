@@ -146,8 +146,6 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   tilt: 45,
 });
 
-// ----- NEW ADDITIONS -----
-
 /**
  * The dispatch hub (previously `hongKongCenter`).
  * We anchor the ThreeJSOverlayView here for 3D transformations.
@@ -159,7 +157,7 @@ export const DISPATCH_HUB = {
 };
 
 /**
- * A special marker location for demonstration: 
+ * A special marker location for demonstration:
  * International Commerce Centre (ICC).
  */
 export const INTER_CC = {
@@ -208,7 +206,7 @@ export const createMarkerIcons = () => {
       fillColor: '#0717f5',   // Light blue
       fillOpacity: 1,
       strokeWeight: 2,
-      strokeColor: '#FFFFFF', 
+      strokeColor: '#FFFFFF',
       anchor: new google.maps.Point(0, 2),
     },
     // 2) Default station marker
@@ -221,7 +219,7 @@ export const createMarkerIcons = () => {
       strokeColor: '#1C1C1F',
       strokeOpacity: 0,
     },
-    // 3) Previously 'activeStation' -> now 'icc'
+    // 3) Example special station marker (ICC)
     icc: {
       path: diamondPath,
       scale: 10,
@@ -258,6 +256,14 @@ export const createMarkerIcons = () => {
       strokeColor: '#f5f5f7',
     },
   };
+};
+
+/** Polyline route styling options. */
+export const ROUTE_LINE_OPTIONS: google.maps.PolylineOptions = {
+  strokeColor: '#FF4444',
+  strokeOpacity: 0.8,
+  strokeWeight: 5,
+  geodesic: true,
 };
 
 // For the Places API usage in StationSelector
