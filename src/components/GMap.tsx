@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useCallback, useState } from "react";
-import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, Marker, Polyline, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
 import * as THREE from "three";
@@ -32,8 +32,11 @@ import {
 import { toggleSheet, selectIsSheetMinimized } from "@/store/uiSlice";
 import {
   selectBookingStep,
-  advanceBookingStep, // we need to do step changes for 1→2 or 3→4
+  advanceBookingStep,
   fetchRoute,
+  selectRoute,            // <-- import route selector
+  selectRouteStatus,      // optional, if you want to handle route loading
+  selectRouteError,       // optional, if you want to handle route errors
 } from "@/store/bookingSlice";
 import {
   fetchStations3D,
@@ -58,6 +61,7 @@ import {
   createMapOptions,
   createMarkerIcons,
   INTER_CC,
+  ROUTE_LINE_OPTIONS,  // <-- import the new route line options
 } from "@/constants/map";
 
 // Our custom hook that creates & disposes the Three.js overlay
@@ -94,7 +98,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
 
-  const stations3D = useAppSelector(selectStations3D); // Possibly unused
+  const stations3D = useAppSelector(selectStations3D);
 
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
@@ -102,6 +106,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
+
+  // Get route data (distance, duration, polyline) from Redux
+  const route = useAppSelector(selectRoute);
 
   // Load Google Maps
   const { isLoaded, loadError } = useJsApiLoader({
@@ -122,9 +129,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /**
    * handleStationClick
    * Triggered when a user clicks a station marker on the map.
-   * Based on the booking step:
-   * - Steps 1/2 update departure station (and advance to step 2 if needed)
-   * - Steps 3/4 update arrival station (and advance to step 4 if needed)
    */
   const handleStationClick = useCallback(
     (station: StationFeature) => {
@@ -144,7 +148,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast("Station clicked, but no action—already at step " + bookingStep);
       }
 
-      // Open station detail sheet
       setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
       setOpenSheet("detail");
@@ -188,7 +191,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // Overlay + Raycasting
+  // 3D Overlay + Raycasting
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay || !stationCubesRef.current || !actualMap) return;
@@ -202,7 +205,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const mapDiv = actualMap.getDiv();
         const mousePosition = new THREE.Vector2();
 
-        // Track mouse move
         actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent as MouseEvent;
           const { left, top, width, height } = mapDiv.getBoundingClientRect();
@@ -223,7 +225,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           }
         };
 
-        // Map click for stations
         actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent as MouseEvent;
           const { left, top, width, height } = mapDiv.getBoundingClientRect();
@@ -275,6 +276,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
       }
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
+
+  // --- NEW: decode the route polyline if available ---
+  const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
+
+  useEffect(() => {
+    if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
+      // If there's no route or we can't decode it, clear the path
+      setDecodedPath([]);
+      return;
+    }
+    // Decode the overview_polyline
+    const path = google.maps.geometry.encoding.decodePath(route.polyline);
+    // Convert each LatLng to a simple {lat, lng} object
+    const latLngArray = path.map((latLng) => latLng.toJSON());
+    setDecodedPath(latLngArray);
+  }, [route]);
 
   // Sorting logic for address search
   const sortStationsByDistanceToPoint = useCallback(
@@ -411,14 +428,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
       toast("Selected a station but not changing steps from " + bookingStep);
     }
 
-    // Open station detail sheet and close the list
     setDetailKey((prev) => prev + 1);
     setForceSheetOpen(true);
     setOpenSheet("detail");
     setPreviousSheet("none");
   };
 
-  // The user’s currently selected station depends on step
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
@@ -466,6 +481,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
               title="ICC Marker"
               onClick={() => setIsSplatModalOpen(true)}
             />
+          )}
+
+          {/* 
+            Draw the route polyline if we have a decodedPath
+            from route.overview_polyline. 
+          */}
+          {decodedPath.length > 0 && (
+            <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS} />
           )}
 
           {/* Station Markers */}
