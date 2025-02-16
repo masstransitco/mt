@@ -17,7 +17,7 @@ import {
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 
 /* -----------------------------------------------------------
-    Reusable icons, same as before
+    Reusable icons
    ----------------------------------------------------------- */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
@@ -29,7 +29,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
       strokeWidth={0.7}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${highlight ? "text-primary" : "text-muted-foreground"}`}
+      className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
     >
       <g transform="translate(3, 0)">
         <path
@@ -67,7 +67,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
       strokeWidth={0.7}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`w-5 h-5 ${highlight ? "text-primary" : "text-muted-foreground"}`}
+      className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
     >
       <g transform="translate(3, 0)">
         <path
@@ -96,7 +96,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
 }
 
 /* -----------------------------------------------------------
-   AddressSearch (unchanged except for formatting)
+   AddressSearch
    ----------------------------------------------------------- */
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
@@ -112,9 +112,7 @@ const AddressSearch = ({
   selectedStation,
 }: AddressSearchProps) => {
   const [searchText, setSearchText] = useState("");
-  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>(
-    []
-  );
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showResults, setShowResults] = useState(false);
 
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -127,7 +125,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If station is selected, just display name + disable
+  // If station is selected, just display name + disable the input
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -136,6 +134,7 @@ const AddressSearch = ({
     );
   }
 
+  // Debounced search
   const searchPlaces = debounce(async (input: string) => {
     if (!input.trim() || !autocompleteService.current) return;
 
@@ -143,9 +142,8 @@ const AddressSearch = ({
       const request = {
         input,
         types: ["establishment", "geocode"],
+        componentRestrictions: { country: "HK" },
       } as google.maps.places.AutocompleteRequest;
-
-      (request as any).componentRestrictions = { country: "HK" };
 
       const response = await autocompleteService.current.getPlacePredictions(request);
       setPredictions(response.predictions);
@@ -234,11 +232,14 @@ const AddressSearch = ({
 };
 
 /* -----------------------------------------------------------
-    StationSelector
+   StationSelector
    ----------------------------------------------------------- */
 interface StationSelectorProps {
+  /** Callback when user searches an address and selects a location on the map */
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
+  /** Callback when user clears the departure station */
   onClearDeparture?: () => void;
+  /** Callback when user clears the arrival station */
   onClearArrival?: () => void;
 }
 
@@ -265,8 +266,19 @@ export default function StationSelector({
 
   // Step logic: step<3 => "Step 1 of 2" (departure), else "Step 2 of 2" (arrival)
   const uiStepNumber = step < 3 ? 1 : 2;
-  const highlightDeparture = step < 3;
+
+  // We'll highlight the departure field if step <= 2,
+  // highlight the arrival field if step >= 3
+  const highlightDeparture = step <= 2;
   const highlightArrival = step >= 3;
+
+  // Control the ring color using ring-white
+  const highlightDepartureClass = highlightDeparture
+    ? "ring-1 ring-white bg-background"
+    : "";
+  const highlightArrivalClass = highlightArrival
+    ? "ring-1 ring-white bg-background"
+    : "";
 
   return (
     <div
@@ -282,7 +294,7 @@ export default function StationSelector({
         <div
           className={`
             flex items-center gap-2 rounded-md transition-all duration-200
-            ${highlightDeparture ? "ring-1 ring-primary bg-background" : ""}
+            ${highlightDepartureClass}
             ${departureStation ? "bg-accent/10" : "bg-muted/50"}
           `}
         >
@@ -290,14 +302,15 @@ export default function StationSelector({
 
           <AddressSearch
             onAddressSelect={onAddressSearch}
-            disabled={step >= 3} // Once we hit step=3 or beyond, user cannot re-search departure
+            disabled={step >= 3} // once step=3 or beyond, user can't re-search departure
             placeholder="Search here"
             selectedStation={departureStation}
           />
 
-          {/** 
-           * Only show the 'X' if we do have a departure station, 
-           * and we haven't moved beyond step=2 yet. 
+          {/**
+           * Show the 'X' if we DO have a departure station
+           * and we're at step=2 or step=3 (i.e. we haven't locked in arrival yet).
+           * For example, if user is at step=2 or step=3, they might want to re-pick departure.
            */}
           {departureStation && step <= 3 && (
             <button
@@ -315,12 +328,12 @@ export default function StationSelector({
           )}
         </div>
 
-        {/* ------------------ ARRIVAL INPUT (step >= 3) ------------------ */}
+        {/* ------------------ ARRIVAL INPUT (visible if step >= 3) ------------------ */}
         {step >= 3 && (
           <div
             className={`
               flex items-center gap-2 rounded-md transition-all duration-200
-              ${highlightArrival ? "ring-1 ring-primary bg-background" : ""}
+              ${highlightArrivalClass}
               ${arrivalStation ? "bg-accent/10" : "bg-muted/50"}
             `}
           >
@@ -328,16 +341,14 @@ export default function StationSelector({
 
             <AddressSearch
               onAddressSelect={onAddressSearch}
-              disabled={step < 3} // Shouldn't happen, but keeps logic consistent
+              disabled={step < 3} // shouldn't happen logically, but let's keep it consistent
               placeholder="Search here"
               selectedStation={arrivalStation}
             />
 
-            {/** 
-             * Show 'X' if an arrival station is chosen 
-             * and we haven't confirmed arrival (step=5) yet.
-             * Typically step=4 => "arrival chosen but not confirmed" 
-             * so the user can revert if needed. 
+            {/**
+             * Show 'X' if an arrival station is chosen
+             * and step <= 4 (i.e., we haven't gone to payment or beyond).
              */}
             {arrivalStation && step <= 4 && (
               <button
