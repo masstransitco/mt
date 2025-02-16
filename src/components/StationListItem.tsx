@@ -5,9 +5,8 @@ import { ListChildComponentProps } from "react-window";
 import { MapPin, Navigation, Zap } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-import { useAppSelector, useAppDispatch } from "@/store/store";
+import { useAppSelector } from "@/store/store";
 import { StationFeature } from "@/store/stationsSlice";
-import { selectBookingStep, advanceBookingStep } from "@/store/bookingSlice";
 import {
   selectDepartureStationId,
   selectArrivalStationId,
@@ -17,10 +16,12 @@ import {
  * The data object passed by react-window to each list item:
  * - `items` is your array of StationFeature
  * - optional `searchLocation` for distance
+ * - optional `onStationSelected` callback to let the parent handle selection.
  */
 interface StationListItemData {
   items: StationFeature[];
   searchLocation?: google.maps.LatLngLiteral | null;
+  onStationSelected?: (station: StationFeature) => void;
 }
 
 /**
@@ -33,18 +34,17 @@ interface StationListItemProps extends ListChildComponentProps {
 
 /**
  * A single row item in the station list.
- * This component now handles station selection by dispatching updates based on the booking step.
+ * When clicked, it calls the parent's onStationSelected callback (if provided)
+ * so that the parent can update selection and open the station detail sheet.
  */
 export const StationListItem = memo<StationListItemProps>((props) => {
   const { index, style, data } = props;
-  const { items: stations, searchLocation } = data;
+  const { items: stations, searchLocation, onStationSelected } = data;
 
-  // The station corresponding to this list row
+  // The station corresponding to this list row.
   const station = stations[index];
 
-  // Redux dispatch and state
-  const dispatch = useAppDispatch();
-  const bookingStep = useAppSelector(selectBookingStep);
+  // Read selected station IDs from Redux to show a highlight.
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
@@ -66,26 +66,16 @@ export const StationListItem = memo<StationListItemProps>((props) => {
 
   /**
    * Handle click on a station item.
-   * - If bookingStep is 1 or 2, update (or replace) the departure station.
-   * - If bookingStep is 3 or 4, update (or replace) the arrival station.
+   * Calls the parent's onStationSelected callback so that the parent
+   * can dispatch actions and update sheet state (open detail, close list).
    */
   const handleClick = useCallback(() => {
-    if (bookingStep === 1 || bookingStep === 2) {
-      dispatch({ type: "user/selectDepartureStation", payload: station.id });
-      if (bookingStep === 1) {
-        dispatch(advanceBookingStep(2));
-      }
-      toast.success("Departure station selected! (Confirm in station detail.)");
-    } else if (bookingStep === 3 || bookingStep === 4) {
-      dispatch({ type: "user/selectArrivalStation", payload: station.id });
-      if (bookingStep === 3) {
-        dispatch(advanceBookingStep(4));
-      }
-      toast.success("Arrival station selected! (Confirm in station detail.)");
-    } else {
-      toast(`Station clicked, but no action—currently at step ${bookingStep}`);
+    if (!onStationSelected) {
+      toast("No onStationSelected callback provided");
+      return;
     }
-  }, [bookingStep, dispatch, station]);
+    onStationSelected(station);
+  }, [onStationSelected, station]);
 
   return (
     <div
