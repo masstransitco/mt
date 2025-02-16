@@ -72,9 +72,7 @@ type OpenSheetType = "none" | "car" | "list" | "detail";
 export default function GMap({ googleApiKey }: GMapProps) {
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
-  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(
-    null
-  );
+  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
@@ -121,53 +119,43 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  /** 
-   * handleStationClick 
-   * => user picks a station from the map.
-   * We do different things based on the current step:
-   * Step 1 => select departure & go to step 2
-   * Step 3 => select arrival & go to step 4
-   * Steps 2 & 4 remain the same until user confirms in StationDetail
+  /**
+   * handleStationClick
+   * Triggered when a user clicks a station marker on the map.
+   * Based on the booking step:
+   * - Steps 1/2 update departure station (and advance to step 2 if needed)
+   * - Steps 3/4 update arrival station (and advance to step 4 if needed)
    */
   const handleStationClick = useCallback(
-  (station: StationFeature) => {
-    if (bookingStep === 1 || bookingStep === 2) {
-      // DEPARTURE flow
-      dispatch({ type: "user/selectDepartureStation", payload: station.id });
-      // If we’re at step=1 => move to step=2.
-      // If we’re already at step=2, remain at step=2 (just replace departure).
-      if (bookingStep === 1) {
-        dispatch(advanceBookingStep(2));
+    (station: StationFeature) => {
+      if (bookingStep === 1 || bookingStep === 2) {
+        dispatch({ type: "user/selectDepartureStation", payload: station.id });
+        if (bookingStep === 1) {
+          dispatch(advanceBookingStep(2));
+        }
+        toast.success("Departure station selected! (Confirm in station detail.)");
+      } else if (bookingStep === 3 || bookingStep === 4) {
+        dispatch({ type: "user/selectArrivalStation", payload: station.id });
+        if (bookingStep === 3) {
+          dispatch(advanceBookingStep(4));
+        }
+        toast.success("Arrival station selected! (Confirm in station detail.)");
+      } else {
+        toast("Station clicked, but no action—already at step " + bookingStep);
       }
-      toast.success("Departure station selected! (Confirm in station detail.)");
 
-    } else if (bookingStep === 3 || bookingStep === 4) {
-      // ARRIVAL flow
-      dispatch({ type: "user/selectArrivalStation", payload: station.id });
-      // If we’re at step=3 => move to step=4.
-      // If we’re already at step=4, remain at step=4 (just replace arrival).
-      if (bookingStep === 3) {
-        dispatch(advanceBookingStep(4));
+      // Open station detail sheet
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+      setPreviousSheet("none");
+
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
       }
-      toast.success("Arrival station selected! (Confirm in station detail.)");
-
-    } else {
-      // Steps beyond 4 might be final or payment flows...
-      toast("Station clicked, but no action—already at step " + bookingStep);
-    }
-
-    // Show detail sheet with new station
-    setDetailKey((prev) => prev + 1);
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    setPreviousSheet("none");
-
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-  },
-  [bookingStep, dispatch, isSheetMinimized]
-);
+    },
+    [bookingStep, dispatch, isSheetMinimized]
+  );
 
   // Initialize map options & marker icons
   useEffect(() => {
@@ -420,10 +408,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(advanceBookingStep(4));
       toast.success("Arrival station selected!");
     } else {
-      // If step=2 or 4, they'd have to confirm before reselecting, or you allow reselect
       toast("Selected a station but not changing steps from " + bookingStep);
     }
 
+    // Open station detail sheet and close the list
     setDetailKey((prev) => prev + 1);
     setForceSheetOpen(true);
     setOpenSheet("detail");
@@ -551,43 +539,33 @@ export default function GMap({ googleApiKey }: GMapProps) {
               style={{}}
               data={{
                 items: sortedStations,
+                onStationSelected: handleStationSelectedFromList,
               }}
             />
           ))}
         </div>
       </Sheet>
 
-     {/* Station detail sheet */}
-<Sheet
-  key={detailKey}
-  isOpen={isDetailOpen}
-  onToggle={closeCurrentSheet}
-
-  // Replace the old hard-coded title with dynamic logic:
-  // If we're in departure flow (step <= 2), show "Departure";
-  // else (step >= 3) show "Arrival".
-  title={bookingStep <= 2 ? "Departure" : "Arrival"}
-
-  // Replace the old `[count] stations found` text with dynamic subtitle:
-  // If departure flow => "Pick up the car from this station";
-  // else => "Return the car at this station".
-  subtitle={
-    bookingStep <= 2
-      ? "Pick up the car from this station"
-      : "Return the car at this station"
-  }
-
-  // Optionally remove count if you don't need it:
-  // count={(searchLocation ? sortedStations : stations).length}
->
-  {stationToShow && (
-    <StationDetail
-      key={detailKey}
-      stations={searchLocation ? sortedStations : stations}
-      activeStation={stationToShow}
-    />
-  )}
-</Sheet>
+      {/* Station detail sheet */}
+      <Sheet
+        key={detailKey}
+        isOpen={isDetailOpen}
+        onToggle={closeCurrentSheet}
+        title={bookingStep <= 2 ? "Departure" : "Arrival"}
+        subtitle={
+          bookingStep <= 2
+            ? "Pick up the car from this station"
+            : "Return the car at this station"
+        }
+      >
+        {stationToShow && (
+          <StationDetail
+            key={detailKey}
+            stations={searchLocation ? sortedStations : stations}
+            activeStation={stationToShow}
+          />
+        )}
+      </Sheet>
 
       {/* GaussianSplatModal */}
       <GaussianSplatModal
