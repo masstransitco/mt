@@ -416,23 +416,35 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Station selection from station list
   const handleStationSelectedFromList = (station: StationFeature) => {
+  if (bookingStep === 1 || bookingStep === 2) {
+    // user is in "selecting departure" or "already selected departure"
+    dispatch({ type: "user/selectDepartureStation", payload: station.id });
+    // If previously at step 1, move to step 2; if already 2, stay in 2
     if (bookingStep === 1) {
-      dispatch({ type: "user/selectDepartureStation", payload: station.id });
       dispatch(advanceBookingStep(2));
-      toast.success("Departure station selected!");
-    } else if (bookingStep === 3) {
-      dispatch({ type: "user/selectArrivalStation", payload: station.id });
-      dispatch(advanceBookingStep(4));
-      toast.success("Arrival station selected!");
-    } else {
-      toast("Selected a station but not changing steps from " + bookingStep);
     }
+    toast.success("Departure station selected!");
 
-    setDetailKey((prev) => prev + 1);
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    setPreviousSheet("none");
-  };
+  } else if (bookingStep === 3 || bookingStep === 4) {
+    // user is in "selecting arrival" or "already selected arrival"
+    dispatch({ type: "user/selectArrivalStation", payload: station.id });
+    // If previously at step 3, move to step 4; if already 4, stay in 4
+    if (bookingStep === 3) {
+      dispatch(advanceBookingStep(4));
+    }
+    toast.success("Arrival station selected!");
+
+  } else {
+    // If you only have steps up to 4, maybe show toast
+    toast(`Selected station but not changing step (current: ${bookingStep})`);
+  }
+
+  // Then open the detail sheet
+  setDetailKey((prev) => prev + 1);
+  setForceSheetOpen(true);
+  setOpenSheet("detail");
+  setPreviousSheet("none");
+};
 
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
