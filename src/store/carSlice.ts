@@ -2,10 +2,16 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
-import { fetchVehicleList } from "@/lib/cartrack";
+
+// Import Car from your shared types
 import type { Car } from "@/types/cars";
 
-// Define the shape of our CarState
+// Optional: an API helper that fetches raw vehicles
+import { fetchVehicleList } from "@/lib/cartrack";
+
+/**
+ * The shape of our CarState in Redux.
+ */
 interface CarState {
   cars: Car[];
   availableForDispatch: Car[];
@@ -13,7 +19,11 @@ interface CarState {
   error: string | null;
 }
 
-// Thunk to fetch cars and transform them
+/**
+ * Thunk: fetchCars
+ *  - calls fetchVehicleList()
+ *  - transforms raw vehicles into our Car interface
+ */
 export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   "car/fetchCars",
   async (_, { rejectWithValue }) => {
@@ -29,9 +39,9 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
 
         return {
           // Basic fields
-          id: v.vehicle_id ?? 0,
+          id: v.vehicle_id ?? 0,             // numeric
           name: v.registration ?? "Unknown Vehicle",
-          type: v.engine_type ?? "Unknown", // or "Electric" if you prefer
+          type: v.engine_type ?? "Unknown",
           price: 600,                       // Hard-coded example
           modelUrl: v.modelUrl,
           image: v.image,
@@ -49,11 +59,9 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
           lng: v.lng ?? 0,
 
           // Additional fields
-          model: v.model ?? "Unknown Model", // Hardcoded as "MG4" in fetchVehicleList if you prefer
-          year: v.year ?? 0,                // Hardcoded as 2023 in fetchVehicleList
-          odometer: odometerKm,             // in km
-
-          // New fields from the CarTrack response
+          model: v.model ?? "Unknown Model",
+          year: v.year ?? 0,
+          odometer: odometerKm,
           engine_type: v.engine_type ?? "",
           bearing: v.bearing ?? 0,
           speed: v.speed ?? 0,
@@ -79,7 +87,9 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
   }
 );
 
-// Initial state
+/**
+ * Initial Redux state for cars
+ */
 const initialState: CarState = {
   cars: [],
   availableForDispatch: [],
@@ -87,7 +97,9 @@ const initialState: CarState = {
   error: null,
 };
 
-// Create the car slice
+/**
+ * The Car slice
+ */
 const carSlice = createSlice({
   name: "car",
   initialState,
@@ -118,7 +130,9 @@ const carSlice = createSlice({
 export const { setAvailableForDispatch } = carSlice.actions;
 export default carSlice.reducer;
 
-// Selectors
+/**
+ * Car selectors
+ */
 export const selectAllCars = (state: RootState) => state.car.cars;
 export const selectAvailableForDispatch = (state: RootState) => state.car.availableForDispatch;
 export const selectCarsLoading = (state: RootState) => state.car.loading;
