@@ -61,7 +61,7 @@ import {
   createMarkerIcons,
   INTER_CC,
   // If you are using two polylines, import both
-  ROUTE_LINE_OPTIONS,            // e.g. your 'shadow' or base line
+  ROUTE_LINE_OPTIONS_SHADOW,            // e.g. your 'shadow' or base line
   ROUTE_LINE_OPTIONS_FOREGROUND, // your lighter “on top” line
 } from "@/constants/map";
 
