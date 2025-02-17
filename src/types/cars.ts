@@ -1,28 +1,27 @@
-// src/types/cars.ts
-
-export interface CarFeatures {
-  range: number;
-  charging: string;
-  acceleration: string;
-}
-
+// src/types/cars.ts (example)
 export interface Car {
-  // Existing fields
   id: number;
   name: string;
-  model: string;
-  year: number;
-  odometer: number;
   type: string;
   price: number;
-  image: string;
   modelUrl?: string;
+  image?: string;
   available: boolean;
-  features: CarFeatures;
+
+  features: {
+    range: number;
+    charging: string;
+    acceleration: string;
+  };
+
   lat: number;
   lng: number;
 
-  // Additional CarTrack fields
+  // Additional fields
+  model?: string;
+  year?: number;
+  odometer?: number;
+
   engine_type?: string;
   bearing?: number;
   speed?: number;
@@ -30,10 +29,10 @@ export interface Car {
   idling?: boolean;
   altitude?: number;
   temp1?: number | null;
-  dynamic1?: number | null;
-  dynamic2?: number | null;
-  dynamic3?: number | null;
-  dynamic4?: number | null;
+  dynamic1?: any;
+  dynamic2?: any;
+  dynamic3?: any;
+  dynamic4?: any;
   electric_battery_percentage_left?: number | null;
   electric_battery_ts?: string | null;
   location_updated?: string | null;
