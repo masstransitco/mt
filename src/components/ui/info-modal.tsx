@@ -29,7 +29,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-      
+
       {/* Modal card: 80% viewport width, with requested tailwind classes */}
       <div
         className="relative w-4/5 max-w-2xl p-4 shadow-lg bg-background/90 backdrop-blur-sm rounded-t-lg"
@@ -44,7 +44,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="mb-2 text-xl font-semibold">Departure Info</h2>
+        {/* (No title per request) */}
 
         {/* Video container: fill modal width/height as much as possible */}
         <div className="w-full h-auto mb-4">
@@ -54,18 +54,27 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             loop={false}         // stop after first playback
             muted={true}         // required for most browsers to auto-play
             controls={false}     // hide video controls
+            pip={false}          // disable picture-in-picture
             width="100%"
             height="100%"
-            onEnded={() => setPlaying(false)}         // stop once finished
-            onClick={() => setPlaying(true)}          // replay on click
-            style={{ cursor: "pointer" }}             // indicate clickable
+            // Prevent fullscreen on mobile; "playsinline" helps iOS play inline
+            config={{
+              file: {
+                attributes: {
+                  playsInline: true,
+                },
+              },
+            }}
+            onEnded={() => setPlaying(false)}     // stop once finished
+            onClick={() => setPlaying(true)}      // replay on click
+            style={{ cursor: "pointer" }}         // indicate clickable
           />
         </div>
 
         {/* Icon + description list */}
         <div className="space-y-4 text-sm">
           <div className="flex items-start space-x-2">
-            {/* Inline Parking SVG */}
+            {/* Inline Parking SVG with light gray color */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -76,7 +85,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="lucide lucide-circle-parking w-5 h-5 text-blue-600"
+              className="lucide lucide-circle-parking w-5 h-5 text-gray-400"
             >
               <circle cx="12" cy="12" r="10" />
               <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
@@ -89,7 +98,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
           </div>
 
           <div className="flex items-start space-x-2">
-            <KeySquare className="w-5 h-5 text-blue-600" />
+            <KeySquare className="w-5 h-5 text-gray-400" />
             <p>
               <strong>Immediate dispatch of vehicles</strong> to your selected
               departure station with a self-serve digital key.
