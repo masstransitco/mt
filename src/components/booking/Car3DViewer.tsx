@@ -18,21 +18,30 @@ import { BlendFunction } from "postprocessing";
 
 import LoadingOverlay from "@/components/ui/loading-overlay";
 
-// -------------------------------------
-// Types
-// -------------------------------------
+/* -------------------------------------
+   Type & Props
+------------------------------------- */
 interface Car3DViewerProps {
-  modelUrl: string;           // Path to the model
-  imageUrl: string;           // Unused now, but kept if you still want it
+  /** URL/path to the GLB model */
+  modelUrl: string;
+  /**
+   * imageUrl can be `undefined` if the parent
+   * has no image. We'll handle fallback inside this component.
+   */
+  imageUrl?: string;
+  /** Container width (default: "100%") */
   width?: string | number;
+  /** Container height (default: "300px") */
   height?: string | number;
-  isVisible?: boolean;        // If false, completely hide the component
-  interactive?: boolean;      // <--- NEW: controls orbit/panning/zoom
+  /** If false, hides the entire 3D canvas */
+  isVisible?: boolean;
+  /** Enables orbit controls & postprocessing if true */
+  interactive?: boolean;
 }
 
-// -------------------------------------
-// Loading State
-// -------------------------------------
+/* -------------------------------------
+   Loading indicator while model loads
+------------------------------------- */
 function LoadingScreen() {
   const { progress } = useProgress();
   return (
@@ -42,23 +51,25 @@ function LoadingScreen() {
   );
 }
 
-// -------------------------------------
-// The main 3D model component
-// -------------------------------------
+/* -------------------------------------
+   The actual 3D model
+------------------------------------- */
 function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
 
-  // Load the scene from cache or fetch if not loaded
+  // Use a GLTF loader hook
   const { scene: originalScene } = useGLTF(url, "/draco/", true) as any;
 
-  // Make a clone so each card can have its own transformation if needed
+  // Clone so each usage can manipulate its own copy if needed
   const scene = useMemo(() => originalScene.clone(), [originalScene]);
 
-  // Initial setup of the model
+  // Initial model setup
   useEffect(() => {
     if (!scene) return;
+    // Adjust position/rotation
     scene.position.set(0, -0.2, 0);
     scene.rotation.y = Math.PI / 2;
+
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
@@ -74,27 +85,26 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
 
-// -------------------------------------
-// Camera + Controls
-// -------------------------------------
+/* -------------------------------------
+   Orbit controls (camera)
+------------------------------------- */
 function CameraSetup({ interactive }: { interactive: boolean }) {
   return (
     <OrbitControls
       enableDamping
       dampingFactor={0.05}
-      // Make these props conditional on "interactive"
       enabled={interactive}
       enableZoom={interactive}
-      enablePan={false} // Keep panning disabled or conditionally set it
+      enablePan={false}
       minPolarAngle={0}
       maxPolarAngle={Math.PI / 2}
     />
   );
 }
 
-// -------------------------------------
-// Scene Lighting
-// -------------------------------------
+/* -------------------------------------
+   Lights & ambient
+------------------------------------- */
 function SceneLighting() {
   return (
     <>
@@ -104,12 +114,6 @@ function SceneLighting() {
         castShadow
         shadow-mapSize-width={512}
         shadow-mapSize-height={512}
-        shadow-camera-near={0.5}
-        shadow-camera-far={500}
-        shadow-camera-left={-10}
-        shadow-camera-right={10}
-        shadow-camera-top={10}
-        shadow-camera-bottom={-10}
       />
       <directionalLight
         position={[-5, 5, -5]}
@@ -128,9 +132,9 @@ function SceneLighting() {
   );
 }
 
-// -------------------------------------
-// PostProcessing
-// -------------------------------------
+/* -------------------------------------
+   Optional PostProcessing
+------------------------------------- */
 function PostProcessing({ interactive }: { interactive: boolean }) {
   return (
     <EffectComposer
@@ -156,29 +160,33 @@ function PostProcessing({ interactive }: { interactive: boolean }) {
   );
 }
 
-// -------------------------------------
-// Optional: simple cache to avoid repeated preload calls
-// -------------------------------------
+/* -------------------------------------
+   Optional: Preloading logic
+------------------------------------- */
 const modelsCache = new Map<string, boolean>();
 
-/**
- * Car3DViewer: Always renders the 3D model, only interactive if `interactive={true}`.
- */
+/* -------------------------------------
+   Main Car3DViewer component
+------------------------------------- */
 function Car3DViewer({
   modelUrl,
-  imageUrl, // no longer used in this example
+  imageUrl, // optional
   width = "100%",
   height = "300px",
   isVisible = true,
   interactive = false,
 }: Car3DViewerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Provide a fallback if 'imageUrl' is undefined
+  const finalImageUrl = imageUrl ?? "/cars/fallback.png";
 
-  // Once we see a modelUrl, optionally preload it if not in cache:
+  // If you plan to use 'finalImageUrl' for something in the scene,
+  // e.g. environment textures or screenshot placeholders, you can do so here.
+
+  // Preload the model if not cached
   useEffect(() => {
     if (!modelsCache.has(modelUrl)) {
       try {
-        // @ts-ignore - if you have useGLTF.preload
+        // @ts-ignore
         useGLTF.preload(modelUrl);
         modelsCache.set(modelUrl, true);
       } catch (err) {
@@ -187,29 +195,27 @@ function Car3DViewer({
     }
   }, [modelUrl]);
 
+  // If not visible, return nothing
+  if (!isVisible) {
+    return null;
+  }
+
+  // Inline styling for the container
   const containerStyles = useMemo<React.CSSProperties>(
     () => ({
       width,
       height,
       overflow: "hidden",
-      pointerEvents: "auto",
-      display: isVisible ? "block" : "none",
       position: "relative",
     }),
-    [width, height, isVisible]
+    [width, height]
   );
 
-  // If not visible, return null to remove from layout
-  if (!isVisible) {
-    return null;
-  }
-
-  // Render the 3D scene in a <Canvas> for *all* cards,
-  // with user interaction only if `interactive` is true.
   return (
     <div style={containerStyles}>
       <Canvas
-        ref={canvasRef}
+        // If you'd like to use or show finalImageUrl in some way,
+        // you can pass it to background or a custom effect. Right now, it's unused.
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
@@ -227,22 +233,19 @@ function Car3DViewer({
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
 
-        {/* Lights */}
+        {/* Scene Lights */}
         <SceneLighting />
 
-        {/* Optional post-processing. Enabled only when interactive=true */}
+        {/* PostProcessing only if interactive */}
         <PostProcessing interactive={interactive} />
 
-        {/* Env + background */}
+        {/* Optional environment */}
         <Environment preset="sunset" background={false} />
         <color attach="background" args={["#1a1a1a"]} />
 
-        {/* Suspense handles model loading progress */}
+        {/* Suspense for model loading */}
         <Suspense fallback={<LoadingScreen />}>
-          {/* Only interactive if user says so */}
           <CameraSetup interactive={interactive} />
-
-          {/* The model itself */}
           <CarModel url={modelUrl} interactive={interactive} />
 
           {/* Preload sub-assets in the GLTF */}
@@ -255,10 +258,9 @@ function Car3DViewer({
 
 export default memo(Car3DViewer);
 
-/**
- * Optional utility if you want to preload multiple model URLs at once
- * without having to rely on each card's effect:
- */
+/* -------------------------------------
+   Optional helper to preload multiple URLs
+------------------------------------- */
 export function preloadCarModels(urls: string[]) {
   urls.forEach((url) => {
     if (!modelsCache.has(url)) {
