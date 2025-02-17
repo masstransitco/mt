@@ -8,7 +8,7 @@ import debounce from "lodash/debounce";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
-  selectRoute,
+  selectRoute as selectBookingRoute,
 } from "@/store/bookingSlice";
 import {
   selectDepartureStationId,
@@ -16,9 +16,12 @@ import {
 } from "@/store/userSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 
+// 1) Import the dispatch route clearing action
+import { clearDispatchRoute } from "@/store/dispatchSlice";
+
 /* -----------------------------------------------------------
-    Reusable icons
-   ----------------------------------------------------------- */
+   Reusable icons
+----------------------------------------------------------- */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
     <svg
@@ -97,7 +100,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
 
 /* -----------------------------------------------------------
    AddressSearch
-   ----------------------------------------------------------- */
+----------------------------------------------------------- */
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
   disabled?: boolean;
@@ -125,7 +128,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If station is selected, just display name + disable the input
+  // If station is selected, display its name & disable input
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -159,9 +162,7 @@ const AddressSearch = ({
     if (!geocoder.current) return;
 
     try {
-      const response = await geocoder.current.geocode({
-        placeId: prediction.place_id,
-      });
+      const response = await geocoder.current.geocode({ placeId: prediction.place_id });
       const result = response.results[0];
       if (result?.geometry?.location) {
         const { lat, lng } = result.geometry.location;
@@ -233,7 +234,7 @@ const AddressSearch = ({
 
 /* -----------------------------------------------------------
    StationSelector
-   ----------------------------------------------------------- */
+----------------------------------------------------------- */
 interface StationSelectorProps {
   /** Callback when user searches an address and selects a location on the map */
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
@@ -260,7 +261,7 @@ export default function StationSelector({
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // Route info
+  // Route info (departure→arrival)
   const route = useAppSelector(selectRoute);
   const distanceInKm = route ? (route.distance / 1000).toFixed(1) : null;
 
@@ -310,11 +311,14 @@ export default function StationSelector({
           {/**
            * Show the 'X' if we DO have a departure station
            * and we're at step=2 or step=3 (i.e. we haven't locked in arrival yet).
-           * For example, if user is at step=2 or step=3, they might want to re-pick departure.
            */}
           {departureStation && step <= 3 && (
             <button
               onClick={() => {
+                // 2) Also clear the dispatch->departure route from Redux
+                dispatch(clearDispatchRoute());
+
+                // Then do your existing logic for clearing departure station
                 if (onClearDeparture) {
                   onClearDeparture();
                 } else {
@@ -341,7 +345,7 @@ export default function StationSelector({
 
             <AddressSearch
               onAddressSelect={onAddressSearch}
-              disabled={step < 3} // shouldn't happen logically, but let's keep it consistent
+              disabled={step < 3}
               placeholder="Search here"
               selectedStation={arrivalStation}
             />
