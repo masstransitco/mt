@@ -8,6 +8,7 @@ import debounce from "lodash/debounce";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
+  // Renamed the import so we can use it as selectBookingRoute:
   selectRoute as selectBookingRoute,
 } from "@/store/bookingSlice";
 import {
@@ -261,9 +262,9 @@ export default function StationSelector({
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // Route info (departure→arrival)
-  const route = useAppSelector(selectRoute);
-  const distanceInKm = route ? (route.distance / 1000).toFixed(1) : null;
+  // Route info (departure→arrival) from bookingSlice
+  const bookingRoute = useAppSelector(selectBookingRoute);
+  const distanceInKm = bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null;
 
   // Step logic: step<3 => "Step 1 of 2" (departure), else "Step 2 of 2" (arrival)
   const uiStepNumber = step < 3 ? 1 : 2;
@@ -274,12 +275,8 @@ export default function StationSelector({
   const highlightArrival = step >= 3;
 
   // Control the ring color using ring-white
-  const highlightDepartureClass = highlightDeparture
-    ? "ring-1 ring-white bg-background"
-    : "";
-  const highlightArrivalClass = highlightArrival
-    ? "ring-1 ring-white bg-background"
-    : "";
+  const highlightDepartureClass = highlightDeparture ? "ring-1 ring-white bg-background" : "";
+  const highlightArrivalClass = highlightArrival ? "ring-1 ring-white bg-background" : "";
 
   return (
     <div
@@ -308,14 +305,11 @@ export default function StationSelector({
             selectedStation={departureStation}
           />
 
-          {/**
-           * Show the 'X' if we DO have a departure station
-           * and we're at step=2 or step=3 (i.e. we haven't locked in arrival yet).
-           */}
+          {/* If user has a departure station & step <= 3, show 'X' to clear */}
           {departureStation && step <= 3 && (
             <button
               onClick={() => {
-                // 2) Also clear the dispatch->departure route from Redux
+                // Also clear the dispatch->departure route
                 dispatch(clearDispatchRoute());
 
                 // Then do your existing logic for clearing departure station
@@ -350,10 +344,7 @@ export default function StationSelector({
               selectedStation={arrivalStation}
             />
 
-            {/**
-             * Show 'X' if an arrival station is chosen
-             * and step <= 4 (i.e., we haven't gone to payment or beyond).
-             */}
+            {/* If user has an arrival station & step <= 4, show 'X' to clear */}
             {arrivalStation && step <= 4 && (
               <button
                 onClick={() => {
