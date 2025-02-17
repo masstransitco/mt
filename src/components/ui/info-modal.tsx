@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { CircleParking, KeySquare, X } from "lucide-react";
-// import ReactPlayer from "react-player"; <-- remove direct import
-import dynamic from "next/dynamic"; // Next.js dynamic import
+import { KeySquare, X } from "lucide-react";
+// import ReactPlayer from "react-player"; <-- dynamic import if using Next.js SSR
+import dynamic from "next/dynamic";
 
 // Dynamically import ReactPlayer (client-side only), disable SSR
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
@@ -27,7 +27,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-      
+
       {/* Modal card: 80% viewport width, rounded, centered */}
       <div
         className="relative w-4/5 max-w-2xl bg-white rounded-xl p-4 shadow-lg"
@@ -58,8 +58,23 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
 
         {/* Icon + description list */}
         <div className="space-y-4 text-sm">
+          {/* 1) Custom Parking Icon (inline SVG) */}
           <div className="flex items-start space-x-2">
-            <CircleParking className="w-5 h-5 text-blue-600" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="lucide lucide-circle-parking w-5 h-5 text-blue-600"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+            </svg>
             <p>
               <strong>Pick up and return the car</strong> at the selected
               station&apos;s carpark. Our fares are inclusive of all parking
@@ -67,6 +82,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             </p>
           </div>
 
+          {/* 2) KeySquare icon from lucide-react */}
           <div className="flex items-start space-x-2">
             <KeySquare className="w-5 h-5 text-blue-600" />
             <p>
