@@ -1,7 +1,8 @@
 // src/store/userSlice.ts
+"use client";
 
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { RootState } from './store';
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import type { RootState } from "./store";
 
 // Example interface for an authenticated user (from Firebase or another system).
 // Adjust fields as needed for your app (phoneNumber, displayName, etc.).
@@ -13,12 +14,12 @@ interface AuthUser {
 }
 
 interface UserState {
-  // Existing fields
+  // We're confirming the station IDs are numeric:
   selectedCarId: number | null;
   departureStationId: number | null;
   arrivalStationId: number | null;
   userLocation: google.maps.LatLngLiteral | null;
-  viewState: 'showCar' | 'showMap';
+  viewState: "showCar" | "showMap";
 
   // NEW auth fields
   authUser: AuthUser | null; // null => not signed in
@@ -31,7 +32,7 @@ const initialState: UserState = {
   departureStationId: null,
   arrivalStationId: null,
   userLocation: null,
-  viewState: 'showCar',
+  viewState: "showCar",
 
   // Auth: default to not signed in
   authUser: null,
@@ -39,31 +40,37 @@ const initialState: UserState = {
 };
 
 export const userSlice = createSlice({
-  name: 'user',
+  name: "user",
   initialState,
   reducers: {
     // Existing station/car reducers
     selectCar: (state, action: PayloadAction<number>) => {
       state.selectedCarId = action.payload;
     },
+
+    // Both departureStationId & arrivalStationId remain numeric
     selectDepartureStation: (state, action: PayloadAction<number | null>) => {
       state.departureStationId = action.payload;
     },
     selectArrivalStation: (state, action: PayloadAction<number | null>) => {
       state.arrivalStationId = action.payload;
     },
+
     setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
       state.userLocation = action.payload;
     },
+
     clearDepartureStation: (state) => {
       state.departureStationId = null;
     },
     clearArrivalStation: (state) => {
       state.arrivalStationId = null;
     },
-    setViewState: (state, action: PayloadAction<'showCar' | 'showMap'>) => {
+
+    setViewState: (state, action: PayloadAction<"showCar" | "showMap">) => {
       state.viewState = action.payload;
     },
+
     resetUserSelections: (state) => {
       state.selectedCarId = null;
       state.departureStationId = null;
