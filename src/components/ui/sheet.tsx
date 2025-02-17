@@ -214,7 +214,7 @@ const Sheet = ({
     <div
       className={cn(
         "fixed bottom-0 left-0 right-0 z-50", // keep on top
-        "bg-card/95 backdrop-blur-sm rounded-t-lg",
+        "bg-background/90 backdrop-blur-sm rounded-t-lg",
         "overflow-hidden", // needed for smooth max-height transition
         "transition-[max-height] duration-500 ease-in-out",
         isOpen ? "max-h-[70vh]" : "max-h-0",
