@@ -2,7 +2,11 @@
 
 import React from "react";
 import { SquareParking, KeySquare, X } from "lucide-react";
-import ReactPlayer from "react-player";
+// import ReactPlayer from "react-player"; <-- remove direct import
+import dynamic from "next/dynamic"; // Next.js dynamic import
+
+// Dynamically import ReactPlayer (client-side only), disable SSR
+const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
 interface InfoModalProps {
   isOpen: boolean;
