@@ -88,24 +88,21 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
               viewBox="0 0 24 24"
-              className="lucide lucide-circle-parking w-6 h-6 sm:w-7 sm:h-7 text-indigo-900"
+              className="lucide lucide-circle-parking w-6 h-6 sm:w-7 sm:h-7 text-gray-900"
             >
               <circle cx="12" cy="12" r="10" />
               <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
             </svg>
             <p>
-              <strong>Pick up and return the car</strong> at the selected
-              station&apos;s carpark. Our fares are inclusive of all parking
-              costs.
+              <strong>Pick up or return at any station</strong>, with all parking costs included—no surprises.
             </p>
           </div>
 
           {/* 2) KeySquare icon + description */}
           <div className="flex items-start space-x-2">
-            <KeySquare className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-900" />
+            <KeySquare className="w-6 h-6 sm:w-7 sm:h-7 text-gray-900" />
             <p>
-              <strong>Immediate dispatch of vehicles</strong> to your selected
-              departure station with a self-serve digital key.
+              <strong>Arrive to a ready car</strong>, unlock with our digital key, and drive instantly.
             </p>
           </div>
 
@@ -113,20 +110,19 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
           <div className="flex items-start space-x-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="24" height="24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
               viewBox="0 0 24 24"
-              className="lucide lucide-shield-check w-6 h-6 sm:w-7 sm:h-7 text-indigo-900"
+              className="lucide lucide-shield-check w-6 h-6 sm:w-7 sm:h-7 text-gray-900"
             >
               <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
               <path d="m9 12 2 2 4-4" />
             </svg>
             <p>
-              <strong>MTC insurance coverage.</strong> MTC purchases an insurance policy that provides the compulsory coverage required under the Hong Kong Motor Vehicles Insurance (Third Party Risks) Ordinance.
+              <strong>Enjoy comprehensive coverage</strong> under Hong Kong’s Third Party Risks, ensuring a worry-free journey.
             </p>
           </div>
         </div>
