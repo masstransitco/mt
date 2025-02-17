@@ -276,6 +276,22 @@ export const ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
   zIndex: 100,             // draw on top
 };
 
+export const DISPATCH_ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
+  strokeColor: "#0A2239", // a darker "navy" or "blueprint"
+  strokeWeight: 8,
+  strokeOpacity: 0.9,
+  geodesic: true,
+  zIndex: 80, // slightly behind the normal route's lines
+};
+
+export const DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
+  strokeColor: "#03A9F4", // bright "Uber-ish" blue
+  strokeWeight: 5,
+  strokeOpacity: 1,
+  geodesic: true,
+  zIndex: 90,
+};
+
 // For the Places API usage in StationSelector
 export const PLACES_OPTIONS = {
   componentRestrictions: {
