@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { SquareParking, KeySquare, X } from "lucide-react";
+import { CircleParking, KeySquare, X } from "lucide-react";
 // import ReactPlayer from "react-player"; <-- remove direct import
 import dynamic from "next/dynamic"; // Next.js dynamic import
 
@@ -59,7 +59,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
         {/* Icon + description list */}
         <div className="space-y-4 text-sm">
           <div className="flex items-start space-x-2">
-            <SquareParking className="w-5 h-5 text-blue-600" />
+            <CircleParking className="w-5 h-5 text-blue-600" />
             <p>
               <strong>Pick up and return the car</strong> at the selected
               station&apos;s carpark. Our fares are inclusive of all parking
