@@ -72,8 +72,22 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             style={{ cursor: "pointer" }}
           />
 
-          {/* Gradient overlay to transition video -> background */}
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-b from-transparent to-gray-200/90" />
+          {/* 
+            Gradient overlay that transitions smoothly into the same color 
+            as the modal background (bg-gray-200/90). We explicitly match 
+            the RGBA value for a seamless blend. 
+          */}
+          <div className="
+            pointer-events-none
+            absolute
+            bottom-0
+            left-0
+            right-0
+            h-24
+            bg-gradient-to-b
+            from-transparent
+            to-[rgba(229,231,235,0.9)]
+          " />
         </div>
 
         {/* Scrollable content area with padding for text/icons */}
@@ -88,7 +102,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
               viewBox="0 0 24 24"
-              className="lucide lucide-circle-parking w-6 h-6 sm:w-7 sm:h-7 text-gray-900"
+              className="w-6 h-6 sm:w-7 sm:h-7 text-gray-900"
             >
               <circle cx="12" cy="12" r="10" />
               <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
@@ -106,7 +120,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             </p>
           </div>
 
-          {/* 3) ShieldCheck icon + insurance description */}
+          {/* 3) ShieldCheck icon + description */}
           <div className="flex items-start space-x-2">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -116,7 +130,8 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
               viewBox="0 0 24 24"
-              className="lucide lucide-shield-check w-6 h-6 sm:w-7 sm:h-7 text-gray-900"
+              className="w-6 h-6 sm:w-7 sm:h-7 text-gray-9
+00"
             >
               <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
               <path d="m9 12 2 2 4-4" />
