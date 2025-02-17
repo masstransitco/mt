@@ -49,7 +49,6 @@ import { LoadingSpinner } from "./LoadingSpinner";
 import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
-import GaussianSplatModal from "./GaussianSplatModal";
 
 // Constants
 import {
@@ -72,6 +71,10 @@ interface GMapProps {
 }
 
 type OpenSheetType = "none" | "car" | "list" | "detail";
+
+const GaussianSplatModal = dynamic(() => import("@/components/booking/GaussianSplatModal"), {
+  suspense: true,
+});
 
 export default function GMap({ googleApiKey }: GMapProps) {
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
@@ -617,10 +620,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
       </Sheet>
 
       {/* GaussianSplatModal */}
-      <GaussianSplatModal
-        isOpen={isSplatModalOpen}
-        onClose={() => setIsSplatModalOpen(false)}
-      />
+     <Suspense fallback={<div>Loading modal...</div>}>
+        {isSplatModalOpen && (
+          <GaussianSplatModal
+            isOpen={isSplatModalOpen}
+            onClose={() => setIsSplatModalOpen(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
