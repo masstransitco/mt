@@ -1,9 +1,9 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { RootState } from './store';
-import { StationFeature } from './stationsSlice';
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import type { RootState } from "./store";
+import { StationFeature } from "./stationsSlice";
 
 /** The user’s chosen ticket plan. */
-type TicketPlan = 'single' | 'paygo' | null;
+type TicketPlan = "single" | "paygo" | null;
 
 interface RouteInfo {
   /** distance in meters */
@@ -56,10 +56,10 @@ export const fetchRoute = createAsyncThunk<
   { departure: StationFeature; arrival: StationFeature }, // Thunk argument
   { rejectValue: string } // Rejected action payload
 >(
-  'booking/fetchRoute',
+  "booking/fetchRoute",
   async ({ departure, arrival }, { rejectWithValue }) => {
     if (!window.google || !window.google.maps) {
-      return rejectWithValue('Google Maps API not available');
+      return rejectWithValue("Google Maps API not available");
     }
     try {
       const directionsService = new google.maps.DirectionsService();
@@ -77,41 +77,41 @@ export const fetchRoute = createAsyncThunk<
       const response = await directionsService.route(request);
 
       if (!response || !response.routes || !response.routes[0]) {
-        return rejectWithValue('No route found');
+        return rejectWithValue("No route found");
       }
 
       const route = response.routes[0];
       const leg = route.legs?.[0];
       if (!leg || !leg.distance || !leg.duration) {
-        return rejectWithValue('Incomplete route data');
+        return rejectWithValue("Incomplete route data");
       }
 
       const distance = leg.distance.value; // meters
       const duration = leg.duration.value; // seconds
 
       // If overview_polyline is typed as a string, just use it directly.
-      const polyline = route.overview_polyline || '';
+      const polyline = route.overview_polyline || "";
 
       return { distance, duration, polyline };
     } catch (err) {
       console.error(err);
-      return rejectWithValue('Directions request failed');
+      return rejectWithValue("Directions request failed");
     }
   }
 );
 
 const initialState: BookingState = {
   step: 1,
-  stepName: 'selecting_departure_station',
+  stepName: "selecting_departure_station",
   departureDate: null,
   route: null,
-  routeStatus: 'idle',
+  routeStatus: "idle",
   routeError: null,
   ticketPlan: null, // NEW FIELD
 };
 
 export const bookingSlice = createSlice({
-  name: 'booking',
+  name: "booking",
   initialState,
   reducers: {
     /**
@@ -128,26 +128,26 @@ export const bookingSlice = createSlice({
       state.step = action.payload;
       switch (action.payload) {
         case 1:
-          state.stepName = 'selecting_departure_station';
+          state.stepName = "selecting_departure_station";
           break;
         case 2:
-          state.stepName = 'selected_departure_station';
+          state.stepName = "selected_departure_station";
           break;
         case 3:
-          state.stepName = 'selecting_arrival_station';
+          state.stepName = "selecting_arrival_station";
           break;
         case 4:
-          state.stepName = 'selected_arrival_station';
+          state.stepName = "selected_arrival_station";
           break;
         case 5:
-          state.stepName = 'payment';
+          state.stepName = "payment";
           break;
         case 6:
-          state.stepName = 'finalizing';
+          state.stepName = "finalizing";
           break;
         default:
           state.step = 1;
-          state.stepName = 'selecting_departure_station';
+          state.stepName = "selecting_departure_station";
           break;
       }
     },
@@ -157,39 +157,47 @@ export const bookingSlice = createSlice({
      */
     resetBookingFlow: (state) => {
       state.step = 1;
-      state.stepName = 'selecting_departure_station';
+      state.stepName = "selecting_departure_station";
       state.departureDate = null;
       // Reset route-related fields
       state.route = null;
-      state.routeStatus = 'idle';
+      state.routeStatus = "idle";
       state.routeError = null;
       // Reset ticket plan
       state.ticketPlan = null;
     },
 
     /**
-     * NEW: sets the user's chosen ticket plan 
-     * (e.g., 'single' or 'paygo').
+     * Sets the user's chosen ticket plan (e.g., 'single' or 'paygo').
      */
     setTicketPlan: (state, action: PayloadAction<TicketPlan>) => {
       state.ticketPlan = action.payload;
+    },
+
+    /**
+     * NEW: Clears the route data so no polyline is rendered.
+     */
+    clearRoute: (state) => {
+      state.route = null;
+      state.routeStatus = "idle";
+      state.routeError = null;
     },
   },
   extraReducers: (builder) => {
     // fetchRoute
     builder
       .addCase(fetchRoute.pending, (state) => {
-        state.routeStatus = 'loading';
+        state.routeStatus = "loading";
         state.routeError = null;
       })
       .addCase(fetchRoute.fulfilled, (state, action) => {
-        state.routeStatus = 'succeeded';
+        state.routeStatus = "succeeded";
         state.routeError = null;
         state.route = action.payload; // { distance, duration, polyline }
       })
       .addCase(fetchRoute.rejected, (state, action) => {
-        state.routeStatus = 'failed';
-        state.routeError = action.payload ?? 'Failed to fetch route';
+        state.routeStatus = "failed";
+        state.routeError = action.payload ?? "Failed to fetch route";
         state.route = null;
       });
   },
@@ -200,7 +208,8 @@ export const {
   setDepartureDate,
   advanceBookingStep,
   resetBookingFlow,
-  setTicketPlan, // NEW
+  setTicketPlan,
+  clearRoute, // <--- New action
 } = bookingSlice.actions;
 
 // Export the reducer
