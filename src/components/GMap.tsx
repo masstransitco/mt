@@ -35,6 +35,7 @@ import {
   advanceBookingStep,
   fetchRoute,
   selectRoute,
+  clearRoute,
 } from "@/store/bookingSlice";
 import {
   fetchStations3D,
@@ -357,6 +358,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (bookingStep === 4) {
       dispatch(clearArrivalStation());
       dispatch(advanceBookingStep(3));
+      dispatch(clearRoute());
       toast.success("Arrival station cleared. (Back to selecting arrival.)");
     } else {
       // fallback if you're at step=3 or beyond
