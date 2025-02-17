@@ -258,12 +258,22 @@ export const createMarkerIcons = () => {
   };
 };
 
-/** Polyline route styling options. */
-export const ROUTE_LINE_OPTIONS: google.maps.PolylineOptions = {
-  strokeColor: '#FF4444',
-  strokeOpacity: 0.8,
-  strokeWeight: 5,
+// A “shadow” polyline (thicker, dark stroke)
+export const ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
+  strokeColor: "#2B2B2B",  // dark gray
+  strokeWeight: 8,         // slightly thicker
+  strokeOpacity: 0.9,
   geodesic: true,
+  zIndex: 90,              // draw under the main line
+};
+
+// A “foreground” polyline (white or light gray)
+export const ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
+  strokeColor: "#f5f5f5",  // light gray/white
+  strokeWeight: 5,
+  strokeOpacity: 1,
+  geodesic: true,
+  zIndex: 100,             // draw on top
 };
 
 // For the Places API usage in StationSelector
