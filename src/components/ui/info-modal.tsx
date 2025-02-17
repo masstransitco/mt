@@ -30,7 +30,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
       <div
         className="
           relative
-          w-4/5
+          w-11/12
           max-w-2xl
           mx-4
           my-4
