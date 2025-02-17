@@ -102,7 +102,7 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
     onStationClick,
   } = props;
 
-  // If user searched an address, show the sorted list first
+  // If user searched an address, we show the sorted list first
   const listToRender = searchLocation ? sortedStations : stations;
 
   return (
@@ -137,7 +137,8 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
    Memoized Car Markers
 ----------------------------------------------------------- */
 interface CarMarkersProps {
-  cars: { id: string; lat: number; lng: number; name: string }[];
+  // Updated id to number (was string)
+  cars: { id: number; lat: number; lng: number; name: string }[];
   markerIcons: any;
 }
 
@@ -229,11 +230,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // -----------------------------
-  // handleStationClick
-  // Decide if we’re picking a departure or arrival
-  // then dispatch numeric station IDs
-  // -----------------------------
+  // Station click => set departure/arrival
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep === 1 || bookingStep === 2) {
@@ -384,11 +381,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Fetch dispatch->departure route (only clear if no departure station)
   useEffect(() => {
     if (!departureStationId) {
-      // If user cleared departure, also remove dispatch route
       dispatch(clearDispatchRoute());
       return;
     }
-    // Otherwise fetch it
     const departureStation = stations.find((s) => s.id === departureStationId);
     if (departureStation) {
       dispatch(fetchDispatchDirections(departureStation));
@@ -594,7 +589,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
-  // Render
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Main Google Map */}
@@ -644,8 +638,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
             onStationClick={handleStationClick}
           />
 
-          {/* Memoized Car Markers */}
-          <CarMarkers cars={cars} markerIcons={markerIcons} />
+          {/* Memoized Car Markers (now expects numeric id) */}
+          <CarMarkers
+            cars={cars.map((c) => ({
+              // If c.id is already number, just pass it along
+              id: c.id,
+              lat: c.lat,
+              lng: c.lng,
+              name: c.name,
+            }))}
+            markerIcons={markerIcons}
+          />
         </GoogleMap>
       </div>
 
@@ -656,7 +659,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         onClearArrival={handleClearArrivalInSelector}
       />
 
-      {/* Top-left buttons (Locate Me, Car Toggle) */}
+      {/* Top-left buttons */}
       <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
         <button
           onClick={handleLocateMe}
