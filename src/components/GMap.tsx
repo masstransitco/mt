@@ -511,7 +511,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Polyline for route, if any */}
           {decodedPath.length > 0 && (
+              {/* Shadow line first (dark, under) */}
             <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS} />
+              {/* Foreground line second (lighter, over) */}
+            <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_FOREGROUND} />
           )}
 
           {/* Station Markers */}
