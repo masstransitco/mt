@@ -7,14 +7,16 @@ import React, {
   useRef,
   useEffect,
   useCallback,
+  useState,
 } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   incrementOpenSheets,
   decrementOpenSheets,
 } from "@/lib/scrollLockManager";
 
+// Pulsating strip constants/types
 type AnimationColor = string;
 type Scale = number;
 
@@ -33,7 +35,6 @@ interface AnimationParams {
   };
 }
 
-// Animation config for the pulsating strip
 const ANIMATION_PARAMS: AnimationParams = {
   duration: 1400,
   colors: {
@@ -49,11 +50,8 @@ const ANIMATION_PARAMS: AnimationParams = {
   },
 };
 
-interface PulsatingStripProps {
-  className?: string;
-}
-
-const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
+// PulsatingStrip
+const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>();
@@ -113,7 +111,7 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
       shadowIntensity = 0.3;
     }
 
-    // Apply animations
+    // Apply
     stripRef.current.style.transform = `scale(${scale})`;
     stripRef.current.style.backgroundColor = color;
     stripRef.current.style.opacity = opacity.toString();
@@ -151,12 +149,14 @@ const PulsatingStrip = React.memo(({ className }: PulsatingStripProps) => {
     </div>
   );
 });
-
 PulsatingStrip.displayName = "PulsatingStrip";
 
-const lerp = (start: Scale, end: Scale, progress: number): Scale => {
+function lerp(start: Scale, end: Scale, progress: number): Scale {
   return start + (end - start) * progress;
-};
+}
+
+// -------------- Import the InfoModal --------------
+import InfoModal from "./info-modal";
 
 interface SheetProps {
   /** Controls whether the sheet is open or collapsed to 0 height */
@@ -167,32 +167,23 @@ interface SheetProps {
   children: ReactNode;
   /** Optional additional classes */
   className?: string;
-  /**
-   * The main title (e.g. "Departure" or "Arrival")
-   */
+  /** Title (e.g. "Departure" or "Arrival") */
   title?: string;
-  /**
-   * A subtitle below the title
-   * (e.g. "Pick up the car from this station" or "Return the car at this station")
-   */
+  /** Subtitle below the title */
   subtitle?: string;
-  /**
-   * If you want to display the number of results (e.g. "12 stations found")
-   */
+  /** e.g. "12 stations found" */
   count?: number;
-  /**
-   * The label that follows the numeric count, e.g. "stations found"
-   */
+  /** The label that follows the numeric count, e.g. "stations found" */
   countLabel?: string;
 }
 
 /**
  * Sheet component that:
  * 1) Disables page scroll when open (via scrollLockManager).
- * 2) Displays a “bottom sheet” with optional header info + a pulsating strip.
+ * 2) Displays a "bottom sheet" with optional header info + a pulsating strip.
  * 3) Lets internal content scroll independently, up to a set max-height.
  */
-const Sheet = ({
+export default function Sheet({
   isOpen,
   onToggle,
   children,
@@ -201,7 +192,7 @@ const Sheet = ({
   subtitle,
   count,
   countLabel,
-}: SheetProps) => {
+}: SheetProps) {
   // Lock body scrolling if isOpen
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
@@ -210,62 +201,76 @@ const Sheet = ({
     };
   }, [isOpen]);
 
+  // Local state to toggle InfoModal
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+
   return (
-    <div
-      className={cn(
-        "fixed bottom-0 left-0 right-0 z-50", // keep on top
-        "bg-background/90 backdrop-blur-sm rounded-t-lg",
-        "overflow-hidden", // needed for smooth max-height transition
-        "transition-[max-height] duration-500 ease-in-out",
-        isOpen ? "max-h-[70vh]" : "max-h-0",
-        className
-      )}
-    >
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4">
-          <div>
-            {/* e.g. "Departure"/"Arrival" */}
-            {title && (
-              <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-            )}
-            {/* e.g. "Pick up the car from this station" */}
-            {subtitle && (
-              <p className="text-sm text-muted-foreground">{subtitle}</p>
-            )}
-            {/* e.g. "12 stations found" */}
-            {typeof count === "number" && (
-              <p className="text-sm text-muted-foreground">
-                {count} {countLabel ?? "stations found"}
-              </p>
-            )}
+    <>
+      {/* The "Bottom Sheet" */}
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-50", // keep on top
+          "bg-background/90 backdrop-blur-sm rounded-t-lg",
+          "overflow-hidden", // smooth max-height transition
+          "transition-[max-height] duration-500 ease-in-out",
+          isOpen ? "max-h-[70vh]" : "max-h-0",
+          className
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4">
+            <div>
+              {title && (
+                <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+              )}
+              {subtitle && (
+                <p className="text-sm text-muted-foreground">{subtitle}</p>
+              )}
+              {typeof count === "number" && (
+                <p className="text-sm text-muted-foreground">
+                  {count} {countLabel ?? "stations found"}
+                </p>
+              )}
+            </div>
+
+            {/* Buttons row: Info + ChevronDown */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setInfoModalOpen(true)}
+                className="p-2 rounded-full hover:bg-muted transition-colors"
+                aria-label="Show info"
+              >
+                <Info className="w-5 h-5 text-muted-foreground" />
+              </button>
+
+              <button
+                onClick={onToggle}
+                className="p-2 rounded-full hover:bg-muted transition-colors"
+                aria-label="Close sheet"
+              >
+                <ChevronDown className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center">
-            <button
-              onClick={onToggle}
-              className="p-2 rounded-full hover:bg-muted transition-colors"
-              aria-label="Close sheet"
-            >
-              <ChevronDown className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
-        </div>
 
-        {/* Pulsating strip (optional) */}
-        <PulsatingStrip />
+          {/* Pulsating strip */}
+          <PulsatingStrip />
 
-        {/* Scrollable content area */}
-        <div className="relative flex-1 overflow-y-auto">
-          {children}
+          {/* Scrollable content area */}
+          <div className="relative flex-1 overflow-y-auto">
+            {children}
 
-          {/* Bottom handle (optional) */}
-          <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
-            <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
+            {/* Bottom handle (optional) */}
+            <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
+              <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
 
-export default Sheet;
+      {/* InfoModal component */}
+      <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
+    </>
+  );
+}
