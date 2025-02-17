@@ -72,7 +72,7 @@ interface GMapProps {
 
 type OpenSheetType = "none" | "car" | "list" | "detail";
 
-const GaussianSplatModal = dynamic(() => import("@/components/booking/GaussianSplatModal"), {
+const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
   suspense: true,
 });
 
