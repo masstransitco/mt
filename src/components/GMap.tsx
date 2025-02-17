@@ -60,11 +60,11 @@ import {
   createMapOptions,
   createMarkerIcons,
   INTER_CC,
-  ROUTE_LINE_OPTIONS,
-  ROUTE_LINE_OPTIONS_FOREGROUND,
+  // If you are using two polylines, import both
+  ROUTE_LINE_OPTIONS,            // e.g. your 'shadow' or base line
+  ROUTE_LINE_OPTIONS_FOREGROUND, // your lighter “on top” line
 } from "@/constants/map";
 
-// Our custom hook that creates & disposes the Three.js overlay
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
 interface GMapProps {
@@ -126,9 +126,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  /**
+  /** 
    * handleStationClick
-   * Triggered when a user clicks a station marker on the map (the 2D marker).
+   * Triggered when a user clicks a station marker on the map.
    */
   const handleStationClick = useCallback(
     (station: StationFeature) => {
@@ -333,15 +333,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // =============== Clear departure logic ===============
+  // Clear departure => step=1 or fallback
   const handleClearDepartureInSelector = () => {
-    // Revert to step=1 only if step <= 3, else no-op or do a fallback
     if (bookingStep === 2 || bookingStep === 3) {
       dispatch(clearDepartureStation());
       dispatch(advanceBookingStep(1));
       toast.success("Departure station cleared. (Back to selecting departure.)");
     } else {
-      // fallback if you're at step=1 or 4 or beyond
       dispatch(clearDepartureStation());
       dispatch(advanceBookingStep(1));
       toast.success("Departure station cleared. (Reverted to step 1.)");
@@ -353,16 +351,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // =============== Clear arrival logic ===============
+  // Clear arrival => step=3 or fallback
   const handleClearArrivalInSelector = () => {
-    // Revert to step=3 only if you're at step=4
     if (bookingStep === 4) {
       dispatch(clearArrivalStation());
       dispatch(advanceBookingStep(3));
       dispatch(clearRoute());
       toast.success("Arrival station cleared. (Back to selecting arrival.)");
     } else {
-      // fallback if you're at step=3 or beyond
       dispatch(clearArrivalStation());
       dispatch(advanceBookingStep(3));
       toast.success("Arrival station cleared. (Reverted to step 3.)");
@@ -436,14 +432,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Station selection from station list
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep === 1 || bookingStep === 2) {
-      // departure
       dispatch({ type: "user/selectDepartureStation", payload: station.id });
       if (bookingStep === 1) {
         dispatch(advanceBookingStep(2));
       }
       toast.success("Departure station selected!");
     } else if (bookingStep === 3 || bookingStep === 4) {
-      // arrival
       dispatch({ type: "user/selectArrivalStation", payload: station.id });
       if (bookingStep === 3) {
         dispatch(advanceBookingStep(4));
@@ -485,6 +479,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           options={mapOptions || {}}
           onLoad={(map) => {
             setActualMap(map);
+            // Fit bounds to all stations if we have them
             if (stations.length > 0) {
               const bounds = new google.maps.LatLngBounds();
               stations.forEach((station) => {
@@ -500,7 +495,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             <Marker position={userLocation} icon={markerIcons.user} clickable={false} />
           )}
 
-          {/* Example special marker */}
+          {/* Example special marker (ICC) */}
           {markerIcons && (
             <Marker
               position={INTER_CC}
@@ -510,10 +505,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
             />
           )}
 
-          {/* Polyline for route, if any */}
+          {/* 
+            If we have a decoded route, render two polylines:
+            1) The "shadow" or base line
+            2) The lighter "foreground" line
+          */}
           {decodedPath.length > 0 && (
-            <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS} />
-            <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_FOREGROUND} />
+            <>
+              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS} />
+              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_FOREGROUND} />
+            </>
           )}
 
           {/* Station Markers */}
