@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useCallback, useState, memo } from "react";
-import { GoogleMap, Polyline, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, Polyline, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
 import * as THREE from "three";
@@ -77,28 +77,16 @@ import {
   DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND,
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
-import { Marker } from "@react-google-maps/api";
-
-interface GMapProps {
-  googleApiKey: string;
-}
-
-type OpenSheetType = "none" | "car" | "list" | "detail";
-
-// Dynamically load GaussianSplatModal for performance
-const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
-  suspense: true,
-});
 
 /* -----------------------------------------------------------
    Memoized Station Markers
-   ----------------------------------------------------------- */
+----------------------------------------------------------- */
 interface StationMarkersProps {
   stations: StationFeature[];
   sortedStations: StationFeature[];
   searchLocation: google.maps.LatLngLiteral | null;
-  departureStationId: string | null;
-  arrivalStationId: string | null;
+  departureStationId: string | null; // or number? Make them consistent
+  arrivalStationId: string | null;   // ditto
   markerIcons: any;
   onStationClick: (station: StationFeature) => void;
 }
@@ -113,17 +101,22 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
     onStationClick,
   } = props;
 
-  // Decide whether to show the sorted list or the full list
+  // If the user has searched an address, we show the sorted list first
   const listToRender = searchLocation ? sortedStations : stations;
 
   return (
     <>
       {listToRender.map((station) => {
         const [lng, lat] = station.geometry.coordinates;
+
+        // Convert station.id + departureStationId to the same type if needed
+        const isDeparture = String(station.id) === departureStationId;
+        const isArrival = String(station.id) === arrivalStationId;
+
         const icon = (() => {
           if (!markerIcons) return undefined;
-          if (station.id === departureStationId) return markerIcons.departureStation;
-          if (station.id === arrivalStationId) return markerIcons.arrivalStation;
+          if (isDeparture) return markerIcons.departureStation;
+          if (isArrival) return markerIcons.arrivalStation;
           return markerIcons.station;
         })();
 
@@ -142,7 +135,7 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
 
 /* -----------------------------------------------------------
    Memoized Car Markers
-   ----------------------------------------------------------- */
+----------------------------------------------------------- */
 interface CarMarkersProps {
   cars: { id: string; lat: number; lng: number; name: string }[];
   markerIcons: any;
@@ -164,6 +157,20 @@ const CarMarkers = memo(function CarMarkers({ cars, markerIcons }: CarMarkersPro
   );
 });
 
+/* -----------------------------------------------------------
+   Main GMap Component
+----------------------------------------------------------- */
+interface GMapProps {
+  googleApiKey: string;
+}
+
+type OpenSheetType = "none" | "car" | "list" | "detail";
+
+// Lazy load the GaussianSplatModal for performance
+const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
+  suspense: true,
+});
+
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
@@ -177,6 +184,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
+  // Bottom sheet states
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
@@ -184,7 +192,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
   // -----------------------------
-  // Redux state
+  // Redux State
   // -----------------------------
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
@@ -203,14 +211,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // Route data (distance, duration, polyline) for user’s departure→arrival
+  // The user’s main route (departure→arrival)
   const route = useAppSelector(selectRoute);
 
-  // Dispatch route data (dispatchHub→departure)
+  // Dispatch route (dispatchHub→departure)
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
   // -----------------------------
-  // Google Maps
+  // Google Maps Loader
   // -----------------------------
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
@@ -229,17 +237,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // Station click => update departure/arrival logic
+  // Station click => set departure/arrival
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep === 1 || bookingStep === 2) {
-        dispatch({ type: "user/selectDepartureStation", payload: station.id });
+        dispatch({ type: "user/selectDepartureStation", payload: String(station.id) });
         if (bookingStep === 1) {
           dispatch(advanceBookingStep(2));
         }
         toast.success("Departure station selected! (Confirm in station detail.)");
       } else if (bookingStep === 3 || bookingStep === 4) {
-        dispatch({ type: "user/selectArrivalStation", payload: station.id });
+        dispatch({ type: "user/selectArrivalStation", payload: String(station.id) });
         if (bookingStep === 3) {
           dispatch(advanceBookingStep(4));
         }
@@ -260,7 +268,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [bookingStep, dispatch, isSheetMinimized]
   );
 
-  // Initialize map options & marker icons
+  // -----------------------------
+  // Initialize map config
+  // -----------------------------
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -268,7 +278,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Fetch data: stations, stations3D, cars
+  // -----------------------------
+  // Fetch data from store
+  // -----------------------------
   useEffect(() => {
     (async () => {
       try {
@@ -291,7 +303,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // 3D Overlay + Raycasting
+  // 3D Overlay Raycasting
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay || !stationCubesRef.current || !actualMap) return;
@@ -348,7 +360,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return () => clearInterval(intervalId);
   }, [overlayRef, stationCubesRef, actualMap, handleStationClick]);
 
+  // -----------------------------
   // Handle errors
+  // -----------------------------
   const hasError = stationsError || carsError || loadError;
   if (hasError) {
     return (
@@ -366,31 +380,41 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Auto-fetch route if departure & arrival are set
+  // -----------------------------
+  // Auto-fetch user’s route (departure→arrival)
+  // -----------------------------
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
-      const departureStation = stations.find((s) => s.id === departureStationId);
-      const arrivalStation = stations.find((s) => s.id === arrivalStationId);
+      const departureStation = stations.find((s) => String(s.id) === departureStationId);
+      const arrivalStation = stations.find((s) => String(s.id) === arrivalStationId);
       if (departureStation && arrivalStation) {
         dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
       }
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // Also fetch dispatch->departure route at step=2
+  // -----------------------------
+  // Fetch dispatch->departure route
+  // Note: we only clear it if the user
+  // actually clears the departure station
+  // -----------------------------
   useEffect(() => {
-    if (bookingStep === 2 && departureStationId) {
-      const departureStation = stations.find((s) => s.id === departureStationId);
-      if (departureStation) {
-        dispatch(fetchDispatchDirections(departureStation));
-      }
-    } else {
-      // Clear if user leaves step 2 or no departure set
+    // If there's no departure station, clear the dispatch route
+    if (!departureStationId) {
       dispatch(clearDispatchRoute());
+      return;
     }
-  }, [bookingStep, departureStationId, stations, dispatch]);
 
-  // Decode the departure->arrival route polyline
+    // Otherwise fetch it if it exists in the station array
+    const departureStation = stations.find((s) => String(s.id) === departureStationId);
+    if (departureStation) {
+      dispatch(fetchDispatchDirections(departureStation));
+    }
+  }, [departureStationId, stations, dispatch]);
+
+  // -----------------------------
+  // Decode departure→arrival route
+  // -----------------------------
   const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -401,7 +425,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedPath(path.map((latLng) => latLng.toJSON()));
   }, [route]);
 
-  // Decode the dispatch->departure route polyline
+  // -----------------------------
+  // Decode dispatch->departure route
+  // -----------------------------
   const [decodedDispatchPath, setDecodedDispatchPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!dispatchRoute?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -412,7 +438,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedDispatchPath(path.map((latLng) => latLng.toJSON()));
   }, [dispatchRoute]);
 
+  // -----------------------------
   // Sorting logic for address search
+  // -----------------------------
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -434,7 +462,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
+  // -----------------------------
   // Address search => pan/zoom => sort
+  // -----------------------------
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -452,7 +482,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
+  // -----------------------------
   // Clear departure => step=1
+  // (Here we DO clear dispatch route)
+  // -----------------------------
   const handleClearDepartureInSelector = () => {
     if (bookingStep === 2 || bookingStep === 3) {
       dispatch(clearDepartureStation());
@@ -472,7 +505,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
+  // -----------------------------
   // Clear arrival => step=3
+  // (We do NOT clear the dispatch route here, so it remains)
+  // -----------------------------
   const handleClearArrivalInSelector = () => {
     if (bookingStep === 4) {
       dispatch(clearArrivalStation());
@@ -491,7 +527,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Open/close sheet logic
+  // -----------------------------
+  // Sheet logic
+  // -----------------------------
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -514,7 +552,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
+  // -----------------------------
   // "Locate me"
+  // -----------------------------
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -541,7 +581,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
+  // -----------------------------
   // "Car" sheet toggle
+  // -----------------------------
   const handleCarToggle = () => {
     if (openSheet === "car") {
       closeCurrentSheet();
@@ -550,16 +592,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
+  // -----------------------------
   // Station selection from station list
+  // -----------------------------
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep === 1 || bookingStep === 2) {
-      dispatch({ type: "user/selectDepartureStation", payload: station.id });
+      dispatch({ type: "user/selectDepartureStation", payload: String(station.id) });
       if (bookingStep === 1) {
         dispatch(advanceBookingStep(2));
       }
       toast.success("Departure station selected!");
     } else if (bookingStep === 3 || bookingStep === 4) {
-      dispatch({ type: "user/selectArrivalStation", payload: station.id });
+      dispatch({ type: "user/selectArrivalStation", payload: String(station.id) });
       if (bookingStep === 3) {
         dispatch(advanceBookingStep(4));
       }
@@ -574,22 +618,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // Which station is selected for detail?
+  // -----------------------------
+  // Which station for detail?
+  // -----------------------------
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
-    ? stations.find((s) => s.id === hasStationSelected)
+    ? stations.find((s) => String(s.id) === hasStationSelected)
     : null;
 
-  // If data is still loading, show spinner
+  // If data is still loading, show a spinner
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
 
-  // Sheets
+  // Sheets open or not?
   const isCarOpen = openSheet === "car";
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
+  // -----------------------------
+  // Render
+  // -----------------------------
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Main Google Map */}
