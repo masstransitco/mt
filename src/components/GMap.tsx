@@ -512,7 +512,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           */}
           {decodedPath.length > 0 && (
             <>
-              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS} />
+              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_SHADOW} />
               <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_FOREGROUND} />
             </>
           )}
