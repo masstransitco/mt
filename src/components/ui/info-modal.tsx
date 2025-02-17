@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { KeySquare, X } from "lucide-react";
 import dynamic from "next/dynamic";
+import { KeySquare, X } from "lucide-react";
 
 // Dynamically import ReactPlayer (client-side only), disable SSR
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
@@ -43,10 +43,10 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
         {/* Close button (absolute) */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 p-1 rounded-full hover:bg-gray-200 z-10"
+          className="absolute top-3 right-3 p-1 rounded-full bg-gray-800 hover:bg-gray-700 z-10"
           aria-label="Close modal"
         >
-          <X className="w-5 h-5" />
+          <X className="w-6 h-6 text-white" />
         </button>
 
         {/* Video section: no padding, flush with top */}
@@ -61,7 +61,11 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             width="100%"
             height="100%"
             config={{
-              file: { attributes: { playsInline: true } },
+              file: {
+                attributes: {
+                  playsInline: true,
+                },
+              },
             }}
             onEnded={() => setPlaying(false)}   // Stop once finished
             onClick={() => setPlaying(true)}    // Replay on click
@@ -77,7 +81,7 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
           {/* Icons + descriptions */}
           <div className="space-y-4 text-sm">
             <div className="flex items-start space-x-2">
-              {/* Inline Parking SVG with light gray color */}
+              {/* Inline Parking SVG with larger size and dark color */}
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="24"
@@ -88,12 +92,12 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="lucide lucide-circle-parking w-5 h-5 text-gray-400"
+                className="lucide lucide-circle-parking w-6 h-6 text-indigo-900"
               >
                 <circle cx="12" cy="12" r="10" />
                 <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
               </svg>
-              <p>
+              <p className="text-gray-900">
                 <strong>Pick up and return the car</strong> at the selected
                 station&apos;s carpark. Our fares are inclusive of all parking
                 costs.
@@ -101,8 +105,8 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             </div>
 
             <div className="flex items-start space-x-2">
-              <KeySquare className="w-5 h-5 text-gray-400" />
-              <p>
+              <KeySquare className="w-6 h-6 text-indigo-900" />
+              <p className="text-gray-900">
                 <strong>Immediate dispatch of vehicles</strong> to your selected
                 departure station with a self-serve digital key.
               </p>
