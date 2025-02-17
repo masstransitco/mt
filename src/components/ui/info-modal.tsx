@@ -1,8 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { KeySquare, X } from "lucide-react";
-// import ReactPlayer from "react-player"; <-- dynamic import if using Next.js SSR
 import dynamic from "next/dynamic";
 
 // Dynamically import ReactPlayer (client-side only), disable SSR
@@ -14,6 +13,9 @@ interface InfoModalProps {
 }
 
 export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
+  // Track whether the video is currently playing
+  const [playing, setPlaying] = useState(true);
+
   if (!isOpen) {
     return null;
   }
@@ -27,10 +29,10 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-
-      {/* Modal card: 80% viewport width, rounded, centered */}
+      
+      {/* Modal card: 80% viewport width, with requested tailwind classes */}
       <div
-        className="relative w-4/5 max-w-2xl bg-white rounded-xl p-4 shadow-lg"
+        className="relative w-4/5 max-w-2xl p-4 shadow-lg bg-background/90 backdrop-blur-sm rounded-t-lg"
         style={{ maxHeight: "80vh", overflowY: "auto" }}
       >
         {/* Close button */}
@@ -44,22 +46,26 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
 
         <h2 className="mb-2 text-xl font-semibold">Departure Info</h2>
 
-        {/* ReactPlayer for the video */}
-        <div className="mb-4 aspect-w-16 aspect-h-9">
+        {/* Video container: fill modal width/height as much as possible */}
+        <div className="w-full h-auto mb-4">
           <ReactPlayer
             url="/brand/departinfo.mp4"
-            playing
-            loop
-            controls
+            playing={playing}     // auto-play on open
+            loop={false}         // stop after first playback
+            muted={true}         // required for most browsers to auto-play
+            controls={false}     // hide video controls
             width="100%"
             height="100%"
+            onEnded={() => setPlaying(false)}         // stop once finished
+            onClick={() => setPlaying(true)}          // replay on click
+            style={{ cursor: "pointer" }}             // indicate clickable
           />
         </div>
 
         {/* Icon + description list */}
         <div className="space-y-4 text-sm">
-          {/* 1) Custom Parking Icon (inline SVG) */}
           <div className="flex items-start space-x-2">
+            {/* Inline Parking SVG */}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="24"
@@ -82,7 +88,6 @@ export default function InfoModal({ isOpen, onClose }: InfoModalProps) {
             </p>
           </div>
 
-          {/* 2) KeySquare icon from lucide-react */}
           <div className="flex items-start space-x-2">
             <KeySquare className="w-5 h-5 text-blue-600" />
             <p>
