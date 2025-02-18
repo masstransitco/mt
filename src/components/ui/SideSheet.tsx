@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface SideSheetProps {
   isOpen: boolean;
@@ -13,6 +13,22 @@ export default function SideSheet({
   children,
   size = 'full', // default to full screen
 }: SideSheetProps) {
+  // 1. Use an effect that locks/unlocks the body scroll
+  useEffect(() => {
+    if (isOpen) {
+      // Lock the page scroll
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Unlock
+      document.body.style.overflow = '';
+    }
+
+    // On unmount or if isOpen toggles again, revert to normal
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   return (
     <div
       className={`
