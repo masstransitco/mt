@@ -155,7 +155,7 @@ function StationDetailComponent(props: StationDetailProps) {
                 "rounded-md transition-colors"
           }
         >
-          {isDepartureFlow ? "Confirm Departure" : "Confirm Arrival"}
+          {isDepartureFlow ? "Choose pick-up station" : "Confirm trip"}
         </button>
       </div>
     </div>
