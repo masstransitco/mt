@@ -700,11 +700,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
         key={detailKey}
         isOpen={isDetailOpen}
         onToggle={closeCurrentSheet}
-        title={bookingStep <= 2 ? "Departure" : "Arrival"}
+        title={bookingStep <= 2 ? "Pick-up station" : "Trip details"}
         subtitle={
           bookingStep <= 2
-            ? "Pick up the car from this station"
-            : "Return the car at this station"
+            ? "Your car will be delivered here"
+            : "Return the car at your arrival station"
         }
       >
         {stationToShow && (
