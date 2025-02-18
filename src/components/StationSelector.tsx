@@ -8,20 +8,15 @@ import debounce from "lodash/debounce";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
-  // Renamed the import so we can use it as selectBookingRoute:
   selectRoute as selectBookingRoute,
-} from "@/store/bookingSlice";
-import {
   selectDepartureStationId,
   selectArrivalStationId,
-} from "@/store/userSlice";
+} from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
-
-// 1) Import the dispatch route clearing action
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 
 /* -----------------------------------------------------------
-   Reusable icons
+   Reusable Icons
 ----------------------------------------------------------- */
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
@@ -129,7 +124,7 @@ const AddressSearch = ({
     }
   }, []);
 
-  // If station is selected, display its name & disable input
+  // If station is already selected, display station name & disable input
   if (selectedStation) {
     return (
       <div className="flex-1 px-1 py-1 text-foreground font-medium">
@@ -143,12 +138,11 @@ const AddressSearch = ({
     if (!input.trim() || !autocompleteService.current) return;
 
     try {
-      const request = {
+      const request: google.maps.places.AutocompleteRequest = {
         input,
         types: ["establishment", "geocode"],
         componentRestrictions: { country: "HK" },
-      } as google.maps.places.AutocompleteRequest;
-
+      };
       const response = await autocompleteService.current.getPlacePredictions(request);
       setPredictions(response.predictions);
       setShowResults(true);
@@ -158,7 +152,7 @@ const AddressSearch = ({
     }
   }, 300);
 
-  // On selecting a prediction => geocode => callback
+  // On selecting a prediction => geocode => call parent's onAddressSelect
   const handleSelect = async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
 
@@ -253,7 +247,7 @@ export default function StationSelector({
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
 
-  // IDs of selected departure & arrival
+  // Booking slice: selected departure & arrival station IDs
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
@@ -262,19 +256,16 @@ export default function StationSelector({
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  // Route info (departure→arrival) from bookingSlice
+  // Booking route (departure→arrival) for distance
   const bookingRoute = useAppSelector(selectBookingRoute);
   const distanceInKm = bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null;
 
-  // Step logic: step<3 => "Step 1 of 2" (departure), else "Step 2 of 2" (arrival)
+  // Step UI logic
   const uiStepNumber = step < 3 ? 1 : 2;
-
-  // We'll highlight the departure field if step <= 2,
-  // highlight the arrival field if step >= 3
   const highlightDeparture = step <= 2;
   const highlightArrival = step >= 3;
 
-  // Control the ring color using ring-white
+  // We'll add a ring highlight for whichever input is relevant
   const highlightDepartureClass = highlightDeparture ? "ring-1 ring-white bg-background" : "";
   const highlightArrivalClass = highlightArrival ? "ring-1 ring-white bg-background" : "";
 
@@ -287,7 +278,6 @@ export default function StationSelector({
       style={{ overscrollBehavior: "none", touchAction: "none" }}
     >
       <div className="px-2 py-2 space-y-2">
-
         {/* ------------------ DEPARTURE INPUT ------------------ */}
         <div
           className={`
@@ -305,14 +295,12 @@ export default function StationSelector({
             selectedStation={departureStation}
           />
 
-          {/* If user has a departure station & step <= 3, show 'X' to clear */}
+          {/* Clear departure if set, and step <= 3 */}
           {departureStation && step <= 3 && (
             <button
               onClick={() => {
-                // Also clear the dispatch->departure route
+                // Also clear the dispatch route
                 dispatch(clearDispatchRoute());
-
-                // Then do your existing logic for clearing departure station
                 if (onClearDeparture) {
                   onClearDeparture();
                 } else {
@@ -326,7 +314,7 @@ export default function StationSelector({
           )}
         </div>
 
-        {/* ------------------ ARRIVAL INPUT (visible if step >= 3) ------------------ */}
+        {/* ------------------ ARRIVAL INPUT (only if step >= 3) ------------------ */}
         {step >= 3 && (
           <div
             className={`
@@ -344,7 +332,7 @@ export default function StationSelector({
               selectedStation={arrivalStation}
             />
 
-            {/* If user has an arrival station & step <= 4, show 'X' to clear */}
+            {/* Clear arrival if set, and step <= 4 */}
             {arrivalStation && step <= 4 && (
               <button
                 onClick={() => {
