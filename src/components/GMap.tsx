@@ -229,38 +229,45 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Station click => set departure/arrival
   const handleStationClick = useCallback(
-    (station: StationFeature) => {
-      // If we are selecting departure:
-      if (bookingStep === 1 || bookingStep === 2) {
-        dispatch(selectDepartureStation(station.id));
-        if (bookingStep === 1) {
-          dispatch(advanceBookingStep(2));
-        }
-        toast.success("Departure station selected! (Confirm in station detail.)");
-      }
-      // If we are selecting arrival:
-      else if (bookingStep === 3 || bookingStep === 4) {
-        dispatch(selectArrivalStation(station.id));
-        if (bookingStep === 3) {
-          dispatch(advanceBookingStep(4));
-        }
-        toast.success("Arrival station selected! (Confirm in station detail.)");
-      } else {
-        toast(`Station clicked, but no action—already at step ${bookingStep}`);
-      }
+  (station: StationFeature) => {
+    if (bookingStep === 1) {
+      // Step 1 => selecting departure
+      dispatch(selectDepartureStation(station.id));
+      dispatch(advanceBookingStep(2));
+      toast.success("Departure station selected! (Confirm in station detail.)");
+    } 
+    else if (bookingStep === 2) {
+      // Step 2 => re-selecting departure (still allowed)
+      dispatch(selectDepartureStation(station.id));
+      toast.success("Departure station re-selected! (Confirm in station detail.)");
+    } 
+    else if (bookingStep === 3) {
+      // Step 3 => selecting arrival => set station, then move to step 4
+      dispatch(selectArrivalStation(station.id));
+      dispatch(advanceBookingStep(4));
+      toast.success("Arrival station selected! (Confirm in station detail.)");
+    } 
+    else if (bookingStep === 4) {
+      // Step 4 => user is re-selecting arrival
+      dispatch(selectArrivalStation(station.id));
+      toast.success("Arrival station re-selected! (Confirm in station detail.)");
+    } 
+    else {
+      toast(`Station clicked, but no action—already at step ${bookingStep}`);
+    }
 
-      // Force station detail open
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setPreviousSheet("none");
+    // Force station detail open
+    setDetailKey((prev) => prev + 1);
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    setPreviousSheet("none");
 
-      if (isSheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [bookingStep, dispatch, isSheetMinimized]
-  );
+    if (isSheetMinimized) {
+      dispatch(toggleSheet());
+    }
+  },
+  [bookingStep, dispatch, isSheetMinimized]
+);
 
   // Initialize map config
   useEffect(() => {
