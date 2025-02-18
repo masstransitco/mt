@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
 interface SpinnerProps {
@@ -9,10 +9,21 @@ interface SpinnerProps {
 }
 
 export default function Spinner({ size = 'md', className }: SpinnerProps) {
+  // 1. Lock body scroll on mount, restore on unmount
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
+  // 2. Define size classes
   const sizeClasses = {
     sm: 'w-4 h-4 border-2',
     md: 'w-8 h-8 border-3',
-    lg: 'w-12 h-12 border-4'
+    lg: 'w-12 h-12 border-4',
   };
 
   return (
