@@ -20,8 +20,6 @@ import { fetchHKWeather, WeatherData } from '@/lib/weather';
 
 interface AppMenuProps {
   onClose: () => void;
-  // Optional: if you want to control open/close animation with a parent
-  // isOpen: boolean;
 }
 
 export default function AppMenu({ onClose }: AppMenuProps) {
@@ -33,7 +31,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
   // Weather data
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
-  // For a simple ease-in/out from the right, track local "visible" state
+  // Simple local state for slide-in/out animation
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -46,7 +44,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
   }, []);
 
   useEffect(() => {
-    // Fetch HK Weather on component mount
+    // Fetch HK Weather on mount
     async function getWeather() {
       const data = await fetchHKWeather();
       setWeather(data);
@@ -54,20 +52,19 @@ export default function AppMenu({ onClose }: AppMenuProps) {
     getWeather();
   }, []);
 
-  // On mount, set visible -> triggers "translate-x-0" 
+  // Trigger the slide-in animation on mount
   useEffect(() => {
-    // Defer setting visible so the CSS transition can catch it
     requestAnimationFrame(() => setVisible(true));
   }, []);
 
-  // Close with an animation
+  // Close menu with an animation
   const handleClose = () => {
     setVisible(false);
     // match the transition duration (300ms)
     setTimeout(onClose, 300);
   };
 
-  // Sign out user
+  // Sign out
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -91,29 +88,22 @@ export default function AppMenu({ onClose }: AppMenuProps) {
     setShowWalletModal(true);
   };
 
-  // Weather code -> Weather Icons mapping
+  // Weather Icons mapping
   const getWeatherIconClass = (weatherCode: number): string => {
     if (weatherCode === 0) {
-      return 'wi-day-sunny'; // Clear sky
+      return 'wi-day-sunny';
     } else if (weatherCode >= 1 && weatherCode <= 3) {
-      return 'wi-day-cloudy'; // Mainly clear, partly cloudy, overcast
+      return 'wi-day-cloudy';
     } else if (weatherCode >= 80 && weatherCode <= 82) {
-      return 'wi-day-rain'; // Rain showers
+      return 'wi-day-rain';
     } else if (weatherCode >= 95 && weatherCode <= 99) {
-      return 'wi-day-thunderstorm'; // Thunderstorm
+      return 'wi-day-thunderstorm';
     }
-    return 'wi-cloud'; // Default
+    return 'wi-cloud'; // default
   };
 
   return (
-    <div
-      // Outer container for full-screen coverage
-      className={`
-        fixed inset-0 z-50
-        flex 
-        overflow-hidden
-      `}
-    >
+    <div className="fixed inset-0 z-50 flex overflow-hidden">
       {/* Sliding panel */}
       <div
         className={`
@@ -121,11 +111,11 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           flex flex-col
           bg-background
           shadow-md
-          h-full 
+          h-full
           w-[85vw] sm:w-[400px]
           pb-safe
           transform
-          transition-transform 
+          transition-transform
           duration-300
           ease-in-out
           ${visible ? 'translate-x-0' : 'translate-x-full'}
@@ -170,11 +160,11 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           </button>
         </header>
 
-        {/* Weather Section (one row, lighter gray background) */}
+        {/* Weather Section */}
         {weather && (
           <div className="border-b border-border/40 bg-card/20 px-4 py-3">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              {/* Main Weather Icon + Temp */}
+              {/* Weather Icon + Temp */}
               <i className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`} />
               <span className="text-foreground font-medium">
                 {Math.round(weather.temperature)}°C
@@ -189,7 +179,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
                 <span>{Math.round(weather.windspeed)} km/h</span>
               </div>
 
-              {/* If you have rainChance */}
+              {/* Rain Chance */}
               {typeof weather.rainChance === 'number' && (
                 <>
                   <span className="opacity-50">|</span>
@@ -200,7 +190,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
                 </>
               )}
 
-              {/* If you have AQI */}
+              {/* AQI */}
               {typeof weather.aqi === 'number' && (
                 <>
                   <span className="opacity-50">|</span>
@@ -214,16 +204,16 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           </div>
         )}
 
-        {/* Main Content (scrollable or not, up to you) */}
+        {/* Main Content */}
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-          {/* Top Section (User Profile / Sign In) */}
+          {/* User Profile / Sign In */}
           <div className="px-4 py-4 border-b border-border/40">
             {!loading && (
               <div className="mb-4">
                 {user ? (
                   <button
                     onClick={() => {
-                      // Could open user profile or settings
+                      // open profile or settings, if needed
                     }}
                     className="
                       w-full 
@@ -279,7 +269,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
               </div>
             )}
 
-            {/* Quick Actions (visible if user is signed in) */}
+            {/* Quick Actions (for signed-in users) */}
             {user && (
               <div className="space-y-2">
                 <button
