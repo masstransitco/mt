@@ -9,11 +9,9 @@ import {
   selectBookingStep,
   advanceBookingStep,
   selectRoute,
-} from "@/store/bookingSlice";
-import {
   selectDepartureStationId,
   selectArrivalStationId,
-} from "@/store/userSlice";
+} from "@/store/bookingSlice"; // <-- Now importing from bookingSlice
 import { StationFeature } from "@/store/stationsSlice";
 
 interface StationDetailProps {
@@ -27,13 +25,13 @@ function StationDetailComponent(props: StationDetailProps) {
   const { stations, activeStation, onConfirmDeparture } = props;
   const dispatch = useAppDispatch();
 
-  // Redux selectors
+  // Booking-related selectors
   const step = useAppSelector(selectBookingStep);
   const route = useAppSelector(selectRoute);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // For internal logic: are we selecting departure or arrival?
+  // For internal logic: are we in the "selecting departure" flow or "selecting arrival" flow?
   const isDepartureFlow = step <= 2;
 
   useEffect(() => {
@@ -105,7 +103,7 @@ function StationDetailComponent(props: StationDetailProps) {
         </p>
       </div>
 
-      {/* === Station Details (removing AvailableSpots & maxPower) === */}
+      {/* === Station Details (removing AvailableSpots & maxPower if you prefer) === */}
       <div className="space-y-2">
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
@@ -147,11 +145,11 @@ function StationDetailComponent(props: StationDetailProps) {
           disabled={!(step === 2 || step === 4)}
           className={
             isDepartureFlow
-              ? // Departure button: light gray bg, dark text, subtle corners
+              ? // Departure button: light gray bg, dark text
                 "w-full px-4 py-2 text-sm font-medium text-black bg-gray-100 " +
                 "hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed " +
                 "rounded-md transition-colors"
-              : // Arrival button: primary bg, white text, subtle corners
+              : // Arrival button: primary bg, white text
                 "w-full px-4 py-2 text-sm font-medium text-white bg-primary " +
                 "hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed " +
                 "rounded-md transition-colors"
