@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -12,10 +12,12 @@ import {
   Wallet,
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
-import { signOut } from 'firebase/auth';
-import { User } from 'firebase/auth';
+import { signOut, User } from 'firebase/auth';
 import SignInModal from './SignInModal';
 import WalletModal from './WalletModal';
+
+// 1. Import weather fetching function + types
+import { fetchHKWeather, WeatherData } from '@/lib/weather';
 
 export default function AppMenu({ onClose }: { onClose: () => void }) {
   const [user, setUser] = useState<User | null>(null);
@@ -23,6 +25,10 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // 2. State for weather
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+
+  // Listen for auth state changes (Firebase)
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
@@ -31,6 +37,16 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
     return () => unsubscribe();
   }, []);
 
+  // Fetch HK Weather on component mount
+  useEffect(() => {
+    async function getWeather() {
+      const data = await fetchHKWeather();
+      setWeather(data);
+    }
+    getWeather();
+  }, []);
+
+  // Sign out user
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -40,18 +56,39 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // Open external link for "Discover"
   const handleDiscoverClick = () => {
     window.open('https://home-nine-indol.vercel.app', '_blank');
   };
 
+  // Handle wallet logic
   const handleWalletClick = () => {
-    // If user is not signed in, show the sign-in modal first
     if (!user) {
       setShowSignInModal(true);
       return;
     }
-    // Otherwise, open the wallet modal
     setShowWalletModal(true);
+  };
+
+  // Weather code -> Weather Icons mapping
+  const getWeatherIconClass = (weatherCode: number): string => {
+    // Basic mapping example
+    // You can refine these codes as per https://open-meteo.com/en/docs#api_weathercode_symbol
+    if (weatherCode === 0) {
+      // Clear sky
+      return 'wi-day-sunny';
+    } else if (weatherCode >= 1 && weatherCode <= 3) {
+      // Mainly clear to overcast
+      return 'wi-day-cloudy';
+    } else if (weatherCode >= 80 && weatherCode <= 82) {
+      // Rain showers
+      return 'wi-day-rain';
+    } else if (weatherCode >= 95 && weatherCode <= 99) {
+      // Thunderstorm
+      return 'wi-day-thunderstorm';
+    }
+    // Default icon if none of the above
+    return 'wi-cloud';
   };
 
   return (
@@ -73,23 +110,37 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
           border-b border-border/40 
           flex items-center 
           px-4
+          justify-between
         "
       >
-        <button
-          onClick={onClose}
-          className="
-            flex items-center justify-center 
-            p-2 -ml-2 
-            rounded-full
-            hover:bg-accent/10 
-            transition-colors 
-            duration-200
-          "
-          aria-label="Close menu"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <h2 className="text-xl font-medium ml-2">Menu</h2>
+        {/* Back button + Menu title */}
+        <div className="flex items-center">
+          <button
+            onClick={onClose}
+            className="
+              flex items-center justify-center 
+              p-2 -ml-2 
+              rounded-full
+              hover:bg-accent/10 
+              transition-colors 
+              duration-200
+            "
+            aria-label="Close menu"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <h2 className="text-xl font-medium ml-2">Menu</h2>
+        </div>
+
+        {/* Weather Display */}
+        {weather && (
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <i
+              className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`}
+            ></i>
+            <span>{Math.round(weather.temperature)}°C</span>
+          </div>
+        )}
       </header>
 
       {/* Main Content (Scrollable) */}
@@ -101,7 +152,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
               {user ? (
                 <button
                   onClick={() => {
-                    // Could open user profile or user settings
+                    // Potentially open user profile or settings
                   }}
                   className="
                     w-full 
