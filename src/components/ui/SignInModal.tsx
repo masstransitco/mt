@@ -12,7 +12,7 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Dynamically import ReactPlayer for the welcome video, no SSR
+// Dynamically import ReactPlayer for the welcome video (no SSR)
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
 /* ------------------------------------------------------------------
@@ -68,19 +68,21 @@ function PinInput({
   const inputRefs = useRef<HTMLInputElement[]>([]);
 
   const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return; // only digits
+    // Only allow digits
+    if (!/^\d*$/.test(value)) return;
     const newValues = [...values];
     newValues[index] = value;
     setValues(newValues);
     onChange(newValues.join(""));
 
-    // Auto-focus next input
+    // Auto-focus next input if a digit was entered
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    // If Backspace on an empty field, move focus back
     if (e.key === "Backspace" && !values[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -142,7 +144,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
     return () => {
       unsubscribe();
-      // Clear reCAPTCHA instance
+      // Clear any existing reCAPTCHA
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         delete window.recaptchaVerifier;
@@ -150,7 +152,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, []);
 
-  /* Cleanup / Close */
+  /* Cleanup & close */
   const handleClose = () => {
     setStep("welcome");
     setPhoneNumber("");
@@ -162,7 +164,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
-  /* Resend code timer */
+  /* Resend code countdown */
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
     if (!canResend && step === "verify") {
@@ -189,21 +191,21 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   --------------------------- */
   const renderWelcomeContent = () => (
     <div className="flex flex-col h-full">
-      {/* Video section */}
+      {/* Video section (optional) */}
       <div className="relative w-full h-[28vh] shrink-0">
         <ReactPlayer
           url="/brand/drive.mp4"
           playing
           muted
           loop
-          controls={false}         // No UI controls
+          controls={false} // Hide UI
           width="100%"
           height="100%"
           style={{ objectFit: "cover" }}
           config={{
             file: {
               attributes: {
-                playsInline: true, // ensure no fullscreen on iOS
+                playsInline: true, // no fullscreen on iOS
               },
             },
           }}
@@ -383,10 +385,11 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         window.recaptchaVerifier.clear();
       }
 
-      // For Firebase v9+ or v11: new RecaptchaVerifier(auth, 'container', config)
+      // For Firebase v11 (same as v9+):
+      // new RecaptchaVerifier(auth, containerIdOrElement, parameters?)
       window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,
-        "recaptcha-container",
+        auth,                  // Auth instance
+        "recaptcha-container", // container or element
         {
           size: "invisible",
           callback: () => {
@@ -463,7 +466,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
      Final Return (Overlay + Modal)
   --------------------------- */
   return (
-    // Outer container: black/50 backdrop
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
       <div
