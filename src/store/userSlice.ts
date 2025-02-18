@@ -14,27 +14,26 @@ interface AuthUser {
 }
 
 interface UserState {
-  // We're confirming the station IDs are numeric:
+  // Keep this if a car is truly a personal user selection,
+  // or consider moving it to bookingSlice if it's part of the flow.
   selectedCarId: number | null;
-  departureStationId: number | null;
-  arrivalStationId: number | null;
+
+  // We removed departureStationId & arrivalStationId from here,
+  // because we handle those in bookingSlice now.
   userLocation: google.maps.LatLngLiteral | null;
   viewState: "showCar" | "showMap";
 
-  // NEW auth fields
-  authUser: AuthUser | null; // null => not signed in
-  isSignedIn: boolean;       // convenience boolean
+  // Auth fields
+  authUser: AuthUser | null; 
+  isSignedIn: boolean;
 }
 
 const initialState: UserState = {
-  // Original fields
   selectedCarId: null,
-  departureStationId: null,
-  arrivalStationId: null,
   userLocation: null,
   viewState: "showCar",
 
-  // Auth: default to not signed in
+  // Auth
   authUser: null,
   isSignedIn: false,
 };
@@ -43,41 +42,26 @@ export const userSlice = createSlice({
   name: "user",
   initialState,
   reducers: {
-    // Existing station/car reducers
+    // Keep selecting a car as part of user state, if appropriate
     selectCar: (state, action: PayloadAction<number>) => {
       state.selectedCarId = action.payload;
-    },
-
-    // Both departureStationId & arrivalStationId remain numeric
-    selectDepartureStation: (state, action: PayloadAction<number | null>) => {
-      state.departureStationId = action.payload;
-    },
-    selectArrivalStation: (state, action: PayloadAction<number | null>) => {
-      state.arrivalStationId = action.payload;
     },
 
     setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
       state.userLocation = action.payload;
     },
 
-    clearDepartureStation: (state) => {
-      state.departureStationId = null;
-    },
-    clearArrivalStation: (state) => {
-      state.arrivalStationId = null;
-    },
-
     setViewState: (state, action: PayloadAction<"showCar" | "showMap">) => {
       state.viewState = action.payload;
     },
 
+    // Could be used to reset any user-specific fields
     resetUserSelections: (state) => {
       state.selectedCarId = null;
-      state.departureStationId = null;
-      state.arrivalStationId = null;
+      // We no longer clear station IDs here, since those are in bookingSlice.
     },
 
-    // NEW auth reducers
+    // Auth reducers
     setAuthUser: (state, action: PayloadAction<AuthUser | null>) => {
       state.authUser = action.payload;
       state.isSignedIn = !!action.payload;
@@ -89,28 +73,20 @@ export const userSlice = createSlice({
   },
 });
 
-// Export the actions
+// Export actions
 export const {
   selectCar,
-  selectDepartureStation,
-  selectArrivalStation,
   setUserLocation,
-  clearDepartureStation,
-  clearArrivalStation,
   setViewState,
   resetUserSelections,
-  // New
   setAuthUser,
   signOutUser,
 } = userSlice.actions;
 
 // Selectors
 export const selectSelectedCarId = (state: RootState) => state.user.selectedCarId;
-export const selectDepartureStationId = (state: RootState) => state.user.departureStationId;
-export const selectArrivalStationId = (state: RootState) => state.user.arrivalStationId;
 export const selectUserLocation = (state: RootState) => state.user.userLocation;
 export const selectViewState = (state: RootState) => state.user.viewState;
-// New auth selectors
 export const selectAuthUser = (state: RootState) => state.user.authUser;
 export const selectIsSignedIn = (state: RootState) => state.user.isSignedIn;
 
