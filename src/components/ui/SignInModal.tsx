@@ -31,7 +31,7 @@ declare global {
 }
 
 /* -------------------------------------
- * A simple step indicator (dots) for your multi-step flow
+ * StepIndicator: simple UI for multi-step flow (dots)
  * ------------------------------------- */
 function StepIndicator({
   currentStep,
@@ -73,28 +73,28 @@ function PinInput({
   const inputRefs = useRef<HTMLInputElement[]>([]);
 
   const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return; // Only allow digits
+    // Only allow digits
+    if (!/^\d*$/.test(value)) return;
+
     const newValues = [...values];
     newValues[index] = value;
     setValues(newValues);
     onChange(newValues.join(""));
 
-    // Auto-focus next
+    // Auto-focus next input if a digit was entered
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyDown = (
-    index: number,
-    e: React.KeyboardEvent<HTMLInputElement>
-  ) => {
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    // If Backspace on an empty field, move focus back
     if (e.key === "Backspace" && !values[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  // Reset fields if not loading
+  // Reset fields if we exit or re-enter verification
   useEffect(() => {
     if (!loading) {
       setValues(Array(length).fill(""));
@@ -112,7 +112,12 @@ function PinInput({
           value={values[i]}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
-          ref={(el) => el && (inputRefs.current[i] = el)}
+          // Fix the type error by not returning anything
+          ref={(el) => {
+            if (el) {
+              inputRefs.current[i] = el;
+            }
+          }}
           className="w-10 h-12 text-center border border-border bg-background
                      text-white text-xl rounded-md focus:outline-none
                      focus:ring focus:ring-blue-500 disabled:opacity-50"
@@ -134,7 +139,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // If user is already signed in, close modal
+  /**
+   * If user is already signed in, close the modal (or update Redux, etc.).
+   * Also clear the reCAPTCHA on unmount.
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -162,7 +170,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
-  // Resend code timer
+  // Resend code countdown
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
     if (!canResend && step === "verify") {
@@ -178,11 +186,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }, 1000);
     }
     return () => {
-      timerId && clearInterval(timerId);
+      if (timerId) clearInterval(timerId);
     };
   }, [canResend, step]);
 
-  // --- Render Step=welcome ---
+  /* --------------------------
+     STEP = welcome
+  -------------------------- */
   const renderWelcomeContent = () => (
     <div
       key="welcome"
@@ -244,7 +254,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
-  // --- Render Step=phone ---
+  /* --------------------------
+     STEP = phone
+  -------------------------- */
   const renderPhoneInput = () => {
     const currentStepNumber = 1;
     const totalSteps = 2;
@@ -261,11 +273,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <p className="text-sm text-gray-300">
             We’ll text you a verification code to ensure it’s really you.
           </p>
-          <PhoneInput
-            value={phoneNumber}
-            onChange={setPhoneNumber}
-            disabled={loading}
-          />
+          <PhoneInput value={phoneNumber} onChange={setPhoneNumber} disabled={loading} />
           {error && (
             <div className="p-3 text-sm text-red-400 bg-red-500/10 rounded-lg">
               {error}
@@ -302,7 +310,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  // --- Render Step=verify ---
+  /* --------------------------
+     STEP = verify
+  -------------------------- */
   const renderVerification = () => {
     const currentStepNumber = 2;
     const totalSteps = 2;
@@ -336,10 +346,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             </p>
           )}
           {canResend && (
-            <button
-              onClick={handleResendCode}
-              className="text-sm underline text-blue-400"
-            >
+            <button onClick={handleResendCode} className="text-sm underline text-blue-400">
               Resend code
             </button>
           )}
@@ -384,11 +391,11 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         window.recaptchaVerifier.clear();
       }
 
-      // In Firebase 9/11, the correct usage is:
-      // new RecaptchaVerifier(auth, containerIdOrElement, parameters?)
+      // In Firebase v9+ or v11, correct usage:
+      // new RecaptchaVerifier(auth, container, parameters?)
       window.recaptchaVerifier = new RecaptchaVerifier(
         auth,                 // 1) Firebase Auth instance
-        "recaptcha-container", // 2) Container ID or element
+        "recaptcha-container", // 2) Container ID (or element)
         {
           size: "invisible",
           callback: () => {
