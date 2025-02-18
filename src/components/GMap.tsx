@@ -25,14 +25,7 @@ import {
   selectCarsLoading,
   selectCarsError,
 } from "@/store/carSlice";
-import {
-  selectUserLocation,
-  setUserLocation,
-  selectDepartureStationId,
-  selectArrivalStationId,
-  clearDepartureStation,
-  clearArrivalStation,
-} from "@/store/userSlice";
+import { selectUserLocation, setUserLocation } from "@/store/userSlice";
 import {
   toggleSheet,
   selectIsSheetMinimized,
@@ -43,6 +36,12 @@ import {
   fetchRoute,
   selectRoute,
   clearRoute,
+  selectDepartureStationId,
+  selectArrivalStationId,
+  selectDepartureStation,
+  selectArrivalStation,
+  clearDepartureStation,
+  clearArrivalStation,
 } from "@/store/bookingSlice";
 import {
   fetchStations3D,
@@ -137,7 +136,6 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
    Memoized Car Markers
 ----------------------------------------------------------- */
 interface CarMarkersProps {
-  // Updated id to number (was string)
   cars: { id: number; lat: number; lng: number; name: string }[];
   markerIcons: any;
 }
@@ -203,12 +201,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const userLocation = useAppSelector(selectUserLocation);
   const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
+
+  // Booking-related
   const bookingStep = useAppSelector(selectBookingStep);
-
-  const departureStationId = useAppSelector(selectDepartureStationId); // number|null
-  const arrivalStationId = useAppSelector(selectArrivalStationId);     // number|null
-
-  // The user’s main route (departure→arrival)
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
   const route = useAppSelector(selectRoute);
 
   // Dispatch route (dispatchHub→departure)
@@ -233,14 +230,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Station click => set departure/arrival
   const handleStationClick = useCallback(
     (station: StationFeature) => {
+      // If we are selecting departure:
       if (bookingStep === 1 || bookingStep === 2) {
-        dispatch({ type: "user/selectDepartureStation", payload: station.id });
+        dispatch(selectDepartureStation(station.id));
         if (bookingStep === 1) {
           dispatch(advanceBookingStep(2));
         }
         toast.success("Departure station selected! (Confirm in station detail.)");
-      } else if (bookingStep === 3 || bookingStep === 4) {
-        dispatch({ type: "user/selectArrivalStation", payload: station.id });
+      }
+      // If we are selecting arrival:
+      else if (bookingStep === 3 || bookingStep === 4) {
+        dispatch(selectArrivalStation(station.id));
         if (bookingStep === 3) {
           dispatch(advanceBookingStep(4));
         }
@@ -249,6 +249,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         toast(`Station clicked, but no action—already at step ${bookingStep}`);
       }
 
+      // Force station detail open
       setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
       setOpenSheet("detail");
@@ -452,19 +453,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Clear departure => step=1, also clear dispatch route
+  // Clear departure => revert step to 1 + clear dispatch route
   const handleClearDepartureInSelector = () => {
-    if (bookingStep === 2 || bookingStep === 3) {
-      dispatch(clearDepartureStation());
-      dispatch(advanceBookingStep(1));
-      toast.success("Departure station cleared. (Back to selecting departure.)");
-    } else {
-      dispatch(clearDepartureStation());
-      dispatch(advanceBookingStep(1));
-      toast.success("Departure station cleared. (Reverted to step 1.)");
-    }
-
+    dispatch(clearDepartureStation());
+    dispatch(advanceBookingStep(1));
     dispatch(clearDispatchRoute());
+    toast.success("Departure station cleared. (Back to selecting departure.)");
 
     if (openSheet === "detail") {
       setOpenSheet("none");
@@ -472,18 +466,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Clear arrival => step=3 (don’t clear dispatch route)
+  // Clear arrival => revert step to 3 + clear main route
   const handleClearArrivalInSelector = () => {
-    if (bookingStep === 4) {
-      dispatch(clearArrivalStation());
-      dispatch(advanceBookingStep(3));
-      dispatch(clearRoute());
-      toast.success("Arrival station cleared. (Back to selecting arrival.)");
-    } else {
-      dispatch(clearArrivalStation());
-      dispatch(advanceBookingStep(3));
-      toast.success("Arrival station cleared. (Reverted to step 3.)");
-    }
+    dispatch(clearArrivalStation());
+    dispatch(advanceBookingStep(3));
+    dispatch(clearRoute());
+    toast.success("Arrival station cleared. (Back to selecting arrival.)");
 
     if (openSheet === "detail") {
       setOpenSheet("none");
@@ -491,7 +479,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Sheet logic
+  // Bottom sheet logic
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -550,16 +538,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Station selection from station list
+  // Selecting a station from station list
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep === 1 || bookingStep === 2) {
-      dispatch({ type: "user/selectDepartureStation", payload: station.id });
+      dispatch(selectDepartureStation(station.id));
       if (bookingStep === 1) {
         dispatch(advanceBookingStep(2));
       }
       toast.success("Departure station selected!");
     } else if (bookingStep === 3 || bookingStep === 4) {
-      dispatch({ type: "user/selectArrivalStation", payload: station.id });
+      dispatch(selectArrivalStation(station.id));
       if (bookingStep === 3) {
         dispatch(advanceBookingStep(4));
       }
@@ -574,7 +562,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // Which station for detail?
+  // Station detail logic
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
@@ -585,6 +573,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
+  // Which sheets are open?
   const isCarOpen = openSheet === "car";
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
@@ -638,10 +627,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
             onStationClick={handleStationClick}
           />
 
-          {/* Memoized Car Markers (now expects numeric id) */}
+          {/* Memoized Car Markers */}
           <CarMarkers
             cars={cars.map((c) => ({
-              // If c.id is already number, just pass it along
               id: c.id,
               lat: c.lat,
               lng: c.lng,
