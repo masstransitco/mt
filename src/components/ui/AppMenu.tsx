@@ -7,7 +7,6 @@ import {
   LogOut,
   Car,
   ChevronRight,
-  ChevronLeft,
   Route,
   Wallet,
 } from 'lucide-react';
@@ -16,7 +15,7 @@ import { signOut, User } from 'firebase/auth';
 import SignInModal from './SignInModal';
 import WalletModal from './WalletModal';
 
-// 1. Import weather fetching function + types
+// Import weather fetching function + types
 import { fetchHKWeather, WeatherData } from '@/lib/weather';
 
 export default function AppMenu({ onClose }: { onClose: () => void }) {
@@ -25,7 +24,7 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 2. State for weather
+  // State for weather
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
   // Listen for auth state changes (Firebase)
@@ -72,8 +71,6 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
 
   // Weather code -> Weather Icons mapping
   const getWeatherIconClass = (weatherCode: number): string => {
-    // Basic mapping example
-    // You can refine these codes as per https://open-meteo.com/en/docs#api_weathercode_symbol
     if (weatherCode === 0) {
       // Clear sky
       return 'wi-day-sunny';
@@ -87,39 +84,69 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
       // Thunderstorm
       return 'wi-day-thunderstorm';
     }
-    // Default icon if none of the above
+    // Default
     return 'wi-cloud';
   };
 
   return (
     <div
+      // Disable scrolling by using overflow-hidden on the outer container
       className="
         fixed inset-0 z-50 
         flex flex-col 
         bg-background
         shadow-md
         h-[100dvh] 
-        pb-safe
+        pb-safe 
+        overflow-hidden
       "
     >
       {/* Header */}
       <header
+        // Use grid with 3 columns so weather is left, title is centered, close button is right
         className="
           safe-top 
           h-14 
           border-b border-border/40 
-          flex items-center 
+          grid grid-cols-3 
+          items-center 
           px-4
-          justify-between
         "
       >
-        {/* Back button + Menu title */}
-        <div className="flex items-center">
+        {/* Weather Display (left) */}
+        <div className="flex items-center gap-2">
+          {weather && (
+            <>
+              <i
+                className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`}
+              ></i>
+              <span className="text-sm font-medium">
+                {Math.round(weather.temperature)}°C
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Title (center) */}
+        <h2
+          className="
+            text-base 
+            font-medium 
+            text-center 
+            col-span-1
+            [font-family:'Helvetica Neue',Helvetica,Arial,sans-serif]
+          "
+        >
+          Menu
+        </h2>
+
+        {/* Close Button (right) */}
+        <div className="flex justify-end">
           <button
             onClick={onClose}
             className="
               flex items-center justify-center 
-              p-2 -ml-2 
+              p-2 
               rounded-full
               hover:bg-accent/10 
               transition-colors 
@@ -127,24 +154,13 @@ export default function AppMenu({ onClose }: { onClose: () => void }) {
             "
             aria-label="Close menu"
           >
-            <ChevronLeft className="w-6 h-6" />
+            <ChevronRight className="w-6 h-6" />
           </button>
-          <h2 className="text-xl font-medium ml-2">Menu</h2>
         </div>
-
-        {/* Weather Display */}
-        {weather && (
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <i
-              className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`}
-            ></i>
-            <span>{Math.round(weather.temperature)}°C</span>
-          </div>
-        )}
       </header>
 
-      {/* Main Content (Scrollable) */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+      {/* Main Content (Non-scrollable now) */}
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Top Section (User Profile / Sign In) */}
         <div className="px-4 py-4 border-b border-border/40">
           {!loading && (
