@@ -7,11 +7,11 @@ interface SideSheetProps {
   size?: 'default' | 'full';
 }
 
-export default function SideSheet({ 
-  isOpen, 
-  onClose, 
+export default function SideSheet({
+  isOpen,
+  onClose,
   children,
-  size = 'default' 
+  size = 'full', // default to full screen
 }: SideSheetProps) {
   return (
     <div
@@ -21,23 +21,24 @@ export default function SideSheet({
         ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
       `}
     >
-      {/* Backdrop (clicking it closes the sheet) */}
+      {/* Backdrop (click to close) */}
       <div
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
       />
-      
-      {/* Side panel */}
+
+      {/* Side panel (slides from the right) */}
       <div
         className={`
-          relative bg-card text-foreground h-full
+          absolute top-0 bottom-0 right-0
+          bg-card text-foreground
           shadow-xl transform transition-transform duration-300 ease-out
-          ${size === 'full' ? 'w-full' : 'w-[85vw] max-w-full'}
-          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          ${size === 'full' ? 'w-full' : 'w-[85vw]'}
+          ${isOpen ? 'translate-x-0' : 'translate-x-full'}
         `}
       >
         {/* Content Area */}
-        <div className="pt-10 h-full overflow-auto">
+        <div className="h-full overflow-auto">
           {children}
         </div>
       </div>
