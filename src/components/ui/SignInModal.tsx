@@ -12,10 +12,12 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Dynamically import ReactPlayer for the welcome video (no SSR)
+// Dynamically import ReactPlayer for the welcome video (client-side only)
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
-// Types for your steps
+/* ----------------------
+   Types
+---------------------- */
 type AuthStep = "welcome" | "phone" | "verify";
 
 interface SignInModalProps {
@@ -23,9 +25,9 @@ interface SignInModalProps {
   onClose: () => void;
 }
 
-/* -----------------------------------
-   StepIndicator (dots for multi-step)
------------------------------------ */
+/* ----------------------
+   StepIndicator (dots)
+---------------------- */
 function StepIndicator({
   currentStep,
   totalSteps,
@@ -50,9 +52,9 @@ function StepIndicator({
   );
 }
 
-/* -----------------------------------
-   PinInput for 6-digit verification
------------------------------------ */
+/* ----------------------
+   PinInput: 6-digit
+---------------------- */
 function PinInput({
   length,
   loading,
@@ -66,21 +68,22 @@ function PinInput({
   const inputRefs = useRef<HTMLInputElement[]>([]);
 
   const handleChange = (index: number, value: string) => {
-    // Only digits
+    // Only allow digits
     if (!/^\d*$/.test(value)) return;
+
     const newValues = [...values];
     newValues[index] = value;
     setValues(newValues);
     onChange(newValues.join(""));
 
-    // Focus next if user typed a digit
+    // Auto-focus next if user typed a digit
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    // If Backspace on empty, go back
+    // If Backspace on an empty field, go back
     if (e.key === "Backspace" && !values[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -118,10 +121,11 @@ function PinInput({
   );
 }
 
-/* -----------------------------------
+/* ----------------------
    SignInModal
------------------------------------ */
+---------------------- */
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
+  // Steps: 'welcome' -> 'phone' -> 'verify'
   const [step, setStep] = useState<AuthStep>("welcome");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
@@ -132,7 +136,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // If user is already signed in, close modal
+  // If user is already signed in, close the modal
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -150,7 +154,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, []);
 
-  // Close & reset
   const handleClose = () => {
     setStep("welcome");
     setPhoneNumber("");
@@ -162,32 +165,37 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
-  // Resend code countdown
+  // Resend code countdown (use window.setInterval to avoid Node type conflict)
   useEffect(() => {
-    let timerId: NodeJS.Timeout | null = null;
+    let timerId: number | null = null;
+
     if (!canResend && step === "verify") {
-      timerId = setInterval(() => {
+      timerId = window.setInterval(() => {
         setResendTimer((prev) => {
           if (prev <= 1) {
             setCanResend(true);
-            clearInterval(timerId as NodeJS.Timeout);
+            if (timerId) {
+              clearInterval(timerId);
+            }
             return 0;
           }
           return prev - 1;
-        }, 1000);
-      });
+        });
+      }, 1000);
     }
+
     return () => {
-      if (timerId) clearInterval(timerId);
+      if (timerId) {
+        clearInterval(timerId);
+      }
     };
   }, [canResend, step]);
 
-  // Return null if modal is closed
   if (!isOpen) return null;
 
-  /* ---------------------------
+  /* --------------------------
      STEP = welcome
-  --------------------------- */
+  -------------------------- */
   const renderWelcomeContent = () => (
     <div className="flex flex-col h-full">
       <div className="relative w-full h-[28vh] shrink-0">
@@ -203,7 +211,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           config={{
             file: {
               attributes: {
-                playsInline: true,
+                playsInline: true, // iOS inline
               },
             },
           }}
@@ -254,9 +262,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
-  /* ---------------------------
+  /* --------------------------
      STEP = phone
-  --------------------------- */
+  -------------------------- */
   const renderPhoneInput = () => {
     const currentStepNumber = 1;
     const totalSteps = 2;
@@ -274,6 +282,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               {error}
             </div>
           )}
+          {/* The container for reCAPTCHA */}
           <div id="recaptcha-container" />
         </div>
 
@@ -300,9 +309,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* ---------------------------
+  /* --------------------------
      STEP = verify
-  --------------------------- */
+  -------------------------- */
   const renderVerification = () => {
     const currentStepNumber = 2;
     const totalSteps = 2;
@@ -366,21 +375,22 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* ---------------------------
+  /* --------------------------
      PHONE SIGN-IN
-  --------------------------- */
+  -------------------------- */
   const handlePhoneSignIn = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Clear old reCAPTCHA if any
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
       }
 
-      // For Firebase v9+ / v11: new RecaptchaVerifier(containerId, parameters, auth)
+      // For Firebase v9+ or v11: new RecaptchaVerifier(container, parameters, auth)
       window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container",       // 1) container ID
+        "recaptcha-container", // container ID
         {
           size: "invisible",
           callback: () => {
@@ -391,7 +401,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             setLoading(false);
           },
         },
-        auth                          // 3) your Auth instance
+        auth // your Auth instance
       );
 
       const confirmationResult = await signInWithPhoneNumber(
@@ -418,9 +428,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
-  /* ---------------------------
+  /* --------------------------
      VERIFY CODE
-  --------------------------- */
+  -------------------------- */
   const handleVerifyCode = async () => {
     try {
       setLoading(true);
@@ -446,17 +456,17 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
-  /* ---------------------------
+  /* --------------------------
      RESEND CODE
-  --------------------------- */
+  -------------------------- */
   const handleResendCode = () => {
     setVerificationCode("");
     setStep("phone");
   };
 
-  /* ---------------------------
-     Final Return (Overlay + Modal)
-  --------------------------- */
+  /* --------------------------
+     Final UI
+  -------------------------- */
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
@@ -492,7 +502,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <X className="w-6 h-6 text-white" />
         </button>
 
-        {/* Steps / Content */}
+        {/* Steps: welcome -> phone -> verify */}
         <div className="flex-1 flex flex-col min-h-0">
           {step === "welcome" && renderWelcomeContent()}
           {step === "phone" && renderPhoneInput()}
