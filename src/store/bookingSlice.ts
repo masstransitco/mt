@@ -1,3 +1,6 @@
+// src/store/bookingSlice.ts
+"use client";
+
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
 import { StationFeature } from "./stationsSlice";
@@ -31,18 +34,22 @@ export interface BookingState {
   departureDate: Date | null;
   /** An optional route object that stores distance, duration, etc. */
   route: RouteInfo | null;
-  /**
-   * Optional field to store status of the route fetch:
-   * 'idle' | 'loading' | 'succeeded' | 'failed'
-   */
+  /** 'idle' | 'loading' | 'succeeded' | 'failed' */
   routeStatus: string;
-  /** Optional field for error messages when fetching route data. */
+  /** Error message (if any) from route fetching. */
   routeError: string | null;
 
   /**
    * The user’s selected ticket plan: 'single' or 'paygo' (or null if not chosen).
    */
   ticketPlan: TicketPlan;
+
+  /**
+   * Moved from userSlice:
+   * Numeric station IDs for departure/arrival
+   */
+  departureStationId: number | null;
+  arrivalStationId: number | null;
 }
 
 /**
@@ -64,7 +71,6 @@ export const fetchRoute = createAsyncThunk<
     try {
       const directionsService = new google.maps.DirectionsService();
 
-      // Extract lat/lng for departure & arrival
       const [depLng, depLat] = departure.geometry.coordinates;
       const [arrLng, arrLat] = arrival.geometry.coordinates;
 
@@ -88,8 +94,6 @@ export const fetchRoute = createAsyncThunk<
 
       const distance = leg.distance.value; // meters
       const duration = leg.duration.value; // seconds
-
-      // If overview_polyline is typed as a string, just use it directly.
       const polyline = route.overview_polyline || "";
 
       return { distance, duration, polyline };
@@ -107,7 +111,11 @@ const initialState: BookingState = {
   route: null,
   routeStatus: "idle",
   routeError: null,
-  ticketPlan: null, // NEW FIELD
+  ticketPlan: null,
+
+  // Moved station IDs here
+  departureStationId: null,
+  arrivalStationId: null,
 };
 
 export const bookingSlice = createSlice({
@@ -122,7 +130,8 @@ export const bookingSlice = createSlice({
     },
 
     /**
-     * Advances the booking flow to a specified step and sets the corresponding stepName.
+     * Force-advances the booking flow to a specified step and sets the corresponding stepName.
+     * (Useful if you have an override or a button that explicitly sets step.)
      */
     advanceBookingStep: (state, action: PayloadAction<number>) => {
       state.step = action.payload;
@@ -153,18 +162,81 @@ export const bookingSlice = createSlice({
     },
 
     /**
+     * Select a departure station (step 1 → 2).
+     * If step is already beyond 2, do nothing or show a warning (strict linear flow).
+     */
+    selectDepartureStation: (state, action: PayloadAction<number>) => {
+      // Only allow if step <= 2 (strict linear)
+      if (state.step <= 2) {
+        state.departureStationId = action.payload;
+        // If step was 1, move to step 2
+        if (state.step === 1) {
+          state.step = 2;
+          state.stepName = "selected_departure_station";
+        }
+      }
+      // else optionally show a toast in UI or do nothing
+    },
+
+    /**
+     * Clear departure station (returns to step 1).
+     */
+    clearDepartureStation: (state) => {
+      state.departureStationId = null;
+      state.step = 1;
+      state.stepName = "selecting_departure_station";
+      // Potentially clear the route if it depends on departure
+      state.route = null;
+      state.routeStatus = "idle";
+      state.routeError = null;
+    },
+
+    /**
+     * Select arrival station (step 3 → 4).
+     * Only allow if step >= 3 and step <= 4 (strict linear).
+     */
+    selectArrivalStation: (state, action: PayloadAction<number>) => {
+      // Only allow if step in [3, 4]
+      if (state.step >= 3 && state.step <= 4) {
+        state.arrivalStationId = action.payload;
+        // If step was 3, move to step 4
+        if (state.step === 3) {
+          state.step = 4;
+          state.stepName = "selected_arrival_station";
+        }
+      }
+      // else optionally show a warning
+    },
+
+    /**
+     * Clear arrival station (returns to step 3 if user had selected an arrival).
+     */
+    clearArrivalStation: (state) => {
+      state.arrivalStationId = null;
+      // Revert to step 3 if we were in step 4
+      if (state.step >= 3) {
+        state.step = 3;
+        state.stepName = "selecting_arrival_station";
+      }
+      // Clear route
+      state.route = null;
+      state.routeStatus = "idle";
+      state.routeError = null;
+    },
+
+    /**
      * Resets the entire booking flow to its initial state.
      */
     resetBookingFlow: (state) => {
       state.step = 1;
       state.stepName = "selecting_departure_station";
       state.departureDate = null;
-      // Reset route-related fields
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
-      // Reset ticket plan
       state.ticketPlan = null;
+      state.departureStationId = null;
+      state.arrivalStationId = null;
     },
 
     /**
@@ -175,7 +247,7 @@ export const bookingSlice = createSlice({
     },
 
     /**
-     * NEW: Clears the route data so no polyline is rendered.
+     * Clears the route data so no polyline is rendered.
      */
     clearRoute: (state) => {
       state.route = null;
@@ -207,9 +279,13 @@ export const bookingSlice = createSlice({
 export const {
   setDepartureDate,
   advanceBookingStep,
+  selectDepartureStation,
+  clearDepartureStation,
+  selectArrivalStation,
+  clearArrivalStation,
   resetBookingFlow,
   setTicketPlan,
-  clearRoute, // <--- New action
+  clearRoute,
 } = bookingSlice.actions;
 
 // Export the reducer
@@ -225,5 +301,9 @@ export const selectRoute = (state: RootState) => state.booking.route;
 export const selectRouteStatus = (state: RootState) => state.booking.routeStatus;
 export const selectRouteError = (state: RootState) => state.booking.routeError;
 
-/** NEW: Ticket plan selector */
+/** Ticket plan selector */
 export const selectTicketPlan = (state: RootState) => state.booking.ticketPlan;
+
+/** Station IDs */
+export const selectDepartureStationId = (state: RootState) => state.booking.departureStationId;
+export const selectArrivalStationId = (state: RootState) => state.booking.arrivalStationId;
