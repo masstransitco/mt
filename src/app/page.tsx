@@ -5,11 +5,19 @@ import Head from 'next/head';
 import { Menu as MenuIcon, ScanLine } from 'lucide-react';
 import Image from 'next/image';
 
+import dynamic from 'next/dynamic'; // <-- Import dynamic
+
 import GMapWithErrorBoundary from '@/components/GMap';
 import BookingDialog from '@/components/booking/BookingDialog';
 import SideSheet from '@/components/ui/SideSheet';
-import AppMenu from '@/components/ui/AppMenu';
-import QrScannerOverlay from '@/components/ui/QrScannerOverlay';
+
+// 1. Dynamically import AppMenu and QrScannerOverlay with no SSR
+const AppMenu = dynamic(() => import('@/components/ui/AppMenu'), {
+  ssr: false,
+});
+const QrScannerOverlay = dynamic(() => import('@/components/ui/QrScannerOverlay'), {
+  ssr: false,
+});
 
 export default function Page() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -18,6 +26,7 @@ export default function Page() {
   const toggleMenu = useCallback(() => {
     setIsMenuOpen((prev) => !prev);
   }, []);
+
   const handleMenuClose = useCallback(() => {
     setIsMenuOpen(false);
   }, []);
@@ -65,7 +74,7 @@ export default function Page() {
           </div>
         </header>
 
-        {/* Main content area: Always render GMap which now contains the CarSheet */}
+        {/* Main content area: Always render GMap (which now might contain the CarSheet) */}
         <div className="flex-1 relative">
           <GMapWithErrorBoundary
             googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
@@ -77,10 +86,11 @@ export default function Page() {
 
         {/* Side Sheet Menu */}
         <SideSheet isOpen={isMenuOpen} onClose={handleMenuClose} size="full">
+          {/* 2. Lazy-loaded AppMenu */}
           <AppMenu onClose={handleMenuClose} />
         </SideSheet>
 
-        {/* QR Scanner Overlay */}
+        {/* QR Scanner Overlay (lazy-loaded) */}
         {isScannerOpen && (
           <QrScannerOverlay
             isOpen={isScannerOpen}
