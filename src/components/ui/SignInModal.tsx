@@ -12,13 +12,14 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Add proper type definitions for window
+// Add proper type definitions
 declare global {
   interface Window {
-    recaptchaVerifier: RecaptchaVerifier;
     confirmationResult: ConfirmationResult;
   }
 }
+
+type RecaptchaVerifierInstance = RecaptchaVerifier | undefined;
 
 // Dynamically import ReactPlayer with loading state
 const ReactPlayer = dynamic(() => import("react-player"), { 
@@ -122,9 +123,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   // Cleanup function
   const cleanup = () => {
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-      delete window.recaptchaVerifier;
+    const verifier = window.recaptchaVerifier as RecaptchaVerifierInstance;
+    if (verifier) {
+      verifier.clear();
+      window.recaptchaVerifier = undefined;
     }
   };
 
@@ -179,7 +181,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       cleanup();
 
       // Create new reCAPTCHA instance
-      window.recaptchaVerifier = new RecaptchaVerifier(
+      const verifier = new RecaptchaVerifier(
         auth,
         "recaptcha-container",
         {
@@ -192,12 +194,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         }
       );
 
-      await window.recaptchaVerifier.render();
+      window.recaptchaVerifier = verifier;
+      await verifier.render();
       
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
-        window.recaptchaVerifier
+        verifier
       );
       window.confirmationResult = confirmationResult;
 
@@ -432,7 +435,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                 <button
                   onClick={() => setStep("phone")}
                   disabled={loading}
-                  className="ww-full p-3 text-sm text-gray-500 hover:text-gray-700
+                  className="w-full p-3 text-sm text-gray-500 hover:text-gray-700
                            disabled:opacity-50"
                 >
                   Change Phone Number
