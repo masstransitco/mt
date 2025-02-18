@@ -58,7 +58,7 @@ function StepIndicator({
 }
 
 /* -------------------------------------
- * PinInput: 6-digit fields for the verification code
+ * PinInput: 6-digit code fields
  * ------------------------------------- */
 function PinInput({
   length,
@@ -73,15 +73,13 @@ function PinInput({
   const inputRefs = useRef<HTMLInputElement[]>([]);
 
   const handleChange = (index: number, value: string) => {
-    // Only allow digits
-    if (!/^\d*$/.test(value)) return;
-
+    if (!/^\d*$/.test(value)) return; // Only allow digits
     const newValues = [...values];
     newValues[index] = value;
     setValues(newValues);
     onChange(newValues.join(""));
 
-    // Move focus to the next field if a digit was entered
+    // Auto-focus next
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -92,12 +90,11 @@ function PinInput({
     e: React.KeyboardEvent<HTMLInputElement>
   ) => {
     if (e.key === "Backspace" && !values[index] && index > 0) {
-      // Move focus backward if current is empty
       inputRefs.current[index - 1]?.focus();
     }
   };
 
-  // Reset code if we exit or re-enter verification
+  // Reset fields if not loading
   useEffect(() => {
     if (!loading) {
       setValues(Array(length).fill(""));
@@ -111,13 +108,11 @@ function PinInput({
           key={i}
           type="text"
           maxLength={1}
-          value={values[i]}
           disabled={loading}
+          value={values[i]}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
-          ref={(el) => {
-            if (el) inputRefs.current[i] = el;
-          }}
+          ref={(el) => el && (inputRefs.current[i] = el)}
           className="w-10 h-12 text-center border border-border bg-background
                      text-white text-xl rounded-md focus:outline-none
                      focus:ring focus:ring-blue-500 disabled:opacity-50"
@@ -139,7 +134,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // If user is already signed in, close the modal (or dispatch to Redux).
+  // If user is already signed in, close modal
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -148,7 +143,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     });
     return () => {
       unsubscribe();
-      // Clean up any existing reCAPTCHA verifier when modal unmounts
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         delete window.recaptchaVerifier;
@@ -156,7 +150,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, []);
 
-  // Cleanup states & close
+  // Cleanup & close
   const handleClose = () => {
     setStep("welcome");
     setPhoneNumber("");
@@ -168,9 +162,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
-  /* -------------------------------------
-   * Resend code countdown
-   * ------------------------------------- */
+  // Resend code timer
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
     if (!canResend && step === "verify") {
@@ -186,81 +178,73 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }, 1000);
     }
     return () => {
-      if (timerId) clearInterval(timerId);
+      timerId && clearInterval(timerId);
     };
   }, [canResend, step]);
 
-  /* 
-   *  STEP = welcome 
-   *  => short message or video => "Continue" => step=phone 
-   */
-  const renderWelcomeContent = () => {
-    return (
-      <div
-        key="welcome"
-        className="flex flex-col h-full overflow-hidden transition-opacity duration-300"
-      >
-        <div className="relative w-full h-[28vh] shrink-0">
-          <video
-            src="/brand/drive.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)",
-            }}
-          />
-          <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
-            <h2 className="text-[28px] font-semibold text-white leading-tight mb-2">
-              Welcome to Mass Transit
-            </h2>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 text-white/80">
-          <div className="space-y-2 text-[15px] leading-snug">
-            <p>• Drive the MG4 Electric, Maxus MIFA7, and the Cyberquad.</p>
-            <p>• Access 150+ stations with seamless entry and exit.</p>
-            <p>• No deposits. Daily fares capped at $400.</p>
-          </div>
-          <p className="text-[13px] text-white/60 leading-relaxed">
-            By clicking "Continue," you confirm you're 18 or older with a valid
-            driver’s license or permit. Trip and driving data may be collected
-            to improve services. See our{" "}
-            <a
-              href="/privacy"
-              className="text-[#0080ff] underline"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Privacy Policy
-            </a>{" "}
-            for details.
-          </p>
-          <button
-            onClick={() => setStep("phone")}
-            disabled={loading}
-            className="w-full py-3.5 mt-1 rounded-xl bg-[#0080ff]
-                       text-white text-[15px] font-medium
-                       active:opacity-90 disabled:opacity-50"
-          >
-            Continue
-          </button>
+  // --- Render Step=welcome ---
+  const renderWelcomeContent = () => (
+    <div
+      key="welcome"
+      className="flex flex-col h-full overflow-hidden transition-opacity duration-300"
+    >
+      <div className="relative w-full h-[28vh] shrink-0">
+        <video
+          src="/brand/drive.mp4"
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.8) 100%)",
+          }}
+        />
+        <div className="absolute inset-x-0 bottom-0 px-4 pb-3">
+          <h2 className="text-[28px] font-semibold text-white leading-tight mb-2">
+            Welcome to Mass Transit
+          </h2>
         </div>
       </div>
-    );
-  };
 
-  /* 
-   *  STEP = phone 
-   *  => user enters phone => press "Send Code" => handlePhoneSignIn 
-   */
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 text-white/80">
+        <div className="space-y-2 text-[15px] leading-snug">
+          <p>• Drive the MG4 Electric, Maxus MIFA7, and the Cyberquad.</p>
+          <p>• Access 150+ stations with seamless entry and exit.</p>
+          <p>• No deposits. Daily fares capped at $400.</p>
+        </div>
+        <p className="text-[13px] text-white/60 leading-relaxed">
+          By clicking "Continue," you confirm you're 18 or older with a valid
+          driver’s license or permit. Trip and driving data may be collected
+          to improve services. See our{" "}
+          <a
+            href="/privacy"
+            className="text-[#0080ff] underline"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Privacy Policy
+          </a>{" "}
+          for details.
+        </p>
+        <button
+          onClick={() => setStep("phone")}
+          disabled={loading}
+          className="w-full py-3.5 mt-1 rounded-xl bg-[#0080ff]
+                     text-white text-[15px] font-medium
+                     active:opacity-90 disabled:opacity-50"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+
+  // --- Render Step=phone ---
   const renderPhoneInput = () => {
     const currentStepNumber = 1;
     const totalSteps = 2;
@@ -277,13 +261,16 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <p className="text-sm text-gray-300">
             We’ll text you a verification code to ensure it’s really you.
           </p>
-          <PhoneInput value={phoneNumber} onChange={setPhoneNumber} disabled={loading} />
+          <PhoneInput
+            value={phoneNumber}
+            onChange={setPhoneNumber}
+            disabled={loading}
+          />
           {error && (
             <div className="p-3 text-sm text-red-400 bg-red-500/10 rounded-lg">
               {error}
             </div>
           )}
-          {/* This is where reCAPTCHA gets rendered */}
           <div id="recaptcha-container" />
         </div>
 
@@ -315,11 +302,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* 
-   *  STEP = verify 
-   *  => user enters code => handleVerifyCode => 
-   *  => onAuthStateChanged sees success => done 
-   */
+  // --- Render Step=verify ---
   const renderVerification = () => {
     const currentStepNumber = 2;
     const totalSteps = 2;
@@ -347,14 +330,16 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               {error}
             </div>
           )}
-
           {!canResend && (
             <p className="text-xs text-gray-400">
               If you don’t receive the code, you can resend in {resendTimer}s
             </p>
           )}
           {canResend && (
-            <button onClick={handleResendCode} className="text-sm underline text-blue-400">
+            <button
+              onClick={handleResendCode}
+              className="text-sm underline text-blue-400"
+            >
               Resend code
             </button>
           )}
@@ -399,23 +384,24 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         window.recaptchaVerifier.clear();
       }
 
-      // Correct argument order for RecaptchaVerifier:
+      // In Firebase 9/11, the correct usage is:
+      // new RecaptchaVerifier(auth, containerIdOrElement, parameters?)
       window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container", // containerIdOrElement
+        auth,                 // 1) Firebase Auth instance
+        "recaptcha-container", // 2) Container ID or element
         {
           size: "invisible",
           callback: () => {
-            // reCAPTCHA solved, proceed
+            // reCAPTCHA solved
           },
           "expired-callback": () => {
             setError("reCAPTCHA expired. Please try again.");
             setLoading(false);
           },
-        },
-        auth // your Firebase Auth instance
+        }
       );
 
-      // Send the SMS
+      // Send SMS
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
@@ -423,7 +409,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       );
       window.confirmationResult = confirmationResult;
 
-      // Move to "verify" step
+      // Move to verify step
       setStep("verify");
       setResendTimer(30);
       setCanResend(false);
@@ -453,7 +439,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }
 
       await window.confirmationResult.confirm(verificationCode);
-      // onAuthStateChanged sees success => user is logged in => closes the modal
+      // onAuthStateChanged sees success => user is logged in => closes
     } catch (err: any) {
       console.error("Code verification error:", err);
       let errorMessage = "Failed to verify code. Please check and try again.";
@@ -474,7 +460,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     setStep("phone");
   };
 
-  /* Final UI */
+  /* ------------- Final UI ------------- */
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent
