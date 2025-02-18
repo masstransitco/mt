@@ -138,7 +138,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   minZoom: 6,
   clickableIcons: false,
   styles: MAP_STYLES,
-  mapId: 'c7d03d22763bc313',
+  mapId: 'e18c09caf6c67ab3',
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
