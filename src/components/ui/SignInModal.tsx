@@ -12,12 +12,12 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Example dynamic import for any video, if you want to embed one:
+// Dynamically import ReactPlayer for the welcome video, no SSR
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
-/* -------------------------------------
- * Types
- * ------------------------------------- */
+/* ------------------------------------------------------------------
+   Types
+------------------------------------------------------------------ */
 type AuthStep = "welcome" | "phone" | "verify";
 
 interface SignInModalProps {
@@ -25,9 +25,9 @@ interface SignInModalProps {
   onClose: () => void;
 }
 
-/* -------------------------------------
- * StepIndicator: simple UI for multi-step flow (dots)
- * ------------------------------------- */
+/* ------------------------------------------------------------------
+   StepIndicator: Simple UI for multi-step flow (dots)
+------------------------------------------------------------------ */
 function StepIndicator({
   currentStep,
   totalSteps,
@@ -52,9 +52,9 @@ function StepIndicator({
   );
 }
 
-/* -------------------------------------
- * PinInput: 6-digit code fields
- * ------------------------------------- */
+/* ------------------------------------------------------------------
+   PinInput: 6-digit code fields
+------------------------------------------------------------------ */
 function PinInput({
   length,
   loading,
@@ -74,7 +74,7 @@ function PinInput({
     setValues(newValues);
     onChange(newValues.join(""));
 
-    // Auto-focus next input if a digit was entered
+    // Auto-focus next input
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -86,7 +86,7 @@ function PinInput({
     }
   };
 
-  // Reset fields if we exit or re-enter verification
+  // Reset fields when not loading
   useEffect(() => {
     if (!loading) {
       setValues(Array(length).fill(""));
@@ -118,9 +118,9 @@ function PinInput({
   );
 }
 
-/* -------------------------------------
- * SignInModal
- * ------------------------------------- */
+/* ------------------------------------------------------------------
+   SignInModal
+------------------------------------------------------------------ */
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [step, setStep] = useState<AuthStep>("welcome");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -132,16 +132,17 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // If user is already signed in, close modal
+  /* If user is already signed in, close modal */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         handleClose();
       }
     });
+
     return () => {
       unsubscribe();
-      // Clear any existing reCAPTCHA
+      // Clear reCAPTCHA instance
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         delete window.recaptchaVerifier;
@@ -149,7 +150,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, []);
 
-  // Cleanup & close
+  /* Cleanup / Close */
   const handleClose = () => {
     setStep("welcome");
     setPhoneNumber("");
@@ -161,7 +162,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
-  // Resend code countdown
+  /* Resend code timer */
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
     if (!canResend && step === "verify") {
@@ -173,8 +174,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             return 0;
           }
           return prev - 1;
-        });
-      }, 1000);
+        }, 1000);
+      });
     }
     return () => {
       if (timerId) clearInterval(timerId);
@@ -183,21 +184,29 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   if (!isOpen) return null;
 
-  /* --------------------------
+  /* ---------------------------
      STEP = welcome
-  -------------------------- */
+  --------------------------- */
   const renderWelcomeContent = () => (
     <div className="flex flex-col h-full">
-      {/* If you want a video at the top, you could do something like InfoModal: */}
+      {/* Video section */}
       <div className="relative w-full h-[28vh] shrink-0">
         <ReactPlayer
           url="/brand/drive.mp4"
           playing
           muted
           loop
+          controls={false}         // No UI controls
           width="100%"
           height="100%"
           style={{ objectFit: "cover" }}
+          config={{
+            file: {
+              attributes: {
+                playsInline: true, // ensure no fullscreen on iOS
+              },
+            },
+          }}
         />
         {/* gradient overlay */}
         <div
@@ -207,6 +216,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)",
           }}
         />
+        {/* Title */}
         <div className="absolute inset-x-0 bottom-0 p-4">
           <h2 className="text-xl font-semibold text-gray-900 drop-shadow">
             Welcome to Mass Transit
@@ -246,9 +256,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     </div>
   );
 
-  /* --------------------------
+  /* ---------------------------
      STEP = phone
-  -------------------------- */
+  --------------------------- */
   const renderPhoneInput = () => {
     const currentStepNumber = 1;
     const totalSteps = 2;
@@ -294,9 +304,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* --------------------------
+  /* ---------------------------
      STEP = verify
-  -------------------------- */
+  --------------------------- */
   const renderVerification = () => {
     const currentStepNumber = 2;
     const totalSteps = 2;
@@ -360,14 +370,15 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* --------------------------
+  /* ---------------------------
      PHONE SIGN-IN
-  -------------------------- */
+  --------------------------- */
   const handlePhoneSignIn = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Clear old reCAPTCHA
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
       }
@@ -412,9 +423,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
-  /* --------------------------
+  /* ---------------------------
      VERIFY CODE
-  -------------------------- */
+  --------------------------- */
   const handleVerifyCode = async () => {
     try {
       setLoading(true);
@@ -440,17 +451,17 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
-  /* --------------------------
+  /* ---------------------------
      RESEND CODE
-  -------------------------- */
+  --------------------------- */
   const handleResendCode = () => {
     setVerificationCode("");
     setStep("phone");
   };
 
-  /* --------------------------
+  /* ---------------------------
      Final Return (Overlay + Modal)
-  -------------------------- */
+  --------------------------- */
   return (
     // Outer container: black/50 backdrop
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
@@ -460,7 +471,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         onClick={handleClose}
         aria-hidden="true"
       />
-
       {/* Modal container */}
       <div
         className="
@@ -488,7 +498,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <X className="w-6 h-6 text-white" />
         </button>
 
-        {/* Modal body */}
+        {/* Modal body (steps) */}
         <div className="flex-1 flex flex-col min-h-0">
           {step === "welcome" && renderWelcomeContent()}
           {step === "phone" && renderPhoneInput()}
