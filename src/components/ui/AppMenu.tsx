@@ -1,11 +1,6 @@
 'use client';
 
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef
-} from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -23,7 +18,7 @@ import WalletModal from './WalletModal';
 // Import weather fetching function + types
 import { fetchHKWeather, WeatherData } from '@/lib/weather';
 
-function AppMenu({ onClose }: { onClose: () => void }) {
+export default function AppMenu({ onClose }: { onClose: () => void }) {
   const [user, setUser] = useState<User | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -32,11 +27,8 @@ function AppMenu({ onClose }: { onClose: () => void }) {
   // Weather data
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
-  // Local "visibility" state to handle the slide-in/out animation
-  const [visible, setVisible] = useState(false);
-
-  // On mount, fetch user & weather
   useEffect(() => {
+    // Listen for auth state changes
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -45,6 +37,7 @@ function AppMenu({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
+    // Fetch HK Weather on component mount
     async function getWeather() {
       const data = await fetchHKWeather();
       setWeather(data);
@@ -52,24 +45,11 @@ function AppMenu({ onClose }: { onClose: () => void }) {
     getWeather();
   }, []);
 
-  // Show the menu with a small delay (for the next frame) so CSS transition can occur
-  useEffect(() => {
-    requestAnimationFrame(() => setVisible(true));
-  }, []);
-
-  // If user clicks close, animate out then call onClose
-  const handleClose = useCallback(() => {
-    setVisible(false);
-    // match transition duration
-    setTimeout(() => {
-      onClose();
-    }, 300);
-  }, [onClose]);
-
+  // Close menu / sign out
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      handleClose();
+      onClose();
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -103,335 +83,317 @@ function AppMenu({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      // Outer container that covers screen
-      className={`
+      className="
         fixed inset-0 z-50 
-        flex 
-        overflow-hidden
-        pointer-events-none
-      `}
+        flex flex-col 
+        bg-background
+        shadow-md
+        h-[100dvh] 
+        pb-safe 
+        overflow-hidden 
+        /* If you have a slide-in animation, keep transform transitions here. */
+      "
     >
-      {/* Sliding panel */}
-      <div
-        className={`
-          relative
-          pointer-events-auto
-          h-full
-          w-[90vw] sm:w-[400px]
-          bg-background
-          shadow-md
-          pb-safe
-          flex flex-col
-          transform
-          transition-transform
-          duration-300
-          ${visible ? 'translate-x-0' : 'translate-x-full'}
-        `}
+      {/* Header */}
+      <header
+        className="
+          safe-top
+          h-14
+          border-b border-border/40
+          flex items-center
+          justify-between
+          px-4
+        "
       >
-        {/* Header */}
-        <header
+        {/* Title (left) */}
+        <h2
           className="
-            safe-top 
-            h-14 
-            border-b border-border/40 
-            grid grid-cols-3 
-            items-center 
-            px-4
+            text-base
+            font-medium
+            [font-family:'Helvetica Neue',Helvetica,Arial,sans-serif]
           "
         >
-          {/* Weather Display (left) */}
-          <div className="flex flex-col">
-            {weather && (
-              <>
-                {/* Row for Temperature */}
-                <div className="flex items-center gap-2">
-                  <i
-                    className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`}
-                  />
-                  <span className="text-sm font-medium">
-                    {Math.round(weather.temperature)}°C
-                  </span>
-                </div>
+          Menu
+        </h2>
 
-                {/* Row for additional weather data (rain chance, wind, aqi) */}
-                <div className="flex items-center text-xs gap-2 text-muted-foreground mt-1">
-                  <div className="flex items-center gap-1">
-                    <i className="wi wi-raindrops" />
-                    <span>{weather.rainChance}%</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <i className="wi wi-strong-wind" />
-                    <span>{Math.round(weather.windspeed)} km/h</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <i className="wi wi-smoke" />
-                    <span>{weather.aqi}</span>
-                  </div>
-                </div>
-              </>
-            )}
+        {/* Close Button (chevron right) */}
+        <button
+          onClick={onClose}
+          className="
+            flex items-center justify-center 
+            p-2 
+            rounded-full
+            hover:bg-accent/10 
+            transition-colors 
+            duration-200
+          "
+          aria-label="Close menu"
+        >
+          <ChevronRight className="w-6 h-6" />
+        </button>
+      </header>
+
+      {/* Weather Section */}
+      {weather && (
+        <div className="border-b border-border/40 px-4 py-3">
+          {/* Temperature Row */}
+          <div className="flex items-center gap-2">
+            <i className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`} />
+            <span className="text-sm font-medium">
+              {Math.round(weather.temperature)}°C
+            </span>
           </div>
 
-          {/* Title (center) */}
-          <h2
-            className="
-              text-base 
-              font-medium 
-              text-center 
-              col-span-1
-              [font-family:'Helvetica Neue',Helvetica,Arial,sans-serif]
-            "
-          >
-            Menu
-          </h2>
-
-          {/* Close Button (right) */}
-          <div className="flex justify-end">
-            <button
-              onClick={handleClose}
-              className="
-                flex items-center justify-center 
-                p-2 
-                rounded-full
-                hover:bg-accent/10 
-                transition-colors 
-                duration-200
-              "
-              aria-label="Close menu"
-            >
-              <ChevronRight className="w-6 h-6" />
-            </button>
-          </div>
-        </header>
-
-        {/* Main Content (Non-scrollable) */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          {/* Top Section (User Profile / Sign In) */}
-          <div className="px-4 py-4 border-b border-border/40">
-            {!loading && (
-              <div className="mb-4">
-                {user ? (
-                  <button
-                    onClick={() => {
-                      // Open user profile or settings if needed
-                    }}
-                    className="
-                      w-full 
-                      flex items-center gap-3 
-                      bg-card/20 
-                      hover:bg-card/30 
-                      rounded-lg 
-                      px-3 py-3
-                      text-left
-                      transition-colors
-                      duration-200
-                    "
-                  >
-                    <div className="w-12 h-12 rounded-full overflow-hidden bg-card flex-shrink-0">
-                      <Image
-                        src="/brand/profile.png"
-                        alt="Profile"
-                        width={48}
-                        height={48}
-                        className="w-full h-full object-cover"
-                        priority
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">
-                        {user.phoneNumber || '+85254491874'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {user.email || user.phoneNumber || 'User'}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setShowSignInModal(true)}
-                    className="
-                      w-full 
-                      bg-primary 
-                      text-primary-foreground 
-                      px-6 py-3.5 
-                      rounded-lg 
-                      font-medium 
-                      transition-colors
-                      duration-200
-                      hover:opacity-90
-                      active:opacity-80
-                    "
-                  >
-                    Sign In
-                  </button>
-                )}
+          {/* Additional Weather Info Row */}
+          <div className="flex items-center text-xs gap-2 text-muted-foreground mt-2">
+            {/* Rain chance */}
+            {weather.rainChance !== undefined && (
+              <div className="flex items-center gap-1">
+                <i className="wi wi-raindrops" />
+                <span>{weather.rainChance}%</span>
               </div>
             )}
 
-            {/* Quick Actions (visible if user is signed in) */}
-            {user && (
-              <div className="space-y-2">
-                <button
-                  className="
-                    w-full 
-                    flex items-center justify-between 
-                    py-2 px-3 
-                    rounded-lg 
-                    hover:bg-accent/10 
-                    transition-colors 
-                    duration-200
-                  "
-                >
-                  <div className="flex items-center gap-3">
-                    <Route className="w-5 h-5" />
-                    <span className="font-medium">Trips</span>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                </button>
-
-                <button
-                  onClick={handleWalletClick}
-                  className="
-                    w-full 
-                    flex items-center justify-between 
-                    py-2 px-3 
-                    rounded-lg 
-                    hover:bg-accent/10 
-                    transition-colors 
-                    duration-200
-                  "
-                >
-                  <div className="flex items-center gap-3">
-                    <Wallet className="w-5 h-5" />
-                    <span className="font-medium">Wallet</span>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Middle Section - Featured */}
-          <div className="px-4 space-y-3 py-4 border-b border-border/40">
-            <button
-              onClick={handleDiscoverClick}
-              className="
-                w-full 
-                flex items-center gap-3 
-                rounded-lg 
-                p-3
-                hover:bg-accent/10 
-                transition-colors 
-                duration-200
-              "
-            >
-              <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0">
-                <Image
-                  src="/brand/discover.gif"
-                  alt="Discover"
-                  width={48}
-                  height={48}
-                  className="w-full h-full object-cover"
-                  priority
-                />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-medium">Discover</h3>
-                <p className="text-sm text-muted-foreground">Research & Tech</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-
-            <button
-              className="
-                w-full
-                flex items-center gap-3
-                rounded-lg
-                p-3
-                hover:bg-accent/10
-                transition-colors
-                duration-200
-              "
-            >
-              <div className="w-12 h-12 rounded-lg bg-card flex items-center justify-center flex-shrink-0">
-                <Car className="w-6 h-6" />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-medium">Commute With Us</h3>
-                <p className="text-sm text-muted-foreground">EV Transit Network</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
-
-          {/* Bottom Section */}
-          <div className="px-4 py-8 mt-auto">
-            {user && (
-              <button
-                onClick={handleSignOut}
-                className="
-                  flex items-center gap-2 
-                  text-destructive 
-                  hover:text-destructive/80 
-                  transition-colors 
-                  duration-200 
-                  mb-4
-                "
-              >
-                <LogOut className="w-5 h-5" />
-                <span className="font-medium">Sign Out</span>
-              </button>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="flex gap-4">
-                <Link
-                  href="/privacy"
-                  className="
-                    text-sm 
-                    text-muted-foreground 
-                    hover:text-foreground 
-                    transition-colors 
-                    duration-200
-                  "
-                >
-                  Privacy
-                </Link>
-                <Link
-                  href="/legal"
-                  className="
-                    text-sm 
-                    text-muted-foreground 
-                    hover:text-foreground 
-                    transition-colors 
-                    duration-200
-                  "
-                >
-                  Legal
-                </Link>
-              </div>
-              <span className="text-sm text-muted-foreground">v4.40.1</span>
+            {/* Wind speed */}
+            <div className="flex items-center gap-1">
+              <i className="wi wi-strong-wind" />
+              <span>{Math.round(weather.windspeed)} km/h</span>
             </div>
+
+            {/* AQI */}
+            {typeof weather.aqi === 'number' && (
+              <div className="flex items-center gap-1">
+                <i className="wi wi-smoke" />
+                <span>{weather.aqi}</span>
+              </div>
+            )}
           </div>
         </div>
+      )}
 
-        {/* Sign In Modal */}
-        <SignInModal
-          isOpen={showSignInModal}
-          onClose={() => setShowSignInModal(false)}
-        />
+      {/* Main Content (Non-scrollable or scrollable as you prefer) */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Top Section (User Profile / Sign In) */}
+        <div className="px-4 py-4 border-b border-border/40">
+          {!loading && (
+            <div className="mb-4">
+              {user ? (
+                <button
+                  onClick={() => {
+                    // Could open user profile or settings
+                  }}
+                  className="
+                    w-full 
+                    flex items-center gap-3 
+                    bg-card/20 
+                    hover:bg-card/30 
+                    rounded-lg 
+                    px-3 py-3
+                    text-left
+                    transition-colors
+                    duration-200
+                  "
+                >
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-card flex-shrink-0">
+                    <Image
+                      src="/brand/profile.png"
+                      alt="Profile"
+                      width={48}
+                      height={48}
+                      className="w-full h-full object-cover"
+                      priority
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium truncate">
+                      {user.phoneNumber || '+85254491874'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {user.email || user.phoneNumber || 'User'}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowSignInModal(true)}
+                  className="
+                    w-full 
+                    bg-primary 
+                    text-primary-foreground 
+                    px-6 py-3.5 
+                    rounded-lg 
+                    font-medium 
+                    transition-colors
+                    duration-200
+                    hover:opacity-90
+                    active:opacity-80
+                  "
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+          )}
 
-        {/* Wallet Modal */}
-        <WalletModal
-          isOpen={showWalletModal}
-          onClose={() => setShowWalletModal(false)}
-        />
+          {/* Quick Actions (visible if user is signed in) */}
+          {user && (
+            <div className="space-y-2">
+              <button
+                className="
+                  w-full 
+                  flex items-center justify-between 
+                  py-2 px-3 
+                  rounded-lg 
+                  hover:bg-accent/10 
+                  transition-colors 
+                  duration-200
+                "
+              >
+                <div className="flex items-center gap-3">
+                  <Route className="w-5 h-5" />
+                  <span className="font-medium">Trips</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
+
+              <button
+                onClick={handleWalletClick}
+                className="
+                  w-full 
+                  flex items-center justify-between 
+                  py-2 px-3 
+                  rounded-lg 
+                  hover:bg-accent/10 
+                  transition-colors 
+                  duration-200
+                "
+              >
+                <div className="flex items-center gap-3">
+                  <Wallet className="w-5 h-5" />
+                  <span className="font-medium">Wallet</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Middle Section - Featured */}
+        <div className="px-4 space-y-3 py-4 border-b border-border/40">
+          <button
+            onClick={handleDiscoverClick}
+            className="
+              w-full 
+              flex items-center gap-3 
+              rounded-lg 
+              p-3
+              hover:bg-accent/10 
+              transition-colors 
+              duration-200
+            "
+          >
+            <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0">
+              <Image
+                src="/brand/discover.gif"
+                alt="Discover"
+                width={48}
+                height={48}
+                className="w-full h-full object-cover"
+                priority
+              />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-medium">Discover</h3>
+              <p className="text-sm text-muted-foreground">Research & Tech</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
+
+          <button
+            className="
+              w-full
+              flex items-center gap-3
+              rounded-lg
+              p-3
+              hover:bg-accent/10
+              transition-colors
+              duration-200
+            "
+          >
+            <div className="w-12 h-12 rounded-lg bg-card flex items-center justify-center flex-shrink-0">
+              <Car className="w-6 h-6" />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="font-medium">Commute With Us</h3>
+              <p className="text-sm text-muted-foreground">EV Transit Network</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="px-4 py-8 mt-auto">
+          {user && (
+            <button
+              onClick={handleSignOut}
+              className="
+                flex items-center gap-2 
+                text-destructive 
+                hover:text-destructive/80 
+                transition-colors 
+                duration-200 
+                mb-4
+              "
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="font-medium">Sign Out</span>
+            </button>
+          )}
+
+          <div className="flex items-center justify-between">
+            <div className="flex gap-4">
+              <Link
+                href="/privacy"
+                className="
+                  text-sm 
+                  text-muted-foreground 
+                  hover:text-foreground 
+                  transition-colors 
+                  duration-200
+                "
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/legal"
+                className="
+                  text-sm 
+                  text-muted-foreground 
+                  hover:text-foreground 
+                  transition-colors 
+                  duration-200
+                "
+              >
+                Legal
+              </Link>
+            </div>
+            <span className="text-sm text-muted-foreground">v4.40.1</span>
+          </div>
+        </div>
       </div>
+
+      {/* Sign In Modal */}
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+      />
+
+      {/* Wallet Modal */}
+      <WalletModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+      />
     </div>
   );
 }
-
-// 3) Memoize for performance if the props rarely change:
-const MemoizedAppMenu = React.memo(AppMenu);
-export default MemoizedAppMenu;
