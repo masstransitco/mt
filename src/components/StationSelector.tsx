@@ -140,6 +140,7 @@ const AddressSearch = ({
     try {
       const request: google.maps.places.AutocompleteRequest = {
         input,
+        // @ts-ignore 
         types: ["establishment", "geocode"],
         componentRestrictions: { country: "HK" },
       };
