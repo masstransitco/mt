@@ -12,14 +12,13 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Add proper type definitions
-declare global {
-  interface Window {
-    confirmationResult: ConfirmationResult;
-  }
+// Add proper type declarations
+interface ExtendedWindow extends Window {
+  recaptchaVerifier?: RecaptchaVerifier;
+  confirmationResult?: ConfirmationResult;
 }
 
-type RecaptchaVerifierInstance = RecaptchaVerifier | undefined;
+declare let window: ExtendedWindow;
 
 // Dynamically import ReactPlayer with loading state
 const ReactPlayer = dynamic(() => import("react-player"), { 
@@ -123,9 +122,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   // Cleanup function
   const cleanup = () => {
-    const verifier = window.recaptchaVerifier as RecaptchaVerifierInstance;
-    if (verifier) {
-      verifier.clear();
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
       window.recaptchaVerifier = undefined;
     }
   };
