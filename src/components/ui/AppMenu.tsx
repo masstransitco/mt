@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import dynamic from 'next/dynamic'; // <-- Import dynamic from 'next/dynamic'
+import dynamic from 'next/dynamic';
 import {
   LogOut,
   Car,
@@ -14,7 +14,6 @@ import {
 import { auth } from '@/lib/firebase';
 import { signOut, User } from 'firebase/auth';
 
-// 1) Lazy-load the modals instead of importing them directly
 const SignInModal = dynamic(() => import('./SignInModal'), {
   ssr: false,
 });
@@ -37,11 +36,10 @@ export default function AppMenu({ onClose }: AppMenuProps) {
   // Weather data
   const [weather, setWeather] = useState<WeatherData | null>(null);
 
-  // Simple local state for slide-in/out animation
+  // Slide-in/out animation
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Listen for auth state changes
     const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -50,7 +48,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
   }, []);
 
   useEffect(() => {
-    // Fetch HK Weather on mount
+    // Fetch HK Weather
     async function getWeather() {
       const data = await fetchHKWeather();
       setWeather(data);
@@ -63,10 +61,10 @@ export default function AppMenu({ onClose }: AppMenuProps) {
     requestAnimationFrame(() => setVisible(true));
   }, []);
 
-  // Close menu with an animation
+  // Close menu with animation
   const handleClose = () => {
     setVisible(false);
-    // match the transition duration (300ms)
+    // match 300ms transition
     setTimeout(onClose, 300);
   };
 
@@ -110,7 +108,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex overflow-hidden">
-      {/* Sliding panel */}
+      {/* Sliding panel (full width) */}
       <div
         className={`
           relative
@@ -118,7 +116,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           bg-background
           shadow-md
           h-full
-          w-[85vw] sm:w-[400px]
+          w-full              /* <-- now fills the entire screen width */
           pb-safe
           transform
           transition-transform
@@ -138,7 +136,6 @@ export default function AppMenu({ onClose }: AppMenuProps) {
             px-4
           "
         >
-          {/* Title (left) */}
           <h2
             className="
               text-base
@@ -422,7 +419,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           </div>
         </div>
 
-        {/* 2) Lazy-loaded Modals */}
+        {/* Lazy-loaded Modals */}
         <SignInModal
           isOpen={showSignInModal}
           onClose={() => setShowSignInModal(false)}
