@@ -1,31 +1,24 @@
-'use client';
+"use client";
 
-import React, { useState, useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store/store';
+import React, { useState, useCallback } from "react";
+import { X } from "lucide-react";
+import { useAppDispatch, useAppSelector } from "@/store/store";
 
-// Chat slice
-import { sendMessageToClaude, selectMessages } from '@/store/chatSlice';
-import { Message } from '@/types/chat';
+// chatSlice
+import { sendMessageToClaude, selectMessages } from "@/store/chatSlice";
+import { Message } from "@/types/chat";
 
-// Replace these imports with your updated userSlice exports
-// that track the "two-station" approach plus selectedCarId.
+// bookingSlice (now has station IDs)
 import {
   selectDepartureStationId,
   selectArrivalStationId,
-} from '@/store/userSlice';
+  selectBookingStep,
+  selectDepartureDate,
+} from "@/store/bookingSlice";
 
-// If you have a separate field for the chosen car ID, you might do:
-import { selectCar } from '@/store/userSlice';
-
-// Or if you're still storing just a numeric car ID in user state:
-import { RootState } from '@/store/store';
-
-// Booking & UI slices
-import { selectBookingStep, selectDepartureDate } from '@/store/bookingSlice';
-import { selectViewState } from '@/store/uiSlice';
-
-// Icons
-import { X } from 'lucide-react';
+// userSlice (if storing selectedCarId or other user-specific state)
+import { selectViewState } from "@/store/uiSlice";
+import { RootState } from "@/store/store";
 
 export default function ChatWidget() {
   const dispatch = useAppDispatch();
@@ -36,71 +29,52 @@ export default function ChatWidget() {
   const departureDate = useAppSelector(selectDepartureDate);
   const viewState = useAppSelector(selectViewState);
 
-  // If you store the chosen car differently, adapt as needed:
-  // Example: numeric ID
+  // If you store the chosen car in user slice, keep it:
+  // (Adapt to your actual user slice or booking slice)
   const selectedCarId = useAppSelector((state: RootState) => state.user.selectedCarId);
 
-  // Two-station approach
+  // Station IDs are now from the booking slice
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState("");
 
-  /**
-   * Build a “system” context message with all relevant domain info.
-   */
   const buildContextMessage = useCallback((): Message => {
     const contextContent = `
-You are Claude, a helpful car rental assistant with knowledge of our internal booking flow.
+You are Claude, a helpful car rental assistant.
 
 Context:
 - Current UI view: ${viewState}
-- Selected Car ID: ${selectedCarId ?? 'None'}
-- Departure Station ID: ${departureStationId ?? 'None'}
-- Arrival Station ID: ${arrivalStationId ?? 'None'}
+- Selected Car ID: ${selectedCarId ?? "None"}
+- Departure Station ID: ${departureStationId ?? "None"}
+- Arrival Station ID: ${arrivalStationId ?? "None"}
 - Booking Step: ${bookingStep}
-- Departure Date: ${departureDate ? departureDate.toString() : 'Not set'}
+- Departure Date: ${departureDate ? departureDate.toString() : "Not set"}
 
 Company Policies:
-1) Users can pick any available car and station.
-2) ID/license verification is required before payment.
-3) We include standard liability coverage up to $1M.
-4) [Add more policies as needed]
-5) Remain polite, concise, and consistent with policies in your responses.
-
-Your objective:
-- Answer user queries about cars, stations, booking steps, etc.
-- If data is unavailable, disclaim that you have limited info.
-- Always maintain a friendly, professional tone.
+1) ...
+2) ...
+3) ...
+Please be concise, consistent, and follow brand guidelines.
 `;
 
     return {
       id: `system-context-${Date.now()}`,
-      role: 'system',
+      role: "system",
       content: contextContent,
       timestamp: new Date(),
       reactions: [],
       attachments: [],
     };
-  }, [
-    viewState,
-    selectedCarId,
-    departureStationId,
-    arrivalStationId,
-    bookingStep,
-    departureDate,
-  ]);
+  }, [viewState, selectedCarId, departureStationId, arrivalStationId, bookingStep, departureDate]);
 
-  /**
-   * Dispatch user + system messages to the LLM.
-   */
   const handleSend = async () => {
     if (!inputText.trim()) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
-      role: 'user',
+      role: "user",
       content: inputText,
       timestamp: new Date(),
       reactions: [],
@@ -109,7 +83,7 @@ Your objective:
 
     const contextMessage = buildContextMessage();
     dispatch(sendMessageToClaude({ userMessage, contextMessage }));
-    setInputText('');
+    setInputText("");
   };
 
   return (
@@ -124,7 +98,7 @@ Your objective:
             </button>
           </div>
 
-          {/* Messages List */}
+          {/* Messages */}
           <div className="flex-1 p-2 overflow-y-auto space-y-2">
             {messages.map((msg: Message) => (
               <div key={msg.id} className="text-sm whitespace-pre-wrap">
@@ -140,14 +114,11 @@ Your objective:
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSend();
+                if (e.key === "Enter") handleSend();
               }}
               placeholder="Type your message..."
             />
-            <button
-              className="bg-primary text-white px-3 py-2 rounded"
-              onClick={handleSend}
-            >
+            <button className="bg-primary text-white px-3 py-2 rounded" onClick={handleSend}>
               Send
             </button>
           </div>
