@@ -1,5 +1,4 @@
 import React from 'react';
-import { X } from 'lucide-react';
 
 interface SideSheetProps {
   isOpen: boolean;
@@ -22,7 +21,7 @@ export default function SideSheet({
         ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
       `}
     >
-      {/* Backdrop */}
+      {/* Backdrop (click anywhere in the dimmed area to close) */}
       <div
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
@@ -37,15 +36,7 @@ export default function SideSheet({
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        {/* Optional close button */}
-        <button 
-          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground" 
-          onClick={onClose}
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        {/* Side-Sheet Content */}
+        {/* Content Area */}
         <div className="pt-10 h-full overflow-auto">
           {children}
         </div>
