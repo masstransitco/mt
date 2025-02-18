@@ -12,7 +12,7 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Dynamically import ReactPlayer for the welcome video (no SSR)
+// Dynamically import ReactPlayer for the welcome video, no SSR
 const ReactPlayer = dynamic(() => import("react-player"), { ssr: false });
 
 /* ------------------------------------------------------------------
@@ -75,7 +75,7 @@ function PinInput({
     setValues(newValues);
     onChange(newValues.join(""));
 
-    // Auto-focus next input if a digit was entered
+    // Auto-focus next
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -88,7 +88,7 @@ function PinInput({
     }
   };
 
-  // Reset fields when not loading
+  // Reset fields if we exit/re-enter or when not loading
   useEffect(() => {
     if (!loading) {
       setValues(Array(length).fill(""));
@@ -134,14 +134,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  /* If user is already signed in, close modal */
+  // If user is already signed in, close the modal
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         handleClose();
       }
     });
-
     return () => {
       unsubscribe();
       // Clear any existing reCAPTCHA
@@ -152,7 +151,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, []);
 
-  /* Cleanup & close */
   const handleClose = () => {
     setStep("welcome");
     setPhoneNumber("");
@@ -164,7 +162,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
-  /* Resend code countdown */
+  // Resend code countdown
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
     if (!canResend && step === "verify") {
@@ -187,25 +185,24 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   if (!isOpen) return null;
 
   /* ---------------------------
-     STEP = welcome
+   STEP = welcome
   --------------------------- */
   const renderWelcomeContent = () => (
     <div className="flex flex-col h-full">
-      {/* Video section (optional) */}
       <div className="relative w-full h-[28vh] shrink-0">
         <ReactPlayer
           url="/brand/drive.mp4"
           playing
           muted
           loop
-          controls={false} // Hide UI
+          controls={false}
           width="100%"
           height="100%"
           style={{ objectFit: "cover" }}
           config={{
             file: {
               attributes: {
-                playsInline: true, // no fullscreen on iOS
+                playsInline: true, // iOS inline
               },
             },
           }}
@@ -218,7 +215,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)",
           }}
         />
-        {/* Title */}
         <div className="absolute inset-x-0 bottom-0 p-4">
           <h2 className="text-xl font-semibold text-gray-900 drop-shadow">
             Welcome to Mass Transit
@@ -226,7 +222,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         </div>
       </div>
 
-      {/* Body text */}
       <div className="flex-1 overflow-y-auto p-4 text-gray-900 space-y-4 text-sm">
         <p>• Drive the MG4 Electric, Maxus MIFA7, and the Cyberquad.</p>
         <p>• Access 150+ stations with seamless entry and exit.</p>
@@ -259,7 +254,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   );
 
   /* ---------------------------
-     STEP = phone
+   STEP = phone
   --------------------------- */
   const renderPhoneInput = () => {
     const currentStepNumber = 1;
@@ -268,9 +263,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 p-6 space-y-4 text-gray-900 text-sm">
-          <h3 className="text-lg font-semibold">
-            Enter Your Phone Number
-          </h3>
+          <h3 className="text-lg font-semibold">Enter Your Phone Number</h3>
           <StepIndicator currentStep={currentStepNumber} totalSteps={totalSteps} />
           <p>We’ll text you a verification code to ensure it’s really you.</p>
           <PhoneInput value={phoneNumber} onChange={setPhoneNumber} disabled={loading} />
@@ -307,7 +300,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   /* ---------------------------
-     STEP = verify
+   STEP = verify
   --------------------------- */
   const renderVerification = () => {
     const currentStepNumber = 2;
@@ -373,23 +366,22 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   /* ---------------------------
-     PHONE SIGN-IN
+   PHONE SIGN-IN
   --------------------------- */
   const handlePhoneSignIn = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Clear old reCAPTCHA
+      // Clear old reCAPTCHA if any
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
       }
 
-      // For Firebase v11 (same as v9+):
-      // new RecaptchaVerifier(auth, containerIdOrElement, parameters?)
+      // Correct usage for Firebase v9+ / v11:
+      // new RecaptchaVerifier(containerOrId, parameters, auth)
       window.recaptchaVerifier = new RecaptchaVerifier(
-        auth,                  // Auth instance
-        "recaptcha-container", // container or element
+        "recaptcha-container", // 1) container ID
         {
           size: "invisible",
           callback: () => {
@@ -399,7 +391,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             setError("reCAPTCHA expired. Please try again.");
             setLoading(false);
           },
-        }
+        },
+        auth // 3) Your Auth instance
       );
 
       const confirmationResult = await signInWithPhoneNumber(
@@ -427,7 +420,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   /* ---------------------------
-     VERIFY CODE
+   VERIFY CODE
   --------------------------- */
   const handleVerifyCode = async () => {
     try {
@@ -455,7 +448,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   /* ---------------------------
-     RESEND CODE
+   RESEND CODE
   --------------------------- */
   const handleResendCode = () => {
     setVerificationCode("");
@@ -463,7 +456,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   /* ---------------------------
-     Final Return (Overlay + Modal)
+   Final Return (Overlay + Modal)
   --------------------------- */
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
@@ -500,7 +493,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <X className="w-6 h-6 text-white" />
         </button>
 
-        {/* Modal body (steps) */}
+        {/* Steps / Content */}
         <div className="flex-1 flex flex-col min-h-0">
           {step === "welcome" && renderWelcomeContent()}
           {step === "phone" && renderPhoneInput()}
