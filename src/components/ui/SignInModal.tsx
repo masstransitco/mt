@@ -139,17 +139,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  /**
-   * If user is already signed in, close the modal (or dispatch to Redux).
-   * Example if using Redux:
-   *   const dispatch = useAppDispatch();
-   *   onAuthStateChanged(auth, (firebaseUser) => {
-   *       if (firebaseUser) {
-   *          dispatch(setAuthUser(...));
-   *          handleClose();
-   *       }
-   *   });
-   */
+  // If user is already signed in, close the modal (or dispatch to Redux).
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -158,6 +148,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     });
     return () => {
       unsubscribe();
+      // Clean up any existing reCAPTCHA verifier when modal unmounts
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
         delete window.recaptchaVerifier;
@@ -199,7 +190,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     };
   }, [canResend, step]);
 
-  /* Step=welcome => user sees a short message or video => "Continue" => step=phone */
+  /* 
+   *  STEP = welcome 
+   *  => short message or video => "Continue" => step=phone 
+   */
   const renderWelcomeContent = () => {
     return (
       <div
@@ -263,7 +257,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* Step=phone => user enters phone => press "Send Code" => handlePhoneSignIn */
+  /* 
+   *  STEP = phone 
+   *  => user enters phone => press "Send Code" => handlePhoneSignIn 
+   */
   const renderPhoneInput = () => {
     const currentStepNumber = 1;
     const totalSteps = 2;
@@ -286,6 +283,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               {error}
             </div>
           )}
+          {/* This is where reCAPTCHA gets rendered */}
           <div id="recaptcha-container" />
         </div>
 
@@ -317,7 +315,11 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     );
   };
 
-  /* Step=verify => user enters code => handleVerifyCode => onAuthStateChanged => done */
+  /* 
+   *  STEP = verify 
+   *  => user enters code => handleVerifyCode => 
+   *  => onAuthStateChanged sees success => done 
+   */
   const renderVerification = () => {
     const currentStepNumber = 2;
     const totalSteps = 2;
@@ -397,9 +399,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         window.recaptchaVerifier.clear();
       }
 
-      // The correct argument order:
+      // Correct argument order for RecaptchaVerifier:
       window.recaptchaVerifier = new RecaptchaVerifier(
-        "recaptcha-container",     // 1) Container ID
+        "recaptcha-container", // containerIdOrElement
         {
           size: "invisible",
           callback: () => {
@@ -410,10 +412,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             setLoading(false);
           },
         },
-        auth                       // 3) Firebase Auth instance
+        auth // your Firebase Auth instance
       );
 
-      // Send SMS
+      // Send the SMS
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
@@ -421,6 +423,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       );
       window.confirmationResult = confirmationResult;
 
+      // Move to "verify" step
       setStep("verify");
       setResendTimer(30);
       setCanResend(false);
@@ -450,7 +453,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }
 
       await window.confirmationResult.confirm(verificationCode);
-      // onAuthStateChanged sees success => user is logged in => closes
+      // onAuthStateChanged sees success => user is logged in => closes the modal
     } catch (err: any) {
       console.error("Code verification error:", err);
       let errorMessage = "Failed to verify code. Please check and try again.";
