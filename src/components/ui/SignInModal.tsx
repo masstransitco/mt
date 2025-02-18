@@ -14,13 +14,7 @@ import {
   ConfirmationResult,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import Image from "next/image";
 import PhoneInput from "./PhoneInput";
-
-// Note: If you want to dispatch the user info to Redux,
-// import { useAppDispatch } from "@/store/store";
-// import { setAuthUser } from "@/store/userSlice";
-// Then do dispatch(setAuthUser(...)) in onAuthStateChanged.
 
 type AuthStep = "welcome" | "phone" | "verify";
 
@@ -147,23 +141,18 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   /**
    * If user is already signed in, close the modal (or dispatch to Redux).
-   * This is optional; if you do want to store user in Redux:
-   *
-   *   import { useAppDispatch } from "@/store/store";
-   *   import { setAuthUser } from "@/store/userSlice";
-   *
-   * Then inside onAuthStateChanged:
-   *   if (firebaseUser) {
-   *     dispatch(setAuthUser({ uid: firebaseUser.uid, ... }));
-   *     handleClose();
-   *   }
-   *
+   * Example if using Redux:
+   *   const dispatch = useAppDispatch();
+   *   onAuthStateChanged(auth, (firebaseUser) => {
+   *       if (firebaseUser) {
+   *          dispatch(setAuthUser(...));
+   *          handleClose();
+   *       }
+   *   });
    */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // If you want to store user in Redux, do so here
-        // e.g. dispatch(setAuthUser(...));
         handleClose();
       }
     });
@@ -345,7 +334,11 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <span className="font-medium">{phoneNumber}</span>.
           </p>
 
-          <PinInput length={6} loading={loading} onChange={(code) => setVerificationCode(code)} />
+          <PinInput
+            length={6}
+            loading={loading}
+            onChange={(code) => setVerificationCode(code)}
+          />
 
           {error && (
             <div className="p-3 text-sm text-red-400 bg-red-500/10 rounded-lg">
@@ -399,21 +392,26 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setLoading(true);
       setError(null);
 
-      // Clear old recaptcha if any
+      // Clear old reCAPTCHA if any
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
       }
 
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
-        size: "invisible",
-        callback: () => {
-          // reCAPTCHA solved, proceed
+      // The correct argument order:
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        "recaptcha-container",     // 1) Container ID
+        {
+          size: "invisible",
+          callback: () => {
+            // reCAPTCHA solved, proceed
+          },
+          "expired-callback": () => {
+            setError("reCAPTCHA expired. Please try again.");
+            setLoading(false);
+          },
         },
-        "expired-callback": () => {
-          setError("reCAPTCHA expired. Please try again.");
-          setLoading(false);
-        },
-      });
+        auth                       // 3) Firebase Auth instance
+      );
 
       // Send SMS
       const confirmationResult = await signInWithPhoneNumber(
@@ -474,8 +472,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   /* Final UI */
-  const currentStepNumber = step === "welcome" ? 1 : step === "phone" ? 1 : 2;
-
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent
