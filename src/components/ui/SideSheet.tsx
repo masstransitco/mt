@@ -21,7 +21,7 @@ export default function SideSheet({
         ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
       `}
     >
-      {/* Backdrop (click anywhere in the dimmed area to close) */}
+      {/* Backdrop (clicking it closes the sheet) */}
       <div
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
@@ -32,7 +32,7 @@ export default function SideSheet({
         className={`
           relative bg-card text-foreground h-full
           shadow-xl transform transition-transform duration-300 ease-out
-          ${size === 'full' ? 'w-full' : 'w-72 max-w-full'}
+          ${size === 'full' ? 'w-full' : 'w-[85vw] max-w-full'}
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
