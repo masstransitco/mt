@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import dynamic from 'next/dynamic'; // <-- Import dynamic from 'next/dynamic'
 import {
   LogOut,
   Car,
@@ -12,10 +13,15 @@ import {
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { signOut, User } from 'firebase/auth';
-import SignInModal from './SignInModal';
-import WalletModal from './WalletModal';
 
-// Import weather fetching function + types
+// 1) Lazy-load the modals instead of importing them directly
+const SignInModal = dynamic(() => import('./SignInModal'), {
+  ssr: false,
+});
+const WalletModal = dynamic(() => import('./WalletModal'), {
+  ssr: false,
+});
+
 import { fetchHKWeather, WeatherData } from '@/lib/weather';
 
 interface AppMenuProps {
@@ -416,13 +422,11 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           </div>
         </div>
 
-        {/* Sign In Modal */}
+        {/* 2) Lazy-loaded Modals */}
         <SignInModal
           isOpen={showSignInModal}
           onClose={() => setShowSignInModal(false)}
         />
-
-        {/* Wallet Modal */}
         <WalletModal
           isOpen={showWalletModal}
           onClose={() => setShowWalletModal(false)}
