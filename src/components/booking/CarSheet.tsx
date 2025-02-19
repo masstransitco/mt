@@ -8,8 +8,6 @@ import CarGrid from "@/components/booking/CarGrid";
 
 interface CarSheetProps {
   isOpen: boolean;
-  // Remove onToggle here, since Sheet no longer uses it
-  // onToggle?: () => void;  // <-- Delete this
 }
 
 export default function CarSheet({ isOpen }: CarSheetProps) {
@@ -26,7 +24,6 @@ export default function CarSheet({ isOpen }: CarSheetProps) {
   return (
     <Sheet
       isOpen={isOpen}
-      // Remove onToggle from the Sheet usage
       title="Choose a car"
       count={count}
       countLabel={countLabel}
