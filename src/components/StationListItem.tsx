@@ -8,7 +8,7 @@ import { toast } from "react-hot-toast";
 import { useAppSelector } from "@/store/store";
 import { StationFeature } from "@/store/stationsSlice";
 /**
- * IMPORTANT: We now import station IDs from the **booking slice**:
+ *  Import station IDs from booking slice
  */
 import {
   selectDepartureStationId,
@@ -29,21 +29,21 @@ interface StationListItemProps extends ListChildComponentProps {
  * A single row item in the station list (via react-window).
  * Displays station info and highlights if it's selected as departure/arrival.
  */
-export const StationListItem = memo<StationListItemProps>((props) => {
+function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
   const { items: stations, searchLocation, onStationSelected } = data;
 
-  // The station corresponding to this list row
+  // The station for this row
   const station = stations[index];
 
-  // Instead of from userSlice, now from bookingSlice
+  // Booking slice to check if it's selected as departure/arrival
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
   const isSelected = station.id === departureId || station.id === arrivalId;
   const isDeparture = station.id === departureId; // for icon display vs arrival
 
-  // Optionally compute distance if we have a searchLocation.
+  // Optionally compute distance if we have a searchLocation
   const distance = useMemo(() => {
     if (!searchLocation || !google?.maps?.geometry?.spherical) {
       // fallback to station.distance if present in your StationFeature
@@ -57,6 +57,7 @@ export const StationListItem = memo<StationListItemProps>((props) => {
     return distMeters / 1000; // convert to kilometers
   }, [station, searchLocation]);
 
+  // onClick => call parent's callback
   const handleClick = useCallback(() => {
     if (!onStationSelected) {
       toast("No onStationSelected callback provided.");
@@ -108,7 +109,9 @@ export const StationListItem = memo<StationListItemProps>((props) => {
       </div>
     </div>
   );
-});
+}
 
+export const StationListItem = memo(StationListItemComponent);
 StationListItem.displayName = "StationListItem";
+
 export default StationListItem;
