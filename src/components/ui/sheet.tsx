@@ -13,7 +13,7 @@ import React, {
 import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
 
-import { ChevronDown, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
@@ -197,7 +197,7 @@ interface SheetProps {
 
 export default function Sheet({
   isOpen,
-  onToggle,
+  onToggle, // Note: onToggle is no longer used since the sheet always remains open.
   children,
   className,
   title,
@@ -232,7 +232,7 @@ export default function Sheet({
   // Two snap points (collapsed & expanded)
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
-      const collapsed = 120; // px from bottom
+      const collapsed = 120; // Minimum height (px from bottom)
       const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
       return [collapsed, expanded];
     },
@@ -250,16 +250,15 @@ export default function Sheet({
 
   // Imperatively snap to expanded whenever isOpen changes to true
   useEffect(() => {
-  if (isOpen && sheetRef.current) {
-    sheetRef.current.snapTo(({ maxHeight }) => {
-      // Calculate the expanded position based on the actual maxHeight
-      const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
-      return expanded;
-    });
-  }
-}, [isOpen, contentHeight]);
+    if (isOpen && sheetRef.current) {
+      sheetRef.current.snapTo(({ maxHeight }) => {
+        const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
+        return expanded;
+      });
+    }
+  }, [isOpen, contentHeight]);
 
-  // Header markup
+  // Header markup (chevron button removed so the sheet always stays open)
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -272,20 +271,17 @@ export default function Sheet({
             </p>
           )}
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center">
           <button
             onClick={() => setInfoModalOpen(true)}
             className="p-2 rounded-full hover:bg-white/10 transition-colors"
           >
             <Info className="w-5 h-5" />
           </button>
-          {/* Only the chevron can close the sheet */}
-          <button
-            onClick={onToggle}
-            className="p-2 rounded-full hover:bg-white/10 transition-colors"
-          >
-            <ChevronDown className="w-5 h-5" />
-          </button>
+          {/*
+            The chevron button has been removed so that the sheet cannot be closed via a tap.
+            Users may still drag the sheet to collapse or expand it.
+          */}
         </div>
       </div>
       <PulsatingStrip className="mt-2 mx-4" />
@@ -299,20 +295,25 @@ export default function Sheet({
         open={isOpen}
         header={SheetHeader}
         className={cn("custom-sheet", className)}
-        // allow background interactions
+        // Allow background interactions
         blocking={false}
-        // do NOT close if dragged down or clicked outside
+        // Prevent the sheet from closing when dragged down or clicking outside
         onDismiss={() => {
-          /* no-op: prevents the sheet from dismissing */
+          /* no-op */
         }}
-        // only two snap points, no partial expansions
+        // Only two snap points, fluid dragging between collapsed & expanded
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
       >
-        <div ref={contentRef} className="relative px-4 pt-2 pb-6">
+        <div
+          ref={contentRef}
+          className="relative px-4 pt-2 pb-6"
+          // Adding these inline styles helps clip any overscroll below the viewport.
+          style={{ maxHeight: "100vh", overflow: "hidden" }}
+        >
           {children}
-          {/* optional handle at the bottom */}
+          {/* Optional handle at the bottom */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
