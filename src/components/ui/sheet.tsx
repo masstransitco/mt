@@ -4,9 +4,8 @@ import React, {
   useState,
   useEffect,
   useRef,
-  useLayoutEffect,
-  ReactNode,
   useCallback,
+  ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -16,9 +15,7 @@ import {
   useTransform,
 } from "framer-motion";
 import { Info } from "lucide-react";
-
 import { cn } from "@/lib/utils";
-import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
 /* ----------------------------------------------------------------
    1) Animation constants for our PulsatingStrip
@@ -73,8 +70,7 @@ function PulsatingStrip({ className }: { className?: string }) {
     if (!stripRef.current) return;
 
     const elapsed = currentTime - startTimeRef.current;
-    const progress =
-      (elapsed % ANIMATION_PARAMS.duration) / ANIMATION_PARAMS.duration;
+    const progress = (elapsed % ANIMATION_PARAMS.duration) / ANIMATION_PARAMS.duration;
 
     let scale: number = ANIMATION_PARAMS.scales.min;
     let color: string = ANIMATION_PARAMS.colors.primary;
@@ -86,29 +82,17 @@ function PulsatingStrip({ className }: { className?: string }) {
       color = ANIMATION_PARAMS.colors.secondary;
       shadowIntensity = 0.6;
     } else if (progress < 0.2) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.max,
-        ANIMATION_PARAMS.scales.mid,
-        (progress - 0.1) * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.max, ANIMATION_PARAMS.scales.mid, (progress - 0.1) * 10);
       color = ANIMATION_PARAMS.colors.secondary;
       opacity = 0.9;
       shadowIntensity = 0.4;
     } else if (progress < 0.3) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.mid,
-        ANIMATION_PARAMS.scales.soft,
-        (progress - 0.2) * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.mid, ANIMATION_PARAMS.scales.soft, (progress - 0.2) * 10);
       color = ANIMATION_PARAMS.colors.tertiary;
       opacity = 0.95;
       shadowIntensity = 0.5;
     } else if (progress < 0.4) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.soft,
-        ANIMATION_PARAMS.scales.min,
-        (progress - 0.3) * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.soft, ANIMATION_PARAMS.scales.min, (progress - 0.3) * 10);
       color = ANIMATION_PARAMS.colors.secondary;
       opacity = 0.85;
       shadowIntensity = 0.4;
@@ -119,7 +103,6 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
-    // Apply the updated styles
     if (stripRef.current) {
       stripRef.current.style.transform = `scale(${scale})`;
       stripRef.current.style.backgroundColor = color;
@@ -134,9 +117,7 @@ function PulsatingStrip({ className }: { className?: string }) {
     startTimeRef.current = undefined;
     animationRef.current = requestAnimationFrame(animate);
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, [animate]);
 
@@ -159,25 +140,15 @@ function PulsatingStrip({ className }: { className?: string }) {
 }
 
 /* ----------------------------------------------------------------
-   3) An optional InfoModal
+   3) Optional InfoModal component
 ---------------------------------------------------------------- */
-function InfoModal({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
+function InfoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   if (!isOpen) return null;
-
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
       <div className="bg-white p-4 rounded shadow-md">
         <p>Information about this sheet!</p>
-        <button
-          onClick={onClose}
-          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
-        >
+        <button onClick={onClose} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
           Close
         </button>
       </div>
@@ -190,23 +161,18 @@ function InfoModal({
    4) SheetProps interface
 ---------------------------------------------------------------- */
 export interface SheetProps {
-  /** If true, the sheet is shown; if false, hidden. */
   isOpen: boolean;
-  /** Content of the sheet */
   children: ReactNode;
-  /** Additional class names for styling */
   className?: string;
-  /** Header fields */
   title?: string;
   subtitle?: string;
   count?: number;
   countLabel?: string;
-  /** Called when user swipes down or clicks backdrop to dismiss */
   onDismiss?: () => void;
 }
 
 /* ----------------------------------------------------------------
-   5) The main Sheet component
+   5) Simplified Sheet component
 ---------------------------------------------------------------- */
 export default function Sheet({
   isOpen,
@@ -218,37 +184,45 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Is user scrolled to the top => enable vertical drag?
-  const [isAtTop, setIsAtTop] = useState(true);
-
-  // (Optional) lock body scroll behind the sheet
-  useLayoutEffect(() => {
+  // Simple background scroll lock: lock the page when sheet is open.
+  useEffect(() => {
     if (isOpen) {
-      incrementOpenSheets();
+      document.body.style.overflow = "hidden";
     } else {
-      decrementOpenSheets();
+      document.body.style.overflow = "auto";
     }
     return () => {
-      // Cleanup on unmount
-      decrementOpenSheets();
+      document.body.style.overflow = "auto";
     };
   }, [isOpen]);
 
-  // Info modal state
-  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  // Track if the sheet's content is scrolled to the top.
+  const [isAtTop, setIsAtTop] = useState(true);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const handleScroll = useCallback(() => {
+    if (contentRef.current) {
+      setIsAtTop(contentRef.current.scrollTop <= 0);
+    }
+  }, []);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
-  // Framer Motion values
+  // Framer Motion values for vertical drag
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
 
-  // Reset Y whenever we close
+  // Reset vertical offset when the sheet is closed
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
     }
   }, [isOpen, y]);
 
-  // Dismiss on drag down >100px
+  // When dragged down >100px, call onDismiss
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       if (info.offset.y > 100) {
@@ -258,7 +232,6 @@ export default function Sheet({
     [onDismiss]
   );
 
-  // The sheet header
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -271,44 +244,23 @@ export default function Sheet({
             </p>
           )}
         </div>
-        <div>
-          <button
-            onClick={() => setInfoModalOpen(true)}
-            className="p-2 rounded-full hover:bg-white/10 transition-colors"
-          >
-            <Info className="w-5 h-5" />
-          </button>
-        </div>
+        <button
+          onClick={() => {}}
+          className="p-2 rounded-full hover:bg-white/10 transition-colors"
+        >
+          <Info className="w-5 h-5" />
+        </button>
       </div>
       <PulsatingStrip className="mt-2 mx-4" />
     </div>
   );
-
-  // Ref to scrollable content
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  // If user’s scrollTop=0 => we can drag sheet
-  const handleScroll = useCallback(() => {
-    if (!contentRef.current) return;
-    const { scrollTop } = contentRef.current;
-    setIsAtTop(scrollTop <= 0);
-  }, []);
-
-  useEffect(() => {
-    const el = contentRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", handleScroll);
-    };
-  }, [handleScroll]);
 
   return (
     <>
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-            {/** Backdrop */}
+            {/* Backdrop */}
             <motion.div
               className="absolute inset-0 bg-black/50 pointer-events-auto"
               initial={{ opacity: 0 }}
@@ -316,8 +268,7 @@ export default function Sheet({
               exit={{ opacity: 0 }}
               onClick={onDismiss}
             />
-
-            {/** Draggable container */}
+            {/* Draggable sheet container */}
             <motion.div
               className="pointer-events-auto mt-auto w-full"
               style={{ y, opacity: sheetOpacity, touchAction: "pan-y" }}
@@ -329,12 +280,9 @@ export default function Sheet({
               dragConstraints={{ top: 0, bottom: 0 }}
               onDragEnd={handleDragEnd}
             >
-              <div
-                className={cn("relative bg-background rounded-t-xl shadow-xl", className)}
-              >
+              <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
                 {SheetHeader}
-
-                {/** Content area with vertical scroll */}
+                {/* Content area with vertical scrolling */}
                 <div
                   ref={contentRef}
                   className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
@@ -346,9 +294,6 @@ export default function Sheet({
           </div>
         )}
       </AnimatePresence>
-
-      {/** Info modal */}
-      <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
 }
