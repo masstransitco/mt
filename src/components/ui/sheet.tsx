@@ -327,13 +327,10 @@ export default function Sheet({
       <BottomSheet
         ref={sheetRef}
         open={isOpen}
-        onDismiss={onDismiss}
+        onDismiss={onDismiss}          //  <-- Keep your onDismiss from props
         header={SheetHeader}
         className={cn("custom-sheet", className)}
         blocking={false}
-        onDismiss={() => {
-          /* no-op: prevents the sheet from dismissing */
-        }}
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
