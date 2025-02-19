@@ -41,13 +41,18 @@ export default function CarSheety({ isOpen, onToggle }: CarSheetyProps) {
       title="Dispatch a car"
       subtitle={carsSubtitle}
     >
-      {/**
-       * Place CarGrid as the child. The sheet has
-       * "max-h-[80vh] overflow-y-auto" for vertical scrolling
-       * if content is tall, and CarGrid handles horizontal swiping.
-       */}
       <div className="px-4 py-2">
-        <CarGrid />
+        {/** 
+         * The extra wrapper stops scroll events (wheel and touch) from bubbling 
+         * up to the browser. This ensures that only the CarGrid's internal 
+         * scrolling (e.g. horizontal swiping) is active.
+         */}
+        <div
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+        >
+          <CarGrid />
+        </div>
       </div>
     </Sheet>
   );
