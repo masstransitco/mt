@@ -198,6 +198,7 @@ interface SheetProps {
   subtitle?: string;
   count?: number;
   countLabel?: string;
+  onDismiss?: () => void;
 }
 
 export default function Sheet({
@@ -208,6 +209,7 @@ export default function Sheet({
   subtitle,
   count,
   countLabel,
+  onDismiss,
 }: SheetProps) {
   // 1) We'll track whether our content is fully loaded
   //   (this is a trivial 0.5s delay as a demonstration)
@@ -325,6 +327,7 @@ export default function Sheet({
       <BottomSheet
         ref={sheetRef}
         open={isOpen}
+        onDismiss={onDismiss}
         header={SheetHeader}
         className={cn("custom-sheet", className)}
         blocking={false}
