@@ -9,7 +9,6 @@ import React, {
   ReactNode,
   useLayoutEffect,
 } from "react";
-// Import BottomSheet and BottomSheetRef only (not SpringEvent)
 import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
 
@@ -17,8 +16,11 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
-// Define a local SpringEvent type for our onSpringEnd callback.
-type SpringEvent = { current?: number; type: string };
+// A local type for the spring event we receive from react-spring-bottom-sheet
+type SpringEvent = {
+  current?: number;
+  type: string;
+};
 
 /* ----------------------------------------------------------------
    1) PulsatingStrip Code (1px height)
@@ -120,6 +122,7 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
+    // Apply styles
     stripRef.current!.style.transform = `scale(${scale})`;
     stripRef.current!.style.backgroundColor = color;
     stripRef.current!.style.opacity = opacity.toString();
@@ -185,11 +188,11 @@ function InfoModal({
 }
 
 /* ----------------------------------------------------------------
-   3) The Sheet with dynamic snap points (expand/collapse, no close)
+   3) The Sheet with dynamic snap points (collapsed or expanded, no close)
 ---------------------------------------------------------------- */
 interface SheetProps {
   isOpen: boolean;
-  onToggle: () => void;
+  // onToggle is unused now, since we do not close or hide the sheet at all
   children: ReactNode;
   className?: string;
   title?: string;
@@ -200,7 +203,6 @@ interface SheetProps {
 
 export default function Sheet({
   isOpen,
-  onToggle, // onToggle is no longer used since the sheet always remains open.
   children,
   className,
   title,
@@ -235,7 +237,7 @@ export default function Sheet({
   // Two snap points (collapsed & expanded)
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
-      const collapsed = 120; // Minimum height (px from bottom)
+      const collapsed = 120; // px from bottom
       const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
       return [collapsed, expanded];
     },
@@ -261,13 +263,13 @@ export default function Sheet({
     }
   }, [isOpen, contentHeight]);
 
-  // Clamp the drag: when the spring animation ends, if the sheet's current
-  // value is below the collapsed snap, force it back.
+  // Prevent dragging below collapsed snap
   const handleSpringEnd = useCallback(
     (event: SpringEvent) => {
       if ("current" in event && typeof event.current === "number") {
-        const collapsed = 120; // Same as your collapsed snap point
+        const collapsed = 120; // Must match the lower snap point
         if (event.current < collapsed) {
+          // Force sheet back to the collapsed position
           sheetRef.current?.snapTo(() => collapsed);
         }
       }
@@ -275,7 +277,7 @@ export default function Sheet({
     []
   );
 
-  // Header markup (chevron button removed so the sheet always stays open)
+  // Header markup (no chevron icon/button)
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -295,10 +297,7 @@ export default function Sheet({
           >
             <Info className="w-5 h-5" />
           </button>
-          {/*
-            The chevron button has been removed so that the sheet cannot be closed via a tap.
-            Users may still drag the sheet to collapse or expand it.
-          */}
+          {/* Removed the chevron down icon, so the sheet cannot be closed. */}
         </div>
       </div>
       <PulsatingStrip className="mt-2 mx-4" />
@@ -316,19 +315,17 @@ export default function Sheet({
         blocking={false}
         // Prevent the sheet from closing when dragged down or clicking outside
         onDismiss={() => {
-          /* no-op */
+          /* no-op: prevents the sheet from dismissing */
         }}
-        // Only two snap points, fluid dragging between collapsed & expanded
+        // Only two snap points, no partial expansions
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
-        // Clamp the drag: if the spring ends below the collapsed snap, force it back.
         onSpringEnd={handleSpringEnd}
       >
         <div
           ref={contentRef}
           className="relative px-4 pt-2 pb-6"
-          // Clip any overscroll below the viewport.
           style={{ maxHeight: "100vh", overflow: "hidden" }}
         >
           {children}
