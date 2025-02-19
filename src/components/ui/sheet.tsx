@@ -1,22 +1,24 @@
 "use client";
 
 import React, {
-  ReactNode,
-  useLayoutEffect,
-  useMemo,
+  useState,
   useRef,
   useEffect,
   useCallback,
-  useState,
+  useMemo,
+  ReactNode,
+  useLayoutEffect,
 } from "react";
+import { BottomSheet } from "react-spring-bottom-sheet";
+import "react-spring-bottom-sheet/dist/style.css";
+
 import { ChevronDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  incrementOpenSheets,
-  decrementOpenSheets,
-} from "@/lib/scrollLockManager";
+import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
-// Pulsating strip constants/types
+/* -----------------------------------------------
+   1) The PulsatingStrip Code (inlined)
+----------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
 
@@ -54,10 +56,7 @@ function lerp(start: Scale, end: Scale, progress: number): Scale {
   return start + (end - start) * progress;
 }
 
-/**
- * The pulsating strip that sits just under the sheet header
- */
-const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
+function PulsatingStrip({ className }: { className?: string }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>();
@@ -75,6 +74,7 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
     let opacity = 1;
     let shadowIntensity = 0.3;
 
+    // Basic interpolation phases
     if (progress < 0.1) {
       scale = lerp(
         ANIMATION_PARAMS.scales.min,
@@ -117,11 +117,11 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
       shadowIntensity = 0.3;
     }
 
-    // Apply final styling
+    // Apply to DOM
     stripRef.current.style.transform = `scale(${scale})`;
     stripRef.current.style.backgroundColor = color;
     stripRef.current.style.opacity = opacity.toString();
-    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0, 0, 0, ${shadowIntensity})`;
+    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
 
     animationRef.current = requestAnimationFrame(animate);
   }, []);
@@ -136,7 +136,7 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
     };
   }, [animate]);
 
-  const styles = useMemo(
+  const stripStyles = useMemo(
     () => ({
       width: "110%",
       height: "2.5px",
@@ -151,42 +151,57 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
 
   return (
     <div className={cn("flex justify-center", className)}>
-      <div ref={stripRef} style={styles} />
+      <div ref={stripRef} style={stripStyles} />
     </div>
   );
-});
-PulsatingStrip.displayName = "PulsatingStrip";
+}
 
-// This is your InfoModal import
-import InfoModal from "./info-modal";
-
-interface SheetProps {
-  /** Whether the sheet is open or collapsed to 0 height */
+/* -----------------------------------------------
+   2) Simple InfoModal Stub
+----------------------------------------------- */
+function InfoModal({
+  isOpen,
+  onClose,
+}: {
   isOpen: boolean;
-  /** Callback to toggle the sheet (e.g., close on button click) */
+  onClose: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white p-4 rounded shadow-md">
+        <p>Information about this sheet!</p>
+        <button
+          onClick={onClose}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* -----------------------------------------------
+   3) The Sheet with dynamic snap points & non-blocking
+----------------------------------------------- */
+interface SheetProps {
+  isOpen: boolean;
   onToggle: () => void;
-  /** The main content inside the sheet (e.g. StationDetail) */
   children: ReactNode;
-  /** Optional additional classes */
   className?: string;
-  /** Title (e.g. "Departure" or "Arrival") */
   title?: string;
-  /** Subtitle below the title */
   subtitle?: string;
-  /** e.g. "12 stations found" */
   count?: number;
-  /** The label that follows the numeric count, e.g. "stations found" */
   countLabel?: string;
 }
 
 /**
- * A "Bottom Sheet" with the older dark-styled layout:
- *  - If isOpen => max-h: 70vh, else 0
- *  - Dark gray background, white text
- *  - Has a header with optional title, subtitle, count, Info & ChevronDown icons
- *  - Lock scroll if open
- *  - Pulsating strip under the header
- *  - Scrollable body
+ * A bottom sheet using react-spring-bottom-sheet with:
+ * - Dark gray styling
+ * - Dynamic snap points based on content height
+ * - Non-blocking => user can still interact with app behind
+ * - Pulsating strip below the header
  */
 export default function Sheet({
   isOpen,
@@ -198,7 +213,7 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
-  // Lock body scrolling if isOpen
+  // Lock page scroll if open:
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -206,74 +221,130 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // Local state for showing the InfoModal
+  // For the Info button
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  return (
-    <>
-      {/* The main bottom sheet container */}
-      <div
-        className={cn(
-          "fixed bottom-0 left-0 right-0 z-50", // on top
-          "overflow-hidden transition-[max-height] duration-500 ease-in-out",
-          // Older dark styling:
-          "bg-gray-900/90 text-white backdrop-blur-sm rounded-t-lg",
-          isOpen ? "max-h-[70vh]" : "max-h-0", // if open => 70vh, else collapsed
-          className
-        )}
-      >
-        <div className="flex flex-col h-full">
-          {/* Sheet Header */}
-          <div className="flex items-center justify-between p-4">
-            <div>
-              {title && (
-                <h2 className="text-lg font-semibold">{title}</h2>
-              )}
-              {subtitle && (
-                <p className="text-sm opacity-80">{subtitle}</p>
-              )}
-              {typeof count === "number" && (
-                <p className="text-sm opacity-80">
-                  {count} {countLabel ?? "items"}
-                </p>
-              )}
-            </div>
+  // We'll measure the content's height & create dynamic snap points
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
 
-            {/* Buttons: Info & ChevronDown */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setInfoModalOpen(true)}
-                className="p-2 rounded-full hover:bg-gray-800 transition-colors"
-                aria-label="Show info"
-              >
-                <Info className="w-5 h-5" />
-              </button>
-              <button
-                onClick={onToggle}
-                className="p-2 rounded-full hover:bg-gray-800 transition-colors"
-                aria-label="Close sheet"
-              >
-                <ChevronDown className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+  // Re-measure if children change
+  useLayoutEffect(() => {
+    if (contentRef.current) {
+      const scrollHeight = contentRef.current.scrollHeight;
+      setContentHeight(scrollHeight);
+    }
+  }, [children]);
 
-          {/* Pulsating strip */}
-          <PulsatingStrip />
+  // The first snap is a minimal 100px (to show the pulsating strip),
+  // second snap is enough to show all content or up to 90% of screen,
+  // e.g. min(contentHeight, maxHeight * 0.9)
+  const snapPoints = useCallback(
+    ({ maxHeight }: { maxHeight: number }) => {
+      // clamp the content-based height
+      const neededHeight = Math.min(contentHeight + 60, maxHeight * 0.9);
+      // minimal collapsed snap point
+      const collapsed = 100;
+      // if the content is super small, maybe only two snaps:
+      // [ collapsed, neededHeight ]
+      // if neededHeight < collapsed, you might do something like neededHeight = collapsed
+      if (neededHeight < collapsed) return [neededHeight];
 
-          {/* Scrollable content area */}
-          <div className="relative flex-1 overflow-y-auto">
-            {children}
+      return [collapsed, neededHeight];
+    },
+    [contentHeight]
+  );
 
-            {/* Optional bottom handle */}
-            <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
-              <div className="w-32 h-1 rounded-full bg-white/25" />
-            </div>
-          </div>
+  // We'll default to the second snap if we want to see the content,
+  // else it starts at collapsed
+  const defaultSnap = useCallback(
+    ({ maxHeight }: { maxHeight: number }) => {
+      // We'll see if the content is bigger than 200px
+      if (contentHeight > 200) {
+        // open with the "content" snap
+        const neededHeight = Math.min(contentHeight + 60, maxHeight * 0.9);
+        return neededHeight;
+      } else {
+        // small => just collapsed
+        return 100;
+      }
+    },
+    [contentHeight]
+  );
+
+  // We'll build a custom header with dark styling & the pulsating strip
+  const SheetHeader = (
+    <div className="pb-2 border-b border-gray-700 bg-gray-900/90 text-white">
+      <div className="flex items-center justify-between px-4 pt-4">
+        {/* Left side: Title, Subtitle, Count */}
+        <div>
+          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+          {subtitle && <p className="text-sm text-gray-200">{subtitle}</p>}
+          {typeof count === "number" && (
+            <p className="text-sm text-gray-200">
+              {count} {countLabel ?? "items"}
+            </p>
+          )}
+        </div>
+
+        {/* Right side: Info + Close icons */}
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setInfoModalOpen(true)}
+            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+          >
+            <Info className="w-5 h-5 text-white" />
+          </button>
+          <button
+            onClick={onToggle}
+            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+          >
+            <ChevronDown className="w-5 h-5 text-white" />
+          </button>
         </div>
       </div>
 
-      {/* The InfoModal (imported from ./info-modal) */}
+      {/* The pulsating strip just below */}
+      <PulsatingStrip className="mt-2 mx-4" />
+    </div>
+  );
+
+  return (
+    <>
+      <BottomSheet
+        open={isOpen}
+        onDismiss={onToggle} // if user drags below the min snap or taps the backdrop
+        snapPoints={snapPoints}
+        defaultSnap={defaultSnap}
+        header={SheetHeader}
+        blocking={false}    // (3) user can still interact with the app behind
+        className={cn(
+          // optional tailwind classes for the .rsbs-root
+          "rsbs-dark text-white",
+          className
+        )}
+        style={{
+          // inline styling for the sheet container
+          backgroundColor: "rgba(17,17,17,0.8)", 
+          color: "#fff",
+        }}
+      >
+        {/* The scrollable content area:
+            We'll measure this ref to decide how tall the sheet should be. */}
+        <div
+          ref={contentRef}
+          className="relative px-4 pt-2 pb-6 bg-gray-900 text-white"
+        >
+          {children}
+
+          {/* Optional bottom handle */}
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+            <div className="w-32 h-1 rounded-full bg-white/25" />
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Info Modal */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
