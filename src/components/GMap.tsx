@@ -26,10 +26,7 @@ import {
   selectCarsError,
 } from "@/store/carSlice";
 import { selectUserLocation, setUserLocation } from "@/store/userSlice";
-import {
-  toggleSheet,
-  selectIsSheetMinimized,
-} from "@/store/uiSlice";
+import { toggleSheet, selectIsSheetMinimized } from "@/store/uiSlice";
 import {
   selectBookingStep,
   advanceBookingStep,
@@ -54,7 +51,7 @@ import {
 } from "@/store/dispatchSlice";
 
 // UI Components
-import Sheet from "@/components/ui/sheet";
+import Sheet from "@/components/ui/sheet";   // <-- This now uses the Framer Motion version
 import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import CarSheet from "@/components/booking/CarSheet";
@@ -229,45 +226,41 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Station click => set departure/arrival
   const handleStationClick = useCallback(
-  (station: StationFeature) => {
-    if (bookingStep === 1) {
-      // Step 1 => selecting departure
-      dispatch(selectDepartureStation(station.id));
-      dispatch(advanceBookingStep(2));
-      toast.success("Departure station selected! (Confirm in station detail.)");
-    } 
-    else if (bookingStep === 2) {
-      // Step 2 => re-selecting departure (still allowed)
-      dispatch(selectDepartureStation(station.id));
-      toast.success("Departure station re-selected! (Confirm in station detail.)");
-    } 
-    else if (bookingStep === 3) {
-      // Step 3 => selecting arrival => set station, then move to step 4
-      dispatch(selectArrivalStation(station.id));
-      dispatch(advanceBookingStep(4));
-      toast.success("Arrival station selected! (Confirm in station detail.)");
-    } 
-    else if (bookingStep === 4) {
-      // Step 4 => user is re-selecting arrival
-      dispatch(selectArrivalStation(station.id));
-      toast.success("Arrival station re-selected! (Confirm in station detail.)");
-    } 
-    else {
-      toast(`Station clicked, but no action—already at step ${bookingStep}`);
-    }
+    (station: StationFeature) => {
+      if (bookingStep === 1) {
+        // Step 1 => selecting departure
+        dispatch(selectDepartureStation(station.id));
+        dispatch(advanceBookingStep(2));
+        toast.success("Departure station selected! (Confirm in station detail.)");
+      } else if (bookingStep === 2) {
+        // Step 2 => re-selecting departure (still allowed)
+        dispatch(selectDepartureStation(station.id));
+        toast.success("Departure station re-selected! (Confirm in station detail.)");
+      } else if (bookingStep === 3) {
+        // Step 3 => selecting arrival => set station, then move to step 4
+        dispatch(selectArrivalStation(station.id));
+        dispatch(advanceBookingStep(4));
+        toast.success("Arrival station selected! (Confirm in station detail.)");
+      } else if (bookingStep === 4) {
+        // Step 4 => user is re-selecting arrival
+        dispatch(selectArrivalStation(station.id));
+        toast.success("Arrival station re-selected! (Confirm in station detail.)");
+      } else {
+        toast(`Station clicked, but no action—already at step ${bookingStep}`);
+      }
 
-    // Force station detail open
-    setDetailKey((prev) => prev + 1);
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    setPreviousSheet("none");
+      // Force station detail open
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+      setPreviousSheet("none");
 
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-  },
-  [bookingStep, dispatch, isSheetMinimized]
-);
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    },
+    [bookingStep, dispatch, isSheetMinimized]
+  );
 
   // Initialize map config
   useEffect(() => {
@@ -610,8 +603,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* DispatchHub->Departure polylines */}
           {decodedDispatchPath.length > 0 && (
             <>
-              <Polyline path={decodedDispatchPath} options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW} />
-              <Polyline path={decodedDispatchPath} options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND} />
+              <Polyline
+                path={decodedDispatchPath}
+                options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW}
+              />
+              <Polyline
+                path={decodedDispatchPath}
+                options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND}
+              />
             </>
           )}
 
