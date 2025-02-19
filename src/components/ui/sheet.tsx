@@ -286,25 +286,27 @@ export default function Sheet({
   return (
     <>
       <BottomSheet
-        open={isOpen}
-        onDismiss={() => {
-          /* no-op so it won't close automatically on drag-down */
-        }}
-        snapPoints={snapPoints}
-        defaultSnap={defaultSnap}
-        header={SheetHeader}
-        blocking={false}
-        className={cn("custom-sheet", className)}
-      >
-        <div ref={contentRef} className="relative px-4 pt-2 pb-6">
-          {children}
-
-          {/* Optional handle at bottom - purely visual, won't close on drag */}
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-            <div className="w-32 h-1 rounded-full bg-white/25" />
-          </div>
-        </div>
-      </BottomSheet>
+  open={isOpen}
+  header={SheetHeader}
+  className={cn("custom-sheet", className)}
+  // allow background interactions
+  blocking={false}
+  // prevent it from going off-screen
+  rubberband={false}
+  // do NOT close if dragged down or clicked outside
+  onDismiss={() => {
+    /* no-op: prevents the sheet from dismissing */
+  }}
+  // only two snap points, no partial expansions
+  snapPoints={snapPoints}
+  defaultSnap={defaultSnap}
+  expandOnContentDrag={false}
+>
+  <div ref={contentRef} className="relative px-4 pt-2 pb-6">
+    {children}
+    {/* Optional handle, etc. */}
+  </div>
+</BottomSheet>
 
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
