@@ -9,7 +9,8 @@ import React, {
   ReactNode,
   useLayoutEffect,
 } from "react";
-import { BottomSheet } from "react-spring-bottom-sheet";
+// Note: We need the `BottomSheetRef` type for programmatic snapping
+import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
 
 import { ChevronDown, Info } from "lucide-react";
@@ -204,6 +205,7 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
+  // Increase scrollLock count when open
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -211,10 +213,10 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // Info button state
+  // Simple info modal trigger
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // Measure sheet content for dynamic snap points
+  // Measure the sheet's content for dynamic snap
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
@@ -224,7 +226,10 @@ export default function Sheet({
     }
   }, [children]);
 
-  // Two snap points: collapsed & expanded
+  // Reference to BottomSheet for programmatic snapping
+  const sheetRef = useRef<BottomSheetRef>(null);
+
+  // Two snap points (collapsed & expanded)
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
       const collapsed = 120; // px from bottom
@@ -234,22 +239,31 @@ export default function Sheet({
     [contentHeight]
   );
 
-  // Start expanded
+  // Default to expanded
   const defaultSnap = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
-      const collapsed = 120;
       const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
       return expanded;
     },
     [contentHeight]
   );
 
-  // Custom header markup — NO background or text color here
-  // so that the library's .rsbs-header styles from globals.css apply.
+  // Imperatively snap to expanded whenever isOpen changes to true
+  useEffect(() => {
+    if (isOpen && sheetRef.current) {
+      // Check the actual maxHeight from the sheet to be safe
+      const actualMaxHeight = sheetRef.current.maxHeight || 0;
+      const expanded = Math.min(contentHeight + 60, actualMaxHeight * 0.9);
+
+      // Force snap to the expanded state
+      sheetRef.current.snapTo(() => expanded);
+    }
+  }, [isOpen, contentHeight]);
+
+  // Header markup
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
-        {/* Left side: Title, subtitle, count => all left-aligned */}
         <div className="text-left">
           {title && <h2 className="text-lg font-semibold">{title}</h2>}
           {subtitle && <p className="text-sm text-gray-300">{subtitle}</p>}
@@ -259,8 +273,6 @@ export default function Sheet({
             </p>
           )}
         </div>
-
-        {/* Right side: Info + close icons */}
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setInfoModalOpen(true)}
@@ -277,38 +289,41 @@ export default function Sheet({
           </button>
         </div>
       </div>
-
-      {/* PulsatingStrip divider */}
       <PulsatingStrip className="mt-2 mx-4" />
     </div>
   );
 
   return (
     <>
-<BottomSheet
-  open={isOpen}
-  header={SheetHeader}
-  className={cn("custom-sheet", className)}
-  // allow background interactions
-  blocking={false}
+      <BottomSheet
+        ref={sheetRef}
+        open={isOpen}
+        header={SheetHeader}
+        className={cn("custom-sheet", className)}
+        // allow background interactions
+        blocking={false}
+        // do NOT close if dragged down or clicked outside
+        onDismiss={() => {
+          /* no-op: prevents the sheet from dismissing */
+        }}
+        // only two snap points, no partial expansions
+        snapPoints={snapPoints}
+        defaultSnap={defaultSnap}
+        expandOnContentDrag={false}
+      >
+        <div ref={contentRef} className="relative px-4 pt-2 pb-6">
+          {children}
+          {/* optional handle at the bottom */}
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+            <div className="w-32 h-1 rounded-full bg-white/25" />
+          </div>
+        </div>
+      </BottomSheet>
 
-  // do NOT close if dragged down or clicked outside
-  onDismiss={() => {
-    /* no-op: prevents the sheet from dismissing */
-  }}
-  // only two snap points, no partial expansions
-  snapPoints={snapPoints}
-  defaultSnap={defaultSnap}
-  expandOnContentDrag={false}
->
-  <div ref={contentRef} className="relative px-4 pt-2 pb-6">
-    {children}
-    {/* Optional handle, etc. */}
-  </div>
-</BottomSheet>
-
-
-      <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
+      <InfoModal
+        isOpen={infoModalOpen}
+        onClose={() => setInfoModalOpen(false)}
+      />
     </>
   );
 }
