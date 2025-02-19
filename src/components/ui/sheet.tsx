@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
 /* ----------------------------------------------------------------
-   1) The PulsatingStrip Code (inlined)
+   1) PulsatingStrip Code (updated for 1px height)
 ---------------------------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
@@ -136,10 +136,11 @@ function PulsatingStrip({ className }: { className?: string }) {
     };
   }, [animate]);
 
+  // CHANGED: height => "1px" for subtle look
   const stripStyles = useMemo(
     () => ({
       width: "110%",
-      height: "2.5px",
+      height: "1px", // subtle, thinner strip
       borderRadius: "1px",
       backgroundColor: ANIMATION_PARAMS.colors.primary,
       willChange: "transform, opacity, box-shadow",
@@ -157,7 +158,7 @@ function PulsatingStrip({ className }: { className?: string }) {
 }
 
 /* ----------------------------------------------------------------
-   2) Simple InfoModal Stub
+   2) Simple InfoModal
 ---------------------------------------------------------------- */
 function InfoModal({
   isOpen,
@@ -171,7 +172,10 @@ function InfoModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white p-4 rounded shadow-md">
         <p>Information about this sheet!</p>
-        <button onClick={onClose} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
+        <button
+          onClick={onClose}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
+        >
           Close
         </button>
       </div>
@@ -180,7 +184,7 @@ function InfoModal({
 }
 
 /* ----------------------------------------------------------------
-   3) The Sheet with dynamic snap points & a .custom-sheet class
+   3) The Sheet with dynamic snap points
 ---------------------------------------------------------------- */
 interface SheetProps {
   isOpen: boolean;
@@ -217,7 +221,7 @@ export default function Sheet({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
-  // Re-measure if children change
+  // Re-measure if children changes
   useLayoutEffect(() => {
     if (contentRef.current) {
       const scrollHeight = contentRef.current.scrollHeight;
@@ -225,7 +229,7 @@ export default function Sheet({
     }
   }, [children]);
 
-  // snapPoints logic
+  // Snap logic
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
       const collapsed = 100;
@@ -247,10 +251,11 @@ export default function Sheet({
     [contentHeight]
   );
 
-  // The custom header
+  // Custom header: no border-b, same dark background as entire sheet
   const SheetHeader = (
-    <div className="pb-2 border-b border-gray-700 bg-gray-900/90 text-white">
+    <div className="pb-2 bg-gray-900/90 text-white">
       <div className="flex items-center justify-between px-4 pt-4">
+        {/* Left side: Title, subtitle, count => all left-aligned */}
         <div>
           {title && <h2 className="text-lg font-semibold">{title}</h2>}
           {subtitle && <p className="text-sm text-gray-200">{subtitle}</p>}
@@ -261,6 +266,7 @@ export default function Sheet({
           )}
         </div>
 
+        {/* Right side: Info + close icons */}
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setInfoModalOpen(true)}
@@ -276,6 +282,8 @@ export default function Sheet({
           </button>
         </div>
       </div>
+
+      {/* The *only* divider: a subtle PulsatingStrip */}
       <PulsatingStrip className="mt-2 mx-4" />
     </div>
   );
@@ -289,16 +297,11 @@ export default function Sheet({
         defaultSnap={defaultSnap}
         header={SheetHeader}
         blocking={false}
-        // 1) Add a custom class here:
         className={cn("custom-sheet", className)}
       >
-        {/* 2) We'll not rely on inline style for background color 
-           - we do that in CSS overrides. */}
-        <div
-          ref={contentRef}
-          className="relative px-4 pt-2 pb-6"
-        >
+        <div ref={contentRef} className="relative px-4 pt-2 pb-6">
           {children}
+          {/* Optional handle at bottom */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
