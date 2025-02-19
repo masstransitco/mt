@@ -142,19 +142,37 @@
   }
 
 /* Global bottom sheet styling */
-  .rsbs-header,
-.rsbs-body,
-.rsbs-content {
-  background-color: rgba(17, 17, 17, 0.8) !important;
-  color: #fff !important;
+/* Add these rules at the root level in globals.css */
+/* These have higher specificity and !important to override any conflicting styles */
+:where(.rsbs-header),
+:where(.rsbs-body),
+:where(.rsbs-content),
+:where(.rsbs-footer) {
+  background-color: rgba(17, 17, 17, 0.9) !important;
+  color: #ffffff !important;
 }
 
-.rsbs-close {
-  color: #fff !important;
+:where(.rsbs-header) button,
+:where(.rsbs-header) svg,
+:where(.rsbs-close) {
+  color: #ffffff !important;
 }
 
-.rsbs-drag-handle {
+:where(.rsbs-drag-handle) {
   background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Apply custom backdrop and overlay colors as well */
+:where(.rsbs-overlay),
+:where(.rsbs-backdrop) {
+  background-color: rgba(17, 17, 17, 0.9) !important;
+}
+
+/* Target the built-in variable */
+:root, :where(.rsbs-root) {
+  --rsbs-backdrop-bg: rgba(17, 17, 17, 0.9) !important;
+  --rsbs-bg: rgba(17, 17, 17, 0.9) !important;
+  --rsbs-handle-bg: rgba(255, 255, 255, 0.3) !important;
 }
 }
 
