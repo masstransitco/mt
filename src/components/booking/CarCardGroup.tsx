@@ -92,7 +92,6 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       "December",
     ];
     const month = monthNames[d.getMonth()] || "";
-    // For hours/minutes + am/pm
     let hours = d.getHours();
     const minutes = d.getMinutes();
     const isPM = hours >= 12;
@@ -104,11 +103,6 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     // Example: "13th February 9:13pm"
     return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
   }, [locationUpdated]);
-
-  // --- 3) Compute "Mileage Remaining" from battery x 3.51 ---
-  // e.g. 50% => 50 * 3.51 = 175.5 km
-  const mileageRemaining =
-    typeof batteryPercentage === "number" ? (batteryPercentage * 3.51).toFixed(1) : "0";
 
   return (
     <motion.div
@@ -149,8 +143,8 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       <div className="p-4">
 
         {/* 
-          Top row: left side = Model Name
-                    right side = Dropdown 
+          Row 1: left side = Model Name,
+                 right side = Dropdown 
         */}
         <div className="flex items-start justify-between">
           {/* Left side: Model */}
@@ -173,21 +167,21 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         </div>
 
         {/* 
-          2nd row: battery & year & info icon 
-          We'll place them in a single row aligned to the right
+          Row 2: battery icon & reading (left) + info icon & year (right) 
         */}
-        <div className="flex items-center justify-end gap-2 mt-1 relative">
-          {/* Battery (if available) */}
-          {typeof batteryPercentage === "number" && batteryPercentage > 0 && (
-            <div className={`flex items-center gap-1 text-sm ${batteryIconColor}`}>
-              <BatteryIcon className="w-4 h-4" />
-              <span>{batteryPercentage}%</span>
-            </div>
-          )}
+        <div className="flex items-center justify-between mt-1 relative">
+          {/* Left: Battery */}
+          <div className="flex items-center gap-1">
+            {typeof batteryPercentage === "number" && batteryPercentage > 0 && (
+              <>
+                <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
+                <span className="text-sm">{batteryPercentage}%</span>
+              </>
+            )}
+          </div>
 
-          {/* Info icon + year */}
+          {/* Right: Info icon + year */}
           <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            {/* Info icon that toggles odometer popup */}
             <Info
               className="w-4 h-4 cursor-pointer"
               onClick={() => setShowOdometerPopup(!showOdometerPopup)}
@@ -200,15 +194,15 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
               </div>
             )}
 
-            {/* Year */}
             <span>{selectedCar.year}</span>
           </div>
         </div>
 
-        {/* 3rd row: Gauge icon for mileage remaining */}
-        <div className="mt-2 text-sm text-muted-foreground flex items-center gap-1">
+        {/* 
+          Row 3: Just the Gauge icon (no text) 
+        */}
+        <div className="mt-2 flex items-center gap-1 text-muted-foreground">
           <Gauge className="w-4 h-4" />
-          <span>Mileage Remaining: {mileageRemaining} km</span>
         </div>
       </div>
 
