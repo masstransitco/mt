@@ -8,10 +8,11 @@ import CarGrid from "@/components/booking/CarGrid";
 
 interface CarSheetProps {
   isOpen: boolean;
-  onToggle: () => void;
+  // Remove onToggle here, since Sheet no longer uses it
+  // onToggle?: () => void;  // <-- Delete this
 }
 
-export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
+export default function CarSheet({ isOpen }: CarSheetProps) {
   // Get only the cars available for dispatch from Redux
   const availableCars = useAppSelector(selectAvailableForDispatch);
 
@@ -25,12 +26,9 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
   return (
     <Sheet
       isOpen={isOpen}
-      onToggle={onToggle}
-      // Keep the same title or customize if needed
+      // Remove onToggle from the Sheet usage
       title="Choose a car"
-      // Provide the count of *available* cars
       count={count}
-      // Provide the dynamic label
       countLabel={countLabel}
     >
       <div className="px-0 py-2">
