@@ -88,7 +88,7 @@ export async function fetchVehicleList(
           ...vehicle,
 
           // Hardcode model, year, modelUrl
-          model: "MG4",
+          model: "MG4 Electric",
           year: 2023,
           modelUrl: vehicle.modelUrl ?? null,
 
