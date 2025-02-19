@@ -9,11 +9,6 @@ import { toggleSheet } from "@/store/uiSlice";
 import Sheet from "@/components/ui/sheet";
 import CarGrid from "@/components/booking/CarGrid";
 
-/**
- * Props for our CarSheety component:
- * - isOpen: controls whether the sheet is visible
- * - onToggle: optional callback if parent wants to handle toggle logic
- */
 interface CarSheetyProps {
   /** Whether the sheet is shown or hidden */
   isOpen: boolean;
@@ -25,17 +20,10 @@ export default function CarSheety({ isOpen, onToggle }: CarSheetyProps) {
   const dispatch = useAppDispatch();
   const availableCars = useAppSelector(selectAvailableForDispatch);
 
-  // Number of available cars
   const count = availableCars.length;
-  // e.g. “1 car” or “2 cars available”
-  const countLabel = count === 1 ? "1 car" : `${count} cars available`;
+  // "4 cars available" or "1 car"
+  const carsInfo = count === 1 ? "1 car available" : `${count} cars available`;
 
-  /**
-   * If the user swipes down, clicks outside,
-   * or triggers “onDismiss” on the Sheet component,
-   * we either call the parent’s onToggle() or
-   * fall back to dispatch(toggleSheet()) if onToggle isn’t provided.
-   */
   const handleDismiss = () => {
     if (onToggle) {
       onToggle();
@@ -48,13 +36,22 @@ export default function CarSheety({ isOpen, onToggle }: CarSheetyProps) {
     <Sheet
       isOpen={isOpen}
       title="Dispatch a car"
-      count={count}
-      countLabel={countLabel}
+      /* Instead of passing `count` and `countLabel`,
+         we'll just stick it in `subtitle` to avoid duplication. */
+      subtitle={carsInfo}
       onDismiss={handleDismiss}
     >
-      {/* You can style this however you prefer */}
-      <div className="px-4 py-2">
-        <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
+      {/**
+       * We add `overflow-x-auto` here so the user can
+       * horizontally scroll if the CarGrid is laid out in a single row.
+       */}
+      <div className="px-4 py-2 overflow-x-auto">
+        {/* 
+          CarGrid might also need a horizontal layout if you want a
+          row of cards. For example:
+            .grid-flow-col .auto-cols-[250px] .gap-4
+        */}
+        <CarGrid className="grid grid-flow-col gap-4 auto-cols-[80%] pr-4" />
       </div>
     </Sheet>
   );
