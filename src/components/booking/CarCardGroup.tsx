@@ -48,10 +48,10 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     setShowOdometerPopup(false); // close popup when switching cars
   };
 
-  // --- 1) Battery icon logic & color ---
+  // 1) Battery icon logic & color
   const batteryPercentage = selectedCar.electric_battery_percentage_left ?? null;
-  let BatteryIcon = BatteryFull; // default
-  let batteryIconColor = "text-green-500"; // default green
+  let BatteryIcon = BatteryFull;
+  let batteryIconColor = "text-green-500";
   if (typeof batteryPercentage === "number") {
     if (batteryPercentage <= 9) {
       BatteryIcon = BatteryWarning;
@@ -68,7 +68,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     }
   }
 
-  // --- 2) Format "location_updated" date ---
+  // 2) Format "location_updated" date
   const locationUpdated = selectedCar.location_updated;
   const formattedLastDriven = useMemo(() => {
     if (!locationUpdated) return "";
@@ -103,6 +103,11 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     // Example: "13th February 9:13pm"
     return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
   }, [locationUpdated]);
+
+  // 3) Restore mileage remaining: batteryPercentage * 3.51
+  // Example: 50% => (50 * 3.51).toFixed(1) => "175.5"
+  const mileageRemaining =
+    typeof batteryPercentage === "number" ? (batteryPercentage * 3.51).toFixed(1) : "0";
 
   return (
     <motion.div
@@ -142,15 +147,10 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       {/* Car Details */}
       <div className="p-4">
 
-        {/* 
-          Row 1: left side = Model Name,
-                 right side = Dropdown 
-        */}
+        {/* Row 1: left side = Model, right side = Dropdown */}
         <div className="flex items-start justify-between">
-          {/* Left side: Model */}
           <p className="font-bold text-foreground text-lg">{selectedCar.model}</p>
 
-          {/* Right side: Car Name Dropdown */}
           <div className="flex flex-col items-end relative">
             <select
               className="mb-1 cursor-pointer bg-card border text-foreground text-sm"
@@ -166,9 +166,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
         </div>
 
-        {/* 
-          Row 2: battery icon & reading (left) + info icon & year (right) 
-        */}
+        {/* Row 2: battery (left) + info icon & year (right) */}
         <div className="flex items-center justify-between mt-1 relative">
           {/* Left: Battery */}
           <div className="flex items-center gap-1">
@@ -186,23 +184,20 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
               className="w-4 h-4 cursor-pointer"
               onClick={() => setShowOdometerPopup(!showOdometerPopup)}
             />
-
             {/* The "popup" container for odometer info */}
             {showOdometerPopup && (
               <div className="absolute top-6 right-0 bg-white text-black text-xs px-2 py-1 rounded shadow-md">
                 Total distance driven: {selectedCar.odometer} km
               </div>
             )}
-
             <span>{selectedCar.year}</span>
           </div>
         </div>
 
-        {/* 
-          Row 3: Just the Gauge icon (no text) 
-        */}
-        <div className="mt-2 flex items-center gap-1 text-muted-foreground">
+        {/* Row 3: Gauge icon + mileageRemaining */}
+        <div className="mt-2 flex items-center gap-2 text-muted-foreground">
           <Gauge className="w-4 h-4" />
+          <span className="text-sm">{mileageRemaining} km</span>
         </div>
       </div>
 
@@ -218,7 +213,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
 
 export default memo(CarCardGroup);
 
-/** Helper to compute the day suffix: "1st", "2nd", "3rd", "4th", etc. */
+/** Helper to compute the day suffix: "1st", "2nd", "3rd", etc. */
 function getDaySuffix(day: number): string {
   if (day >= 11 && day <= 13) {
     return "th";
