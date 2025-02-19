@@ -676,7 +676,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       {/* Station list sheet */}
       <Sheet
         isOpen={isListOpen}
-        onToggle={closeCurrentSheet}
+        onDismiss={closeCurrentSheet}
         title="Nearby Stations"
         count={sortedStations.length}
       >
@@ -699,7 +699,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       <Sheet
         key={detailKey}
         isOpen={isDetailOpen}
-        onToggle={closeCurrentSheet}
+        onDismiss={closeCurrentSheet}
         title={bookingStep <= 2 ? "Pick-up station" : "Trip details"}
         subtitle={
           bookingStep <= 2
