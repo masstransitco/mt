@@ -172,19 +172,22 @@ export default function Sheet({
             />
 
             {/** 2) The sheet container */}
-            <motion.div
-              className="pointer-events-auto mt-auto w-full"
-              style={{
-                opacity: sheetOpacity,
-                touchAction: "pan-y", // helps interpret vertical swipes
-              }}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              onDragEnd={handleDragEnd}
+<motion.div
+  className="pointer-events-auto mt-auto w-full"
+  /** MERGE STYLES HERE */
+  style={{
+    // Combine the motion values and anything else
+    y: y,
+    opacity: sheetOpacity,
+    touchAction: "pan-y",
+  }}
+  initial={{ y: "100%" }}
+  animate={{ y: 0 }}
+  exit={{ y: "100%" }}
+  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+  drag="y"
+  dragConstraints={{ top: 0, bottom: 0 }}
+  onDragEnd={handleDragEnd}
               // Use the same motion value for better control if needed
               style={{ y, opacity: sheetOpacity, touchAction: "pan-y" }}
             >
