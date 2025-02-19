@@ -13,6 +13,7 @@ import {
   motion,
   useMotionValue,
   useTransform,
+  useDragControls,
 } from "framer-motion";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -172,7 +173,7 @@ export interface SheetProps {
 }
 
 /* ----------------------------------------------------------------
-   5) Simplified Sheet component
+   5) Revised Sheet component with manual drag handle
 ---------------------------------------------------------------- */
 export default function Sheet({
   isOpen,
@@ -184,17 +185,18 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Instead of locking browser scrolling globally, we lock scroll events only on the body (content area) of the sheet.
-  // This allows the header to remain free (and draggable) while the content scrolls within its container.
+  // Instead of locking browser scrolling globally, we lock scroll events only on the body
 
   // Track if the sheet's content is scrolled to the top
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
+
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
       setIsAtTop(contentRef.current.scrollTop <= 0);
     }
   }, []);
+
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
@@ -205,6 +207,11 @@ export default function Sheet({
   // Framer Motion values for vertical drag
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
+
+  // ADDED: We’ll useDragControls to manage “when” we start dragging
+  const dragControls = useDragControls();
+
+  // CHANGED: On mount/unmount of the sheet, reset y
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
@@ -221,8 +228,17 @@ export default function Sheet({
     [onDismiss]
   );
 
+  // ADDED: Start the drag only when user presses on the header
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragControls.start(e);
+  };
+
   const SheetHeader = (
-    <div>
+    <div
+      // CHANGED: Only the header can initiate the drag
+      onPointerDown={handlePointerDown}
+      className="cursor-grab active:cursor-grabbing"
+    >
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="text-left">
           {title && <h2 className="text-lg font-semibold">{title}</h2>}
@@ -242,44 +258,58 @@ export default function Sheet({
   );
 
   return (
-    <>
-      <AnimatePresence>
-        {isOpen && (
-          <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-            {/* Backdrop */}
-            <motion.div
-              className="absolute inset-0 bg-black/50 pointer-events-auto"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onDismiss}
-            />
-            {/* Draggable sheet container */}
-            <motion.div
-              className="pointer-events-auto mt-auto w-full"
-              style={{ y, opacity: sheetOpacity, touchAction: "pan-y" }}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              drag={isAtTop ? "y" : false}
-              dragConstraints={{ top: 0, bottom: 0 }}
-              onDragEnd={handleDragEnd}
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
+          {/* Backdrop */}
+          <motion.div
+            className="absolute inset-0 bg-black/50 pointer-events-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onDismiss}
+          />
+          {/* Draggable sheet container */}
+          <motion.div
+            className="pointer-events-auto mt-auto w-full"
+            style={{ y, opacity: sheetOpacity }}
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            // CHANGED: We still want vertical drag, but only started from the header
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false} // <— important so it doesn’t drag from body
+            dragConstraints={{ top: 0, bottom: 0 }}
+            onDragEnd={handleDragEnd}
+            // Also helpful on mobile to ensure we can drag vertically from the header:
+            style={{ touchAction: "pan-y" }}
+          >
+            <div
+              className={cn(
+                "relative bg-background rounded-t-xl shadow-xl",
+                className
+              )}
             >
-              <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
-                {SheetHeader}
-                {/* Content area: Apply scroll event stopper to lock scroll events to this container only */}
-                <div
-                  ref={contentRef}
-                  className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
-                  onWheel={(e) => e.stopPropagation()}
-                  onTouchMove={(e) => e.stopPropagation()}
-                >
-                  {children}
-                </div>
+              {SheetHeader}
+              {/* Body: scrollable content area */}
+              <div
+                ref={contentRef}
+                className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
+                // We do NOT stopPropagation() for Touch here
+                // because we want normal scrolling inside.
+                // onWheel={(e) => e.stopPropagation()} // optional if you need to block wheel in nested contexts
+              >
+                {children}
               </div>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
         )}
       </AnimatePresence>
     </>
