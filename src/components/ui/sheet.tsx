@@ -189,10 +189,10 @@ function InfoModal({
 
 /* ----------------------------------------------------------------
    3) The Sheet with dynamic snap points (collapsed or expanded, no close)
+   - Waits for content to be fully ready before rendering the sheet
 ---------------------------------------------------------------- */
 interface SheetProps {
-  isOpen: boolean;
-  // onToggle is unused now, since we do not close or hide the sheet at all
+  isOpen: boolean; // signals when we want the sheet open
   children: ReactNode;
   className?: string;
   title?: string;
@@ -210,6 +210,25 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
+  // We'll track whether our content is fully loaded
+  const [isContentReady, setIsContentReady] = useState(false);
+
+  // Example: If you have an async load, do it here
+  // For demonstration, let's simulate a short delay:
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsContentReady(true);
+    }, 500); // 0.5 second delay
+    return () => clearTimeout(timer);
+  }, []);
+
+  // If content not ready, don't render the sheet at all
+  if (!isContentReady) {
+    return null;
+  }
+
+  // If content is ready, proceed as before
+
   // Increase scrollLock count when open
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
@@ -297,7 +316,6 @@ export default function Sheet({
           >
             <Info className="w-5 h-5" />
           </button>
-          {/* Removed the chevron down icon, so the sheet cannot be closed. */}
         </div>
       </div>
       <PulsatingStrip className="mt-2 mx-4" />
@@ -311,13 +329,10 @@ export default function Sheet({
         open={isOpen}
         header={SheetHeader}
         className={cn("custom-sheet", className)}
-        // Allow background interactions
-        blocking={false}
-        // Prevent the sheet from closing when dragged down or clicking outside
+        blocking={false} // allow background interactions
         onDismiss={() => {
           /* no-op: prevents the sheet from dismissing */
         }}
-        // Only two snap points, no partial expansions
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
@@ -329,7 +344,6 @@ export default function Sheet({
           style={{ maxHeight: "100vh", overflow: "hidden" }}
         >
           {children}
-          {/* Optional handle at the bottom */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
