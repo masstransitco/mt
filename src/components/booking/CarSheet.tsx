@@ -1,24 +1,26 @@
 "use client";
 
 import React from "react";
-import { useAppSelector } from "@/store/store";
+import { useAppSelector, useAppDispatch } from "@/store/store";
 import { selectAvailableForDispatch } from "@/store/carSlice";
 import Sheet from "@/components/ui/sheet";
 import CarGrid from "@/components/booking/CarGrid";
 
+// Optionally use Redux for minimization if desired
+import { selectIsSheetMinimized, toggleSheet } from "@/store/uiSlice";
+
 interface CarSheetProps {
+  /** If true, sheet is open. If false, sheet is hidden. */
   isOpen: boolean;
+  /** Optional callback if the user swipes/presses to dismiss. */
+  onClose?: () => void;
 }
 
-export default function CarSheet({ isOpen }: CarSheetProps) {
-  // Get only the cars available for dispatch from Redux
+export default function CarSheet({ isOpen, onClose }: CarSheetProps) {
+  const dispatch = useAppDispatch();
   const availableCars = useAppSelector(selectAvailableForDispatch);
-
-  // Calculate how many are available
   const count = availableCars.length;
-  // Decide whether to use singular or plural
   const singularOrPlural = count === 1 ? "car" : "cars";
-  // Construct the final label
   const countLabel = `${singularOrPlural} available for dispatch`;
 
   return (
@@ -27,9 +29,16 @@ export default function CarSheet({ isOpen }: CarSheetProps) {
       title="Choose a car"
       count={count}
       countLabel={countLabel}
+      /**
+       * If the user drags down or clicks outside,
+       * call our onClose or default to dispatch(toggleSheet())
+       */
+      onDismiss={() => {
+        if (onClose) onClose();
+        else dispatch(toggleSheet()); 
+      }}
     >
       <div className="px-0 py-2">
-        {/* CarGrid will display only the available cars */}
         <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
       </div>
     </Sheet>
