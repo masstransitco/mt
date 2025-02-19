@@ -7,7 +7,6 @@ import React, {
   useCallback,
   useMemo,
   ReactNode,
-  useLayoutEffect,
 } from "react";
 import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
@@ -212,7 +211,6 @@ export default function Sheet({
   onDismiss,
 }: SheetProps) {
   // 1) We'll track whether our content is fully loaded
-  //   (this is a trivial 0.5s delay as a demonstration)
   const [isContentReady, setIsContentReady] = useState(false);
 
   useEffect(() => {
@@ -230,7 +228,7 @@ export default function Sheet({
   // 2) Once content is ready, proceed:
 
   // Increase scrollLock count when open
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
       if (isOpen) decrementOpenSheets();
@@ -244,7 +242,7 @@ export default function Sheet({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (contentRef.current) {
       setContentHeight(contentRef.current.scrollHeight);
     }
@@ -283,18 +281,15 @@ export default function Sheet({
   }, [isOpen, contentHeight]);
 
   // Prevent dragging below collapsed snap
-  const handleSpringEnd = useCallback(
-    (event: SpringEvent) => {
-      if ("current" in event && typeof event.current === "number") {
-        const collapsed = 120; // Must match the lower snap point
-        if (event.current < collapsed) {
-          // Force sheet back to the collapsed position
-          sheetRef.current?.snapTo(() => collapsed);
-        }
+  const handleSpringEnd = useCallback((event: SpringEvent) => {
+    if ("current" in event && typeof event.current === "number") {
+      const collapsed = 120; // Must match the lower snap point
+      if (event.current < collapsed) {
+        // Force sheet back to the collapsed position
+        sheetRef.current?.snapTo(() => collapsed);
       }
-    },
-    []
-  );
+    }
+  }, []);
 
   // Header markup (no chevron icon/button)
   const SheetHeader = (
@@ -327,7 +322,7 @@ export default function Sheet({
       <BottomSheet
         ref={sheetRef}
         open={isOpen}
-        onDismiss={onDismiss}          //  <-- Keep your onDismiss from props
+        onDismiss={onDismiss}
         header={SheetHeader}
         className={cn("custom-sheet", className)}
         blocking={false}
