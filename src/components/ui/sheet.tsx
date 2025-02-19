@@ -168,25 +168,17 @@ function InfoModal({
   );
 }
 
-/* ----------------------------------------------------------------
-   3) SheetProps and bottom sheet using Framer Motion
----------------------------------------------------------------- */
+/* ------------------------------------------------------------
+   3) SheetProps and the bottom sheet (Framer Motion)
+------------------------------------------------------------ */
 export interface SheetProps {
-  /** If true, the sheet is rendered open; if false, hidden. */
   isOpen: boolean;
-  /** Content of the sheet */
   children: ReactNode;
-  /** Additional class names for customization */
   className?: string;
-  /** Header fields */
   title?: string;
   subtitle?: string;
   count?: number;
   countLabel?: string;
-  /**
-   * Called when the user swipes down, drags down sufficiently,
-   * or clicks the backdrop to dismiss.
-   */
   onDismiss?: () => void;
 }
 
@@ -200,38 +192,33 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // If you need to block scrolling behind the sheet
+  // 1) (Optional) Lock body scroll when sheet is open
   useLayoutEffect(() => {
-    if (isOpen) incrementOpenSheets();
+    if (isOpen) {
+      incrementOpenSheets();
+      // If you want to fully lock scrolling behind the sheet:
+      document.body.style.overflow = "hidden";
+    } else {
+      decrementOpenSheets();
+      document.body.style.overflow = "auto";
+    }
     return () => {
-      if (isOpen) decrementOpenSheets();
+      document.body.style.overflow = "auto";
+      decrementOpenSheets();
     };
   }, [isOpen]);
 
-  // Local state for an example “info” modal
+  // 2) Info modal state
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // Reference to measure content if needed
-  const contentRef = useRef<HTMLDivElement>(null);
+  // 3) Remove vertical drag so we don’t interfere with horizontal swipes
+  //    If you still want to allow drag->dismiss, you can keep it, but it
+  //    can conflict with horizontal scroll gestures on mobile.
+  const handleDragEnd = useCallback(() => {
+    /* no-op if removing vertical drag altogether */
+  }, []);
 
-  // Framer Motion "drag down" logic
-  const y = useMotionValue(0);
-
-  // Transform for opacity of a handle or strip, if you want
-  // (not strictly needed, but an example)
-  const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
-
-  const handleDragEnd = useCallback(
-    (_: PointerEvent, info: { offset: { x: number; y: number } }) => {
-      // If user dragged down more than 100px, consider that a dismissal
-      if (info.offset.y > 100) {
-        onDismiss?.();
-      }
-    },
-    [onDismiss]
-  );
-
-  // Header
+  // 4) Sheet header
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -261,8 +248,11 @@ export default function Sheet({
     <>
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-            {/** 1) The backdrop */}
+          <div
+            className="fixed inset-0 z-[999] flex flex-col pointer-events-none"
+            // We remove vertical/horizontal scroll from the sheet container
+          >
+            {/* 5) Backdrop */}
             <motion.div
               className="absolute inset-0 bg-black/50 pointer-events-auto"
               initial={{ opacity: 0 }}
@@ -271,37 +261,30 @@ export default function Sheet({
               onClick={onDismiss}
             />
 
-            {/** 2) The sheet container */}
+            {/* 6) The sheet container (NO vertical drag) */}
             <motion.div
-              className="pointer-events-auto mt-auto w-full overflow-hidden"
-              style={{
-                opacity: sheetOpacity,
-              }}
+              className="pointer-events-auto mt-auto w-full"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
+              // Remove drag props to avoid capturing vertical swipes
               onDragEnd={handleDragEnd}
             >
-              <div
-                className={cn(
-                  "relative bg-background rounded-t-xl shadow-xl",
-                  className
-                )}
-              >
-                {/** -- Sheet Header */}
+              <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
                 {SheetHeader}
 
-                {/** -- Sheet Content */}
-                <div
-                  ref={contentRef}
-                  className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
-                >
+                {/* 
+                  7) The main content
+                  Remove 'overflow-y-auto' & 'max-h-[80vh]' so the
+                  sheet itself is not scrollable. 
+                  Instead, your child component can handle scrolling 
+                  (horizontal or otherwise).
+                */}
+                <div className="px-4 pt-2 pb-6 overflow-hidden">
                   {children}
 
-                  {/** Extra little handle at the bottom (optional) */}
+                  {/* Optional handle at bottom */}
                   <div className="absolute bottom-2 left-0 right-0 flex justify-center">
                     <div className="w-32 h-1 rounded-full bg-white/25" />
                   </div>
@@ -312,7 +295,7 @@ export default function Sheet({
         )}
       </AnimatePresence>
 
-      {/** Info modal if you want it */}
+      {/* Info modal if you want it */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
