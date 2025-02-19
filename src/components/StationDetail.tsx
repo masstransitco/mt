@@ -15,13 +15,27 @@ import {
 import { StationFeature } from "@/store/stationsSlice";
 
 interface StationDetailProps {
-  /** The station to display. If null, show empty/instructions. */
+  /**
+   * The currently selected / active station.
+   * If null, we show placeholder text.
+   */
   activeStation: StationFeature | null;
+  
+  /**
+   * The entire list of stations, if needed inside the detail.
+   * This is optional, so we mark it with a '?'
+   */
+  stations?: StationFeature[];
+
   /** Optional callback after confirming departure. */
   onConfirmDeparture?: () => void;
 }
 
-function StationDetailComponent({ activeStation, onConfirmDeparture }: StationDetailProps) {
+function StationDetailComponent({
+  activeStation,
+  stations,
+  onConfirmDeparture,
+}: StationDetailProps) {
   const dispatch = useAppDispatch();
 
   // Booking-related
@@ -34,7 +48,10 @@ function StationDetailComponent({ activeStation, onConfirmDeparture }: StationDe
 
   useEffect(() => {
     console.log("[StationDetail] step=", step);
-  }, [step]);
+    if (stations && stations.length > 0) {
+      console.log("[StationDetail] stations array length=", stations.length);
+    }
+  }, [step, stations]);
 
   // If there's no active station => show placeholder
   if (!activeStation) {
@@ -84,6 +101,7 @@ function StationDetailComponent({ activeStation, onConfirmDeparture }: StationDe
 
   return (
     <div className="p-4 space-y-4">
+      {/* Station name + address */}
       <div className="pl-0 space-y-1">
         <h4 className="text-base font-semibold">
           {activeStation.properties.Place}
@@ -93,11 +111,14 @@ function StationDetailComponent({ activeStation, onConfirmDeparture }: StationDe
         </p>
       </div>
 
+      {/* Station stats: wait time, distance, etc. */}
       <div className="space-y-2">
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Est. Wait Time</span>
-            <span className="font-medium">{activeStation.properties.waitTime} min</span>
+            <span className="font-medium">
+              {activeStation.properties.waitTime} min
+            </span>
           </div>
         )}
 
@@ -124,18 +145,15 @@ function StationDetailComponent({ activeStation, onConfirmDeparture }: StationDe
         )}
       </div>
 
+      {/* Confirm button */}
       <div className="pt-2">
         <button
           onClick={handleConfirm}
           disabled={!(step === 2 || step === 4)}
           className={
             isDepartureFlow
-              ? "w-full px-4 py-2 text-sm font-medium text-black bg-gray-100 " +
-                "hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed " +
-                "rounded-md transition-colors"
-              : "w-full px-4 py-2 text-sm font-medium text-white bg-primary " +
-                "hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed " +
-                "rounded-md transition-colors"
+              ? "w-full px-4 py-2 text-sm font-medium text-black bg-gray-100 hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed rounded-md transition-colors"
+              : "w-full px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed rounded-md transition-colors"
           }
         >
           {isDepartureFlow ? "Choose pick-up station" : "Confirm trip"}
