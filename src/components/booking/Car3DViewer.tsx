@@ -24,10 +24,7 @@ import LoadingOverlay from "@/components/ui/loading-overlay";
 interface Car3DViewerProps {
   /** URL/path to the GLB model */
   modelUrl: string;
-  /**
-   * imageUrl can be `undefined` if the parent
-   * has no image. We'll handle fallback inside this component.
-   */
+  /** If the parent has no image, we can fallback internally if needed. */
   imageUrl?: string;
   /** Container width (default: "100%") */
   width?: string | number;
@@ -67,12 +64,10 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   useEffect(() => {
     if (!scene) return;
 
-    // 1) Apply default transform to all models
-    //    (You can tweak or remove these if your bounding-box logic
-    //     fully replaces them for all models.)
+    // 1) Apply default transforms (rotation) to all models
     scene.rotation.y = Math.PI / 2;
 
-    // Traverse all children to set roughness / metalness, etc.
+    // Adjust materials (roughness, metalness, etc.)
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
@@ -86,33 +81,33 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
 
     // 2) If it's the Kona model, auto-scale + center via bounding box
     if (url.includes("kona.glb")) {
-      // Compute bounding box of the entire scene
       const box = new THREE.Box3().setFromObject(scene);
       const size = box.getSize(new THREE.Vector3());    // width, height, depth
-      const center = box.getCenter(new THREE.Vector3()); // center of model
+      const center = box.getCenter(new THREE.Vector3()); // center of the model
 
-      // We'll scale so the max dimension fits ~1 unit in scene
-      // Adjust to taste (e.g. 1.2 for slightly smaller, 0.8 for larger, etc.)
+      // Scale so the largest dimension is ~1 unit
       const maxDim = Math.max(size.x, size.y, size.z);
-      const scaleFactor = 1.0 / maxDim;
+      const scaleFactor = 1.0 / maxDim; 
       scene.scale.set(scaleFactor, scaleFactor, scaleFactor);
 
-      // Recompute the bounding box & center after scaling
+      // Recompute bounding box & center after scaling
       box.setFromObject(scene);
       box.getCenter(center);
 
-      // Shift the model so its center is at the origin (0, 0, 0)
-      // Adjust if you want the model "on the ground" vs "centered"
+      // Move the model so its center is at (0,0,0)
       scene.position.x -= center.x;
       scene.position.y -= center.y;
       scene.position.z -= center.z;
 
-      // Optional: if you prefer the car to rest on y = -0.2,
-      // just do this after the center shift:
+      // Then shift the model slightly down (or up) along the Y axis
+      // If you want the car a bit higher, make this less negative or even positive.
       scene.position.y -= 0.2;
+      
+      // Example: if you want it higher, do something like:
+      // scene.position.y -= 0.1; // Instead of 0.2
+      // or for a bigger raise: scene.position.y += 0.1;
     } else {
-      // 3) For other models, keep the existing default offset if desired
-      //    (Currently, you had scene.position.set(0, -0.2, 0))
+      // For other models, keep the existing default offset if desired
       scene.position.set(0, -0.2, 0);
     }
   }, [scene, url]);
