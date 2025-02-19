@@ -20,9 +20,10 @@ export default function CarSheety({ isOpen, onToggle }: CarSheetyProps) {
   const dispatch = useAppDispatch();
   const availableCars = useAppSelector(selectAvailableForDispatch);
 
+  // e.g. “1 car available” or “4 cars available”
   const count = availableCars.length;
-  // "4 cars available" or "1 car"
-  const carsInfo = count === 1 ? "1 car available" : `${count} cars available`;
+  const carsSubtitle =
+    count === 1 ? "1 car available" : `${count} cars available`;
 
   const handleDismiss = () => {
     if (onToggle) {
@@ -35,23 +36,19 @@ export default function CarSheety({ isOpen, onToggle }: CarSheetyProps) {
   return (
     <Sheet
       isOpen={isOpen}
-      title="Dispatch a car"
-      /* Instead of passing `count` and `countLabel`,
-         we'll just stick it in `subtitle` to avoid duplication. */
-      subtitle={carsInfo}
       onDismiss={handleDismiss}
+      title="Dispatch a car"
+      subtitle={carsSubtitle}
     >
       {/**
-       * We add `overflow-x-auto` here so the user can
-       * horizontally scroll if the CarGrid is laid out in a single row.
+       * Sheet content area:
+       * We use an extra .overflow-x-auto wrapper so CarGrid
+       * can be scrolled horizontally if needed.
        */}
-      <div className="px-4 py-2 overflow-x-auto">
-        {/* 
-          CarGrid might also need a horizontal layout if you want a
-          row of cards. For example:
-            .grid-flow-col .auto-cols-[250px] .gap-4
-        */}
-        <CarGrid className="grid grid-flow-col gap-4 auto-cols-[80%] pr-4" />
+      <div className="px-4 py-2">
+        <div className="overflow-x-auto">
+          <CarGrid className="" />
+        </div>
       </div>
     </Sheet>
   );
