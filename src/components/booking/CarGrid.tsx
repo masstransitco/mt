@@ -7,8 +7,8 @@ import { fetchCars } from "@/store/carSlice";
 import { fetchDispatchLocations } from "@/store/dispatchSlice";
 import { selectCar } from "@/store/userSlice";
 import { selectViewState } from "@/store/uiSlice";
-import CarCard from "./CarCard";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
+import CarCardGroup from "./CarCardGroup"; // <-- We'll create this component
 
 interface CarGridProps {
   className?: string;
@@ -35,12 +35,22 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }
   }, [availableCars, selectedCarId, dispatch]);
 
-  // 4) Handler to select a car
-  const handleSelectCar = (carId: number) => {
-    dispatch(selectCar(carId));
-  };
+  // --- NEW: Group cars by model so we only display one group per model ---
+  const groupedByModel = Object.values(
+    availableCars.reduce((acc, car) => {
+      const model = car.model || "Unknown Model";
+      if (!acc[model]) {
+        acc[model] = {
+          model,
+          cars: [],
+        };
+      }
+      acc[model].cars.push(car);
+      return acc;
+    }, {} as Record<string, { model: string; cars: typeof availableCars }>)
+  );
 
-  // 5) Show/hide this component based on UI state
+  // 4) Show/hide this component based on UI state
   const isVisible = viewState === "showCar";
 
   return (
@@ -51,45 +61,33 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         visibility: isVisible ? "visible" : "hidden",
       }}
     >
-      {/* 
-        Outer container with padding + horizontal scrolling enabled.
-        You can adjust the maxHeight or remove it if not needed.
-      */}
+      {/* Outer container with padding + horizontal scrolling */}
       <div className="overflow-x-auto px-4" style={{ maxHeight: "80vh" }}>
-        {/* 
-          Flex container for a single row of cards.
-          gap-3 for spacing between cards 
-        */}
+        {/* Flex container for a single row of grouped cards */}
         <div className="flex gap-3 py-2">
           <AnimatePresence mode="popLayout">
-            {availableCars.map((car) => {
-              const isSelected = car.id === selectedCarId;
-              return (
-                <motion.div
-                  key={car.id}
-                  layout
-                  // Subtle fade/scale animation when cards appear or disappear
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 0.975 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <CarCard
-                    car={car}
-                    selected={isSelected}
-                    onClick={() => handleSelectCar(car.id)}
-                    isVisible={isVisible}
-                    size="large"
-                  />
-                </motion.div>
-              );
-            })}
+            {groupedByModel.map((group) => (
+              <motion.div
+                key={group.model}
+                layout
+                // Subtle fade/scale animation when cards appear or disappear
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 0.975 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CarCardGroup
+                  group={group}      // group.model + group.cars
+                  isVisible={isVisible}
+                />
+              </motion.div>
+            ))}
           </AnimatePresence>
         </div>
       </div>
 
       {/* Fallback when no cars match the criteria */}
-      {availableCars.length === 0 && (
+      {groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
