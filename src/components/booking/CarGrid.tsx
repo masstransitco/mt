@@ -47,7 +47,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }, {} as Record<string, { model: string; cars: typeof availableCars }>)
   );
 
-  // 5) If using a UI state to conditionally show the grid
+  // 5) Conditionally render if using a viewState
   const isVisible = viewState === "showCar";
   if (!isVisible) {
     return null;
@@ -55,10 +55,11 @@ export default function CarGrid({ className = "" }: CarGridProps) {
 
   return (
     <div className={`transition-all duration-300 ${className}`}>
-      {/** 
-       * Outer container for horizontal scrolling.
-       * - "touch-pan-x" + "-webkit-overflow-scrolling:touch" → 
-       *   smooth mobile swipes
+      {/**
+       * Outer container for horizontal scrolling:
+       * - overflow-x-auto gives a scrollbar if content overflows.
+       * - touch-pan-x and -webkit-overflow-scrolling:touch enable smooth horizontal swiping on mobile.
+       * - onWheel and onTouchMove stop propagation so the browser does not scroll.
        */}
       <div
         className="
@@ -66,11 +67,12 @@ export default function CarGrid({ className = "" }: CarGridProps) {
           touch-pan-x
           -webkit-overflow-scrolling:touch
         "
+        onWheel={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
       >
         {/**
-         * Inner container: 
-         * - "flex-nowrap w-max" so items line up horizontally
-         * - "gap-3" for spacing
+         * Inner flex container: flex-nowrap prevents wrapping;
+         * w-max forces the container to expand with its content.
          */}
         <div className="flex flex-nowrap w-max gap-3 py-2">
           <AnimatePresence mode="popLayout">
@@ -90,9 +92,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         </div>
       </div>
 
-      {/**
-       * If no cars were found, show fallback message
-       */}
+      {/** Fallback when no cars are available */}
       {groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
