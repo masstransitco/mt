@@ -48,27 +48,39 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     setShowOdometerPopup(false); // close popup when switching cars
   };
 
-  // 1) Battery icon logic & color
-  const batteryPercentage = selectedCar.electric_battery_percentage_left ?? null;
+  // -------------------------------------------------------------
+  // 1) Battery fallback logic
+  //    - parse and fallback to 92 if out of [1..100] or invalid
+  // -------------------------------------------------------------
+  const rawBattery = selectedCar.electric_battery_percentage_left; // could be number, null, undefined, etc.
+  // parseFloat will handle string -> number; returns NaN if invalid
+  const parsed = rawBattery != null ? parseFloat(String(rawBattery)) : NaN;
+
+  // We consider "valid" only if 1..100
+  const isValid = !isNaN(parsed) && parsed >= 1 && parsed <= 100;
+  const batteryPercentage = isValid ? parsed : 92;
+
+  // -------------------------------------------------------------
+  // 2) Battery icon + color based on final batteryPercentage
+  // -------------------------------------------------------------
   let BatteryIcon = BatteryFull;
   let batteryIconColor = "text-green-500";
-  if (typeof batteryPercentage === "number") {
-    if (batteryPercentage <= 9) {
-      BatteryIcon = BatteryWarning;
-      batteryIconColor = "text-red-500";
-    } else if (batteryPercentage < 40) {
-      BatteryIcon = BatteryLow;
-      batteryIconColor = "text-orange-500";
-    } else if (batteryPercentage < 80) {
-      BatteryIcon = BatteryMedium;
-      batteryIconColor = "text-lime-400";
-    } else {
-      BatteryIcon = BatteryFull;
-      batteryIconColor = "text-green-500";
-    }
-  }
 
-  // 2) Format "location_updated" date
+  if (batteryPercentage <= 9) {
+    BatteryIcon = BatteryWarning;
+    batteryIconColor = "text-red-500";
+  } else if (batteryPercentage < 40) {
+    BatteryIcon = BatteryLow;
+    batteryIconColor = "text-orange-500";
+  } else if (batteryPercentage < 80) {
+    BatteryIcon = BatteryMedium;
+    batteryIconColor = "text-lime-400";
+  } 
+  // else by default BatteryIcon stays BatteryFull and color green
+
+  // -------------------------------------------------------------
+  // 3) Format "location_updated" date
+  // -------------------------------------------------------------
   const locationUpdated = selectedCar.location_updated;
   const formattedLastDriven = useMemo(() => {
     if (!locationUpdated) return "";
@@ -78,18 +90,8 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     const day = d.getDate();
     const suffix = getDaySuffix(day);
     const monthNames = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
+      "January","February","March","April","May","June",
+      "July","August","September","October","November","December",
     ];
     const month = monthNames[d.getMonth()] || "";
     let hours = d.getHours();
@@ -102,11 +104,8 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
   }, [locationUpdated]);
 
-  // 3) Restore mileage remaining: batteryPercentage * 3.51
-  const mileageRemaining =
-    typeof batteryPercentage === "number"
-      ? (batteryPercentage * 3.51).toFixed(1)
-      : "0";
+  // 4) "Mileage remaining" = batteryPercentage * 3.51
+  const mileageRemaining = (batteryPercentage * 3.51).toFixed(1);
 
   return (
     <motion.div
@@ -114,8 +113,8 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       animate={{ scale: isGroupSelected ? 1.0 : 0.98 }}
       transition={{ type: "tween", duration: 0.3 }}
       className={`
-        relative 
-        overflow-hidden        /* ADDED to hide scrollbars */
+        relative
+        overflow-hidden 
         rounded-2xl 
         bg-card 
         transition-all 
@@ -124,7 +123,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         border-border/50
         ${isGroupSelected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
       `}
-      style={{ width: 320, overflow: "hidden" }}  // ADDED overflow hidden in inline style
+      style={{ width: 320, overflow: "hidden" }}
     >
       {/* "5-Seater" badge if group is selected */}
       {isGroupSelected && (
@@ -171,14 +170,10 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
 
         {/* Row 2: Battery (left), Info icon & year (right) */}
         <div className="flex items-center justify-between mt-1 relative">
-          {/* Battery */}
+          {/* Battery display */}
           <div className="flex items-center gap-1">
-            {typeof batteryPercentage === "number" && batteryPercentage > 0 && (
-              <>
-                <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
-                <span className="text-sm">{batteryPercentage}%</span>
-              </>
-            )}
+            <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
+            <span className="text-sm">{batteryPercentage}%</span>
           </div>
 
           {/* Info icon + year */}
