@@ -9,8 +9,8 @@ import React, {
   ReactNode,
   useLayoutEffect,
 } from "react";
-// Note: We need the `BottomSheetRef` type for programmatic snapping
-import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
+// Import SpringEvent as well
+import { BottomSheet, BottomSheetRef, SpringEvent } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
 
 import { Info } from "lucide-react";
@@ -258,15 +258,15 @@ export default function Sheet({
     }
   }, [isOpen, contentHeight]);
 
-  // onSpringEnd is used to clamp the sheet so that it cannot be dragged
-  // below the collapsed snap point.
+  // Clamp the drag: when the spring animation ends, check if the current
+  // value is below the collapsed snap and if so, snap back.
   const handleSpringEnd = useCallback(
-    (event: { current: number }) => {
-      const collapsed = 120; // Same as your defined collapsed snap point
-      if (event.current < collapsed) {
-        // If the sheet has been dragged below the collapsed value,
-        // force it to snap back to collapsed.
-        sheetRef.current?.snapTo(() => collapsed);
+    (event: SpringEvent) => {
+      if ("current" in event && typeof event.current === "number") {
+        const collapsed = 120; // Same as your collapsed snap point
+        if (event.current < collapsed) {
+          sheetRef.current?.snapTo(() => collapsed);
+        }
       }
     },
     []
@@ -319,14 +319,13 @@ export default function Sheet({
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
-        // Clamp the drag: when the spring animation ends, check if the current
-        // value is below the collapsed snap and if so, snap back.
+        // Clamp the drag: if the spring ends below the collapsed snap, force it back.
         onSpringEnd={handleSpringEnd}
       >
         <div
           ref={contentRef}
           className="relative px-4 pt-2 pb-6"
-          // These inline styles help clip any overscroll below the viewport.
+          // Clip any overscroll below the viewport.
           style={{ maxHeight: "100vh", overflow: "hidden" }}
         >
           {children}
