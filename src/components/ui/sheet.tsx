@@ -2,34 +2,26 @@
 
 import React, {
   useState,
-  useRef,
   useEffect,
-  useCallback,
-  useMemo,
-  ReactNode,
+  useRef,
   useLayoutEffect,
+  ReactNode,
+  useCallback,
 } from "react";
-import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
-import "react-spring-bottom-sheet/dist/style.css";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useMotionValue, useTransform } from "framer-motion";
 import { Info } from "lucide-react";
 
-// Utility for classnames
 import { cn } from "@/lib/utils";
 
-// (Optional) Helpers for controlling scroll lock count
+// (Optional) scroll-lock utilities
 import {
   incrementOpenSheets,
   decrementOpenSheets,
 } from "@/lib/scrollLockManager";
 
-// A local type for the spring event from react-spring-bottom-sheet
-type SpringEvent = {
-  current?: number;
-  type: string;
-};
-
 /* ----------------------------------------------------------------
-   1) PulsatingStrip Code (1px height, purely decorative)
+   1) PulsatingStrip Code (same as your snippet)
 ---------------------------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
@@ -81,43 +73,27 @@ function PulsatingStrip({ className }: { className?: string }) {
     const progress =
       (elapsed % ANIMATION_PARAMS.duration) / ANIMATION_PARAMS.duration;
 
-    let scale: Scale = ANIMATION_PARAMS.scales.min;
-    let color: AnimationColor = ANIMATION_PARAMS.colors.primary;
+    let scale: number = ANIMATION_PARAMS.scales.min;
+    let color: string = ANIMATION_PARAMS.colors.primary;
     let opacity = 1;
     let shadowIntensity = 0.3;
 
     if (progress < 0.1) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.min,
-        ANIMATION_PARAMS.scales.max,
-        progress * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.min, ANIMATION_PARAMS.scales.max, progress * 10);
       color = ANIMATION_PARAMS.colors.secondary;
       shadowIntensity = 0.6;
     } else if (progress < 0.2) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.max,
-        ANIMATION_PARAMS.scales.mid,
-        (progress - 0.1) * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.max, ANIMATION_PARAMS.scales.mid, (progress - 0.1) * 10);
       color = ANIMATION_PARAMS.colors.secondary;
       opacity = 0.9;
       shadowIntensity = 0.4;
     } else if (progress < 0.3) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.mid,
-        ANIMATION_PARAMS.scales.soft,
-        (progress - 0.2) * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.mid, ANIMATION_PARAMS.scales.soft, (progress - 0.2) * 10);
       color = ANIMATION_PARAMS.colors.tertiary;
       opacity = 0.95;
       shadowIntensity = 0.5;
     } else if (progress < 0.4) {
-      scale = lerp(
-        ANIMATION_PARAMS.scales.soft,
-        ANIMATION_PARAMS.scales.min,
-        (progress - 0.3) * 10
-      );
+      scale = lerp(ANIMATION_PARAMS.scales.soft, ANIMATION_PARAMS.scales.min, (progress - 0.3) * 10);
       color = ANIMATION_PARAMS.colors.secondary;
       opacity = 0.85;
       shadowIntensity = 0.4;
@@ -146,28 +122,26 @@ function PulsatingStrip({ className }: { className?: string }) {
     };
   }, [animate]);
 
-  const stripStyles = useMemo(
-    () => ({
-      width: "110%",
-      height: "1px",
-      borderRadius: "1px",
-      backgroundColor: ANIMATION_PARAMS.colors.primary,
-      willChange: "transform, opacity, boxShadow",
-      transition: "transform 0.05s ease-out",
-      transformOrigin: "center",
-    }),
-    []
-  );
-
   return (
     <div className={cn("flex justify-center", className)}>
-      <div ref={stripRef} style={stripStyles} />
+      <div
+        ref={stripRef}
+        style={{
+          width: "110%",
+          height: "1px",
+          borderRadius: "1px",
+          backgroundColor: ANIMATION_PARAMS.colors.primary,
+          willChange: "transform, opacity, boxShadow",
+          transition: "transform 0.05s ease-out",
+          transformOrigin: "center",
+        }}
+      />
     </div>
   );
 }
 
 /* ----------------------------------------------------------------
-   2) A simple InfoModal (just for example)
+   2) InfoModal (optional, same as your snippet)
 ---------------------------------------------------------------- */
 function InfoModal({
   isOpen,
@@ -177,8 +151,9 @@ function InfoModal({
   onClose: () => void;
 }) {
   if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
       <div className="bg-white p-4 rounded shadow-md">
         <p>Information about this sheet!</p>
         <button
@@ -188,12 +163,13 @@ function InfoModal({
           Close
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
 /* ----------------------------------------------------------------
-   3) The Sheet with dynamic snap points
+   3) SheetProps and bottom sheet using Framer Motion
 ---------------------------------------------------------------- */
 export interface SheetProps {
   /** If true, the sheet is rendered open; if false, hidden. */
@@ -208,8 +184,8 @@ export interface SheetProps {
   count?: number;
   countLabel?: string;
   /**
-   * Called when the user swipes down or clicks outside
-   * to dismiss the sheet
+   * Called when the user swipes down, drags down sufficiently,
+   * or clicks the backdrop to dismiss.
    */
   onDismiss?: () => void;
 }
@@ -224,22 +200,7 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Track whether our content is ready (0.5s delay simulating load)
-  const [isContentReady, setIsContentReady] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsContentReady(true);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // If content not ready, don’t render the sheet
-  if (!isContentReady) {
-    return null;
-  }
-
-  // Increase scroll lock count when open
+  // If you need to block scrolling behind the sheet
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -247,65 +208,30 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // Optional info modal
+  // Local state for an example “info” modal
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // Measure content for dynamic snap
+  // Reference to measure content if needed
   const contentRef = useRef<HTMLDivElement>(null);
-  const [contentHeight, setContentHeight] = useState(0);
 
-  useLayoutEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [children]);
+  // Framer Motion "drag down" logic
+  const y = useMotionValue(0);
 
-  // Reference to BottomSheet for programmatic snapping
-  const sheetRef = useRef<BottomSheetRef>(null);
+  // Transform for opacity of a handle or strip, if you want
+  // (not strictly needed, but an example)
+  const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
 
-  // Define snap points
-  const snapPoints = useCallback(
-    ({ maxHeight }: { maxHeight: number }) => {
-      const collapsed = 120; // px from bottom
-      const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
-      return [collapsed, expanded];
-    },
-    [contentHeight]
-  );
-
-  // Default to expanded
-  const defaultSnap = useCallback(
-    ({ maxHeight }: { maxHeight: number }) => {
-      const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
-      return expanded;
-    },
-    [contentHeight]
-  );
-
-  // When isOpen → snap to expanded
-  useEffect(() => {
-    if (isOpen && sheetRef.current) {
-      sheetRef.current.snapTo(({ maxHeight }) => {
-        const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
-        return expanded;
-      });
-    }
-  }, [isOpen, contentHeight]);
-
-  // Prevent the sheet from going below the collapsed snap
-  const handleSpringEnd = useCallback(
-    (event: SpringEvent) => {
-      if ("current" in event && typeof event.current === "number") {
-        const collapsed = 120; // must match the lower snap point
-        if (event.current < collapsed) {
-          sheetRef.current?.snapTo(() => collapsed);
-        }
+  const handleDragEnd = useCallback(
+    (_: PointerEvent, info: { offset: { x: number; y: number } }) => {
+      // If user dragged down more than 100px, consider that a dismissal
+      if (info.offset.y > 100) {
+        onDismiss?.();
       }
     },
-    []
+    [onDismiss]
   );
 
-  // Header content
+  // Header
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -333,35 +259,61 @@ export default function Sheet({
 
   return (
     <>
-      <BottomSheet
-        ref={sheetRef}
-        open={isOpen}
-        onDismiss={onDismiss}
-        header={SheetHeader}
-        className={cn("custom-sheet", className)}
-        blocking={false} // <-- user can scroll background if they want
-        snapPoints={snapPoints}
-        defaultSnap={defaultSnap}
-        expandOnContentDrag={false}
-        onSpringEnd={handleSpringEnd}
-      >
-        <div
-          ref={contentRef}
-          className="relative px-4 pt-2 pb-6"
-          style={{ maxHeight: "100vh", overflow: "hidden" }}
-        >
-          {children}
-          {/* Extra little handle at the bottom (optional) */}
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-            <div className="w-32 h-1 rounded-full bg-white/25" />
-          </div>
-        </div>
-      </BottomSheet>
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
+            {/** 1) The backdrop */}
+            <motion.div
+              className="absolute inset-0 bg-black/50 pointer-events-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onDismiss}
+            />
 
-      <InfoModal
-        isOpen={infoModalOpen}
-        onClose={() => setInfoModalOpen(false)}
-      />
+            {/** 2) The sheet container */}
+            <motion.div
+              className="pointer-events-auto mt-auto w-full overflow-hidden"
+              style={{
+                opacity: sheetOpacity,
+              }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              onDragEnd={handleDragEnd}
+            >
+              <div
+                className={cn(
+                  "relative bg-background rounded-t-xl shadow-xl",
+                  className
+                )}
+              >
+                {/** -- Sheet Header */}
+                {SheetHeader}
+
+                {/** -- Sheet Content */}
+                <div
+                  ref={contentRef}
+                  className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
+                >
+                  {children}
+
+                  {/** Extra little handle at the bottom (optional) */}
+                  <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+                    <div className="w-32 h-1 rounded-full bg-white/25" />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/** Info modal if you want it */}
+      <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
 }
