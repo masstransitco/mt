@@ -3,9 +3,9 @@
 import React, {
   ReactNode,
   useLayoutEffect,
+  useEffect,
   useMemo,
   useRef,
-  useEffect,
   useCallback,
   useState,
 } from "react";
@@ -16,7 +16,25 @@ import {
   decrementOpenSheets,
 } from "@/lib/scrollLockManager";
 
-// Pulsating strip constants/types
+/**
+ * Example usage:
+ *
+ *  <Sheet
+ *    isOpen={open}
+ *    onToggle={() => setOpen(!open)}
+ *    title="My Bottom Sheet"
+ *    subtitle="Optional subtitle"
+ *    count={12}
+ *    countLabel="stations"
+ *  >
+ *    <p>My content inside the sheet</p>
+ *  </Sheet>
+ *
+ */
+
+/* -------------------------------------
+   1) PulsatingStrip Implementation
+------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
 
@@ -50,12 +68,16 @@ const ANIMATION_PARAMS: AnimationParams = {
   },
 };
 
-// PulsatingStrip
-const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
+function lerp(start: Scale, end: Scale, progress: number): Scale {
+  return start + (end - start) * progress;
+}
+
+function PulsatingStrip({ className }: { className?: string }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>();
 
+  // The core animation function
   const animate = useCallback((currentTime: number) => {
     if (!startTimeRef.current) startTimeRef.current = currentTime;
     if (!stripRef.current) return;
@@ -69,6 +91,7 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
     let opacity = 1;
     let shadowIntensity = 0.3;
 
+    // simple interpolation phases
     if (progress < 0.1) {
       scale = lerp(
         ANIMATION_PARAMS.scales.min,
@@ -120,6 +143,7 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
     animationRef.current = requestAnimationFrame(animate);
   }, []);
 
+  // Start / stop the animation
   useEffect(() => {
     startTimeRef.current = undefined;
     animationRef.current = requestAnimationFrame(animate);
@@ -130,7 +154,7 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
     };
   }, [animate]);
 
-  const styles = useMemo(
+  const stripStyles = useMemo(
     () => ({
       width: "110%",
       height: "2.5px",
@@ -145,43 +169,55 @@ const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
 
   return (
     <div className={cn("flex justify-center", className)}>
-      <div ref={stripRef} style={styles} />
+      <div ref={stripRef} style={stripStyles} className={className} />
     </div>
   );
-});
-PulsatingStrip.displayName = "PulsatingStrip";
-
-function lerp(start: Scale, end: Scale, progress: number): Scale {
-  return start + (end - start) * progress;
 }
 
-// -------------- Import the InfoModal --------------
-import InfoModal from "./info-modal";
-
-interface SheetProps {
-  /** Controls whether the sheet is open or collapsed to 0 height */
+/* -------------------------------------
+   2) InfoModal Stub (or real implementation)
+------------------------------------- */
+function InfoModal({
+  isOpen,
+  onClose,
+}: {
   isOpen: boolean;
-  /** Callback to toggle the sheet (e.g., close on button click) */
+  onClose: () => void;
+}) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white p-4 rounded shadow-md">
+        <p>Information about this sheet!</p>
+        <button onClick={onClose} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------
+   3) SheetProps + Implementation
+------------------------------------- */
+interface SheetProps {
+  isOpen: boolean;
   onToggle: () => void;
-  /** The main content inside the sheet (e.g. StationDetail) */
   children: ReactNode;
-  /** Optional additional classes */
   className?: string;
-  /** Title (e.g. "Departure" or "Arrival") */
   title?: string;
-  /** Subtitle below the title */
   subtitle?: string;
-  /** e.g. "12 stations found" */
   count?: number;
-  /** The label that follows the numeric count, e.g. "stations found" */
   countLabel?: string;
 }
 
 /**
- * Sheet component that:
- * 1) Disables page scroll when open (via scrollLockManager).
- * 2) Displays a "bottom sheet" with optional header info + a pulsating strip.
- * 3) Lets internal content scroll independently, up to a set max-height.
+ * A "Bottom Sheet" that:
+ *  - Disables scrolling with scrollLockManager if open
+ *  - Has a header with optional title, subtitle, count, and two icons (Info & Down)
+ *  - Renders a pulsating strip below the header
+ *  - Grows to 70vh if open, or collapses to 0
+ *  - Has a scrollable body for the children
  */
 export default function Sheet({
   isOpen,
@@ -193,7 +229,7 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
-  // Lock body scrolling if isOpen
+  // (A) Lock body scroll if open
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -201,7 +237,7 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // Local state to toggle InfoModal
+  // (B) Local state for showing "InfoModal"
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
   return (
@@ -209,16 +245,16 @@ export default function Sheet({
       {/* The "Bottom Sheet" */}
       <div
         className={cn(
-          "fixed bottom-0 left-0 right-0 z-50", // keep on top
+          "fixed bottom-0 left-0 right-0 z-50",    // top layer
           "bg-background/90 backdrop-blur-sm rounded-t-lg",
-          "overflow-hidden", // smooth max-height transition
+          "overflow-hidden",                       // ensures the max-height transition is smooth
           "transition-[max-height] duration-500 ease-in-out",
-          isOpen ? "max-h-[70vh]" : "max-h-0",
+          isOpen ? "max-h-[70vh]" : "max-h-0",      // expand/collapse
           className
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
+          {/* Header Row */}
           <div className="flex items-center justify-between p-4">
             <div>
               {title && (
@@ -229,12 +265,12 @@ export default function Sheet({
               )}
               {typeof count === "number" && (
                 <p className="text-sm text-muted-foreground">
-                  {count} {countLabel ?? "stations found"}
+                  {count} {countLabel ?? "items"}
                 </p>
               )}
             </div>
 
-            {/* Buttons row: Info + ChevronDown */}
+            {/* Info & Close Icons */}
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setInfoModalOpen(true)}
@@ -254,14 +290,14 @@ export default function Sheet({
             </div>
           </div>
 
-          {/* Pulsating strip */}
+          {/* Pulsating strip (just below header) */}
           <PulsatingStrip />
 
           {/* Scrollable content area */}
           <div className="relative flex-1 overflow-y-auto">
             {children}
 
-            {/* Bottom handle (optional) */}
+            {/* Optional handle at bottom */}
             <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
               <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
             </div>
@@ -269,7 +305,7 @@ export default function Sheet({
         </div>
       </div>
 
-      {/* InfoModal component */}
+      {/* InfoModal */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
