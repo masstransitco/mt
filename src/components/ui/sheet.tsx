@@ -285,14 +285,12 @@ export default function Sheet({
 
   return (
     <>
-      <BottomSheet
+     <BottomSheet
   open={isOpen}
   header={SheetHeader}
   className={cn("custom-sheet", className)}
   // allow background interactions
   blocking={false}
-  // prevent it from going off-screen
-  springConfig={{ clamp: true }} 
   // do NOT close if dragged down or clicked outside
   onDismiss={() => {
     /* no-op: prevents the sheet from dismissing */
@@ -300,7 +298,10 @@ export default function Sheet({
   // only two snap points, no partial expansions
   snapPoints={snapPoints}
   defaultSnap={defaultSnap}
+  // disable content drag expansion
   expandOnContentDrag={false}
+  // disable overscroll/rubber band effect
+  forceRemeasure={true}
 >
   <div ref={contentRef} className="relative px-4 pt-2 pb-6">
     {children}
