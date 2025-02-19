@@ -8,7 +8,7 @@ import { fetchDispatchLocations } from "@/store/dispatchSlice";
 import { selectCar } from "@/store/userSlice";
 import { selectViewState } from "@/store/uiSlice";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
-import CarCardGroup from "./CarCardGroup"; // <-- We'll create this component
+import CarCardGroup from "./CarCardGroup";
 
 interface CarGridProps {
   className?: string;
@@ -35,23 +35,36 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }
   }, [availableCars, selectedCarId, dispatch]);
 
-  // --- NEW: Group cars by model so we only display one group per model ---
+  // Group cars by model
   const groupedByModel = Object.values(
     availableCars.reduce((acc, car) => {
       const model = car.model || "Unknown Model";
       if (!acc[model]) {
-        acc[model] = {
-          model,
-          cars: [],
-        };
+        acc[model] = { model, cars: [] };
       }
       acc[model].cars.push(car);
       return acc;
     }, {} as Record<string, { model: string; cars: typeof availableCars }>)
   );
 
-  // 4) Show/hide this component based on UI state
+  // Determine visibility based on UI state
   const isVisible = viewState === "showCar";
+
+  // 4) Disable browser scrolling when visible
+  useEffect(() => {
+    if (isVisible) {
+      // Hide main document scroll
+      document.body.style.overflow = "hidden";
+    } else {
+      // Restore scrolling
+      document.body.style.overflow = "auto";
+    }
+
+    // Cleanup: restore scroll on unmount or state change
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [isVisible]);
 
   return (
     <div
@@ -70,16 +83,12 @@ export default function CarGrid({ className = "" }: CarGridProps) {
               <motion.div
                 key={group.model}
                 layout
-                // Subtle fade/scale animation when cards appear or disappear
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 0.975 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
               >
-                <CarCardGroup
-                  group={group}      // group.model + group.cars
-                  isVisible={isVisible}
-                />
+                <CarCardGroup group={group} isVisible={isVisible} />
               </motion.div>
             ))}
           </AnimatePresence>
