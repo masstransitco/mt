@@ -11,7 +11,7 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-} from "@/store/bookingSlice"; // <-- Now importing from bookingSlice
+} from "@/store/bookingSlice";
 import { StationFeature } from "@/store/stationsSlice";
 
 interface StationDetailProps {
@@ -31,7 +31,7 @@ function StationDetailComponent(props: StationDetailProps) {
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // For internal logic: are we in the "selecting departure" flow or "selecting arrival" flow?
+  // For internal logic: Are we in the "selecting departure" flow or "selecting arrival" flow?
   const isDepartureFlow = step <= 2;
 
   useEffect(() => {
@@ -103,7 +103,7 @@ function StationDetailComponent(props: StationDetailProps) {
         </p>
       </div>
 
-      {/* === Station Details (removing AvailableSpots & maxPower if you prefer) === */}
+      {/* === Station Details === */}
       <div className="space-y-2">
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
@@ -122,7 +122,9 @@ function StationDetailComponent(props: StationDetailProps) {
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Estimated Drive Time</span>
+              <span className="text-muted-foreground">
+                Estimated Drive Time
+              </span>
               <span className="font-medium">{routeDurationMin} min</span>
             </div>
           </>
