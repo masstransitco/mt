@@ -11,10 +11,16 @@ import React, {
 } from "react";
 import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
-
 import { Info } from "lucide-react";
+
+// Utility for classnames
 import { cn } from "@/lib/utils";
-import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
+
+// (Optional) Helpers for controlling scroll lock count
+import {
+  incrementOpenSheets,
+  decrementOpenSheets,
+} from "@/lib/scrollLockManager";
 
 // A local type for the spring event from react-spring-bottom-sheet
 type SpringEvent = {
@@ -23,7 +29,7 @@ type SpringEvent = {
 };
 
 /* ----------------------------------------------------------------
-   1) PulsatingStrip Code (1px height)
+   1) PulsatingStrip Code (1px height, purely decorative)
 ---------------------------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
@@ -58,7 +64,7 @@ const ANIMATION_PARAMS: AnimationParams = {
   },
 };
 
-function lerp(start: Scale, end: Scale, progress: number): Scale {
+function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
 
@@ -122,10 +128,10 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
-    stripRef.current!.style.transform = `scale(${scale})`;
-    stripRef.current!.style.backgroundColor = color;
-    stripRef.current!.style.opacity = opacity.toString();
-    stripRef.current!.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
+    stripRef.current.style.transform = `scale(${scale})`;
+    stripRef.current.style.backgroundColor = color;
+    stripRef.current.style.opacity = opacity.toString();
+    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
 
     animationRef.current = requestAnimationFrame(animate);
   }, []);
@@ -146,7 +152,7 @@ function PulsatingStrip({ className }: { className?: string }) {
       height: "1px",
       borderRadius: "1px",
       backgroundColor: ANIMATION_PARAMS.colors.primary,
-      willChange: "transform, opacity, box-shadow",
+      willChange: "transform, opacity, boxShadow",
       transition: "transform 0.05s ease-out",
       transformOrigin: "center",
     }),
@@ -161,7 +167,7 @@ function PulsatingStrip({ className }: { className?: string }) {
 }
 
 /* ----------------------------------------------------------------
-   2) Simple InfoModal
+   2) A simple InfoModal (just for example)
 ---------------------------------------------------------------- */
 function InfoModal({
   isOpen,
@@ -188,16 +194,23 @@ function InfoModal({
 
 /* ----------------------------------------------------------------
    3) The Sheet with dynamic snap points
-   - Waits for content to be loaded before rendering
 ---------------------------------------------------------------- */
-interface SheetProps {
-  isOpen: boolean; // signals when we want the sheet open
+export interface SheetProps {
+  /** If true, the sheet is rendered open; if false, hidden. */
+  isOpen: boolean;
+  /** Content of the sheet */
   children: ReactNode;
+  /** Additional class names for customization */
   className?: string;
+  /** Header fields */
   title?: string;
   subtitle?: string;
   count?: number;
   countLabel?: string;
+  /**
+   * Called when the user swipes down or clicks outside
+   * to dismiss the sheet
+   */
   onDismiss?: () => void;
 }
 
@@ -211,8 +224,7 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // 1) We'll track whether our content is fully loaded
-  //   (this is a trivial 0.5s delay as a demonstration)
+  // Track whether our content is ready (0.5s delay simulating load)
   const [isContentReady, setIsContentReady] = useState(false);
 
   useEffect(() => {
@@ -222,14 +234,12 @@ export default function Sheet({
     return () => clearTimeout(timer);
   }, []);
 
-  // If content not ready, don't render the sheet at all
+  // If content not ready, don’t render the sheet
   if (!isContentReady) {
     return null;
   }
 
-  // 2) Once content is ready, proceed:
-
-  // Increase scrollLock count when open
+  // Increase scroll lock count when open
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -237,10 +247,10 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // Simple info modal trigger
+  // Optional info modal
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // Measure the sheet's content for dynamic snap
+  // Measure content for dynamic snap
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
@@ -253,7 +263,7 @@ export default function Sheet({
   // Reference to BottomSheet for programmatic snapping
   const sheetRef = useRef<BottomSheetRef>(null);
 
-  // Two snap points (collapsed & expanded)
+  // Define snap points
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
       const collapsed = 120; // px from bottom
@@ -272,7 +282,7 @@ export default function Sheet({
     [contentHeight]
   );
 
-  // Imperatively snap to expanded whenever isOpen changes to true
+  // When isOpen → snap to expanded
   useEffect(() => {
     if (isOpen && sheetRef.current) {
       sheetRef.current.snapTo(({ maxHeight }) => {
@@ -282,13 +292,12 @@ export default function Sheet({
     }
   }, [isOpen, contentHeight]);
 
-  // Prevent dragging below collapsed snap
+  // Prevent the sheet from going below the collapsed snap
   const handleSpringEnd = useCallback(
     (event: SpringEvent) => {
       if ("current" in event && typeof event.current === "number") {
-        const collapsed = 120; // Must match the lower snap point
+        const collapsed = 120; // must match the lower snap point
         if (event.current < collapsed) {
-          // Force sheet back to the collapsed position
           sheetRef.current?.snapTo(() => collapsed);
         }
       }
@@ -296,7 +305,7 @@ export default function Sheet({
     []
   );
 
-  // Header markup (no chevron icon/button)
+  // Header content
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -327,10 +336,10 @@ export default function Sheet({
       <BottomSheet
         ref={sheetRef}
         open={isOpen}
-        onDismiss={onDismiss}          //  <-- Keep your onDismiss from props
+        onDismiss={onDismiss}
         header={SheetHeader}
         className={cn("custom-sheet", className)}
-        blocking={false}
+        blocking={false} // <-- user can scroll background if they want
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
@@ -342,6 +351,7 @@ export default function Sheet({
           style={{ maxHeight: "100vh", overflow: "hidden" }}
         >
           {children}
+          {/* Extra little handle at the bottom (optional) */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
