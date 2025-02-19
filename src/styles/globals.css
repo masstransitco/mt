@@ -140,10 +140,8 @@
     @apply w-full sm:w-[448px];
     @apply p-0 gap-0 border border-border/40;
   }
+}
 
-/* Global bottom sheet styling */
-/* Add these rules at the root level in globals.css */
-/* These have higher specificity and !important to override any conflicting styles */
 :where(.rsbs-header),
 :where(.rsbs-body),
 :where(.rsbs-content),
@@ -174,8 +172,6 @@
   --rsbs-bg: rgba(17, 17, 17, 0.9) !important;
   --rsbs-handle-bg: rgba(255, 255, 255, 0.3) !important;
 }
-}
-
 /* Menu components */
 .app-menu {
   @apply fixed inset-0 bg-background z-50 flex flex-col min-h-screen w-full;
