@@ -247,7 +247,7 @@ export default function Sheet({
 
   // Make a custom header that matches the rest of the sheet
   const SheetHeader = (
-    <div className="pb-2 bg-gray-900/90 text-white">
+    <div className="bg-gray-900/90 text-white">
       <div className="flex items-center justify-between px-4 pt-4">
         {/* Left side: Title, subtitle, count => all left-aligned */}
         <div className="text-left">
