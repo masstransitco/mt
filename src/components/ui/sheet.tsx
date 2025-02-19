@@ -9,13 +9,16 @@ import React, {
   ReactNode,
   useLayoutEffect,
 } from "react";
-// Import SpringEvent as well
-import { BottomSheet, BottomSheetRef, SpringEvent } from "react-spring-bottom-sheet";
+// Import BottomSheet and BottomSheetRef only (not SpringEvent)
+import { BottomSheet, BottomSheetRef } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
 
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
+
+// Define a local SpringEvent type for our onSpringEnd callback.
+type SpringEvent = { current?: number; type: string };
 
 /* ----------------------------------------------------------------
    1) PulsatingStrip Code (1px height)
@@ -258,8 +261,8 @@ export default function Sheet({
     }
   }, [isOpen, contentHeight]);
 
-  // Clamp the drag: when the spring animation ends, check if the current
-  // value is below the collapsed snap and if so, snap back.
+  // Clamp the drag: when the spring animation ends, if the sheet's current
+  // value is below the collapsed snap, force it back.
   const handleSpringEnd = useCallback(
     (event: SpringEvent) => {
       if ("current" in event && typeof event.current === "number") {
