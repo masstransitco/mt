@@ -1,14 +1,17 @@
 "use client";
 
 import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
   ReactNode,
   useLayoutEffect,
-  useEffect,
-  useMemo,
-  useRef,
-  useCallback,
-  useState,
 } from "react";
+import { BottomSheet } from "react-spring-bottom-sheet";
+import "react-spring-bottom-sheet/dist/style.css";
+
 import { ChevronDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -16,25 +19,10 @@ import {
   decrementOpenSheets,
 } from "@/lib/scrollLockManager";
 
-/**
- * Example usage:
- *
- *  <Sheet
- *    isOpen={open}
- *    onToggle={() => setOpen(!open)}
- *    title="My Bottom Sheet"
- *    subtitle="Optional subtitle"
- *    count={12}
- *    countLabel="stations"
- *  >
- *    <p>My content inside the sheet</p>
- *  </Sheet>
- *
- */
-
-/* -------------------------------------
-   1) PulsatingStrip Implementation
-------------------------------------- */
+/* ----------------------------------------------------------------
+   1) The PulsatingStrip Code (inlined)
+   - We keep your same logic for the animated strip
+---------------------------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
 
@@ -77,7 +65,6 @@ function PulsatingStrip({ className }: { className?: string }) {
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>();
 
-  // The core animation function
   const animate = useCallback((currentTime: number) => {
     if (!startTimeRef.current) startTimeRef.current = currentTime;
     if (!stripRef.current) return;
@@ -91,7 +78,6 @@ function PulsatingStrip({ className }: { className?: string }) {
     let opacity = 1;
     let shadowIntensity = 0.3;
 
-    // simple interpolation phases
     if (progress < 0.1) {
       scale = lerp(
         ANIMATION_PARAMS.scales.min,
@@ -134,7 +120,6 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
-    // Apply
     stripRef.current.style.transform = `scale(${scale})`;
     stripRef.current.style.backgroundColor = color;
     stripRef.current.style.opacity = opacity.toString();
@@ -143,7 +128,6 @@ function PulsatingStrip({ className }: { className?: string }) {
     animationRef.current = requestAnimationFrame(animate);
   }, []);
 
-  // Start / stop the animation
   useEffect(() => {
     startTimeRef.current = undefined;
     animationRef.current = requestAnimationFrame(animate);
@@ -169,14 +153,14 @@ function PulsatingStrip({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex justify-center", className)}>
-      <div ref={stripRef} style={stripStyles} className={className} />
+      <div ref={stripRef} style={stripStyles} />
     </div>
   );
 }
 
-/* -------------------------------------
-   2) InfoModal Stub (or real implementation)
-------------------------------------- */
+/* ----------------------------------------------------------------
+   2) InfoModal Stub
+---------------------------------------------------------------- */
 function InfoModal({
   isOpen,
   onClose,
@@ -189,7 +173,10 @@ function InfoModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white p-4 rounded shadow-md">
         <p>Information about this sheet!</p>
-        <button onClick={onClose} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
+        <button
+          onClick={onClose}
+          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
+        >
           Close
         </button>
       </div>
@@ -197,9 +184,9 @@ function InfoModal({
   );
 }
 
-/* -------------------------------------
-   3) SheetProps + Implementation
-------------------------------------- */
+/* ----------------------------------------------------------------
+   3) The actual Sheet using react-spring-bottom-sheet
+---------------------------------------------------------------- */
 interface SheetProps {
   isOpen: boolean;
   onToggle: () => void;
@@ -211,14 +198,6 @@ interface SheetProps {
   countLabel?: string;
 }
 
-/**
- * A "Bottom Sheet" that:
- *  - Disables scrolling with scrollLockManager if open
- *  - Has a header with optional title, subtitle, count, and two icons (Info & Down)
- *  - Renders a pulsating strip below the header
- *  - Grows to 70vh if open, or collapses to 0
- *  - Has a scrollable body for the children
- */
 export default function Sheet({
   isOpen,
   onToggle,
@@ -229,7 +208,7 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
-  // (A) Lock body scroll if open
+  // If you want to lock the entire page from scrolling
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -237,75 +216,88 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // (B) Local state for showing "InfoModal"
+  // For the Info button
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  return (
-    <>
-      {/* The "Bottom Sheet" */}
-      <div
-        className={cn(
-          "fixed bottom-0 left-0 right-0 z-50",    // top layer
-          "bg-background/90 backdrop-blur-sm rounded-t-lg",
-          "overflow-hidden",                       // ensures the max-height transition is smooth
-          "transition-[max-height] duration-500 ease-in-out",
-          isOpen ? "max-h-[70vh]" : "max-h-0",      // expand/collapse
-          className
-        )}
-      >
-        <div className="flex flex-col h-full">
-          {/* Header Row */}
-          <div className="flex items-center justify-between p-4">
-            <div>
-              {title && (
-                <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-              )}
-              {subtitle && (
-                <p className="text-sm text-muted-foreground">{subtitle}</p>
-              )}
-              {typeof count === "number" && (
-                <p className="text-sm text-muted-foreground">
-                  {count} {countLabel ?? "items"}
-                </p>
-              )}
-            </div>
+  // We'll define snap points so the sheet can be collapsed (80px),
+  // half the screen, or 70% of the screen:
+  const snapPoints = ({ maxHeight }: { maxHeight: number }) => [
+    80, // min collapsed
+    0.5 * maxHeight,
+    0.7 * maxHeight,
+  ];
 
-            {/* Info & Close Icons */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setInfoModalOpen(true)}
-                className="p-2 rounded-full hover:bg-muted transition-colors"
-                aria-label="Show info"
-              >
-                <Info className="w-5 h-5 text-muted-foreground" />
-              </button>
+  // We'll default to half screen upon opening
+  const defaultSnap = ({ maxHeight }: { maxHeight: number }) => 0.5 * maxHeight;
 
-              <button
-                onClick={onToggle}
-                className="p-2 rounded-full hover:bg-muted transition-colors"
-                aria-label="Close sheet"
-              >
-                <ChevronDown className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </div>
-          </div>
+  // react-spring-bottom-sheet:
+  // Instead of manually animating "maxHeight", we rely on the library.
+  // We'll place your entire "header" in a custom "header" prop, 
+  // including the pulsating strip.
 
-          {/* Pulsating strip (just below header) */}
-          <PulsatingStrip />
+  // The library also has "Footer" if you want to add that.
 
-          {/* Scrollable content area */}
-          <div className="relative flex-1 overflow-y-auto">
-            {children}
+  // We'll import:
+  const { BottomSheet } = require("react-spring-bottom-sheet");
 
-            {/* Optional handle at bottom */}
-            <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
-              <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
-            </div>
-          </div>
+  // Construct a header that includes your Title, Subtitle, Buttons, and PulsatingStrip
+  const SheetHeader = (
+    <div className="pb-2 border-b border-border/30">
+      <div className="flex items-center justify-between px-4 pt-4">
+        <div>
+          {title && <h2 className="text-lg font-semibold text-foreground">{title}</h2>}
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+          {typeof count === "number" && (
+            <p className="text-sm text-muted-foreground">
+              {count} {countLabel ?? "items"}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setInfoModalOpen(true)}
+            className="p-2 rounded-full hover:bg-muted transition-colors"
+            aria-label="Show info"
+          >
+            <Info className="w-5 h-5 text-muted-foreground" />
+          </button>
+          <button
+            onClick={onToggle}
+            className="p-2 rounded-full hover:bg-muted transition-colors"
+            aria-label="Close sheet"
+          >
+            <ChevronDown className="w-5 h-5 text-muted-foreground" />
+          </button>
         </div>
       </div>
 
-      {/* InfoModal */}
+      {/* The pulsating strip just below */}
+      <PulsatingStrip className="mt-2 mx-4" />
+    </div>
+  );
+
+  return (
+    <>
+      <BottomSheet
+        open={isOpen}
+        onDismiss={onToggle} // called when user swipes down or taps backdrop
+        snapPoints={snapPoints}
+        defaultSnap={defaultSnap}
+        className={cn(className)}
+        header={SheetHeader}
+      >
+        {/* The content inside the bottom sheet is automatically scrollable by the library */}
+        <div className="relative px-4 pt-2 pb-6">
+          {children}
+          {/* optional bottom handle */}
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center">
+            <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Info Modal */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
