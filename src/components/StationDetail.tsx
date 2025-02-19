@@ -15,32 +15,28 @@ import {
 import { StationFeature } from "@/store/stationsSlice";
 
 interface StationDetailProps {
-  stations: StationFeature[];
+  /** The station to display. If null, show empty/instructions. */
   activeStation: StationFeature | null;
-  /** Optional callback triggered after confirming departure in the UI. */
+  /** Optional callback after confirming departure. */
   onConfirmDeparture?: () => void;
 }
 
-function StationDetailComponent(props: StationDetailProps) {
-  const { stations, activeStation, onConfirmDeparture } = props;
+function StationDetailComponent({ activeStation, onConfirmDeparture }: StationDetailProps) {
   const dispatch = useAppDispatch();
 
-  // Booking-related selectors
+  // Booking-related
   const step = useAppSelector(selectBookingStep);
   const route = useAppSelector(selectRoute);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
-  // For internal logic: Are we in the "selecting departure" flow or "selecting arrival" flow?
   const isDepartureFlow = step <= 2;
 
   useEffect(() => {
     console.log("[StationDetail] step=", step);
-    console.log("[StationDetail] departureId=", departureId);
-    console.log("[StationDetail] arrivalId=", arrivalId);
-  }, [step, departureId, arrivalId]);
+  }, [step]);
 
-  // If there's no active station, show instructions or an empty state
+  // If there's no active station => show placeholder
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -63,7 +59,7 @@ function StationDetailComponent(props: StationDetailProps) {
     );
   }
 
-  // If we have route info, display distance & duration
+  // If we have route info, distance/duration
   let routeDistanceKm: string | null = null;
   let routeDurationMin: string | null = null;
   if (route && departureId && arrivalId) {
@@ -71,19 +67,14 @@ function StationDetailComponent(props: StationDetailProps) {
     routeDurationMin = Math.round(route.duration / 60).toString();
   }
 
-  // Confirm button logic
   const handleConfirm = () => {
     if (isDepartureFlow) {
-      // Confirm departure flow
       if (step === 2) {
         dispatch(advanceBookingStep(3));
-        toast.success(
-          "Departure station confirmed! Now select your arrival station."
-        );
+        toast.success("Departure station confirmed! Now select your arrival station.");
         onConfirmDeparture?.();
       }
     } else {
-      // Confirm arrival flow
       if (step === 4) {
         dispatch(advanceBookingStep(5));
         toast.success("Arrival station confirmed! Proceeding to payment...");
@@ -93,7 +84,6 @@ function StationDetailComponent(props: StationDetailProps) {
 
   return (
     <div className="p-4 space-y-4">
-      {/* === Station Name + Address === */}
       <div className="pl-0 space-y-1">
         <h4 className="text-base font-semibold">
           {activeStation.properties.Place}
@@ -103,18 +93,14 @@ function StationDetailComponent(props: StationDetailProps) {
         </p>
       </div>
 
-      {/* === Station Details === */}
       <div className="space-y-2">
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Est. Wait Time</span>
-            <span className="font-medium">
-              {activeStation.properties.waitTime} min
-            </span>
+            <span className="font-medium">{activeStation.properties.waitTime} min</span>
           </div>
         )}
 
-        {/* If route is available, show distance/time */}
         {routeDistanceKm && routeDurationMin ? (
           <>
             <div className="flex justify-between text-sm">
@@ -122,9 +108,7 @@ function StationDetailComponent(props: StationDetailProps) {
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                Estimated Drive Time
-              </span>
+              <span className="text-muted-foreground">Estimated Drive Time</span>
               <span className="font-medium">{routeDurationMin} min</span>
             </div>
           </>
@@ -140,19 +124,16 @@ function StationDetailComponent(props: StationDetailProps) {
         )}
       </div>
 
-      {/* === Confirm Button === */}
       <div className="pt-2">
         <button
           onClick={handleConfirm}
           disabled={!(step === 2 || step === 4)}
           className={
             isDepartureFlow
-              ? // Departure button: light gray bg, dark text
-                "w-full px-4 py-2 text-sm font-medium text-black bg-gray-100 " +
+              ? "w-full px-4 py-2 text-sm font-medium text-black bg-gray-100 " +
                 "hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed " +
                 "rounded-md transition-colors"
-              : // Arrival button: primary bg, white text
-                "w-full px-4 py-2 text-sm font-medium text-white bg-primary " +
+              : "w-full px-4 py-2 text-sm font-medium text-white bg-primary " +
                 "hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed " +
                 "rounded-md transition-colors"
           }
@@ -164,7 +145,4 @@ function StationDetailComponent(props: StationDetailProps) {
   );
 }
 
-const StationDetail = memo(StationDetailComponent);
-StationDetail.displayName = "StationDetail";
-
-export default StationDetail;
+export default memo(StationDetailComponent);
