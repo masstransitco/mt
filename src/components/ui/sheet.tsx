@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
 /* ----------------------------------------------------------------
-   1) Constants for the Pulsating Strip
+   1) Animation constants for our PulsatingStrip
 ---------------------------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
@@ -61,7 +61,7 @@ function lerp(start: number, end: number, progress: number) {
 }
 
 /* ----------------------------------------------------------------
-   2) The PulsatingStrip component
+   2) PulsatingStrip component
 ---------------------------------------------------------------- */
 function PulsatingStrip({ className }: { className?: string }) {
   const stripRef = useRef<HTMLDivElement>(null);
@@ -119,10 +119,13 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
-    stripRef.current.style.transform = `scale(${scale})`;
-    stripRef.current.style.backgroundColor = color;
-    stripRef.current.style.opacity = opacity.toString();
-    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
+    // Apply the updated styles
+    if (stripRef.current) {
+      stripRef.current.style.transform = `scale(${scale})`;
+      stripRef.current.style.backgroundColor = color;
+      stripRef.current.style.opacity = opacity.toString();
+      stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
+    }
 
     animationRef.current = requestAnimationFrame(animate);
   }, []);
@@ -156,7 +159,7 @@ function PulsatingStrip({ className }: { className?: string }) {
 }
 
 /* ----------------------------------------------------------------
-   3) Optional InfoModal
+   3) An optional InfoModal
 ---------------------------------------------------------------- */
 function InfoModal({
   isOpen,
@@ -166,6 +169,7 @@ function InfoModal({
   onClose: () => void;
 }) {
   if (!isOpen) return null;
+
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
       <div className="bg-white p-4 rounded shadow-md">
@@ -183,19 +187,27 @@ function InfoModal({
 }
 
 /* ----------------------------------------------------------------
-   4) SheetProps
+   4) SheetProps interface
 ---------------------------------------------------------------- */
 export interface SheetProps {
+  /** If true, the sheet is shown; if false, hidden. */
   isOpen: boolean;
+  /** Content of the sheet */
   children: ReactNode;
+  /** Additional class names for styling */
   className?: string;
+  /** Header fields */
   title?: string;
   subtitle?: string;
   count?: number;
   countLabel?: string;
+  /** Called when user swipes down or clicks backdrop to dismiss */
   onDismiss?: () => void;
 }
 
+/* ----------------------------------------------------------------
+   5) The main Sheet component
+---------------------------------------------------------------- */
 export default function Sheet({
   isOpen,
   children,
@@ -206,10 +218,10 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Tracks if user’s scroll is at the top => allow vertical drag
+  // Is user scrolled to the top => enable vertical drag?
   const [isAtTop, setIsAtTop] = useState(true);
 
-  // Lock body scroll behind the sheet
+  // (Optional) lock body scroll behind the sheet
   useLayoutEffect(() => {
     if (isOpen) {
       incrementOpenSheets();
@@ -217,24 +229,26 @@ export default function Sheet({
       decrementOpenSheets();
     }
     return () => {
+      // Cleanup on unmount
       decrementOpenSheets();
     };
   }, [isOpen]);
 
+  // Info modal state
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // Motion for vertical drag
+  // Framer Motion values
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
 
-  // Reset Y on close
+  // Reset Y whenever we close
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
     }
   }, [isOpen, y]);
 
-  // If user drags down >100px => dismiss
+  // Dismiss on drag down >100px
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       if (info.offset.y > 100) {
@@ -244,7 +258,7 @@ export default function Sheet({
     [onDismiss]
   );
 
-  // Header
+  // The sheet header
   const SheetHeader = (
     <div>
       <div className="flex items-center justify-between px-4 pt-4">
@@ -257,20 +271,23 @@ export default function Sheet({
             </p>
           )}
         </div>
-        <button
-          onClick={() => setInfoModalOpen(true)}
-          className="p-2 rounded-full hover:bg-white/10 transition-colors"
-        >
-          <Info className="w-5 h-5" />
-        </button>
+        <div>
+          <button
+            onClick={() => setInfoModalOpen(true)}
+            className="p-2 rounded-full hover:bg-white/10 transition-colors"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+        </div>
       </div>
-      <PulsatingStrip />
+      <PulsatingStrip className="mt-2 mx-4" />
     </div>
   );
 
-  // Scrollable content
+  // Ref to scrollable content
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // If user’s scrollTop=0 => we can drag sheet
   const handleScroll = useCallback(() => {
     if (!contentRef.current) return;
     const { scrollTop } = contentRef.current;
@@ -291,7 +308,7 @@ export default function Sheet({
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-            {/* 1) Backdrop */}
+            {/** Backdrop */}
             <motion.div
               className="absolute inset-0 bg-black/50 pointer-events-auto"
               initial={{ opacity: 0 }}
@@ -300,7 +317,7 @@ export default function Sheet({
               onClick={onDismiss}
             />
 
-            {/* 2) Draggable container */}
+            {/** Draggable container */}
             <motion.div
               className="pointer-events-auto mt-auto w-full"
               style={{ y, opacity: sheetOpacity, touchAction: "pan-y" }}
@@ -312,10 +329,12 @@ export default function Sheet({
               dragConstraints={{ top: 0, bottom: 0 }}
               onDragEnd={handleDragEnd}
             >
-              <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
+              <div
+                className={cn("relative bg-background rounded-t-xl shadow-xl", className)}
+              >
                 {SheetHeader}
 
-                {/* The content area with vertical scroll */}
+                {/** Content area with vertical scroll */}
                 <div
                   ref={contentRef}
                   className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
@@ -328,7 +347,7 @@ export default function Sheet({
         )}
       </AnimatePresence>
 
-      {/* Info modal */}
+      {/** Info modal */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
