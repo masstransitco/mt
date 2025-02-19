@@ -47,7 +47,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }, {} as Record<string, { model: string; cars: typeof availableCars }>)
   );
 
-  // UI state check
+  // Determine visibility based on some UI state
   const isVisible = viewState === "showCar";
 
   // 4) Toggle body scroll lock (example)
@@ -62,37 +62,49 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     };
   }, [isVisible]);
 
-  // If you only want to show the grid when isVisible, you can conditionally render
+  // If you only want to show the grid when isVisible, short-circuit
   if (!isVisible) {
     return null;
   }
 
   return (
     <div className={`transition-all duration-300 ${className}`}>
-      {/* 
-        Outer container for the row of groups:
-          - flex
-          - flex-nowrap so items don’t wrap
-          - w-max ensures the container’s width grows based on content
-      */}
-      <div className="flex flex-nowrap w-max gap-3 py-2">
-        <AnimatePresence mode="popLayout">
-          {groupedByModel.map((group) => (
-            <motion.div
-              key={group.model}
-              layout
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 0.975 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-            >
-              <CarCardGroup group={group} isVisible={isVisible} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+      {/**
+       * Parent container for horizontal swipe:
+       * - overflow-x-auto for scrolling
+       * - touch-pan-x & -webkit-overflow-scrolling:touch for mobile momentum scrolling
+       */}
+      <div
+        className="
+          overflow-x-auto
+          touch-pan-x
+          -webkit-overflow-scrolling:touch
+        "
+      >
+        {/**
+         * Inner flex container:
+         * - flex-nowrap so items do not wrap
+         * - w-max to expand the container's width based on content
+         */}
+        <div className="flex flex-nowrap w-max gap-3 py-2">
+          <AnimatePresence mode="popLayout">
+            {groupedByModel.map((group) => (
+              <motion.div
+                key={group.model}
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 0.975 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+              >
+                <CarCardGroup group={group} isVisible={isVisible} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/** Fallback: show if no cars match */}
+      {/** Show fallback if no cars are available */}
       {groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
