@@ -9,6 +9,8 @@ import React, {
   ReactNode,
   useLayoutEffect,
 } from "react";
+
+// IMPORTANT: install & import the library + its default CSS
 import { BottomSheet } from "react-spring-bottom-sheet";
 import "react-spring-bottom-sheet/dist/style.css";
 
@@ -208,7 +210,7 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
-  // If you want to lock the entire page from scrolling
+  // If you want to lock the entire page from scrolling:
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -219,36 +221,30 @@ export default function Sheet({
   // For the Info button
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // We'll define snap points so the sheet can be collapsed (80px),
-  // half the screen, or 70% of the screen:
+  // Snap points:
+  // We want the sheet to have a minimal snap near the pulsating strip,
+  // e.g. 120px so the user sees the strip and partial header.
+  // Then a half screen, and 80% screen for near-full.
   const snapPoints = ({ maxHeight }: { maxHeight: number }) => [
-    80, // min collapsed
+    120, // Enough to show the strip & partial header
     0.5 * maxHeight,
-    0.7 * maxHeight,
+    0.8 * maxHeight,
   ];
 
   // We'll default to half screen upon opening
   const defaultSnap = ({ maxHeight }: { maxHeight: number }) => 0.5 * maxHeight;
 
-  // react-spring-bottom-sheet:
-  // Instead of manually animating "maxHeight", we rely on the library.
-  // We'll place your entire "header" in a custom "header" prop, 
-  // including the pulsating strip.
+  // The library also automatically uses a backdrop. 
+  // If the user drags below the smallest snap (120px), `onDismiss` is called => close.
 
-  // The library also has "Footer" if you want to add that.
-
-  // We'll import:
-  const { BottomSheet } = require("react-spring-bottom-sheet");
-
-  // Construct a header that includes your Title, Subtitle, Buttons, and PulsatingStrip
   const SheetHeader = (
-    <div className="pb-2 border-b border-border/30">
+    <div className="pb-2 border-b border-border/30 bg-gray-900/90 text-white">
       <div className="flex items-center justify-between px-4 pt-4">
         <div>
-          {title && <h2 className="text-lg font-semibold text-foreground">{title}</h2>}
-          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+          {subtitle && <p className="text-sm text-gray-200">{subtitle}</p>}
           {typeof count === "number" && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-gray-200">
               {count} {countLabel ?? "items"}
             </p>
           )}
@@ -257,17 +253,17 @@ export default function Sheet({
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setInfoModalOpen(true)}
-            className="p-2 rounded-full hover:bg-muted transition-colors"
+            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
             aria-label="Show info"
           >
-            <Info className="w-5 h-5 text-muted-foreground" />
+            <Info className="w-5 h-5 text-white" />
           </button>
           <button
             onClick={onToggle}
-            className="p-2 rounded-full hover:bg-muted transition-colors"
+            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
             aria-label="Close sheet"
           >
-            <ChevronDown className="w-5 h-5 text-muted-foreground" />
+            <ChevronDown className="w-5 h-5 text-white" />
           </button>
         </div>
       </div>
@@ -281,18 +277,31 @@ export default function Sheet({
     <>
       <BottomSheet
         open={isOpen}
-        onDismiss={onToggle} // called when user swipes down or taps backdrop
+        onDismiss={onToggle} // If user drags below 120px or taps backdrop
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
-        className={cn(className)}
+        className={cn(
+          // We set the sheet background to dark gray
+          // The library's CSS classes are appended last, so use !important if needed.
+          "rsbs-dark bg-gray-900 text-white",
+          className
+        )}
         header={SheetHeader}
+        // This ensures the actual sheet container also has a dark background:
+        // "style" sets inline CSS for the .rsbs-body
+        style={{
+          backgroundColor: "rgba(17,17,17,0.8)", // or #333, etc.
+          color: "#fff",
+        }}
+        blocking={true} // if you want to block scrolling behind the sheet
       >
-        {/* The content inside the bottom sheet is automatically scrollable by the library */}
-        <div className="relative px-4 pt-2 pb-6">
+        {/* The content inside the bottom sheet (scrollable) */}
+        <div className="relative px-4 pt-2 pb-6 bg-gray-900 text-white">
           {children}
+
           {/* optional bottom handle */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-            <div className="w-32 h-1 rounded-full bg-muted-foreground/25" />
+            <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
         </div>
       </BottomSheet>
