@@ -197,7 +197,7 @@ interface SheetProps {
 
 export default function Sheet({
   isOpen,
-  onToggle, // Note: onToggle is no longer used since the sheet always remains open.
+  onToggle, // onToggle is no longer used since the sheet always remains open.
   children,
   className,
   title,
@@ -258,6 +258,20 @@ export default function Sheet({
     }
   }, [isOpen, contentHeight]);
 
+  // onSpringEnd is used to clamp the sheet so that it cannot be dragged
+  // below the collapsed snap point.
+  const handleSpringEnd = useCallback(
+    (event: { current: number }) => {
+      const collapsed = 120; // Same as your defined collapsed snap point
+      if (event.current < collapsed) {
+        // If the sheet has been dragged below the collapsed value,
+        // force it to snap back to collapsed.
+        sheetRef.current?.snapTo(() => collapsed);
+      }
+    },
+    []
+  );
+
   // Header markup (chevron button removed so the sheet always stays open)
   const SheetHeader = (
     <div>
@@ -305,11 +319,14 @@ export default function Sheet({
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         expandOnContentDrag={false}
+        // Clamp the drag: when the spring animation ends, check if the current
+        // value is below the collapsed snap and if so, snap back.
+        onSpringEnd={handleSpringEnd}
       >
         <div
           ref={contentRef}
           className="relative px-4 pt-2 pb-6"
-          // Adding these inline styles helps clip any overscroll below the viewport.
+          // These inline styles help clip any overscroll below the viewport.
           style={{ maxHeight: "100vh", overflow: "hidden" }}
         >
           {children}
