@@ -211,10 +211,10 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // For the Info button
+  // Info button state
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // Measure content height to figure out snap points
+  // Measure sheet content for dynamic snap points
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
@@ -224,7 +224,7 @@ export default function Sheet({
     }
   }, [children]);
 
-  // We'll provide 2 snap points: collapsed & expanded
+  // Two snap points: collapsed & expanded
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
       const collapsed = 120; // px from bottom
@@ -234,26 +234,27 @@ export default function Sheet({
     [contentHeight]
   );
 
-  // Default to the expanded snap, or collapsed - your choice
+  // Start collapsed
   const defaultSnap = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
       const collapsed = 120;
       const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
-      // For example, start in the collapsed position:
       return collapsed;
     },
     [contentHeight]
   );
 
-  // Make a custom header that matches the rest of the sheet
+  // Custom header markup — NO background or text color here
+  // so that the library's .rsbs-header styles from globals.css apply.
   const SheetHeader = (
+    <div>
       <div className="flex items-center justify-between px-4 pt-4">
         {/* Left side: Title, subtitle, count => all left-aligned */}
         <div className="text-left">
-          {title && <h2 className="text-lg font-semibold text-left">{title}</h2>}
-          {subtitle && <p className="text-sm text-gray-200">{subtitle}</p>}
+          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+          {subtitle && <p className="text-sm text-gray-300">{subtitle}</p>}
           {typeof count === "number" && (
-            <p className="text-sm text-gray-200">
+            <p className="text-sm text-gray-300">
               {count} {countLabel ?? "items"}
             </p>
           )}
@@ -263,16 +264,16 @@ export default function Sheet({
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setInfoModalOpen(true)}
-            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-full hover:bg-white/10 transition-colors"
           >
-            <Info className="w-5 h-5 text-white" />
+            <Info className="w-5 h-5" />
           </button>
           {/* Only the chevron can close the sheet */}
           <button
             onClick={onToggle}
-            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-full hover:bg-white/10 transition-colors"
           >
-            <ChevronDown className="w-5 h-5 text-white" />
+            <ChevronDown className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -286,26 +287,25 @@ export default function Sheet({
     <>
       <BottomSheet
         open={isOpen}
-        // We do NOT allow the sheet to fully close on drag:
         onDismiss={() => {
-          /* no-op so it won't close automatically */
+          /* no-op so it won't close automatically on drag-down */
         }}
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         header={SheetHeader}
-        blocking={false} // can interact with background
+        blocking={false}
         className={cn("custom-sheet", className)}
       >
         <div ref={contentRef} className="relative px-4 pt-2 pb-6">
           {children}
-          {/* Optional handle at bottom - purely visual; won't close */}
+
+          {/* Optional handle at bottom - purely visual, won't close on drag */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
         </div>
       </BottomSheet>
 
-      {/* Info Modal */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
