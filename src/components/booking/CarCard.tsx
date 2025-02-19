@@ -28,21 +28,26 @@ function CarCardComponent({
   isVisible = true,
   size = "large",
 }: CarCardProps) {
-  // Debug log to see exactly what the raw battery value is
+  // Debug logs to track battery value processing
   console.log("Battery raw:", car.electric_battery_percentage_left);
-
-  // More robust conversion and validation
-// Handle all possible types (number|null|undefined)
-const rawBattery = car.electric_battery_percentage_left;
-const parsedBattery = typeof rawBattery === 'number' ? rawBattery : 
-                      (rawBattery ? parseFloat(String(rawBattery)) : NaN);
-
-// Check if it's valid and within range
-const isValidBatteryValue = 
-  !isNaN(parsedBattery) && parsedBattery >= 1 && parsedBattery <= 100;
-
-// If invalid, fallback to 92
-const batteryPercentage = isValidBatteryValue ? parsedBattery : 92;
+  
+  // Handle all possible types (number|null|undefined)
+  const rawBattery = car.electric_battery_percentage_left;
+  const parsedBattery = typeof rawBattery === 'number' ? rawBattery : 
+                        (rawBattery ? parseFloat(String(rawBattery)) : NaN);
+  
+  console.log("Parsed battery:", parsedBattery);
+  
+  // Check if it's valid and within range
+  const isValidBatteryValue = 
+    !isNaN(parsedBattery) && parsedBattery >= 1 && parsedBattery <= 100;
+  
+  console.log("Is valid battery:", isValidBatteryValue);
+  
+  // If invalid, fallback to 92
+  const batteryPercentage = isValidBatteryValue ? parsedBattery : 92;
+  
+  console.log("Final battery percentage:", batteryPercentage);
 
   return (
     <motion.div
