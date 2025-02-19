@@ -289,25 +289,20 @@ export default function Sheet({
   open={isOpen}
   header={SheetHeader}
   className={cn("custom-sheet", className)}
-  // allow background interactions
   blocking={false}
-  // do NOT close if dragged down or clicked outside
   onDismiss={() => {
-    /* no-op: prevents the sheet from dismissing */
+    // no-op: prevents the sheet from dismissing
   }}
-  // only two snap points, no partial expansions
-  snapPoints={snapPoints}
-  defaultSnap={defaultSnap}
-  // disable content drag expansion
+  snapPoints={({ maxHeight }) => [120, maxHeight]}
+  defaultSnap={({ maxHeight }) => 120}
   expandOnContentDrag={false}
-  // disable overscroll/rubber band effect
-  forceRemeasure={true}
 >
   <div ref={contentRef} className="relative px-4 pt-2 pb-6">
     {children}
     {/* Optional handle, etc. */}
   </div>
 </BottomSheet>
+
 
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
