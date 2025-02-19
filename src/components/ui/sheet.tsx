@@ -1,19 +1,14 @@
 "use client";
 
 import React, {
-  useState,
+  ReactNode,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useEffect,
   useCallback,
-  useMemo,
-  ReactNode,
-  useLayoutEffect,
+  useState,
 } from "react";
-
-// IMPORTANT: install & import the library + its default CSS
-import { BottomSheet } from "react-spring-bottom-sheet";
-import "react-spring-bottom-sheet/dist/style.css";
-
 import { ChevronDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -21,10 +16,7 @@ import {
   decrementOpenSheets,
 } from "@/lib/scrollLockManager";
 
-/* ----------------------------------------------------------------
-   1) The PulsatingStrip Code (inlined)
-   - We keep your same logic for the animated strip
----------------------------------------------------------------- */
+// Pulsating strip constants/types
 type AnimationColor = string;
 type Scale = number;
 
@@ -62,7 +54,10 @@ function lerp(start: Scale, end: Scale, progress: number): Scale {
   return start + (end - start) * progress;
 }
 
-function PulsatingStrip({ className }: { className?: string }) {
+/**
+ * The pulsating strip that sits just under the sheet header
+ */
+const PulsatingStrip = React.memo<{ className?: string }>(({ className }) => {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>();
@@ -122,6 +117,7 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
+    // Apply final styling
     stripRef.current.style.transform = `scale(${scale})`;
     stripRef.current.style.backgroundColor = color;
     stripRef.current.style.opacity = opacity.toString();
@@ -140,7 +136,7 @@ function PulsatingStrip({ className }: { className?: string }) {
     };
   }, [animate]);
 
-  const stripStyles = useMemo(
+  const styles = useMemo(
     () => ({
       width: "110%",
       height: "2.5px",
@@ -155,51 +151,43 @@ function PulsatingStrip({ className }: { className?: string }) {
 
   return (
     <div className={cn("flex justify-center", className)}>
-      <div ref={stripRef} style={stripStyles} />
+      <div ref={stripRef} style={styles} />
     </div>
   );
-}
+});
+PulsatingStrip.displayName = "PulsatingStrip";
 
-/* ----------------------------------------------------------------
-   2) InfoModal Stub
----------------------------------------------------------------- */
-function InfoModal({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white p-4 rounded shadow-md">
-        <p>Information about this sheet!</p>
-        <button
-          onClick={onClose}
-          className="mt-2 px-3 py-1 bg-blue-500 text-white rounded"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  );
-}
+// This is your InfoModal import
+import InfoModal from "./info-modal";
 
-/* ----------------------------------------------------------------
-   3) The actual Sheet using react-spring-bottom-sheet
----------------------------------------------------------------- */
 interface SheetProps {
+  /** Whether the sheet is open or collapsed to 0 height */
   isOpen: boolean;
+  /** Callback to toggle the sheet (e.g., close on button click) */
   onToggle: () => void;
+  /** The main content inside the sheet (e.g. StationDetail) */
   children: ReactNode;
+  /** Optional additional classes */
   className?: string;
+  /** Title (e.g. "Departure" or "Arrival") */
   title?: string;
+  /** Subtitle below the title */
   subtitle?: string;
+  /** e.g. "12 stations found" */
   count?: number;
+  /** The label that follows the numeric count, e.g. "stations found" */
   countLabel?: string;
 }
 
+/**
+ * A "Bottom Sheet" with the older dark-styled layout:
+ *  - If isOpen => max-h: 70vh, else 0
+ *  - Dark gray background, white text
+ *  - Has a header with optional title, subtitle, count, Info & ChevronDown icons
+ *  - Lock scroll if open
+ *  - Pulsating strip under the header
+ *  - Scrollable body
+ */
 export default function Sheet({
   isOpen,
   onToggle,
@@ -210,7 +198,7 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
-  // If you want to lock the entire page from scrolling:
+  // Lock body scrolling if isOpen
   useLayoutEffect(() => {
     if (isOpen) incrementOpenSheets();
     return () => {
@@ -218,95 +206,74 @@ export default function Sheet({
     };
   }, [isOpen]);
 
-  // For the Info button
+  // Local state for showing the InfoModal
   const [infoModalOpen, setInfoModalOpen] = useState(false);
-
-  // Snap points:
-  // We want the sheet to have a minimal snap near the pulsating strip,
-  // e.g. 120px so the user sees the strip and partial header.
-  // Then a half screen, and 80% screen for near-full.
-  const snapPoints = ({ maxHeight }: { maxHeight: number }) => [
-    120, // Enough to show the strip & partial header
-    0.5 * maxHeight,
-    0.8 * maxHeight,
-  ];
-
-  // We'll default to half screen upon opening
-  const defaultSnap = ({ maxHeight }: { maxHeight: number }) => 0.5 * maxHeight;
-
-  // The library also automatically uses a backdrop. 
-  // If the user drags below the smallest snap (120px), `onDismiss` is called => close.
-
-  const SheetHeader = (
-    <div className="pb-2 border-b border-border/30 bg-gray-900/90 text-white">
-      <div className="flex items-center justify-between px-4 pt-4">
-        <div>
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
-          {subtitle && <p className="text-sm text-gray-200">{subtitle}</p>}
-          {typeof count === "number" && (
-            <p className="text-sm text-gray-200">
-              {count} {countLabel ?? "items"}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setInfoModalOpen(true)}
-            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
-            aria-label="Show info"
-          >
-            <Info className="w-5 h-5 text-white" />
-          </button>
-          <button
-            onClick={onToggle}
-            className="p-2 rounded-full hover:bg-gray-800 transition-colors"
-            aria-label="Close sheet"
-          >
-            <ChevronDown className="w-5 h-5 text-white" />
-          </button>
-        </div>
-      </div>
-
-      {/* The pulsating strip just below */}
-      <PulsatingStrip className="mt-2 mx-4" />
-    </div>
-  );
 
   return (
     <>
-      <BottomSheet
-        open={isOpen}
-        onDismiss={onToggle} // If user drags below 120px or taps backdrop
-        snapPoints={snapPoints}
-        defaultSnap={defaultSnap}
+      {/* The main bottom sheet container */}
+      <div
         className={cn(
-          // We set the sheet background to dark gray
-          // The library's CSS classes are appended last, so use !important if needed.
-          "rsbs-dark bg-gray-900 text-white",
+          "fixed bottom-0 left-0 right-0 z-50", // on top
+          "overflow-hidden transition-[max-height] duration-500 ease-in-out",
+          // Older dark styling:
+          "bg-gray-900/90 text-white backdrop-blur-sm rounded-t-lg",
+          isOpen ? "max-h-[70vh]" : "max-h-0", // if open => 70vh, else collapsed
           className
         )}
-        header={SheetHeader}
-        // This ensures the actual sheet container also has a dark background:
-        // "style" sets inline CSS for the .rsbs-body
-        style={{
-          backgroundColor: "rgba(17,17,17,0.8)", // or #333, etc.
-          color: "#fff",
-        }}
-        blocking={true} // if you want to block scrolling behind the sheet
       >
-        {/* The content inside the bottom sheet (scrollable) */}
-        <div className="relative px-4 pt-2 pb-6 bg-gray-900 text-white">
-          {children}
+        <div className="flex flex-col h-full">
+          {/* Sheet Header */}
+          <div className="flex items-center justify-between p-4">
+            <div>
+              {title && (
+                <h2 className="text-lg font-semibold">{title}</h2>
+              )}
+              {subtitle && (
+                <p className="text-sm opacity-80">{subtitle}</p>
+              )}
+              {typeof count === "number" && (
+                <p className="text-sm opacity-80">
+                  {count} {countLabel ?? "items"}
+                </p>
+              )}
+            </div>
 
-          {/* optional bottom handle */}
-          <div className="absolute bottom-2 left-0 right-0 flex justify-center">
-            <div className="w-32 h-1 rounded-full bg-white/25" />
+            {/* Buttons: Info & ChevronDown */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setInfoModalOpen(true)}
+                className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+                aria-label="Show info"
+              >
+                <Info className="w-5 h-5" />
+              </button>
+              <button
+                onClick={onToggle}
+                className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+                aria-label="Close sheet"
+              >
+                <ChevronDown className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Pulsating strip */}
+          <PulsatingStrip />
+
+          {/* Scrollable content area */}
+          <div className="relative flex-1 overflow-y-auto">
+            {children}
+
+            {/* Optional bottom handle */}
+            <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-2">
+              <div className="w-32 h-1 rounded-full bg-white/25" />
+            </div>
           </div>
         </div>
-      </BottomSheet>
+      </div>
 
-      {/* Info Modal */}
+      {/* The InfoModal (imported from ./info-modal) */}
       <InfoModal isOpen={infoModalOpen} onClose={() => setInfoModalOpen(false)} />
     </>
   );
