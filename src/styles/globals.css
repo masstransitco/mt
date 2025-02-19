@@ -30,6 +30,8 @@
 
   html {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    overscroll-behavior: none;
+    height: 100%;
   }
 
   body {
@@ -38,6 +40,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+    height: 100%;
   }
 }
 
