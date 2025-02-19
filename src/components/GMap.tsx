@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useEffect, useCallback, useState, memo, Suspense } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  memo,
+  Suspense,
+} from "react";
 import { GoogleMap, Polyline, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
@@ -99,7 +105,7 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
     onStationClick,
   } = props;
 
-  // If the user searched an address, show that sorted list first
+  // If user searched an address, show that sorted list first
   const listToRender = searchLocation ? sortedStations : stations;
 
   return (
@@ -170,9 +176,12 @@ const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
+  // Track when all data + map is fully loaded => only then do we show the sheet
+  const [overlayVisible, setOverlayVisible] = useState(true);
+  const [isSheetReady, setIsSheetReady] = useState(false);
+
   // Local state
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
-  const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
@@ -235,7 +244,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         dispatch(advanceBookingStep(2));
         toast.success("Departure station selected! (Confirm in station detail.)");
       } else if (bookingStep === 2) {
-        // Step 2 => re-selecting departure (still allowed)
+        // Step 2 => re-selecting departure
         dispatch(selectDepartureStation(station.id));
         toast.success("Departure station re-selected! (Confirm in station detail.)");
       } else if (bookingStep === 3) {
@@ -293,11 +302,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatch]);
 
   /* -----------------------------------------------------------
-     3) Hide spinner once data is loaded
+     3) Hide spinner once data is loaded, and let the Sheet render
   ----------------------------------------------------------- */
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
+      // data fully loaded => hide spinner
       setOverlayVisible(false);
+      // also make the sheet appear only now
+      setIsSheetReady(true);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
@@ -363,7 +375,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /* -----------------------------------------------------------
      5) Handle errors
   ----------------------------------------------------------- */
-  const hasError = stationsError || carsError || loadError;
+  const stationsErrorOrCarsError = stationsError || carsError;
+  const hasError = stationsErrorOrCarsError || loadError;
   if (hasError) {
     return (
       <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
@@ -383,6 +396,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /* -----------------------------------------------------------
      6) Auto-fetch user’s route (departure->arrival)
   ----------------------------------------------------------- */
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
+
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -410,6 +426,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /* -----------------------------------------------------------
      8) Decode departure->arrival route
   ----------------------------------------------------------- */
+  const route = useAppSelector(selectRoute);
   const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -423,6 +440,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /* -----------------------------------------------------------
      9) Decode dispatch->departure route
   ----------------------------------------------------------- */
+  const dispatchRoute = useAppSelector(selectDispatchRoute);
   const [decodedDispatchPath, setDecodedDispatchPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!dispatchRoute?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -470,11 +488,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setSearchLocation(location);
       setSortedStations(sorted);
 
+      const isSheetMinimized = useAppSelector(selectIsSheetMinimized);
       if (isSheetMinimized) {
         dispatch(toggleSheet());
       }
     },
-    [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
+    [actualMap, stations, sortStationsByDistanceToPoint, dispatch]
   );
 
   /* -----------------------------------------------------------
@@ -510,6 +529,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /* -----------------------------------------------------------
      14) Bottom sheet logic
   ----------------------------------------------------------- */
+  const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
+  const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
+  const [forceSheetOpen, setForceSheetOpen] = useState(false);
+  const [detailKey, setDetailKey] = useState(0);
+
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -570,9 +594,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   /* -----------------------------------------------------------
-     17) Selecting a station from the station list
+     17) Selecting a station from station list
   ----------------------------------------------------------- */
   const handleStationSelectedFromList = (station: StationFeature) => {
+    const bookingStep = useAppSelector(selectBookingStep);
+
     if (bookingStep === 1 || bookingStep === 2) {
       dispatch(selectDepartureStation(station.id));
       if (bookingStep === 1) {
@@ -598,7 +624,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   /* -----------------------------------------------------------
      18) Station detail logic
   ----------------------------------------------------------- */
-  const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
+  const hasStationSelected =
+    bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
     : null;
@@ -610,16 +637,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return <LoadingSpinner />;
   }
 
-  /* -----------------------------------------------------------
-     20) Which sheets are open?
-  ----------------------------------------------------------- */
+  // 
+  // 20) Only show the sheet if we set isSheetReady=true
+  //     This ensures the sheet won't render at all if data not fully loaded
+  //
+
+  /* Which sheets are open? */
   const isCarOpen = openSheet === "car";
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
-  /* -----------------------------------------------------------
-     21) Return the map UI
-  ----------------------------------------------------------- */
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Main Google Map */}
@@ -645,16 +672,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* DispatchHub->Departure polylines */}
           {decodedDispatchPath.length > 0 && (
             <>
-              <Polyline path={decodedDispatchPath} options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW} />
-              <Polyline path={decodedDispatchPath} options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND} />
+              <Polyline
+                path={decodedDispatchPath}
+                options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW}
+              />
+              <Polyline
+                path={decodedDispatchPath}
+                options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND}
+              />
             </>
           )}
 
           {/* Departure->Arrival polylines */}
           {decodedPath.length > 0 && (
             <>
-              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_SHADOW} />
-              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_FOREGROUND} />
+              <Polyline
+                path={decodedPath}
+                options={ROUTE_LINE_OPTIONS_SHADOW}
+              />
+              <Polyline
+                path={decodedPath}
+                options={ROUTE_LINE_OPTIONS_FOREGROUND}
+              />
             </>
           )}
 
@@ -708,49 +747,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </button>
       </div>
 
-      {/* Car Sheet (controlled by isCarOpen) */}
-      <CarSheet isOpen={isCarOpen} />
+      {/* 
+        Only render your sheet components 
+        if isSheetReady is true 
+      */}
+      {isSheetReady && (
+        <>
+          {/* Car Sheet (controlled by isCarOpen) */}
+          <CarSheet isOpen={isCarOpen} />
 
-      {/* Station list sheet (no onToggle) */}
-      <Sheet
-        isOpen={isListOpen}
-        title="Nearby Stations"
-        count={sortedStations.length}
-      >
-        <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-          {sortedStations.map((station, idx) => (
-            <StationListItem
-              key={station.id}
-              index={idx}
-              style={{}}
-              data={{
-                items: sortedStations,
-                onStationSelected: handleStationSelectedFromList,
-              }}
-            />
-          ))}
-        </div>
-      </Sheet>
+          {/* Station list sheet */}
+          <Sheet
+            isOpen={isListOpen}
+            title="Nearby Stations"
+            count={sortedStations.length}
+          >
+            <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+              {sortedStations.map((station, idx) => (
+                <StationListItem
+                  key={station.id}
+                  index={idx}
+                  style={{}}
+                  data={{
+                    items: sortedStations,
+                    onStationSelected: handleStationSelectedFromList,
+                  }}
+                />
+              ))}
+            </div>
+          </Sheet>
 
-      {/* Station detail sheet (no onToggle) */}
-      <Sheet
-        key={detailKey}
-        isOpen={isDetailOpen}
-        title={bookingStep <= 2 ? "Pick-up station" : "Trip details"}
-        subtitle={
-          bookingStep <= 2
-            ? "Your car will be delivered here"
-            : "Return the car at your arrival station"
-        }
-      >
-        {stationToShow && (
-          <StationDetail
+          {/* Station detail sheet */}
+          <Sheet
             key={detailKey}
-            stations={searchLocation ? sortedStations : stations}
-            activeStation={stationToShow}
-          />
-        )}
-      </Sheet>
+            isOpen={isDetailOpen}
+            title={bookingStep <= 2 ? "Pick-up station" : "Trip details"}
+            subtitle={
+              bookingStep <= 2
+                ? "Your car will be delivered here"
+                : "Return the car at your arrival station"
+            }
+          >
+            {stationToShow && (
+              <StationDetail
+                key={detailKey}
+                stations={searchLocation ? sortedStations : stations}
+                activeStation={stationToShow}
+              />
+            )}
+          </Sheet>
+        </>
+      )}
 
       {/* GaussianSplatModal */}
       <Suspense fallback={<div>Loading modal...</div>}>
