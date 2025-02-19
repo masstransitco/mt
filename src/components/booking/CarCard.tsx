@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import { Gauge, Battery } from "lucide-react";
 import type { Car } from "@/types/cars";
 
-// Dynamically load the 3D viewer for performance
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => (
@@ -29,6 +28,12 @@ function CarCardComponent({
   isVisible = true,
   size = "large",
 }: CarCardProps) {
+  // Fallback battery value
+  const batteryPercentage =
+    typeof car.electric_battery_percentage_left === "number"
+      ? car.electric_battery_percentage_left
+      : 92; // fallback to 92% if undefined
+
   return (
     <motion.div
       initial={{ scale: 0.98 }}
@@ -58,7 +63,6 @@ function CarCardComponent({
           <Car3DViewer
             modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
             imageUrl={car.image}
-            // Only let the selected card be interactive
             interactive={selected}
             height="100%"
             width="100%"
@@ -69,24 +73,17 @@ function CarCardComponent({
 
       {/* Car details */}
       <div className="p-4">
-        {/* 
-          A left/right layout:
-          Left side shows: Model (bold), Battery, Odometer
-          Right side shows: Car Name, Year
-        */}
         <div className="flex items-start justify-between gap-2 mb-2">
           {/* Left side */}
           <div className="flex flex-col">
             {/* Model (bold) */}
             <p className="font-bold text-foreground text-lg">{car.model}</p>
 
-            {/* Battery percentage (only if we have a valid number) */}
-            {typeof car.electric_battery_percentage_left === "number" && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                <Battery className="w-4 h-4" />
-                <span>{car.electric_battery_percentage_left}%</span>
-              </div>
-            )}
+            {/* Battery percentage (with fallback) */}
+            <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+              <Battery className="w-4 h-4" />
+              <span>{batteryPercentage}%</span>
+            </div>
 
             {/* Odometer */}
             <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
@@ -97,11 +94,7 @@ function CarCardComponent({
 
           {/* Right side */}
           <div className="text-right">
-            {/* Car Name (regular) */}
-            <p className="text-base text-foreground font-normal">
-              {car.name}
-            </p>
-            {/* Year */}
+            <p className="text-base text-foreground font-normal">{car.name}</p>
             <p className="text-sm text-muted-foreground">{car.year}</p>
           </div>
         </div>
