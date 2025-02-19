@@ -1,5 +1,3 @@
-// src/components/Sheet.tsx
-
 "use client";
 
 import React, {
@@ -136,11 +134,10 @@ function PulsatingStrip({ className }: { className?: string }) {
     };
   }, [animate]);
 
-  // CHANGED: height => "1px" for subtle look
   const stripStyles = useMemo(
     () => ({
       width: "110%",
-      height: "1px", // subtle, thinner strip
+      height: "1px",
       borderRadius: "1px",
       backgroundColor: ANIMATION_PARAMS.colors.primary,
       willChange: "transform, opacity, box-shadow",
@@ -221,7 +218,6 @@ export default function Sheet({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
-  // Re-measure if children changes
   useLayoutEffect(() => {
     if (contentRef.current) {
       const scrollHeight = contentRef.current.scrollHeight;
@@ -251,13 +247,13 @@ export default function Sheet({
     [contentHeight]
   );
 
-  // Custom header: no border-b, same dark background as entire sheet
+  // Custom header (dark background, left-aligned title)
   const SheetHeader = (
     <div className="pb-2 bg-gray-900/90 text-white">
       <div className="flex items-center justify-between px-4 pt-4">
         {/* Left side: Title, subtitle, count => all left-aligned */}
-        <div>
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+        <div className="text-left">
+          {title && <h2 className="text-lg font-semibold text-left">{title}</h2>}
           {subtitle && <p className="text-sm text-gray-200">{subtitle}</p>}
           {typeof count === "number" && (
             <p className="text-sm text-gray-200">
@@ -283,7 +279,7 @@ export default function Sheet({
         </div>
       </div>
 
-      {/* The *only* divider: a subtle PulsatingStrip */}
+      {/* The subtle PulsatingStrip divider */}
       <PulsatingStrip className="mt-2 mx-4" />
     </div>
   );
@@ -296,12 +292,13 @@ export default function Sheet({
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         header={SheetHeader}
-        blocking={false}
+        // <-- Important: set blocking to true so user CANNOT close by dragging
+        blocking={true}
         className={cn("custom-sheet", className)}
       >
         <div ref={contentRef} className="relative px-4 pt-2 pb-6">
           {children}
-          {/* Optional handle at bottom */}
+          {/* Optional handle at bottom (still visible but won't close the sheet on drag) */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
