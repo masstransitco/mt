@@ -3,42 +3,57 @@
 import React from "react";
 import { useAppSelector, useAppDispatch } from "@/store/store";
 import { selectAvailableForDispatch } from "@/store/carSlice";
+import { toggleSheet } from "@/store/uiSlice";
+
+// UI primitives
 import Sheet from "@/components/ui/sheet";
 import CarGrid from "@/components/booking/CarGrid";
 
-// Optionally use Redux for minimization if desired
-import { selectIsSheetMinimized, toggleSheet } from "@/store/uiSlice";
-
-interface CarSheetProps {
-  /** If true, sheet is open. If false, sheet is hidden. */
+/**
+ * Props for our CarSheety component:
+ * - isOpen: controls whether the sheet is visible
+ * - onToggle: optional callback if parent wants to handle toggle logic
+ */
+interface CarSheetyProps {
+  /** Whether the sheet is shown or hidden */
   isOpen: boolean;
-  /** Optional callback if the user swipes/presses to dismiss. */
-  onClose?: () => void;
+  /** Optional callback if parent wants to handle toggling logic */
+  onToggle?: () => void;
 }
 
-export default function CarSheet({ isOpen, onClose }: CarSheetProps) {
+export default function CarSheety({ isOpen, onToggle }: CarSheetyProps) {
   const dispatch = useAppDispatch();
   const availableCars = useAppSelector(selectAvailableForDispatch);
+
+  // Number of available cars
   const count = availableCars.length;
-  const singularOrPlural = count === 1 ? "car" : "cars";
-  const countLabel = `${singularOrPlural} available for dispatch`;
+  // e.g. “1 car” or “2 cars available”
+  const countLabel = count === 1 ? "1 car" : `${count} cars available`;
+
+  /**
+   * If the user swipes down, clicks outside,
+   * or triggers “onDismiss” on the Sheet component,
+   * we either call the parent’s onToggle() or
+   * fall back to dispatch(toggleSheet()) if onToggle isn’t provided.
+   */
+  const handleDismiss = () => {
+    if (onToggle) {
+      onToggle();
+    } else {
+      dispatch(toggleSheet());
+    }
+  };
 
   return (
     <Sheet
       isOpen={isOpen}
-      title="Choose a car"
+      title="Dispatch a car"
       count={count}
       countLabel={countLabel}
-      /**
-       * If the user drags down or clicks outside,
-       * call our onClose or default to dispatch(toggleSheet())
-       */
-      onDismiss={() => {
-        if (onClose) onClose();
-        else dispatch(toggleSheet()); 
-      }}
+      onDismiss={handleDismiss}
     >
-      <div className="px-0 py-2">
+      {/* You can style this however you prefer */}
+      <div className="px-4 py-2">
         <CarGrid className="grid grid-cols-1 gap-4 auto-rows-max" />
       </div>
     </Sheet>
