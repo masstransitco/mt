@@ -81,9 +81,9 @@ import {
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
-/* ------------------------------------------------------------
-   StationMarkers - a memoized component for rendering stations
------------------------------------------------------------- */
+/* ----------------------------------------------------------------
+   1) StationMarkers - a memoized component for rendering stations
+---------------------------------------------------------------- */
 interface StationMarkersProps {
   stations: StationFeature[];
   sortedStations: StationFeature[];
@@ -105,13 +105,14 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
     onStationClick,
   } = props;
 
-  // If the user searched an address, show that sorted list first
+  // If user searched an address, show that sorted list first
   const listToRender = searchLocation ? sortedStations : stations;
 
   return (
     <>
       {listToRender.map((station) => {
         const [lng, lat] = station.geometry.coordinates;
+
         const isDeparture = station.id === departureStationId;
         const isArrival = station.id === arrivalStationId;
 
@@ -135,9 +136,9 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
   );
 });
 
-/* ------------------------------------------------------------
-   CarMarkers - a memoized component for rendering cars
------------------------------------------------------------- */
+/* ----------------------------------------------------------------
+   2) CarMarkers - a memoized component for rendering cars
+---------------------------------------------------------------- */
 interface CarMarkersProps {
   cars: { id: number; lat: number; lng: number; name: string }[];
   markerIcons: any;
@@ -160,9 +161,9 @@ const CarMarkers = memo(function CarMarkers({ cars, markerIcons }: CarMarkersPro
   );
 });
 
-/* ------------------------------------------------------------
-   GMap - main map component
------------------------------------------------------------- */
+/* ----------------------------------------------------------------
+   3) GMap - main map component
+---------------------------------------------------------------- */
 interface GMapProps {
   googleApiKey: string;
 }
@@ -176,25 +177,25 @@ const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
-  // Local load states
+  // 1) Overall loading states for data + map
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [isSheetReady, setIsSheetReady] = useState(false);
 
-  // Local states for map + markers
+  // 2) Local states for map + markers
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Bottom sheet states
+  // 3) Bottom sheet states
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
-  // Redux store data
+  // 4) Redux store data
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
@@ -215,7 +216,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const sheetMinimized = useAppSelector(selectIsSheetMinimized);
 
-  // Google Maps Loader
+  // 5) Google Maps Loader
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: googleApiKey,
@@ -223,7 +224,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // 3D Overlay logic
+  // 6) 3D Overlay logic
   const { overlayRef, stationCubesRef } = useThreeOverlay(
     actualMap,
     stations,
@@ -231,40 +232,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // Station click => set departure/arrival => open detail
-  const handleStationClick = useCallback(
-    (station: StationFeature) => {
-      if (bookingStep === 1) {
-        dispatch(selectDepartureStation(station.id));
-        dispatch(advanceBookingStep(2));
-        toast.success("Departure station selected! (Confirm in station detail.)");
-      } else if (bookingStep === 2) {
-        dispatch(selectDepartureStation(station.id));
-        toast.success("Departure station re-selected! (Confirm in station detail.)");
-      } else if (bookingStep === 3) {
-        dispatch(selectArrivalStation(station.id));
-        dispatch(advanceBookingStep(4));
-        toast.success("Arrival station selected! (Confirm in station detail.)");
-      } else if (bookingStep === 4) {
-        dispatch(selectArrivalStation(station.id));
-        toast.success("Arrival station re-selected! (Confirm in station detail.)");
-      } else {
-        toast(`Station clicked, but no action—already at step ${bookingStep}`);
-      }
-
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setPreviousSheet("none");
-
-      if (sheetMinimized) {
-        dispatch(toggleSheet());
-      }
-    },
-    [bookingStep, sheetMinimized, dispatch]
-  );
-
-  // 1) Initialize map config once loaded
+  /* -----------------------------------------------------------
+     (A) Data + Map Loading
+  ----------------------------------------------------------- */
+  // Initialize map config once loaded
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -272,7 +243,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // 2) Fetch data
+  // Fetch station & car data
   useEffect(() => {
     (async () => {
       try {
@@ -288,7 +259,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // 3) Once data is done loading => hide spinner + set isSheetReady
+  // Once data is done loading => hide spinner + set isSheetReady
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -296,7 +267,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // 4) 3D Overlay Raycasting
+  // If there's an error, display
+  const stationsErrorOrCarsError = stationsError || carsError;
+  const hasError = stationsErrorOrCarsError || loadError;
+  if (hasError) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
+        <div className="text-center space-y-2">
+          <p className="font-medium">Error loading map data</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm underline hover:text-destructive/80"
+          >
+            Try reloading
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* -----------------------------------------------------------
+     (B) 3D Overlay Raycasting
+  ----------------------------------------------------------- */
   useEffect(() => {
     if (!overlayRef.current || !stationCubesRef.current || !actualMap) return;
     const overlay = overlayRef.current;
@@ -353,26 +345,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return () => clearInterval(intervalId);
   }, [overlayRef, stationCubesRef, actualMap, handleStationClick]);
 
-  // 5) If there's an error, display
-  const stationsErrorOrCarsError = stationsError || carsError;
-  const hasError = stationsErrorOrCarsError || loadError;
-  if (hasError) {
-    return (
-      <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
-        <div className="text-center space-y-2">
-          <p className="font-medium">Error loading map data</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="text-sm underline hover:text-destructive/80"
-          >
-            Try reloading
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 6) Auto-fetch user’s route (departure->arrival)
+  /* -----------------------------------------------------------
+     (C) Station & Car logic
+  ----------------------------------------------------------- */
+  // Auto-fetch user’s route (departure->arrival)
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -383,7 +359,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // 7) Fetch dispatch->departure route (only clear if none)
+  // Fetch dispatch->departure route (only clear if none)
   useEffect(() => {
     if (!departureStationId) {
       dispatch(clearDispatchRoute());
@@ -395,7 +371,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, stations, dispatch]);
 
-  // 8) Decode departure->arrival route
+  // Decode departure->arrival route
   const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   const mainRoute = useAppSelector(selectRoute);
   useEffect(() => {
@@ -407,7 +383,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedPath(path.map((latLng) => latLng.toJSON()));
   }, [mainRoute]);
 
-  // 9) Decode dispatch->departure route
+  // Decode dispatch->departure route
   const [decodedDispatchPath, setDecodedDispatchPath] = useState<google.maps.LatLngLiteral[]>([]);
   const mainDispatchRoute = useAppSelector(selectDispatchRoute);
   useEffect(() => {
@@ -419,7 +395,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedDispatchPath(path.map((latLng) => latLng.toJSON()));
   }, [mainDispatchRoute]);
 
-  // 10) Sorting logic for address search
+  // Sorting logic for address search
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -441,7 +417,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // 11) Address search => pan/zoom => sort
+  // Address search => pan/zoom => sort
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -459,7 +435,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, stations, sortStationsByDistanceToPoint, dispatch, sheetMinimized]
   );
 
-  // 12) Clear departure => revert step to 1 + clear dispatch route
+  // Clear departure => revert step to 1 + clear dispatch route
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
@@ -472,7 +448,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // 13) Clear arrival => revert step to 3 + clear route
+  // Clear arrival => revert step to 3 + clear route
   const handleClearArrivalInSelector = () => {
     dispatch(clearArrivalStation());
     dispatch(advanceBookingStep(3));
@@ -485,7 +461,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // 14) Manage bottom sheet states
+  /* -----------------------------------------------------------
+     (D) Bottom sheet states
+  ----------------------------------------------------------- */
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -508,7 +486,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // 15) 'Locate me'
+  /* -----------------------------------------------------------
+     (E) 'Locate me' & 'Open CarSheet' buttons
+  ----------------------------------------------------------- */
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -535,15 +515,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // 16) 'Open CarSheet'
   const openCarSheet = () => {
     openNewSheet("car");
   };
 
-  // 17) Select station from station list
+  /* -----------------------------------------------------------
+     (F) Selecting a station from station list
+  ----------------------------------------------------------- */
   const handleStationSelectedFromList = useCallback(
     (station: StationFeature) => {
-      // reading bookingStep from top-level, not inside callback
       if (bookingStep === 1 || bookingStep === 2) {
         dispatch(selectDepartureStation(station.id));
         if (bookingStep === 1) {
@@ -568,18 +548,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [bookingStep, dispatch]
   );
 
-  // 18) Station detail logic
+  /* -----------------------------------------------------------
+     (G) Station detail logic
+  ----------------------------------------------------------- */
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
     : null;
 
-  // 19) If still loading data or map => spinner
+  // If data is still loading => show spinner
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
 
-  // 20) Only render the sheets if isSheetReady is true
+  // Only render sheets if we set isSheetReady => no partial expansions
   const isCarOpen = openSheet === "car";
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
@@ -609,16 +591,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* DispatchHub->Departure polylines */}
           {decodedDispatchPath.length > 0 && (
             <>
-              <Polyline path={decodedDispatchPath} options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW} />
-              <Polyline path={decodedDispatchPath} options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND} />
+              <Polyline
+                path={decodedDispatchPath}
+                options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW}
+              />
+              <Polyline
+                path={decodedDispatchPath}
+                options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND}
+              />
             </>
           )}
 
           {/* Departure->Arrival polylines */}
           {decodedPath.length > 0 && (
             <>
-              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_SHADOW} />
-              <Polyline path={decodedPath} options={ROUTE_LINE_OPTIONS_FOREGROUND} />
+              <Polyline
+                path={decodedPath}
+                options={ROUTE_LINE_OPTIONS_SHADOW}
+              />
+              <Polyline
+                path={decodedPath}
+                options={ROUTE_LINE_OPTIONS_FOREGROUND}
+              />
             </>
           )}
 
@@ -646,7 +640,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </GoogleMap>
       </div>
 
-      {/* StationSelector overlay */}
+      {/* Station Selector overlay */}
       <StationSelector
         onAddressSearch={handleAddressSearch}
         onClearDeparture={handleClearDepartureInSelector}
