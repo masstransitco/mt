@@ -184,19 +184,10 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Simple background scroll lock: lock the page when sheet is open.
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, [isOpen]);
+  // Instead of locking browser scrolling globally, we lock scroll events only on the body (content area) of the sheet.
+  // This allows the header to remain free (and draggable) while the content scrolls within its container.
 
-  // Track if the sheet's content is scrolled to the top.
+  // Track if the sheet's content is scrolled to the top
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
   const handleScroll = useCallback(() => {
@@ -214,15 +205,13 @@ export default function Sheet({
   // Framer Motion values for vertical drag
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
-
-  // Reset vertical offset when the sheet is closed
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
     }
   }, [isOpen, y]);
 
-  // When dragged down >100px, call onDismiss
+  // When dragged down >100px, dismiss the sheet
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       if (info.offset.y > 100) {
@@ -244,10 +233,7 @@ export default function Sheet({
             </p>
           )}
         </div>
-        <button
-          onClick={() => {}}
-          className="p-2 rounded-full hover:bg-white/10 transition-colors"
-        >
+        <button className="p-2 rounded-full hover:bg-white/10 transition-colors">
           <Info className="w-5 h-5" />
         </button>
       </div>
@@ -282,10 +268,12 @@ export default function Sheet({
             >
               <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
                 {SheetHeader}
-                {/* Content area with vertical scrolling */}
+                {/* Content area: Apply scroll event stopper to lock scroll events to this container only */}
                 <div
                   ref={contentRef}
                   className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
+                  onWheel={(e) => e.stopPropagation()}
+                  onTouchMove={(e) => e.stopPropagation()}
                 >
                   {children}
                 </div>
