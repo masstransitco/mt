@@ -66,10 +66,13 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   // Initial model setup
   useEffect(() => {
     if (!scene) return;
-    // Adjust position/rotation
-    scene.position.set(0, -0.2, 0);
+
+    // 1) Apply default transform to all models
+    //    (You can tweak or remove these if your bounding-box logic
+    //     fully replaces them for all models.)
     scene.rotation.y = Math.PI / 2;
 
+    // Traverse all children to set roughness / metalness, etc.
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.computeBoundingBox();
@@ -80,7 +83,39 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
         }
       }
     });
-  }, [scene]);
+
+    // 2) If it's the Kona model, auto-scale + center via bounding box
+    if (url.includes("kona.glb")) {
+      // Compute bounding box of the entire scene
+      const box = new THREE.Box3().setFromObject(scene);
+      const size = box.getSize(new THREE.Vector3());    // width, height, depth
+      const center = box.getCenter(new THREE.Vector3()); // center of model
+
+      // We'll scale so the max dimension fits ~1 unit in scene
+      // Adjust to taste (e.g. 1.2 for slightly smaller, 0.8 for larger, etc.)
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const scaleFactor = 1.0 / maxDim;
+      scene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+      // Recompute the bounding box & center after scaling
+      box.setFromObject(scene);
+      box.getCenter(center);
+
+      // Shift the model so its center is at the origin (0, 0, 0)
+      // Adjust if you want the model "on the ground" vs "centered"
+      scene.position.x -= center.x;
+      scene.position.y -= center.y;
+      scene.position.z -= center.z;
+
+      // Optional: if you prefer the car to rest on y = -0.2,
+      // just do this after the center shift:
+      scene.position.y -= 0.2;
+    } else {
+      // 3) For other models, keep the existing default offset if desired
+      //    (Currently, you had scene.position.set(0, -0.2, 0))
+      scene.position.set(0, -0.2, 0);
+    }
+  }, [scene, url]);
 
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
@@ -179,9 +214,6 @@ function Car3DViewer({
   // Provide a fallback if 'imageUrl' is undefined
   const finalImageUrl = imageUrl ?? "/cars/fallback.png";
 
-  // If you plan to use 'finalImageUrl' for something in the scene,
-  // e.g. environment textures or screenshot placeholders, you can do so here.
-
   // Preload the model if not cached
   useEffect(() => {
     if (!modelsCache.has(modelUrl)) {
@@ -214,8 +246,6 @@ function Car3DViewer({
   return (
     <div style={containerStyles}>
       <Canvas
-        // If you'd like to use or show finalImageUrl in some way,
-        // you can pass it to background or a custom effect. Right now, it's unused.
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
