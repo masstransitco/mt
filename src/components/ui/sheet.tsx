@@ -250,15 +250,14 @@ export default function Sheet({
 
   // Imperatively snap to expanded whenever isOpen changes to true
   useEffect(() => {
-    if (isOpen && sheetRef.current) {
-      // Check the actual maxHeight from the sheet to be safe
-      const actualMaxHeight = sheetRef.current.maxHeight || 0;
-      const expanded = Math.min(contentHeight + 60, actualMaxHeight * 0.9);
-
-      // Force snap to the expanded state
-      sheetRef.current.snapTo(() => expanded);
-    }
-  }, [isOpen, contentHeight]);
+  if (isOpen && sheetRef.current) {
+    sheetRef.current.snapTo(({ maxHeight }) => {
+      // Calculate the expanded position based on the actual maxHeight
+      const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
+      return expanded;
+    });
+  }
+}, [isOpen, contentHeight]);
 
   // Header markup
   const SheetHeader = (
