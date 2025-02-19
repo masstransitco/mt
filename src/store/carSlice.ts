@@ -2,11 +2,7 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
-
-// Import Car from your shared types
 import type { Car } from "@/types/cars";
-
-// Optional: an API helper that fetches raw vehicles
 import { fetchVehicleList } from "@/lib/cartrack";
 
 /**
@@ -37,12 +33,12 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
         // By the time data reaches here, `v.odometer` should already be in km.
         const odometerKm = v.odometer ?? 0;
 
-        return {
+        const car: Car = {
           // Basic fields
-          id: v.vehicle_id ?? 0,             // numeric
+          id: v.vehicle_id ?? 0, // numeric
           name: v.registration ?? "Unknown Vehicle",
           type: v.engine_type ?? "Unknown",
-          price: 600,                       // Hard-coded example
+          price: 600, // Hard-coded example
           modelUrl: v.modelUrl,
           image: v.image,
           available: true,
@@ -78,6 +74,17 @@ export const fetchCars = createAsyncThunk<Car[], void, { rejectValue: string }>(
           location_updated: v.location_updated ?? null,
           location_position_description: v.location_position_description ?? null,
         };
+
+        // ------
+        // OVERRIDE for "NY6662"
+        // ------
+        if (car.name === "NY6662") {
+          car.model = "Hyundai Kona";
+          car.year = 2020;
+          car.modelUrl = "/cars/kona.glb";
+        }
+
+        return car;
       });
 
       return transformed;
@@ -134,6 +141,7 @@ export default carSlice.reducer;
  * Car selectors
  */
 export const selectAllCars = (state: RootState) => state.car.cars;
-export const selectAvailableForDispatch = (state: RootState) => state.car.availableForDispatch;
+export const selectAvailableForDispatch = (state: RootState) =>
+  state.car.availableForDispatch;
 export const selectCarsLoading = (state: RootState) => state.car.loading;
 export const selectCarsError = (state: RootState) => state.car.error;
