@@ -74,10 +74,19 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         visibility: isVisible ? "visible" : "hidden",
       }}
     >
-      {/* Outer container with padding + horizontal scrolling */}
+      {/**
+       *  Outer container for horizontal scrolling
+       *  1) overflow-x-auto
+       *  2) A fixed height or max-height if necessary
+       */}
       <div className="overflow-x-auto px-4" style={{ maxHeight: "80vh" }}>
-        {/* Flex container for a single row of grouped cards */}
-        <div className="flex gap-3 py-2">
+        {/**
+         * Inner flex container:
+         *  - flex-nowrap so items do NOT wrap
+         *  - w-max so the container grows to the total width of children
+         *  - gap-3 for spacing
+         */}
+        <div className="flex flex-nowrap w-max gap-3 py-2">
           <AnimatePresence mode="popLayout">
             {groupedByModel.map((group) => (
               <motion.div
