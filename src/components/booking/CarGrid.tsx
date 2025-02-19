@@ -35,7 +35,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }
   }, [availableCars, selectedCarId, dispatch]);
 
-  // Group cars by model
+  // 4) Group cars by model
   const groupedByModel = Object.values(
     availableCars.reduce((acc, car) => {
       const model = car.model || "Unknown Model";
@@ -47,32 +47,18 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }, {} as Record<string, { model: string; cars: typeof availableCars }>)
   );
 
-  // Determine if we want this grid visible
+  // 5) If using a UI state to conditionally show the grid
   const isVisible = viewState === "showCar";
-
-  // 4) (Optional) Lock body scroll while this grid is visible
-  useEffect(() => {
-    if (isVisible) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
-    return () => {
-      document.body.style.overflow = "auto";
-    };
-  }, [isVisible]);
-
-  // Only render if currently visible, or remove if you always want CarGrid displayed
   if (!isVisible) {
     return null;
   }
 
   return (
     <div className={`transition-all duration-300 ${className}`}>
-      {/**
-       *  Outer container for horizontal swipe:
-       *   - overflow-x-auto (scrollbar if content exceeds width)
-       *   - touch-pan-x & -webkit-overflow-scrolling:touch for mobile swipe
+      {/** 
+       * Outer container for horizontal scrolling.
+       * - "touch-pan-x" + "-webkit-overflow-scrolling:touch" → 
+       *   smooth mobile swipes
        */}
       <div
         className="
@@ -82,10 +68,9 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         "
       >
         {/**
-         * Inner flex container:
-         *  - flex-nowrap so items do NOT wrap
-         *  - w-max so the container grows to the total width of children
-         *  - gap-3 for spacing
+         * Inner container: 
+         * - "flex-nowrap w-max" so items line up horizontally
+         * - "gap-3" for spacing
          */}
         <div className="flex flex-nowrap w-max gap-3 py-2">
           <AnimatePresence mode="popLayout">
@@ -105,7 +90,9 @@ export default function CarGrid({ className = "" }: CarGridProps) {
         </div>
       </div>
 
-      {/** If no cars were found, show a fallback */}
+      {/**
+       * If no cars were found, show fallback message
+       */}
       {groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
