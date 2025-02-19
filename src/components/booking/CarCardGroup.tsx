@@ -97,17 +97,16 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     const isPM = hours >= 12;
     let hours12 = hours % 12 || 12;
     const ampm = isPM ? "pm" : "am";
-    // Zero-pad minutes
     const minutesStr = String(minutes).padStart(2, "0");
 
-    // Example: "13th February 9:13pm"
     return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
   }, [locationUpdated]);
 
   // 3) Restore mileage remaining: batteryPercentage * 3.51
-  // Example: 50% => (50 * 3.51).toFixed(1) => "175.5"
   const mileageRemaining =
-    typeof batteryPercentage === "number" ? (batteryPercentage * 3.51).toFixed(1) : "0";
+    typeof batteryPercentage === "number"
+      ? (batteryPercentage * 3.51).toFixed(1)
+      : "0";
 
   return (
     <motion.div
@@ -115,11 +114,17 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       animate={{ scale: isGroupSelected ? 1.0 : 0.98 }}
       transition={{ type: "tween", duration: 0.3 }}
       className={`
-        relative overflow-hidden rounded-2xl bg-card 
-        transition-all duration-300 border border-border/50
+        relative 
+        overflow-hidden        /* ADDED to hide scrollbars */
+        rounded-2xl 
+        bg-card 
+        transition-all 
+        duration-300 
+        border 
+        border-border/50
         ${isGroupSelected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
       `}
-      style={{ width: 320 }}
+      style={{ width: 320, overflow: "hidden" }}  // ADDED overflow hidden in inline style
     >
       {/* "5-Seater" badge if group is selected */}
       {isGroupSelected && (
@@ -146,11 +151,9 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
 
       {/* Car Details */}
       <div className="p-4">
-
-        {/* Row 1: left side = Model, right side = Dropdown */}
+        {/* Row 1: Model (left), Dropdown (right) */}
         <div className="flex items-start justify-between">
           <p className="font-bold text-foreground text-lg">{selectedCar.model}</p>
-
           <div className="flex flex-col items-end relative">
             <select
               className="mb-1 cursor-pointer bg-card border text-foreground text-sm"
@@ -166,9 +169,9 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
         </div>
 
-        {/* Row 2: battery (left) + info icon & year (right) */}
+        {/* Row 2: Battery (left), Info icon & year (right) */}
         <div className="flex items-center justify-between mt-1 relative">
-          {/* Left: Battery */}
+          {/* Battery */}
           <div className="flex items-center gap-1">
             {typeof batteryPercentage === "number" && batteryPercentage > 0 && (
               <>
@@ -178,13 +181,12 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
             )}
           </div>
 
-          {/* Right: Info icon + year */}
+          {/* Info icon + year */}
           <div className="flex items-center gap-1 text-sm text-muted-foreground">
             <Info
               className="w-4 h-4 cursor-pointer"
               onClick={() => setShowOdometerPopup(!showOdometerPopup)}
             />
-            {/* The "popup" container for odometer info */}
             {showOdometerPopup && (
               <div className="absolute top-6 right-0 bg-white text-black text-xs px-2 py-1 rounded shadow-md">
                 Total distance driven: {selectedCar.odometer} km
