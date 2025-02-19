@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useEffect, useCallback, useState, memo } from "react";
+import React, { useEffect, useCallback, useState, memo, Suspense } from "react";
 import { GoogleMap, Polyline, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
 import * as THREE from "three";
 import dynamic from "next/dynamic";
-import { Suspense } from "react";
 
 // Redux & store hooks
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -208,7 +207,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const arrivalStationId = useAppSelector(selectArrivalStationId);
   const route = useAppSelector(selectRoute);
 
-  // Dispatch route (dispatchHub→departure)
+  // Dispatch route (dispatchHub->departure)
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
   // Google Maps Loader
@@ -229,45 +228,41 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Station click => set departure/arrival
   const handleStationClick = useCallback(
-  (station: StationFeature) => {
-    if (bookingStep === 1) {
-      // Step 1 => selecting departure
-      dispatch(selectDepartureStation(station.id));
-      dispatch(advanceBookingStep(2));
-      toast.success("Departure station selected! (Confirm in station detail.)");
-    } 
-    else if (bookingStep === 2) {
-      // Step 2 => re-selecting departure (still allowed)
-      dispatch(selectDepartureStation(station.id));
-      toast.success("Departure station re-selected! (Confirm in station detail.)");
-    } 
-    else if (bookingStep === 3) {
-      // Step 3 => selecting arrival => set station, then move to step 4
-      dispatch(selectArrivalStation(station.id));
-      dispatch(advanceBookingStep(4));
-      toast.success("Arrival station selected! (Confirm in station detail.)");
-    } 
-    else if (bookingStep === 4) {
-      // Step 4 => user is re-selecting arrival
-      dispatch(selectArrivalStation(station.id));
-      toast.success("Arrival station re-selected! (Confirm in station detail.)");
-    } 
-    else {
-      toast(`Station clicked, but no action—already at step ${bookingStep}`);
-    }
+    (station: StationFeature) => {
+      if (bookingStep === 1) {
+        // Step 1 => selecting departure
+        dispatch(selectDepartureStation(station.id));
+        dispatch(advanceBookingStep(2));
+        toast.success("Departure station selected! (Confirm in station detail.)");
+      } else if (bookingStep === 2) {
+        // Step 2 => re-selecting departure (still allowed)
+        dispatch(selectDepartureStation(station.id));
+        toast.success("Departure station re-selected! (Confirm in station detail.)");
+      } else if (bookingStep === 3) {
+        // Step 3 => selecting arrival => set station, then move to step 4
+        dispatch(selectArrivalStation(station.id));
+        dispatch(advanceBookingStep(4));
+        toast.success("Arrival station selected! (Confirm in station detail.)");
+      } else if (bookingStep === 4) {
+        // Step 4 => user is re-selecting arrival
+        dispatch(selectArrivalStation(station.id));
+        toast.success("Arrival station re-selected! (Confirm in station detail.)");
+      } else {
+        toast(`Station clicked, but no action—already at step ${bookingStep}`);
+      }
 
-    // Force station detail open
-    setDetailKey((prev) => prev + 1);
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    setPreviousSheet("none");
+      // Force station detail open
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+      setPreviousSheet("none");
 
-    if (isSheetMinimized) {
-      dispatch(toggleSheet());
-    }
-  },
-  [bookingStep, dispatch, isSheetMinimized]
-);
+      if (isSheetMinimized) {
+        dispatch(toggleSheet());
+      }
+    },
+    [bookingStep, dispatch, isSheetMinimized]
+  );
 
   // Initialize map config
   useEffect(() => {
@@ -670,13 +665,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </button>
       </div>
 
-      {/* Car Sheet */}
+      {/* Car Sheet (unchanged if your CarSheet still has onToggle) */}
       <CarSheet isOpen={isCarOpen} onToggle={handleCarToggle} />
 
-      {/* Station list sheet */}
+      {/* Station list sheet -> remove onToggle */}
       <Sheet
         isOpen={isListOpen}
-        onToggle={closeCurrentSheet}
         title="Nearby Stations"
         count={sortedStations.length}
       >
@@ -695,11 +689,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </div>
       </Sheet>
 
-      {/* Station detail sheet */}
+      {/* Station detail sheet -> remove onToggle */}
       <Sheet
         key={detailKey}
         isOpen={isDetailOpen}
-        onToggle={closeCurrentSheet}
         title={bookingStep <= 2 ? "Pick-up station" : "Trip details"}
         subtitle={
           bookingStep <= 2
