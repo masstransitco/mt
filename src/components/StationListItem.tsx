@@ -36,7 +36,7 @@ function StationListItemComponent(props: StationListItemProps) {
   // The station for this row
   const station = stations[index];
 
-  // Booking slice to check if it's selected as departure/arrival
+  // Retrieve the selected station ids from Redux
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
 
@@ -59,6 +59,9 @@ function StationListItemComponent(props: StationListItemProps) {
     <div
       style={style}
       onClick={handleClick}
+      // Prevent scroll events from bubbling up to the browser
+      onWheel={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
       className={`
         px-4 py-3 cursor-pointer
         hover:bg-muted/20 transition-colors
