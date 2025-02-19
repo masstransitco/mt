@@ -32,9 +32,16 @@ function CarCardComponent({
   console.log("Battery raw:", car.electric_battery_percentage_left);
 
   // More robust conversion and validation
-const parsedBattery = parseFloat(car.electric_battery_percentage_left);
+// Handle all possible types (number|null|undefined)
+const rawBattery = car.electric_battery_percentage_left;
+const parsedBattery = typeof rawBattery === 'number' ? rawBattery : 
+                      (rawBattery ? parseFloat(String(rawBattery)) : NaN);
+
+// Check if it's valid and within range
 const isValidBatteryValue = 
   !isNaN(parsedBattery) && parsedBattery >= 1 && parsedBattery <= 100;
+
+// If invalid, fallback to 92
 const batteryPercentage = isValidBatteryValue ? parsedBattery : 92;
 
   return (
