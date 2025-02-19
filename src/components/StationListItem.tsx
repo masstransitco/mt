@@ -1,15 +1,12 @@
 "use client";
 
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useCallback } from "react";
 import { ListChildComponentProps } from "react-window";
 import { MapPin, Navigation, Zap } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 import { useAppSelector } from "@/store/store";
 import { StationFeature } from "@/store/stationsSlice";
-/**
- *  Import station IDs from booking slice
- */
 import {
   selectDepartureStationId,
   selectArrivalStationId,
@@ -17,7 +14,10 @@ import {
 
 interface StationListItemData {
   items: StationFeature[];
-  searchLocation?: google.maps.LatLngLiteral | null;
+  /**
+   * No `searchLocation` needed anymore since
+   * we’re removing duplicate distance calculations
+   */
   onStationSelected?: (station: StationFeature) => void;
 }
 
@@ -31,7 +31,7 @@ interface StationListItemProps extends ListChildComponentProps {
  */
 function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
-  const { items: stations, searchLocation, onStationSelected } = data;
+  const { items: stations, onStationSelected } = data;
 
   // The station for this row
   const station = stations[index];
@@ -43,19 +43,8 @@ function StationListItemComponent(props: StationListItemProps) {
   const isSelected = station.id === departureId || station.id === arrivalId;
   const isDeparture = station.id === departureId; // for icon display vs arrival
 
-  // Optionally compute distance if we have a searchLocation
-  const distance = useMemo(() => {
-    if (!searchLocation || !google?.maps?.geometry?.spherical) {
-      // fallback to station.distance if present in your StationFeature
-      return station.distance;
-    }
-    const [lng, lat] = station.geometry.coordinates;
-    const distMeters = google.maps.geometry.spherical.computeDistanceBetween(
-      new google.maps.LatLng(lat, lng),
-      new google.maps.LatLng(searchLocation.lat, searchLocation.lng)
-    );
-    return distMeters / 1000; // convert to kilometers
-  }, [station, searchLocation]);
+  // Rely on station.distance (computed upstream)
+  const distance = station.distance;
 
   // onClick => call parent's callback
   const handleClick = useCallback(() => {
