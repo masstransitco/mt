@@ -144,7 +144,7 @@
 }
 
 /* Make the entire sheet dark gray, including headers, body, etc. */
-:where(.rsbs-header), {
+:where(.rsbs-header) {
  background-color: transparent !important;
 }
 :where(.rsbs-body),
