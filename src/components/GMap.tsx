@@ -68,7 +68,6 @@ import {
   DEFAULT_ZOOM,
   createMapOptions,
   createMarkerIcons,
-  INTER_CC,
   ROUTE_LINE_OPTIONS_SHADOW,
   ROUTE_LINE_OPTIONS_FOREGROUND,
   DISPATCH_ROUTE_LINE_OPTIONS_SHADOW,
@@ -76,9 +75,9 @@ import {
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
-/* -----------------------------------------------------------
-   Memoized Station Markers
------------------------------------------------------------ */
+/* ----------------------------------------------------------------
+   1) StationMarkers - a memoized component for rendering stations
+---------------------------------------------------------------- */
 interface StationMarkersProps {
   stations: StationFeature[];
   sortedStations: StationFeature[];
@@ -100,14 +99,13 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
     onStationClick,
   } = props;
 
-  // If user searched an address, we show the sorted list first
+  // If the user searched an address, show that sorted list first
   const listToRender = searchLocation ? sortedStations : stations;
 
   return (
     <>
       {listToRender.map((station) => {
         const [lng, lat] = station.geometry.coordinates;
-
         const isDeparture = station.id === departureStationId;
         const isArrival = station.id === arrivalStationId;
 
@@ -131,9 +129,9 @@ const StationMarkers = memo(function StationMarkers(props: StationMarkersProps) 
   );
 });
 
-/* -----------------------------------------------------------
-   Memoized Car Markers
------------------------------------------------------------ */
+/* ----------------------------------------------------------------
+   2) CarMarkers - a memoized component for rendering cars
+---------------------------------------------------------------- */
 interface CarMarkersProps {
   cars: { id: number; lat: number; lng: number; name: string }[];
   markerIcons: any;
@@ -156,9 +154,9 @@ const CarMarkers = memo(function CarMarkers({ cars, markerIcons }: CarMarkersPro
   );
 });
 
-/* -----------------------------------------------------------
-   Main GMap Component
------------------------------------------------------------ */
+/* ----------------------------------------------------------------
+   3) GMap - main map component
+---------------------------------------------------------------- */
 interface GMapProps {
   googleApiKey: string;
 }
@@ -226,7 +224,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // Station click => set departure/arrival
+  /* -----------------------------------------------------------
+     Station click => set departure or arrival
+  ----------------------------------------------------------- */
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       if (bookingStep === 1) {
@@ -264,7 +264,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [bookingStep, dispatch, isSheetMinimized]
   );
 
-  // Initialize map config
+  /* -----------------------------------------------------------
+     1) Initialize map config
+  ----------------------------------------------------------- */
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -272,7 +274,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // Fetch data
+  /* -----------------------------------------------------------
+     2) Fetch data
+  ----------------------------------------------------------- */
   useEffect(() => {
     (async () => {
       try {
@@ -288,14 +292,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Hide spinner once data is loaded
+  /* -----------------------------------------------------------
+     3) Hide spinner once data is loaded
+  ----------------------------------------------------------- */
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // 3D Overlay Raycasting
+  /* -----------------------------------------------------------
+     4) 3D Overlay Raycasting
+  ----------------------------------------------------------- */
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay || !stationCubesRef.current || !actualMap) return;
@@ -352,7 +360,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return () => clearInterval(intervalId);
   }, [overlayRef, stationCubesRef, actualMap, handleStationClick]);
 
-  // Handle errors
+  /* -----------------------------------------------------------
+     5) Handle errors
+  ----------------------------------------------------------- */
   const hasError = stationsError || carsError || loadError;
   if (hasError) {
     return (
@@ -370,7 +380,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   }
 
-  // Auto-fetch user’s route (departure->arrival)
+  /* -----------------------------------------------------------
+     6) Auto-fetch user’s route (departure->arrival)
+  ----------------------------------------------------------- */
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -381,7 +393,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, arrivalStationId, stations, dispatch]);
 
-  // Fetch dispatch->departure route (only clear if no departure station)
+  /* -----------------------------------------------------------
+     7) Fetch dispatch->departure route (only clear if no departure)
+  ----------------------------------------------------------- */
   useEffect(() => {
     if (!departureStationId) {
       dispatch(clearDispatchRoute());
@@ -393,7 +407,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, stations, dispatch]);
 
-  // Decode departure->arrival polyline
+  /* -----------------------------------------------------------
+     8) Decode departure->arrival route
+  ----------------------------------------------------------- */
   const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -404,7 +420,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedPath(path.map((latLng) => latLng.toJSON()));
   }, [route]);
 
-  // Decode dispatch->departure polyline
+  /* -----------------------------------------------------------
+     9) Decode dispatch->departure route
+  ----------------------------------------------------------- */
   const [decodedDispatchPath, setDecodedDispatchPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!dispatchRoute?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -415,7 +433,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedDispatchPath(path.map((latLng) => latLng.toJSON()));
   }, [dispatchRoute]);
 
-  // Sorting logic for address search
+  /* -----------------------------------------------------------
+     10) Sorting logic for address search
+  ----------------------------------------------------------- */
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!google?.maps?.geometry?.spherical) return stationsToSort;
@@ -437,7 +457,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     []
   );
 
-  // Address search => pan/zoom => sort
+  /* -----------------------------------------------------------
+     11) Address search => pan/zoom => sort
+  ----------------------------------------------------------- */
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -455,7 +477,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, dispatch, stations, isSheetMinimized, sortStationsByDistanceToPoint]
   );
 
-  // Clear departure => revert step to 1 + clear dispatch route
+  /* -----------------------------------------------------------
+     12) Clear departure => revert step to 1 + clear dispatch route
+  ----------------------------------------------------------- */
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
@@ -468,7 +492,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Clear arrival => revert step to 3 + clear main route
+  /* -----------------------------------------------------------
+     13) Clear arrival => revert step to 3 + clear route
+  ----------------------------------------------------------- */
   const handleClearArrivalInSelector = () => {
     dispatch(clearArrivalStation());
     dispatch(advanceBookingStep(3));
@@ -481,7 +507,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Bottom sheet logic
+  /* -----------------------------------------------------------
+     14) Bottom sheet logic
+  ----------------------------------------------------------- */
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -504,7 +532,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // "Locate me"
+  /* -----------------------------------------------------------
+     15) 'Locate me' button => geolocate => station list
+  ----------------------------------------------------------- */
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -531,16 +561,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // "Car" sheet toggle
-  const handleCarToggle = () => {
-    if (openSheet === "car") {
-      closeCurrentSheet();
-    } else {
-      openNewSheet("car");
-    }
+  /* -----------------------------------------------------------
+     16) 'Open CarSheet' instead of toggling it
+  ----------------------------------------------------------- */
+  const openCarSheet = () => {
+    // Just open the CarSheet every time the user clicks.
+    openNewSheet("car");
   };
 
-  // Selecting a station from station list
+  /* -----------------------------------------------------------
+     17) Selecting a station from the station list
+  ----------------------------------------------------------- */
   const handleStationSelectedFromList = (station: StationFeature) => {
     if (bookingStep === 1 || bookingStep === 2) {
       dispatch(selectDepartureStation(station.id));
@@ -564,22 +595,31 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setPreviousSheet("none");
   };
 
-  // Station detail logic
+  /* -----------------------------------------------------------
+     18) Station detail logic
+  ----------------------------------------------------------- */
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
     : null;
 
-  // If data is still loading, show spinner
+  /* -----------------------------------------------------------
+     19) If data is still loading, show spinner
+  ----------------------------------------------------------- */
   if (overlayVisible) {
     return <LoadingSpinner />;
   }
 
-  // Which sheets are open?
+  /* -----------------------------------------------------------
+     20) Which sheets are open?
+  ----------------------------------------------------------- */
   const isCarOpen = openSheet === "car";
   const isListOpen = openSheet === "list";
   const isDetailOpen = (openSheet === "detail" || forceSheetOpen) && !!stationToShow;
 
+  /* -----------------------------------------------------------
+     21) Return the map UI
+  ----------------------------------------------------------- */
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {/* Main Google Map */}
@@ -651,24 +691,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       {/* Top-left buttons */}
       <div className="absolute top-[120px] left-4 z-30 flex flex-col space-y-2">
+        {/* "Locate me" button => opens list */}
         <button
           onClick={handleLocateMe}
           className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
         >
           <Locate className="w-5 h-5" />
         </button>
+
+        {/* "Open CarSheet" button => openNewSheet("car") */}
         <button
-          onClick={handleCarToggle}
+          onClick={openCarSheet}
           className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground shadow"
         >
           <Car className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Car Sheet (unchanged if your CarSheet still has onToggle) */}
-      <CarSheet isOpen={isCarOpen} onToggle={handleCarToggle} />
+      {/* Car Sheet (controlled by isCarOpen) */}
+      <CarSheet isOpen={isCarOpen} />
 
-      {/* Station list sheet -> remove onToggle */}
+      {/* Station list sheet (no onToggle) */}
       <Sheet
         isOpen={isListOpen}
         title="Nearby Stations"
@@ -689,7 +732,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </div>
       </Sheet>
 
-      {/* Station detail sheet -> remove onToggle */}
+      {/* Station detail sheet (no onToggle) */}
       <Sheet
         key={detailKey}
         isOpen={isDetailOpen}
