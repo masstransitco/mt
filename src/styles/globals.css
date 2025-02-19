@@ -1,4 +1,4 @@
-@import url('https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css');
+@import url("https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css");
 
 @tailwind base;
 @tailwind components;
@@ -139,6 +139,28 @@
     @apply bg-background sm:rounded-lg overflow-hidden;
     @apply w-full sm:w-[448px];
     @apply p-0 gap-0 border border-border/40;
+  }
+
+  /* 
+    We'll specifically target .custom-sheet 
+    and the .rsbs-body / .rsbs-header / etc.
+    to ensure the dark background + text color remain.
+  */
+  .custom-sheet .rsbs-header,
+  .custom-sheet .rsbs-body,
+  .custom-sheet .rsbs-content {
+    background-color: rgba(17,17,17,0.8) !important;
+    color: #fff !important;
+  }
+
+  /* If needed, override any link or button styles */
+  .custom-sheet .rsbs-close {
+    color: #fff !important;
+  }
+
+  /* Also can style the .rsbs-drag-handle if library uses it */
+  .custom-sheet .rsbs-drag-handle {
+    background-color: rgba(255,255,255,0.3) !important;
   }
 }
 
