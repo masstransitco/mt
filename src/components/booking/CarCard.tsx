@@ -31,15 +31,11 @@ function CarCardComponent({
   // Debug log to see exactly what the raw battery value is
   console.log("Battery raw:", car.electric_battery_percentage_left);
 
-  // Convert to number
-  const parsedBattery = Number(car.electric_battery_percentage_left);
-
-  // Check if it's finite and within 1-100 range
-  const isValidBatteryValue =
-    Number.isFinite(parsedBattery) && parsedBattery >= 1 && parsedBattery <= 100;
-
-  // If invalid, fallback to 92
-  const batteryPercentage = isValidBatteryValue ? parsedBattery : 92;
+  // More robust conversion and validation
+const parsedBattery = parseFloat(car.electric_battery_percentage_left);
+const isValidBatteryValue = 
+  !isNaN(parsedBattery) && parsedBattery >= 1 && parsedBattery <= 100;
+const batteryPercentage = isValidBatteryValue ? parsedBattery : 92;
 
   return (
     <motion.div
