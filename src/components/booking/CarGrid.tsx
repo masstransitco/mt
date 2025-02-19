@@ -23,12 +23,12 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     dispatch(fetchDispatchLocations());
   }, [dispatch]);
 
-  // 2) Get the cars available for dispatch + which car is selected
+  // 2) Get available cars + selected car
   const availableCars = useAvailableCarsForDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   const viewState = useAppSelector(selectViewState);
 
-  // 3) If no car selected, default to first available
+  // 3) If no car selected, default to first
   useEffect(() => {
     if (!selectedCarId && availableCars.length > 0) {
       dispatch(selectCar(availableCars[0].id));
@@ -47,73 +47,59 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }, {} as Record<string, { model: string; cars: typeof availableCars }>)
   );
 
-  // Determine visibility based on UI state
+  // UI state check
   const isVisible = viewState === "showCar";
 
-  // 4) Disable browser scrolling when visible
+  // 4) Toggle body scroll lock (example)
   useEffect(() => {
     if (isVisible) {
-      // Hide main document scroll
       document.body.style.overflow = "hidden";
     } else {
-      // Restore scrolling
       document.body.style.overflow = "auto";
     }
-
-    // Cleanup: restore scroll on unmount or state change
     return () => {
       document.body.style.overflow = "auto";
     };
   }, [isVisible]);
 
+  // If you only want to show the grid when isVisible, you can conditionally render
+  if (!isVisible) {
+    return null;
+  }
+
   return (
-    <div
-      className={`transition-all duration-300 ${className}`}
-      style={{
-        display: isVisible ? "block" : "none",
-        visibility: isVisible ? "visible" : "hidden",
-      }}
-    >
-      {/**
-       *  Outer container for horizontal scrolling
-       *  1) overflow-x-auto
-       *  2) A fixed height or max-height if necessary
-       */}
-      <div className="overflow-x-auto px-4" style={{ maxHeight: "80vh" }}>
-        {/**
-         * Inner flex container:
-         *  - flex-nowrap so items do NOT wrap
-         *  - w-max so the container grows to the total width of children
-         *  - gap-3 for spacing
-         */}
-        <div className="flex flex-nowrap w-max gap-3 py-2">
-          <AnimatePresence mode="popLayout">
-            {groupedByModel.map((group) => (
-              <motion.div
-                key={group.model}
-                layout
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 0.975 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-              >
-                <CarCardGroup group={group} isVisible={isVisible} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
+    <div className={`transition-all duration-300 ${className}`}>
+      {/* 
+        Outer container for the row of groups:
+          - flex
+          - flex-nowrap so items don’t wrap
+          - w-max ensures the container’s width grows based on content
+      */}
+      <div className="flex flex-nowrap w-max gap-3 py-2">
+        <AnimatePresence mode="popLayout">
+          {groupedByModel.map((group) => (
+            <motion.div
+              key={group.model}
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 0.975 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <CarCardGroup group={group} isVisible={isVisible} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
-      {/* Fallback when no cars match the criteria */}
+      {/** Fallback: show if no cars match */}
       {groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="py-12 text-center rounded-2xl bg-card mt-4 mx-4"
         >
-          <p className="text-muted-foreground">
-            No vehicles found matching your criteria.
-          </p>
+          <p className="text-muted-foreground">No vehicles found.</p>
         </motion.div>
       )}
     </div>
