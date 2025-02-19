@@ -285,16 +285,20 @@ export default function Sheet({
 
   return (
     <>
-     <BottomSheet
+<BottomSheet
   open={isOpen}
   header={SheetHeader}
   className={cn("custom-sheet", className)}
+  // allow background interactions
   blocking={false}
+
+  // do NOT close if dragged down or clicked outside
   onDismiss={() => {
-    // no-op: prevents the sheet from dismissing
+    /* no-op: prevents the sheet from dismissing */
   }}
-  snapPoints={({ maxHeight }) => [120, maxHeight]}
-  defaultSnap={({ maxHeight }) => 120}
+  // only two snap points, no partial expansions
+  snapPoints={snapPoints}
+  defaultSnap={defaultSnap}
   expandOnContentDrag={false}
 >
   <div ref={contentRef} className="relative px-4 pt-2 pb-6">
