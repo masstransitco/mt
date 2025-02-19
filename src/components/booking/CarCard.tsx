@@ -43,7 +43,7 @@ function CarCardComponent({
         ${selected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
       `}
     >
-      {/* "Selected" badge in top-right corner, now replaced with "5-Seater" */}
+      {/* "Selected" badge in top-right corner, here replaced with "5-Seater" */}
       {selected && (
         <div className="absolute top-3 right-3 z-10">
           <div className="px-2 py-1 rounded-full bg-white text-black text-sm">
@@ -70,9 +70,9 @@ function CarCardComponent({
       {/* Car details */}
       <div className="p-4">
         {/* 
-          Always a left/right layout (no stacking).
-          Left: Model (bold), Battery, Odometer
-          Right: Car Name (regular), Year
+          A left/right layout:
+          Left side shows: Model (bold), Battery, Odometer
+          Right side shows: Car Name, Year
         */}
         <div className="flex items-start justify-between gap-2 mb-2">
           {/* Left side */}
@@ -102,9 +102,7 @@ function CarCardComponent({
               {car.name}
             </p>
             {/* Year */}
-            <p className="text-sm text-muted-foreground">
-              {car.year}
-            </p>
+            <p className="text-sm text-muted-foreground">{car.year}</p>
           </div>
         </div>
       </div>
