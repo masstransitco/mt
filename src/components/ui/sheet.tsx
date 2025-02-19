@@ -16,7 +16,7 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
-// A local type for the spring event we receive from react-spring-bottom-sheet
+// A local type for the spring event from react-spring-bottom-sheet
 type SpringEvent = {
   current?: number;
   type: string;
@@ -122,7 +122,6 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
-    // Apply styles
     stripRef.current!.style.transform = `scale(${scale})`;
     stripRef.current!.style.backgroundColor = color;
     stripRef.current!.style.opacity = opacity.toString();
@@ -188,8 +187,8 @@ function InfoModal({
 }
 
 /* ----------------------------------------------------------------
-   3) The Sheet with dynamic snap points (collapsed or expanded, no close)
-   - Waits for content to be fully ready before rendering the sheet
+   3) The Sheet with dynamic snap points
+   - Waits for content to be loaded before rendering
 ---------------------------------------------------------------- */
 interface SheetProps {
   isOpen: boolean; // signals when we want the sheet open
@@ -210,15 +209,14 @@ export default function Sheet({
   count,
   countLabel,
 }: SheetProps) {
-  // We'll track whether our content is fully loaded
+  // 1) We'll track whether our content is fully loaded
+  //   (this is a trivial 0.5s delay as a demonstration)
   const [isContentReady, setIsContentReady] = useState(false);
 
-  // Example: If you have an async load, do it here
-  // For demonstration, let's simulate a short delay:
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsContentReady(true);
-    }, 500); // 0.5 second delay
+    }, 500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -227,7 +225,7 @@ export default function Sheet({
     return null;
   }
 
-  // If content is ready, proceed as before
+  // 2) Once content is ready, proceed:
 
   // Increase scrollLock count when open
   useLayoutEffect(() => {
@@ -329,7 +327,7 @@ export default function Sheet({
         open={isOpen}
         header={SheetHeader}
         className={cn("custom-sheet", className)}
-        blocking={false} // allow background interactions
+        blocking={false}
         onDismiss={() => {
           /* no-op: prevents the sheet from dismissing */
         }}
