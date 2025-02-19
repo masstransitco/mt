@@ -292,7 +292,7 @@ export default function Sheet({
   // allow background interactions
   blocking={false}
   // prevent it from going off-screen
-  rubberband={false}
+  springConfig={{ clamp: true }} 
   // do NOT close if dragged down or clicked outside
   onDismiss={() => {
     /* no-op: prevents the sheet from dismissing */
