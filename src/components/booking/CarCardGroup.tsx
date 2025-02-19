@@ -33,12 +33,13 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
   // Local state to show/hide the odometer popup
   const [showOdometerPopup, setShowOdometerPopup] = useState(false);
 
-  // Find whichever car is selected in this group (or fallback to first)
+  // Pick whichever car is actually "selected" in this group; fallback to first if none
   const selectedCar = useMemo(() => {
     const found = group.cars.find((c) => c.id === selectedCarId);
     return found || group.cars[0];
   }, [group.cars, selectedCarId]);
 
+  // If *any* car in the group is the selectedCar, we consider the group "selected"
   const isGroupSelected = group.cars.some((c) => c.id === selectedCarId);
   const modelUrl = selectedCar?.modelUrl || "/cars/defaultModel.glb";
 
@@ -48,24 +49,19 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     setShowOdometerPopup(false); // close popup when switching cars
   };
 
-  // -------------------------------------------------------------
-  // 1) Battery fallback logic
-  //    - parse and fallback to 92 if out of [1..100] or invalid
-  // -------------------------------------------------------------
-  const rawBattery = selectedCar.electric_battery_percentage_left; // could be number, null, undefined, etc.
-  // parseFloat will handle string -> number; returns NaN if invalid
+  // -----------------------------------------
+  // 1) Battery fallback logic (1..100 => valid, else 92)
+  // -----------------------------------------
+  const rawBattery = selectedCar.electric_battery_percentage_left; // number, null, undefined, etc.
   const parsed = rawBattery != null ? parseFloat(String(rawBattery)) : NaN;
-
-  // We consider "valid" only if 1..100
   const isValid = !isNaN(parsed) && parsed >= 1 && parsed <= 100;
   const batteryPercentage = isValid ? parsed : 92;
 
-  // -------------------------------------------------------------
-  // 2) Battery icon + color based on final batteryPercentage
-  // -------------------------------------------------------------
+  // -----------------------------------------
+  // 2) Battery icon + color
+  // -----------------------------------------
   let BatteryIcon = BatteryFull;
   let batteryIconColor = "text-green-500";
-
   if (batteryPercentage <= 9) {
     BatteryIcon = BatteryWarning;
     batteryIconColor = "text-red-500";
@@ -75,18 +71,16 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
   } else if (batteryPercentage < 80) {
     BatteryIcon = BatteryMedium;
     batteryIconColor = "text-lime-400";
-  } 
-  // else by default BatteryIcon stays BatteryFull and color green
+  }
 
-  // -------------------------------------------------------------
+  // -----------------------------------------
   // 3) Format "location_updated" date
-  // -------------------------------------------------------------
+  // -----------------------------------------
   const locationUpdated = selectedCar.location_updated;
-  const formattedLastDriven = useMemo(() => {
+  const formattedLastDriven = React.useMemo(() => {
     if (!locationUpdated) return "";
     const d = new Date(locationUpdated);
     if (isNaN(d.getTime())) return "";
-
     const day = d.getDate();
     const suffix = getDaySuffix(day);
     const monthNames = [
@@ -94,21 +88,31 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       "July","August","September","October","November","December",
     ];
     const month = monthNames[d.getMonth()] || "";
-    let hours = d.getHours();
+    const hours = d.getHours();
     const minutes = d.getMinutes();
     const isPM = hours >= 12;
-    let hours12 = hours % 12 || 12;
+    const hours12 = hours % 12 || 12;
     const ampm = isPM ? "pm" : "am";
     const minutesStr = String(minutes).padStart(2, "0");
-
     return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
   }, [locationUpdated]);
 
+  // -----------------------------------------
   // 4) "Mileage remaining" = batteryPercentage * 3.51
+  // -----------------------------------------
   const mileageRemaining = (batteryPercentage * 3.51).toFixed(1);
+
+  // Click entire card => select this group/car
+  const handleCardClick = () => {
+    // If the group isn't selected, we select the "selectedCar" from this group
+    if (!isGroupSelected) {
+      dispatch(selectCar(selectedCar.id));
+    }
+  };
 
   return (
     <motion.div
+      onClick={handleCardClick}
       initial={{ scale: 0.98 }}
       animate={{ scale: isGroupSelected ? 1.0 : 0.98 }}
       transition={{ type: "tween", duration: 0.3 }}
@@ -153,7 +157,11 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         {/* Row 1: Model (left), Dropdown (right) */}
         <div className="flex items-start justify-between">
           <p className="font-bold text-foreground text-lg">{selectedCar.model}</p>
-          <div className="flex flex-col items-end relative">
+          <div
+            className="flex flex-col items-end relative"
+            // stop clicks on the dropdown from also triggering card click
+            onClick={(e) => e.stopPropagation()}
+          >
             <select
               className="mb-1 cursor-pointer bg-card border text-foreground text-sm"
               onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
@@ -177,7 +185,11 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
 
           {/* Info icon + year */}
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <div
+            className="flex items-center gap-1 text-sm text-muted-foreground"
+            // stop info clicks from triggering card click
+            onClick={(e) => e.stopPropagation()}
+          >
             <Info
               className="w-4 h-4 cursor-pointer"
               onClick={() => setShowOdometerPopup(!showOdometerPopup)}
@@ -212,17 +224,11 @@ export default memo(CarCardGroup);
 
 /** Helper to compute the day suffix: "1st", "2nd", "3rd", etc. */
 function getDaySuffix(day: number): string {
-  if (day >= 11 && day <= 13) {
-    return "th";
-  }
+  if (day >= 11 && day <= 13) return "th";
   switch (day % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
+    case 1:  return "st";
+    case 2:  return "nd";
+    case 3:  return "rd";
+    default: return "th";
   }
 }
