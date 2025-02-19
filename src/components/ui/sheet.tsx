@@ -234,12 +234,12 @@ export default function Sheet({
     [contentHeight]
   );
 
-  // Start collapsed
+  // Start expanded
   const defaultSnap = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
       const collapsed = 120;
       const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
-      return collapsed;
+      return expanded;
     },
     [contentHeight]
   );
