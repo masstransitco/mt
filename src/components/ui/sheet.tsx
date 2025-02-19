@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { incrementOpenSheets, decrementOpenSheets } from "@/lib/scrollLockManager";
 
 /* ----------------------------------------------------------------
-   1) PulsatingStrip Code (updated for 1px height)
+   1) PulsatingStrip Code (1px height)
 ---------------------------------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
@@ -181,7 +181,7 @@ function InfoModal({
 }
 
 /* ----------------------------------------------------------------
-   3) The Sheet with dynamic snap points
+   3) The Sheet with dynamic snap points (expand/collapse, no close)
 ---------------------------------------------------------------- */
 interface SheetProps {
   isOpen: boolean;
@@ -214,40 +214,38 @@ export default function Sheet({
   // For the Info button
   const [infoModalOpen, setInfoModalOpen] = useState(false);
 
-  // We'll measure the content's height & create dynamic snap points
+  // Measure content height to figure out snap points
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
   useLayoutEffect(() => {
     if (contentRef.current) {
-      const scrollHeight = contentRef.current.scrollHeight;
-      setContentHeight(scrollHeight);
+      setContentHeight(contentRef.current.scrollHeight);
     }
   }, [children]);
 
-  // Snap logic
+  // We'll provide 2 snap points: collapsed & expanded
   const snapPoints = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
-      const collapsed = 100;
-      const neededHeight = Math.min(contentHeight + 60, maxHeight * 0.9);
-      if (neededHeight < collapsed) return [neededHeight];
-      return [collapsed, neededHeight];
+      const collapsed = 120; // px from bottom
+      const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
+      return [collapsed, expanded];
     },
     [contentHeight]
   );
 
+  // Default to the expanded snap, or collapsed - your choice
   const defaultSnap = useCallback(
     ({ maxHeight }: { maxHeight: number }) => {
-      if (contentHeight > 200) {
-        return Math.min(contentHeight + 60, maxHeight * 0.9);
-      } else {
-        return 100;
-      }
+      const collapsed = 120;
+      const expanded = Math.min(contentHeight + 60, maxHeight * 0.9);
+      // For example, start in the collapsed position:
+      return collapsed;
     },
     [contentHeight]
   );
 
-  // Custom header (dark background, left-aligned title)
+  // Make a custom header that matches the rest of the sheet
   const SheetHeader = (
     <div className="pb-2 bg-gray-900/90 text-white">
       <div className="flex items-center justify-between px-4 pt-4">
@@ -270,6 +268,7 @@ export default function Sheet({
           >
             <Info className="w-5 h-5 text-white" />
           </button>
+          {/* Only the chevron can close the sheet */}
           <button
             onClick={onToggle}
             className="p-2 rounded-full hover:bg-gray-800 transition-colors"
@@ -279,7 +278,7 @@ export default function Sheet({
         </div>
       </div>
 
-      {/* The subtle PulsatingStrip divider */}
+      {/* PulsatingStrip divider */}
       <PulsatingStrip className="mt-2 mx-4" />
     </div>
   );
@@ -288,17 +287,19 @@ export default function Sheet({
     <>
       <BottomSheet
         open={isOpen}
-        onDismiss={onToggle}
+        // We do NOT allow the sheet to fully close on drag:
+        onDismiss={() => {
+          /* no-op so it won't close automatically */
+        }}
         snapPoints={snapPoints}
         defaultSnap={defaultSnap}
         header={SheetHeader}
-        // <-- Important: set blocking to true so user CANNOT close by dragging
-        blocking={true}
+        blocking={false} // can interact with background
         className={cn("custom-sheet", className)}
       >
         <div ref={contentRef} className="relative px-4 pt-2 pb-6">
           {children}
-          {/* Optional handle at bottom (still visible but won't close the sheet on drag) */}
+          {/* Optional handle at bottom - purely visual; won't close */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center">
             <div className="w-32 h-1 rounded-full bg-white/25" />
           </div>
