@@ -28,11 +28,16 @@ function CarCardComponent({
   isVisible = true,
   size = "large",
 }: CarCardProps) {
-  // Fallback battery value
-  const batteryPercentage =
-    typeof car.electric_battery_percentage_left === "number"
-      ? car.electric_battery_percentage_left
-      : 92; // fallback to 92% if undefined
+
+  // Log the raw battery value to debug
+  console.log("Battery raw:", car.electric_battery_percentage_left);
+
+  // Attempt to parse the battery value into a number
+  const parsedBattery = Number(car.electric_battery_percentage_left);
+  // If it's not a finite number, fallback to 92
+  const batteryPercentage = Number.isFinite(parsedBattery)
+    ? parsedBattery
+    : 92;
 
   return (
     <motion.div
@@ -48,7 +53,6 @@ function CarCardComponent({
         ${selected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
       `}
     >
-      {/* "Selected" badge in top-right corner, here replaced with "5-Seater" */}
       {selected && (
         <div className="absolute top-3 right-3 z-10">
           <div className="px-2 py-1 rounded-full bg-white text-black text-sm">
@@ -57,7 +61,6 @@ function CarCardComponent({
         </div>
       )}
 
-      {/* 3D Viewer container: fixed aspect ratio for uniform sizing */}
       <div className="relative w-full aspect-[3/2]">
         {isVisible && (
           <Car3DViewer
@@ -71,21 +74,17 @@ function CarCardComponent({
         )}
       </div>
 
-      {/* Car details */}
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-2">
           {/* Left side */}
           <div className="flex flex-col">
-            {/* Model (bold) */}
             <p className="font-bold text-foreground text-lg">{car.model}</p>
 
-            {/* Battery percentage (with fallback) */}
             <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
               <Battery className="w-4 h-4" />
               <span>{batteryPercentage}%</span>
             </div>
 
-            {/* Odometer */}
             <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
               <Gauge className="w-4 h-4" />
               <span>{car.odometer} km</span>
