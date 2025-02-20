@@ -239,14 +239,16 @@ export default function StationSelector({
   // Handle "Car" button click for CarSheet visibility toggling
  const handleCarToggle = () => {
     if (openSheet === "car") {
-      dispatch(closeCurrentSheet()); // Close CarSheet if already open
+      // Instead of closeCurrentSheet, just dispatch an action to set openSheet to "none" (close the sheet)
+      dispatch(closeCurrentSheet());
     } else {
-      dispatch(openNewSheet("car")); // or else, Open the CarSheet
+      // Dispatch action to open the "car" sheet
+      dispatch(openNewSheet("car"));
     }
   };
 
   // Manage CarSheet visibility
-  const openSheet = useAppSelector(selectOpenSheet);
+  const openSheet = useAppSelector((state) => state.dispatch.openSheet);
 
   return (
     <div
