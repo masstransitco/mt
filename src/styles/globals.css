@@ -147,46 +147,6 @@
   }
 }
 
-/* Make the entire sheet dark gray, including headers, body, etc. */
-:where(.rsbs-header) {
- background-color: rgba(17, 17, 17, 0.9) !important;
-}
-:where(.rsbs-body),
-:where(.rsbs-content),
-:where(.rsbs-footer) {
-  background-color: rgba(17, 17, 17, 0.9) !important;
-  color: #ffffff !important;
-}
-
-/* Header/close icons in white */
-:where(.rsbs-header) button,
-:where(.rsbs-header) svg,
-:where(.rsbs-close) {
-  color: #ffffff !important;
-}
-
-/* Thin drag handle */
-:where(.rsbs-drag-handle) {
-  background-color: rgba(255, 255, 255, 0.3) !important;
-}
-
-/* Custom backdrop/overlay color */
-:where(.rsbs-overlay),
-:where(.rsbs-backdrop) {
-  background-color: rgba(17, 17, 17, 0.9) !important;
-}
-
-/* Built-in variable overrides */
-:root, :where(.rsbs-root) {
-  --rsbs-backdrop-bg: rgba(17, 17, 17, 0.9) !important;
-  --rsbs-bg: rgba(17, 17, 17, 0.9) !important;
-  --rsbs-handle-bg: rgba(255, 255, 255, 0.3) !important;
-}
-
-/* Make the pulsating strip thinner - default was ~2.5px; let's do 1px. */
-:where(.rsbs-header) :where(.flex.justify-center) > div[style*="height: 2.5px"] {
-  height: 1px !important; /* We override the default 2.5px */
-}
 
 /* Menu components */
 .app-menu {
