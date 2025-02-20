@@ -1,12 +1,10 @@
-// src/store/uiSlice.ts
-
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
 
 /* -----------------------------------------------------------
    Possible top-level view states for your UI
 ----------------------------------------------------------- */
-type ViewState = "showCar" | "showMap";
+type ViewState = "showCar" | "showMap" | "none";  // Add 'none' to represent no sheet open
 
 /* -----------------------------------------------------------
    Possible layout modes for CarGrid (optional example)
@@ -33,10 +31,14 @@ const uiSlice = createSlice({
     setCarGridLayout: (state, action: PayloadAction<CarGridLayout>) => {
       state.carGridLayout = action.payload;
     },
+    closeCurrentSheet: (state) => {
+      // Close the currently open sheet (set to 'none')
+      state.viewState = "none";
+    },
   },
 });
 
-export const { setViewState, setCarGridLayout } = uiSlice.actions;
+export const { setViewState, setCarGridLayout, closeCurrentSheet } = uiSlice.actions;
 export default uiSlice.reducer;
 
 /* --------------------------- Selectors --------------------------- */
