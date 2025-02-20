@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectBookingStep, selectDepartureStationId, selectArrivalStationId } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
