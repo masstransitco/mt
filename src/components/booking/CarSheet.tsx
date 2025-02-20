@@ -17,16 +17,16 @@ interface CarSheetProps {
 }
 
 export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps) {
-  // Avoid unnecessary renders by only subscribing when sheet is open
+  // Move the selector outside the effect - always call hooks at the top level
+  const availableCars = useAppSelector(selectAvailableForDispatch);
   const [carCount, setCarCount] = useState<number>(0);
   
-  // Only select cars when the sheet is open
+  // Update carCount when sheet is open or cars change
   useEffect(() => {
     if (isOpen) {
-      const availableCars = useAppSelector(selectAvailableForDispatch);
       setCarCount(availableCars.length);
     }
-  }, [isOpen]);
+  }, [isOpen, availableCars]);
   
   // Memoize subtitle
   const carsSubtitle = useMemo(() => 
