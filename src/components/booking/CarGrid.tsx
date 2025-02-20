@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback } from "react";
+import React, { useEffect, useMemo, useCallback, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCars } from "@/store/carSlice";
@@ -6,7 +6,9 @@ import { fetchDispatchLocations } from "@/store/dispatchSlice";
 import { selectCar } from "@/store/userSlice";
 import { selectViewState } from "@/store/uiSlice";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
-import CarCardGroup from "./CarCardGroup";
+
+// Lazy-load CarCardGroup using dynamic import
+const CarCardGroup = React.lazy(() => import("./CarCardGroup"));
 
 interface CarGridProps {
   className?: string;
@@ -14,46 +16,67 @@ interface CarGridProps {
 
 export default function CarGrid({ className = "" }: CarGridProps) {
   const dispatch = useAppDispatch();
-
-  // 1) Ensure cars & dispatch locations are loaded
-  useEffect(() => {
-    dispatch(fetchCars());
-    dispatch(fetchDispatchLocations());
-  }, [dispatch]);
-
-  // 2) Get available cars + selected car
-  const availableCars = useAvailableCarsForDispatch();
-  const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   const viewState = useAppSelector(selectViewState);
-
-  // 3) If no car is selected, default to the first available
+  const isVisible = viewState === "showCar";
+  
+  // Only fetch data when component is visible to reduce network and memory usage
   useEffect(() => {
-    if (!selectedCarId && availableCars.length > 0) {
+    if (isVisible) {
+      dispatch(fetchCars());
+      dispatch(fetchDispatchLocations());
+    }
+  }, [dispatch, isVisible]);
+  
+  // Only calculate available cars when component is visible
+  const availableCars = isVisible ? useAvailableCarsForDispatch() : [];
+  const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
+  
+  // Window visibility tracking to pause animations when tab is not active
+  const [isWindowVisible, setIsWindowVisible] = useState(true);
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsWindowVisible(!document.hidden);
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+  
+  // Early return if not visible to prevent unnecessary calculations
+  if (!isVisible) {
+    return null;
+  }
+  
+  // Only select default car when visible and no car is selected
+  useEffect(() => {
+    if (isVisible && !selectedCarId && availableCars.length > 0) {
       dispatch(selectCar(availableCars[0].id));
     }
-  }, [availableCars, selectedCarId, dispatch]);
-
-  // 4) Group cars by model (memoized to avoid recalculations)
-  const groupedByModel = useMemo(() => 
-    Object.values(
+  }, [availableCars, selectedCarId, dispatch, isVisible]);
+  
+  // Group cars by model (memoized with limit on group size)
+  const groupedByModel = useMemo(() => {
+    const groups = Object.values(
       availableCars.reduce((acc, car) => {
         const model = car.model || "Unknown Model";
         if (!acc[model]) {
           acc[model] = { model, cars: [] };
         }
-        acc[model].cars.push(car);
+        // Limit each group to maximum 10 cars to prevent excessive rendering
+        if (acc[model].cars.length < 10) {
+          acc[model].cars.push(car);
+        }
         return acc;
       }, {} as Record<string, { model: string; cars: typeof availableCars }>)
-    ), [availableCars]
-  );
-
-  // 5) Conditionally render if using a viewState
-  const isVisible = viewState === "showCar";
-  if (!isVisible) {
-    return null;
-  }
-
-  // Memoize event handlers to avoid re-creating them on every render
+    );
+    
+    // Limit total number of groups to display
+    return groups.slice(0, 5);
+  }, [availableCars]);
+  
+  // Memoize event handlers 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.stopPropagation();
   }, []);
@@ -61,51 +84,76 @@ export default function CarGrid({ className = "" }: CarGridProps) {
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.stopPropagation();
   }, []);
-
+  
+  // Intersection Observer for viewport detection
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isInViewport, setIsInViewport] = useState(false);
+  
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIsInViewport(entries[0].isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+    
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+  
+  // Use simplified animation when not in viewport or window not visible
+  const shouldAnimate = isInViewport && isWindowVisible;
+  
   return (
-    <div className={`transition-all duration-300 ${className}`}>
-      {/**
-       * Outer container for horizontal scrolling:
-       * - overflow-x-auto gives a scrollbar if content overflows.
-       * - touch-pan-x and -webkit-overflow-scrolling:touch enable smooth horizontal swiping on mobile.
-       * - onWheel and onTouchMove stop propagation so the browser does not scroll.
-       */}
+    <div 
+      className={`transition-all duration-300 ${className}`}
+      ref={containerRef}
+    >
       <div
         className="
           overflow-x-auto
           touch-pan-x
-          -webkit-overflow-scrolling:touch
+          overscroll-contain
+          max-w-full
+          will-change-scroll
         "
         onWheel={handleWheel}
         onTouchMove={handleTouchMove}
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none', // Hide scrollbar in Firefox
+          msOverflowStyle: 'none',  // Hide scrollbar in IE/Edge
+        }}
       >
-        {/**
-         * Inner flex container: flex-nowrap prevents wrapping;
-         * w-max forces the container to expand with its content.
-         */}
-        <div className="flex flex-nowrap w-max gap-3 py-2">
+        <div className="flex flex-nowrap gap-3 py-2 px-1">
           <AnimatePresence mode="popLayout">
             {groupedByModel.map((group) => (
               <motion.div
                 key={group.model}
-                layout
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 0.975 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
+                layout={shouldAnimate}
+                initial={shouldAnimate ? { opacity: 0, scale: 0.95 } : { opacity: 1, scale: 1 }}
+                animate={shouldAnimate ? { opacity: 1, scale: 0.975 } : { opacity: 1, scale: 1 }}
+                exit={shouldAnimate ? { opacity: 0, scale: 0.95 } : { opacity: 0 }}
+                transition={{ duration: shouldAnimate ? 0.2 : 0 }}
               >
-                <CarCardGroup group={group} isVisible={isVisible} />
+                <React.Suspense fallback={
+                  <div className="h-48 w-64 bg-muted/30 rounded-xl animate-pulse"></div>
+                }>
+                  <CarCardGroup group={group} isVisible={isVisible} />
+                </React.Suspense>
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
       </div>
-
-      {/** Fallback when no cars are available */}
+      
       {groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
           className="py-12 text-center rounded-2xl bg-card mt-4 mx-4"
         >
           <p className="text-muted-foreground">No cars available right now. Please check again later.</p>
