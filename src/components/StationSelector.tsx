@@ -332,6 +332,7 @@ export default function StationSelector({
         <CarSheet
           isOpen={viewState === "showCar"}
           onToggle={handleCarToggle}
+           className="max-w-screen-md mx-auto mt-10" // Ensure TopSheet is aligned with StationSelector
         />
       </div>
     </div>
