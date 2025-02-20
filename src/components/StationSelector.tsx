@@ -375,19 +375,19 @@ function StationSelector({
           </div>
         )}
 
-{/* Locate Me & Car Button - Only render when needed */}
+{/* Locate Me & Car Button - Fixed styling for consistent sizing */}
 {(step === 1 || step === 2) && (
   <div className="mt-2 flex gap-2">
     <button
       onClick={handleLocateMe}
-      className="px-4 py-2 text-sm font-medium bg-indigo-500/90 text-white rounded-full hover:bg-indigo-600 transition-colors w-full shadow-sm"
+      className="px-4 h-12 text-sm font-medium bg-indigo-500/90 text-white rounded-full hover:bg-indigo-600 transition-colors flex-1 shadow-sm flex items-center justify-center"
       type="button"
     >
       Near me
     </button>
     <button
       onClick={handleCarToggle}
-      className="p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors w-12 h-12 flex items-center justify-center shadow-sm"
+      className="p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors w-12 h-12 flex items-center justify-center shadow-sm flex-shrink-0"
       type="button"
       aria-label="Toggle car view"
     >
