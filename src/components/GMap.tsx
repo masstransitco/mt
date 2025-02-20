@@ -5,7 +5,7 @@ import { GoogleMap, Polyline, Marker, useJsApiLoader } from "@react-google-maps/
 import { toast } from "react-hot-toast";
 import { Car, Locate } from "lucide-react";
 import * as THREE from "three";
-import dynamic, { Suspense } from "next/dynamic";
+import React, { Suspense } from "next/dynamic";
 
 // Redux & store hooks
 import { useAppDispatch, useAppSelector } from "@/store/store";
