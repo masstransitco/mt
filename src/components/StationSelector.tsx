@@ -77,8 +77,8 @@ const AddressSearch = ({
     try {
       const request: google.maps.places.AutocompleteRequest = {
         input,
-         // @ts-ignore
-        types: ["establishment", "geocode"],
+        // @ts-ignore
+        types: ["establishment", "geocode"], // Ignore the TypeScript error here
         componentRestrictions: { country: "HK" },
       };
       const response = await autocompleteService.current.getPlacePredictions(request);
