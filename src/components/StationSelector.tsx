@@ -16,6 +16,7 @@ import {
 } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
+import { openNewSheet } from "@/store/dispatchSlice"; // Import the action to open the sheet
 
 /* -----------------------------------------------------------
    Reusable Icons
@@ -237,7 +238,7 @@ export default function StationSelector({
 
   // Handle "Car" button click (to toggle car sheet)
   const handleCarToggle = () => {
-    // Reusing the car toggle logic from GMap to open the car sheet
+    // Dispatch the action to open the car sheet
     dispatch(openNewSheet("car"));
   };
 
