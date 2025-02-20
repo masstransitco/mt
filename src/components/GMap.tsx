@@ -536,15 +536,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // "Car" button => if car sheet is open, close it; otherwise open it
-  const handleCarToggle = () => {
-    if (openSheet === "car") {
-      closeCurrentSheet();
-    } else {
-      openNewSheet("car");
-    }
-  };
-
   // ------------------ Station list selection ------------------
 
   const handleStationSelectedFromList = (station: StationFeature) => {
