@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { Gauge, Battery } from "lucide-react";
 import type { Car } from "@/types/cars";
 
+// Dynamically load the Car3DViewer to minimize initial page load
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => (
