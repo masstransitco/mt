@@ -69,17 +69,17 @@ export default function TopSheet({
   const [isInfoOpen, setIsInfoOpen] = useState(false); // State to control InfoBox visibility
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const y = useMotionValue(0);
-  const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
+  const y = useMotionValue(-100); // Start the sheet above the viewport
+  const sheetOpacity = useTransform(y, [-300, 0], [1, 0.6], { clamp: false }); // Animate opacity based on the y position
   const dragControls = useDragControls();
 
   useEffect(() => {
-    if (!isOpen) y.set(0);
+    if (!isOpen) y.set(-100); // Reset position when closed
   }, [isOpen, y]);
 
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
-      if (info.offset.y < -100) {
+      if (info.offset.y > 100) {
         onDismiss?.();
       }
     },
@@ -115,9 +115,9 @@ export default function TopSheet({
           <motion.div
             className="pointer-events-auto mt-auto w-full"
             style={combinedStyle}
-            initial={{ y: "100%" }}
+            initial={{ y: "-100%" }}
             animate={{ y: 0 }}
-            exit={{ y: "100%" }}
+            exit={{ y: "-100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             drag="y"
             dragControls={dragControls}
@@ -125,7 +125,7 @@ export default function TopSheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             onDragEnd={handleDragEnd}
           >
-            <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
+            <div className={cn("relative bg-background rounded-xl shadow-xl", className)}>
               {/* Body content */}
               <div ref={contentRef} className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto">
                 {children}
