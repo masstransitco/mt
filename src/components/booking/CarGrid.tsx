@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCars } from "@/store/carSlice";
@@ -35,16 +33,18 @@ export default function CarGrid({ className = "" }: CarGridProps) {
     }
   }, [availableCars, selectedCarId, dispatch]);
 
-  // 4) Group cars by model
-  const groupedByModel = Object.values(
-    availableCars.reduce((acc, car) => {
-      const model = car.model || "Unknown Model";
-      if (!acc[model]) {
-        acc[model] = { model, cars: [] };
-      }
-      acc[model].cars.push(car);
-      return acc;
-    }, {} as Record<string, { model: string; cars: typeof availableCars }>)
+  // 4) Group cars by model (memoized to avoid recalculations)
+  const groupedByModel = useMemo(() => 
+    Object.values(
+      availableCars.reduce((acc, car) => {
+        const model = car.model || "Unknown Model";
+        if (!acc[model]) {
+          acc[model] = { model, cars: [] };
+        }
+        acc[model].cars.push(car);
+        return acc;
+      }, {} as Record<string, { model: string; cars: typeof availableCars }>)
+    ), [availableCars]
   );
 
   // 5) Conditionally render if using a viewState
@@ -52,6 +52,15 @@ export default function CarGrid({ className = "" }: CarGridProps) {
   if (!isVisible) {
     return null;
   }
+
+  // Memoize event handlers to avoid re-creating them on every render
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.stopPropagation();
+  }, []);
+  
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.stopPropagation();
+  }, []);
 
   return (
     <div className={`transition-all duration-300 ${className}`}>
@@ -67,8 +76,8 @@ export default function CarGrid({ className = "" }: CarGridProps) {
           touch-pan-x
           -webkit-overflow-scrolling:touch
         "
-        onWheel={(e) => e.stopPropagation()}
-        onTouchMove={(e) => e.stopPropagation()}
+        onWheel={handleWheel}
+        onTouchMove={handleTouchMove}
       >
         {/**
          * Inner flex container: flex-nowrap prevents wrapping;
@@ -99,7 +108,7 @@ export default function CarGrid({ className = "" }: CarGridProps) {
           animate={{ opacity: 1 }}
           className="py-12 text-center rounded-2xl bg-card mt-4 mx-4"
         >
-          <p className="text-muted-foreground">No vehicles found.</p>
+          <p className="text-muted-foreground">No cars available right now. Please check again later.</p>
         </motion.div>
       )}
     </div>
