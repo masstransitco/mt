@@ -24,6 +24,7 @@ function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
     <ArrowRightFromLine
       className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
+      style={{ marginLeft: "12px" }} // Shift to the right
     />
   );
 }
@@ -32,6 +33,7 @@ function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
     <ArrowRightToLine
       className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
+      style={{ marginLeft: "12px" }} // Shift to the right
     />
   );
 }
@@ -296,17 +298,16 @@ export default function StationSelector({
         {/* Info Bar */}
         <div className="flex items-center justify-between px-1 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Step {uiStepNumber} of 2</span>
             <span>•</span>
             {uiStepNumber === 1
-              ? "Select departure station"
+              ? "Choose pick-up station"
               : "Select arrival station"}
           </div>
 
           {/* Show route distance if both stations chosen & we have route data */}
           {departureStation && arrivalStation && distanceInKm && (
             <div className="text-xs font-medium">
-              Total Route: {distanceInKm} km
+              Drive Distance: {distanceInKm} km
             </div>
           )}
         </div>
