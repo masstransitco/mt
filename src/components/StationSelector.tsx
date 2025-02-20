@@ -5,7 +5,7 @@ import { X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import debounce from "lodash/debounce";
 import { Car } from "lucide-react";
-import Sheet from "@/components/ui/sheet";
+import CarSheet from "@/components/booking/CarSheet";
 
 
 // Redux & store hooks
@@ -372,18 +372,11 @@ export default function StationSelector({
       </div>
 
       {/* CarSheet */}
-      <Sheet
-  isOpen={viewState === "showCar"} // Control visibility based on the Redux state
-  onDismiss={handleCarToggle} // Use the toggle function for dismissing the sheet
-  title="Dispatch a car"
->
-  <div className="px-4 py-2">
-    {/* Stop scrolling from bubbling to the parent */}
-    <div onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
-      <CarGrid />
-    </div>
-  </div>
-</Sheet>
+      <CarSheet
+        isOpen={viewState === "showCar"} // Control visibility based on the Redux state
+        onToggle={handleCarToggle}
+      />
     </div>
   );
+}
 }
