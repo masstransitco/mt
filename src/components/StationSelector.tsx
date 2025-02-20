@@ -214,6 +214,25 @@ export default function StationSelector({
   const highlightDepartureClass = highlightDeparture ? "ring-1 ring-white bg-background" : "";
   const highlightArrivalClass = highlightArrival ? "ring-1 ring-white bg-background" : "";
 
+  // Handle "Locate Me" button click
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not supported.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        toast.success("Location found!");
+        onAddressSearch(loc); // Perform search with the found location
+      },
+      (err) => {
+        console.error("Geolocation error:", err);
+        toast.error("Unable to retrieve location.");
+      }
+    );
+  };
+
   return (
     <div
       className="absolute top-[2px] left-5 right-5 z-10
@@ -318,6 +337,16 @@ export default function StationSelector({
             <AlertCircle className="w-4 h-4" />
             <span>Departure and arrival stations cannot be the same</span>
           </div>
+        )}
+
+        {/* Locate Me Button */}
+        {(step === 1 || step === 2) && (
+          <button
+            onClick={handleLocateMe}
+            className="mt-2 px-4 py-2 text-sm bg-accent text-white rounded-full hover:bg-accent/80 w-full"
+          >
+            Near me
+          </button>
         )}
       </div>
     </div>
