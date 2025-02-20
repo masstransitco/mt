@@ -6,15 +6,15 @@ import { selectBookingStep, selectDepartureStationId, selectArrivalStationId, se
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
 import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon";
 
-// Dynamically import CarSheet with no SSR to reduce initial bundle size
+// Dynamically import CarSheet (no SSR)
 const CarSheet = dynamic(() => import("@/components/booking/CarSheet"), {
   ssr: false,
-  loading: () => <div className="h-10 bg-muted animate-pulse rounded-md"></div>
+  loading: () => <div className="h-10 bg-muted animate-pulse rounded-md"></div>,
 });
 
 /* -----------------------------------------------------------
@@ -44,7 +44,6 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
-// Extracted to separate component for better memoization
 const AddressSearch = React.memo(({
   onAddressSelect,
   disabled,
@@ -59,14 +58,12 @@ const AddressSearch = React.memo(({
   const geocoder = useRef<google.maps.Geocoder | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize Google services only once
+  // Initialize Google services once
   useEffect(() => {
     if (window.google && !autocompleteService.current) {
       autocompleteService.current = new google.maps.places.AutocompleteService();
       geocoder.current = new google.maps.Geocoder();
     }
-    
-    // Cleanup function
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -74,35 +71,28 @@ const AddressSearch = React.memo(({
     };
   }, []);
 
-  if (selectedStation) {
-    return (
-      <div className="flex-1 px-1 py-1 text-foreground font-medium">
-        {selectedStation.properties.Place}
-      </div>
-    );
-  }
+  // Instead of returning early when a station is selected,
+  // we conditionally render a read-only view.
+  const isStationSelected = Boolean(selectedStation);
 
-  // Improved debounce implementation with proper cleanup
   const searchPlaces = useCallback((input: string) => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
-
     if (!input.trim() || !autocompleteService.current) {
       setPredictions([]);
       return;
     }
-
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const request: google.maps.places.AutocompleteRequest = {
           input,
-        // @ts-ignore
+          // @ts-ignore
           types: ["establishment", "geocode"],
           componentRestrictions: { country: "HK" },
         };
         const response = await autocompleteService.current!.getPlacePredictions(request);
-        // Limit number of predictions shown
+        // Limit to 5 predictions
         setPredictions(response.predictions.slice(0, 5));
         setIsDropdownOpen(response.predictions.length > 0);
       } catch (error) {
@@ -115,15 +105,12 @@ const AddressSearch = React.memo(({
 
   const handleSelect = useCallback(async (prediction: google.maps.places.AutocompletePrediction) => {
     if (!geocoder.current) return;
-
     try {
-      // Request only the location data we need
       const response = await geocoder.current.geocode({
         placeId: prediction.place_id,
         // @ts-ignore
         fields: ["geometry.location"]
       });
-      
       const result = response.results[0];
       if (result?.geometry?.location) {
         const { lat, lng } = result.geometry.location;
@@ -139,54 +126,58 @@ const AddressSearch = React.memo(({
   }, [onAddressSelect]);
 
   return (
-    <div className="relative flex-1">
-      <div className="relative">
-        <input
-          type="text"
-          value={searchText}
-          onChange={(e) => {
-            setSearchText(e.target.value);
-            searchPlaces(e.target.value);
-          }}
-          onFocus={() => setIsDropdownOpen(predictions.length > 0)}
-          onBlur={() => {
-            // Delay hiding to allow for selection
-            setTimeout(() => setIsDropdownOpen(false), 200);
-          }}
-          disabled={disabled}
-          placeholder={placeholder}
-          className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
-        />
-        {searchText && (
-          <button
-            onClick={() => {
-              setSearchText("");
-              setPredictions([]);
-              setIsDropdownOpen(false);
-            }}
-            className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
-            type="button"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      {isDropdownOpen && predictions.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-50 max-h-64 overflow-y-auto">
-          {predictions.map((prediction) => (
-            <button
-              key={prediction.place_id}
-              onClick={() => handleSelect(prediction)}
-              className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
-              type="button"
-            >
-              <div className="font-medium">{prediction.structured_formatting.main_text}</div>
-              <div className="text-xs text-muted-foreground">
-                {prediction.structured_formatting.secondary_text}
-              </div>
-            </button>
-          ))}
+    <div className="flex-1">
+      {isStationSelected ? (
+        <div className="px-1 py-1 text-foreground font-medium">
+          {selectedStation!.properties.Place}
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                searchPlaces(e.target.value);
+              }}
+              onFocus={() => setIsDropdownOpen(predictions.length > 0)}
+              onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+              disabled={disabled}
+              placeholder={placeholder}
+              className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
+            />
+            {searchText && (
+              <button
+                onClick={() => {
+                  setSearchText("");
+                  setPredictions([]);
+                  setIsDropdownOpen(false);
+                }}
+                className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
+                type="button"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          {isDropdownOpen && predictions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-50 max-h-64 overflow-y-auto">
+              {predictions.map((prediction) => (
+                <button
+                  key={prediction.place_id}
+                  onClick={() => handleSelect(prediction)}
+                  className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
+                  type="button"
+                >
+                  <div className="font-medium">{prediction.structured_formatting.main_text}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {prediction.structured_formatting.secondary_text}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -210,8 +201,6 @@ function StationSelector({
   onClearArrival,
 }: StationSelectorProps) {
   const dispatch = useAppDispatch();
-  
-  // Cached selectors
   const viewState = useAppSelector((state) => state.ui.viewState);
   const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -219,21 +208,9 @@ function StationSelector({
   const stations = useAppSelector(selectStationsWithDistance);
   const bookingRoute = useAppSelector(selectRoute);
 
-  // Memoized values
-  const departureStation = useMemo(() => 
-    stations.find((s) => s.id === departureId), 
-    [stations, departureId]
-  );
-  
-  const arrivalStation = useMemo(() => 
-    stations.find((s) => s.id === arrivalId),
-    [stations, arrivalId]
-  );
-
-  const distanceInKm = useMemo(() => 
-    bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null,
-    [bookingRoute]
-  );
+  const departureStation = useMemo(() => stations.find((s) => s.id === departureId), [stations, departureId]);
+  const arrivalStation = useMemo(() => stations.find((s) => s.id === arrivalId), [stations, arrivalId]);
+  const distanceInKm = useMemo(() => bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null, [bookingRoute]);
 
   const uiStepNumber = step < 3 ? 1 : 2;
   const highlightDeparture = step <= 2;
@@ -242,19 +219,12 @@ function StationSelector({
   const highlightDepartureClass = highlightDeparture ? "ring-1 ring-white bg-background" : "";
   const highlightArrivalClass = highlightArrival ? "ring-1 ring-white bg-background" : "";
 
-  // Memoized handlers
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
       return;
     }
-    
-    const options = {
-      enableHighAccuracy: false, // Set to true only when needed
-      timeout: 5000,
-      maximumAge: 10000 // Allow cached position to reduce battery usage
-    };
-    
+    const options = { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 };
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -294,7 +264,6 @@ function StationSelector({
     }
   }, [onClearArrival]);
 
-  // Only render CarSheet when needed
   const showCarSheet = viewState === "showCar";
 
   return (
@@ -328,7 +297,7 @@ function StationSelector({
           )}
         </div>
 
-        {/* ARRIVAL INPUT - Only render when needed */}
+        {/* ARRIVAL INPUT */}
         {step >= 3 && (
           <div
             className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightArrivalClass} ${
@@ -361,13 +330,12 @@ function StationSelector({
             <span>•</span>
             {uiStepNumber === 1 ? "Choose pick-up station" : "Select arrival station"}
           </div>
-
           {departureStation && arrivalStation && distanceInKm && (
             <div className="text-xs font-medium">Drive Distance: {distanceInKm} km</div>
           )}
         </div>
 
-        {/* Validation: same-station error - Only render when needed */}
+        {/* Validation for same-station error */}
         {departureId && arrivalId && departureId === arrivalId && (
           <div className="flex items-center gap-2 px-1 py-1 text-xs text-destructive">
             <AlertCircle className="w-4 h-4" />
@@ -375,29 +343,27 @@ function StationSelector({
           </div>
         )}
 
-{/* Locate Me & Car Button - Fixed styling for consistent sizing */}
-{(step === 1 || step === 2) && (
-  <div className="mt-2 flex gap-2">
-    <button
-      onClick={handleLocateMe}
-      className="px-4 h-12 text-sm font-medium bg-indigo-500/90 text-white rounded-full hover:bg-indigo-600 transition-colors flex-1 shadow-sm flex items-center justify-center"
-      type="button"
-    >
-      Near me
-    </button>
-    <button
-      onClick={handleCarToggle}
-      className="p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors w-12 h-12 flex items-center justify-center shadow-sm flex-shrink-0"
-      type="button"
-      aria-label="Toggle car view"
-    >
-      <CarSignalIcon className="w-6 h-6" />
-    </button>
-  </div>
-)}
-</div>
-
-      {/* Only render CarSheet when needed */}
+        {/* Locate Me & Car Button */}
+        {(step === 1 || step === 2) && (
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleLocateMe}
+              className="px-4 h-12 text-sm font-medium bg-indigo-500/90 text-white rounded-full hover:bg-indigo-600 transition-colors flex-1 shadow-sm flex items-center justify-center"
+              type="button"
+            >
+              Near me
+            </button>
+            <button
+              onClick={handleCarToggle}
+              className="p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors w-12 h-12 flex items-center justify-center shadow-sm flex-shrink-0"
+              type="button"
+              aria-label="Toggle car view"
+            >
+              <CarSignalIcon className="w-6 h-6" />
+            </button>
+          </div>
+        )}
+      </div>
       {showCarSheet && (
         <div className="mt-2">
           <CarSheet
@@ -411,5 +377,4 @@ function StationSelector({
   );
 }
 
-// Memoize the entire component
 export default React.memo(StationSelector);
