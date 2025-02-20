@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, ReactNode, useMemo } from "react";
-import { AnimatePresence, motion, useMotionValue, useTransform, useDragControls } from "framer-motion";
+import { AnimatePresence, motion, useMotionValue, useDragControls } from "framer-motion";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PulsatingStrip } from "./PulsatingStrip"; // Import the PulsatingStrip component
@@ -10,7 +10,7 @@ export interface TopSheetProps {
   className?: string;
   title?: string;
   subtitle?: string;
-  count?: number;  // Add count as a prop here
+  count?: number; // Add count as a prop here
   countLabel?: string;
   onDismiss?: () => void;
 }
@@ -28,14 +28,14 @@ const SheetHeader = ({
   setIsInfoOpen,
   isInfoOpen,
   handlePointerDown,
-  count,  // Accept count as a prop
-  countLabel,  // Accept countLabel as a prop
+  count, // Accept count as a prop
+  countLabel, // Accept countLabel as a prop
 }: {
   onDismiss?: () => void;
   setIsInfoOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isInfoOpen: boolean;
   handlePointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
-  count: number;  // Type for count
+  count: number; // Type for count
   countLabel?: string;
 }) => (
   <div
@@ -68,7 +68,7 @@ export default function TopSheet({
   className,
   title,
   subtitle,
-  count = 0,  // Default count to 0 if not passed
+  count = 0, // Default count to 0 if not passed
   countLabel,
   onDismiss,
 }: TopSheetProps) {
@@ -76,7 +76,6 @@ export default function TopSheet({
   const contentRef = useRef<HTMLDivElement>(null);
 
   const y = useMotionValue(-100); // Start the sheet above the viewport
-  const sheetOpacity = useTransform(y, [-300, 0], [1, 0.6], { clamp: false }); // Animate opacity based on the y position
   const dragControls = useDragControls();
 
   useEffect(() => {
@@ -98,10 +97,10 @@ export default function TopSheet({
 
   const combinedStyle = useMemo(
     () => ({
-      ...{ y, opacity: sheetOpacity },
+      ...{ y },
       touchAction: "pan-y",
     }),
-    [y, sheetOpacity]
+    [y]
   );
 
   return (
@@ -131,7 +130,7 @@ export default function TopSheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             onDragEnd={handleDragEnd}
           >
-            <div className={cn("relative bg-background rounded-xl shadow-xl", className)}>
+            <div className={cn("relative bg-background rounded-2xl shadow-xl", className)}> {/* Increased corner radius */}
               {/* Body content */}
               <div ref={contentRef} className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto">
                 {children}
@@ -146,7 +145,7 @@ export default function TopSheet({
                 setIsInfoOpen={setIsInfoOpen}
                 isInfoOpen={isInfoOpen}
                 handlePointerDown={handlePointerDown}
-                count={count}  // Pass count here
+                count={count} // Pass count here
                 countLabel={countLabel}
               />
             </div>
