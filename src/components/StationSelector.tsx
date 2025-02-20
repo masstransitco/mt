@@ -120,6 +120,7 @@ const AddressSearch = React.memo(({
       // Request only the location data we need
       const response = await geocoder.current.geocode({
         placeId: prediction.place_id,
+        // @ts-ignore
         fields: ["geometry.location"]
       });
       
