@@ -1,4 +1,3 @@
-// TopSheet.tsx
 import React, { useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, useDragControls } from "framer-motion";
 import { Info } from "lucide-react";
@@ -26,6 +25,7 @@ export default function TopSheet({
   countLabel,
   onDismiss,
 }: TopSheetProps) {
+  const [isInfoOpen, setIsInfoOpen] = useState(false); // State to control InfoBox visibility
   const contentRef = useRef<HTMLDivElement>(null);
 
   const y = useMotionValue(0);
@@ -49,29 +49,41 @@ export default function TopSheet({
     dragControls.start(e);
   };
 
-  // Header content
+  // InfoBox content
+  const InfoBox = (
+    <div className="absolute top-0 right-0 bg-white p-4 shadow-md rounded-lg">
+      <p className="text-sm text-gray-700">
+        {count} {countLabel ?? "items"} available
+      </p>
+    </div>
+  );
+
+  // Header content with button to dismiss
   const SheetHeader = (
     <div
       onPointerDown={handlePointerDown}
-      className="cursor-grab active:cursor-grabbing px-4 pt-4"
+      className="cursor-grab active:cursor-grabbing px-4 pt-4 flex items-center justify-between"
     >
-      {/* Title/subtitle/count */}
-      <div className="flex items-center justify-between">
-        <div className="text-left">
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
-          {subtitle && <p className="text-sm text-gray-300">{subtitle}</p>}
-          {typeof count === "number" && (
-            <p className="text-sm text-gray-300">
-              {count} {countLabel ?? "items"}
-            </p>
-          )}
-        </div>
+      {/* Dispatch car button and info icon in the same row */}
+      <button
+        className="flex-grow text-left text-lg font-semibold"
+        onClick={onDismiss}
+      >
+        Dispatch a car
+      </button>
 
-        {/* Info button */}
-        <button className="p-2 rounded-full hover:bg-white/10 transition-colors">
-          <Info className="w-5 h-5" />
-        </button>
-      </div>
+      {/* Info button */}
+      <button
+        className="p-2 rounded-full hover:bg-white/10 transition-colors"
+        onClick={() => setIsInfoOpen(!isInfoOpen)} // Toggle the info box visibility
+      >
+        <Info className="w-5 h-5" />
+      </button>
+
+      {/* Display InfoBox if visible */}
+      {isInfoOpen && InfoBox}
+
+      <PulsatingStrip className="mt-2 mx-auto" />
     </div>
   );
 
