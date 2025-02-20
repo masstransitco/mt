@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import debounce from "lodash/debounce";
