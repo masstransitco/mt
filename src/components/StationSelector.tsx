@@ -6,7 +6,7 @@ import { selectBookingStep, selectDepartureStationId, selectArrivalStationId } f
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
-import { CarSheet } from "@/components/booking/CarSheet"; // Import CarSheet to handle car dispatching
+import CarSheet from "@/components/booking/CarSheet"; // Import CarSheet to handle car dispatching
 import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import debounce from "lodash/debounce";
