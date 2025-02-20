@@ -100,8 +100,6 @@ const AddressSearch = React.memo(({
         // @ts-ignore
           types: ["establishment", "geocode"],
           componentRestrictions: { country: "HK" },
-          // Limit results to reduce memory usage
-          fields: ["place_id", "structured_formatting"],
         };
         const response = await autocompleteService.current!.getPlacePredictions(request);
         // Limit number of predictions shown
