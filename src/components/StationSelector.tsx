@@ -239,7 +239,7 @@ export default function StationSelector({
   };
 
   // Handle "Car" button click for CarSheet visibility toggling
-const handleCarToggle = () => {
+  const handleCarToggle = () => {
     if (viewState === "showCar") {
       // Close the car sheet
       dispatch(closeCurrentSheet());
@@ -249,15 +249,9 @@ const handleCarToggle = () => {
     }
   };
 
-  // Manage CarSheet visibility
-  const openSheet = useAppSelector((state) => state.dispatch.openSheet);
-
   return (
     <div
-      className="absolute top-[2px] left-5 right-5 z-10
-                 bg-background/90 backdrop-blur-sm
-                 border-b border-border
-                 rounded-md"
+      className="absolute top-[2px] left-5 right-5 z-10 bg-background/90 backdrop-blur-sm border-b border-border rounded-md"
       style={{ overscrollBehavior: "none", touchAction: "none" }}
     >
       <div className="px-2 py-2 space-y-2">
@@ -337,9 +331,7 @@ const handleCarToggle = () => {
         <div className="flex items-center justify-between px-1 py-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>•</span>
-            {uiStepNumber === 1
-              ? "Choose pick-up station"
-              : "Select arrival station"}
+            {uiStepNumber === 1 ? "Choose pick-up station" : "Select arrival station"}
           </div>
 
           {/* Show route distance if both stations chosen & we have route data */}
@@ -373,12 +365,15 @@ const handleCarToggle = () => {
             >
               Car
             </button>
-            <CarSheet
+          </div>
+        )}
+      </div>
+
+      {/* CarSheet */}
+      <CarSheet
         isOpen={viewState === "showCar"} // Control visibility based on the Redux state
         onToggle={handleCarToggle}
       />
-        )}
-      </div>
     </div>
   );
 }
