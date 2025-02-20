@@ -27,13 +27,15 @@ const SheetHeader = ({
   onDismiss,
   setIsInfoOpen,
   isInfoOpen,
+  handlePointerDown,  // <-- Added handlePointerDown prop here
 }: {
   onDismiss?: () => void;
   setIsInfoOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isInfoOpen: boolean;
+  handlePointerDown: (e: React.PointerEvent<HTMLDivElement>) => void; // <-- Added type for the function
 }) => (
   <div
-    onPointerDown={handlePointerDown}
+    onPointerDown={handlePointerDown}  // <-- Use the handlePointerDown passed as a prop
     className="cursor-grab active:cursor-grabbing px-4 pt-4 flex items-center justify-between"
   >
     {/* Dispatch car button and info icon in the same row */}
@@ -139,6 +141,7 @@ export default function TopSheet({
                 onDismiss={onDismiss}
                 setIsInfoOpen={setIsInfoOpen}
                 isInfoOpen={isInfoOpen}
+                handlePointerDown={handlePointerDown}  // <-- Pass handlePointerDown here
               />
             </div>
           </motion.div>
