@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react"; // Add missing imports
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectBookingStep, selectDepartureStationId, selectArrivalStationId } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
@@ -49,7 +49,7 @@ const AddressSearch = ({
   placeholder,
   selectedStation,
 }: AddressSearchProps) => {
-  const [searchText, setSearchText] = useState("");
+  const [searchText, setSearchText] = useState(""); // Use useState to manage search text
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [showResults, setShowResults] = useState(false);
 
