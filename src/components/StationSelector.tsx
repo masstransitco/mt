@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react"; // Add missing imports
+import React, { useState, useEffect, useRef, useCallback } from "react"; // Add missing imports
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectBookingStep, selectDepartureStationId, selectArrivalStationId, selectRoute } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
@@ -15,23 +15,23 @@ import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon"; // Import t
 /* -----------------------------------------------------------
    Reusable Icons
 ----------------------------------------------------------- */
-function DepartureIcon({ highlight }: { highlight: boolean }) {
+const DepartureIcon = React.memo(({ highlight }: { highlight: boolean }) => {
   return (
     <ArrowRightFromLine
       className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
       style={{ marginLeft: "12px" }}
     />
   );
-}
+});
 
-function ArrivalIcon({ highlight }: { highlight: boolean }) {
+const ArrivalIcon = React.memo(({ highlight }: { highlight: boolean }) => {
   return (
     <ArrowRightToLine
       className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
       style={{ marginLeft: "12px" }}
     />
   );
-}
+});
 
 /* -----------------------------------------------------------
    AddressSearch Component
@@ -51,7 +51,6 @@ const AddressSearch = ({
 }: AddressSearchProps) => {
   const [searchText, setSearchText] = useState(""); // Use useState to manage search text
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
-  const [showResults, setShowResults] = useState(false);
 
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
   const geocoder = useRef<google.maps.Geocoder | null>(null);
@@ -77,13 +76,11 @@ const AddressSearch = ({
     try {
       const request: google.maps.places.AutocompleteRequest = {
         input,
-        // @ts-ignore
-        types: ["establishment", "geocode"], // Ignore the TypeScript error here
+        types: ["establishment", "geocode"],
         componentRestrictions: { country: "HK" },
       };
       const response = await autocompleteService.current.getPlacePredictions(request);
       setPredictions(response.predictions);
-      setShowResults(true);
     } catch (error) {
       console.error("Error fetching predictions:", error);
       setPredictions([]);
@@ -101,7 +98,6 @@ const AddressSearch = ({
         onAddressSelect({ lat: lat(), lng: lng() });
         setSearchText(prediction.structured_formatting.main_text);
         setPredictions([]);
-        setShowResults(false);
       }
     } catch (error) {
       console.error("Geocoding error:", error);
@@ -119,8 +115,7 @@ const AddressSearch = ({
             setSearchText(e.target.value);
             searchPlaces(e.target.value);
           }}
-          onFocus={() => setShowResults(true)}
-          onBlur={() => setTimeout(() => setShowResults(false), 200)}
+          onFocus={() => setPredictions([])}
           disabled={disabled}
           placeholder={placeholder}
           className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
@@ -138,7 +133,7 @@ const AddressSearch = ({
         )}
       </div>
 
-      {showResults && predictions.length > 0 && (
+      {predictions.length > 0 && (
         <div
           className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-50"
         >
@@ -195,7 +190,7 @@ export default function StationSelector({
   const highlightDepartureClass = highlightDeparture ? "ring-1 ring-white bg-background" : "";
   const highlightArrivalClass = highlightArrival ? "ring-1 ring-white bg-background" : "";
 
-  const handleLocateMe = () => {
+  const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
       return;
@@ -211,15 +206,15 @@ export default function StationSelector({
         toast.error("Unable to retrieve location.");
       }
     );
-  };
+  }, [onAddressSearch]);
 
-  const handleCarToggle = () => {
+  const handleCarToggle = useCallback(() => {
     if (viewState === "showCar") {
       dispatch(closeCurrentSheet());
     } else {
       dispatch(setViewState("showCar"));
     }
-  };
+  }, [dispatch, viewState]);
 
   return (
     <div
@@ -332,7 +327,7 @@ export default function StationSelector({
         <CarSheet
           isOpen={viewState === "showCar"}
           onToggle={handleCarToggle}
-           className="max-w-screen-md mx-auto mt-10" // Ensure TopSheet is aligned with StationSelector
+          className="max-w-screen-md mx-auto mt-10" // Ensure TopSheet is aligned with StationSelector
         />
       </div>
     </div>
