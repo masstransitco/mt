@@ -75,9 +75,9 @@ const AddressSearch = ({
     if (!input.trim() || !autocompleteService.current) return;
 
     try {
-       // @ts-ignore
       const request: google.maps.places.AutocompleteRequest = {
         input,
+         // @ts-ignore
         types: ["establishment", "geocode"],
         componentRestrictions: { country: "HK" },
       };
