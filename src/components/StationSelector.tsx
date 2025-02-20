@@ -370,10 +370,18 @@ export default function StationSelector({
       </div>
 
       {/* CarSheet */}
-      <CarSheet
-        isOpen={viewState === "showCar"} // Control visibility based on the Redux state
-        onToggle={handleCarToggle}
-      />
+      <Sheet
+  isOpen={viewState === "showCar"} // Control visibility based on the Redux state
+  onDismiss={handleCarToggle} // Use the toggle function for dismissing the sheet
+  title="Dispatch a car"
+>
+  <div className="px-4 py-2">
+    {/* Stop scrolling from bubbling to the parent */}
+    <div onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+      <CarGrid />
+    </div>
+  </div>
+</Sheet>
     </div>
   );
 }
