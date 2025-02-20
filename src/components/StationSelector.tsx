@@ -185,7 +185,7 @@ export default function StationSelector({
   const departureStation = stations.find((s) => s.id === departureId);
   const arrivalStation = stations.find((s) => s.id === arrivalId);
 
-  const bookingRoute = useAppSelector(selectBookingRoute);
+  const bookingRoute = useAppSelector(selectRoute);
   const distanceInKm = bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null;
 
   const uiStepNumber = step < 3 ? 1 : 2;
