@@ -272,6 +272,27 @@ function StationSelector({
       style={{ overscrollBehavior: "none", touchAction: "none" }}
     >
       <div className="px-2 py-2 space-y-2">
+
+
+        {/* Info Bar */}
+        <div className="flex items-center justify-between px-1 py-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>•</span>
+            {uiStepNumber === 1 ? "Choose pick-up station" : "Select arrival station"}
+          </div>
+          {departureStation && arrivalStation && distanceInKm && (
+            <div className="text-xs font-medium">Drive Distance: {distanceInKm} km</div>
+          )}
+        </div>
+
+        {/* Validation for same-station error */}
+        {departureId && arrivalId && departureId === arrivalId && (
+          <div className="flex items-center gap-2 px-1 py-1 text-xs text-destructive">
+            <AlertCircle className="w-4 h-4" />
+            <span>Departure and arrival stations cannot be the same</span>
+          </div>
+        )}
+
         {/* DEPARTURE INPUT */}
         <div
           className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightDepartureClass} ${
@@ -324,42 +345,51 @@ function StationSelector({
           </div>
         )}
 
-        {/* Info Bar */}
-        <div className="flex items-center justify-between px-1 py-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>•</span>
-            {uiStepNumber === 1 ? "Choose pick-up station" : "Select arrival station"}
-          </div>
-          {departureStation && arrivalStation && distanceInKm && (
-            <div className="text-xs font-medium">Drive Distance: {distanceInKm} km</div>
-          )}
-        </div>
-
-        {/* Validation for same-station error */}
-        {departureId && arrivalId && departureId === arrivalId && (
-          <div className="flex items-center gap-2 px-1 py-1 text-xs text-destructive">
-            <AlertCircle className="w-4 h-4" />
-            <span>Departure and arrival stations cannot be the same</span>
-          </div>
-        )}
-
-        {/* Locate Me & Car Button */}
-        {(step === 1 || step === 2) && (
+         {/* Locate Me & Car Button */}
+         {(step === 1 || step === 2) && (
           <div className="mt-2 flex gap-2">
             <button
               onClick={handleLocateMe}
-              className="px-4 h-12 text-sm font-medium bg-indigo-500/90 text-white rounded-full hover:bg-indigo-600 transition-colors flex-1 shadow-sm flex items-center justify-center"
+              className="
+                px-3
+                h-10
+                text-sm
+                font-medium
+                bg-gray-50
+                text-gray-800
+                rounded-full
+                hover:bg-slate-600
+                transition-colors
+                flex-1
+                shadow-sm
+                flex
+                items-center
+                justify-center
+              "
               type="button"
             >
               Near me
             </button>
             <button
               onClick={handleCarToggle}
-              className="p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors w-12 h-12 flex items-center justify-center shadow-sm flex-shrink-0"
+              className="
+                w-10
+                h-10
+                bg-zinc-700
+                text-gray-100
+                rounded-full
+                hover:bg-slate-600
+                transition-colors
+                flex
+                items-center
+                justify-center
+                shadow-sm
+                flex-shrink-0
+              "
               type="button"
               aria-label="Toggle car view"
             >
-              <CarSignalIcon className="w-6 h-6" />
+              <CarSignalIcon className="w-5 h-5" />
             </button>
           </div>
         )}
