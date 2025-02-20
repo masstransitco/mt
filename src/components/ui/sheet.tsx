@@ -17,6 +17,8 @@ import {
 } from "framer-motion";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from 'framer-motion';
+
 
 /* ---------------------------------------
    1) Animation constants for PulsatingStrip
