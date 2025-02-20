@@ -273,48 +273,5 @@ export default function Sheet({
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
           {/* Backdrop - clicking it dismisses the sheet */}
           <motion.div
-            className="absolute inset-0 bg-black/50 pointer-events-auto"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onDismiss}
-          />
 
-          {/* Draggable sheet container */}
-          <motion.div
-            className="pointer-events-auto mt-auto w-full"
-            style={{ y, opacity: sheetOpacity }}
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false} // only drag from header
-            dragConstraints={{ top: 0, bottom: 0 }}
-            onDragEnd={handleDragEnd}
-            style={{ touchAction: "pan-y" }} // helps on mobile
-          >
-            <div
-              className={cn(
-                "relative bg-background rounded-t-xl shadow-xl",
-                className
-              )}
-            >
-              {/* Header */}
-              {SheetHeader}
-
-              {/* Body: scrollable content */}
-              <div
-                ref={contentRef}
-                className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
-              >
-                {children}
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
+          
