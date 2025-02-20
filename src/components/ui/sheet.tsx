@@ -2,7 +2,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useMotionValue, useTransform, useDragControls } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useTransform,
+  useDragControls,
+} from "framer-motion";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -127,7 +133,7 @@ function PulsatingStrip({ className }: { className?: string }) {
 }
 
 /* ---------------------------------------
-   3) Optional InfoModal
+   3) InfoModal component (uses AnimatePresence for consistency)
 --------------------------------------- */
 function InfoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   return createPortal(
@@ -183,6 +189,7 @@ export default function Sheet({
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // Lock body scroll when sheet is open
   useEffect(() => {
     if (isOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -193,6 +200,7 @@ export default function Sheet({
     }
   }, [isOpen]);
 
+  // Set up scroll listener for the sheet content
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
       setIsAtTop(contentRef.current.scrollTop <= 0);
@@ -206,7 +214,7 @@ export default function Sheet({
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Framer Motion hooks
+  // Framer Motion hooks for drag and animation
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
   const dragControls = useDragControls();
@@ -230,6 +238,7 @@ export default function Sheet({
     dragControls.start(e);
   };
 
+  // Header content for the sheet
   const SheetHeader = (
     <div onPointerDown={handlePointerDown} className="cursor-grab active:cursor-grabbing px-4 pt-4">
       <div className="flex items-center justify-between">
@@ -256,6 +265,7 @@ export default function Sheet({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
+          {/* Backdrop */}
           <motion.div
             className="absolute inset-0 bg-black/50 pointer-events-auto"
             initial={{ opacity: 0 }}
@@ -263,6 +273,7 @@ export default function Sheet({
             exit={{ opacity: 0 }}
             onClick={onDismiss}
           />
+          {/* Draggable sheet */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
             style={combinedStyle}
