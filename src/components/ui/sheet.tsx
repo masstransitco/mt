@@ -130,16 +130,24 @@ function PulsatingStrip({ className }: { className?: string }) {
    3) Optional InfoModal
 --------------------------------------- */
 function InfoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  if (!isOpen) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-      <div className="bg-white p-4 rounded shadow-md">
-        <p>Information about this sheet!</p>
-        <button onClick={onClose} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
-          Close
-        </button>
-      </div>
-    </div>,
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <div className="bg-white p-4 rounded shadow-md">
+            <p>Information about this sheet!</p>
+            <button onClick={onClose} className="mt-2 px-3 py-1 bg-blue-500 text-white rounded">
+              Close
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body
   );
 }
@@ -171,10 +179,10 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
+  // Always call hooks at the top level
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Lock scroll on the <body> behind the sheet
   useEffect(() => {
     if (isOpen) {
       const originalOverflow = document.body.style.overflow;
@@ -185,7 +193,6 @@ export default function Sheet({
     }
   }, [isOpen]);
 
-  // Check if user has scrolled the sheet body
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
       setIsAtTop(contentRef.current.scrollTop <= 0);
@@ -199,19 +206,17 @@ export default function Sheet({
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Framer Motion for vertical drag
+  // Framer Motion hooks
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
   const dragControls = useDragControls();
 
-  // Reset y when isOpen changes
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
     }
   }, [isOpen, y]);
 
-  // If user drags the sheet downward >100px, dismiss
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       if (info.offset.y > 100) {
@@ -221,18 +226,12 @@ export default function Sheet({
     [onDismiss]
   );
 
-  // Only start drag from the header
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     dragControls.start(e);
   };
 
-  // Header content
   const SheetHeader = (
-    <div
-      onPointerDown={handlePointerDown}
-      className="cursor-grab active:cursor-grabbing px-4 pt-4"
-    >
-      {/* Title/subtitle/count */}
+    <div onPointerDown={handlePointerDown} className="cursor-grab active:cursor-grabbing px-4 pt-4">
       <div className="flex items-center justify-between">
         <div className="text-left">
           {title && <h2 className="text-lg font-semibold">{title}</h2>}
@@ -243,27 +242,20 @@ export default function Sheet({
             </p>
           )}
         </div>
-
-        {/* Example Info button */}
         <button className="p-2 rounded-full hover:bg-white/10 transition-colors">
           <Info className="w-5 h-5" />
         </button>
       </div>
-
       <PulsatingStrip className="mt-2 mx-auto" />
     </div>
   );
 
-  const combinedStyle = {
-    ...{ y, opacity: sheetOpacity },
-    touchAction: "pan-y",
-  };
+  const combinedStyle = { y, opacity: sheetOpacity, touchAction: "pan-y" };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-          {/* Backdrop - clicking it dismisses the sheet */}
           <motion.div
             className="absolute inset-0 bg-black/50 pointer-events-auto"
             initial={{ opacity: 0 }}
@@ -271,8 +263,6 @@ export default function Sheet({
             exit={{ opacity: 0 }}
             onClick={onDismiss}
           />
-
-          {/* Draggable sheet container */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
             style={combinedStyle}
@@ -282,7 +272,7 @@ export default function Sheet({
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             drag="y"
             dragControls={dragControls}
-            dragListener={false} // only drag from header
+            dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             onDragEnd={handleDragEnd}
           >
