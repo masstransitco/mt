@@ -5,6 +5,8 @@ import { X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import debounce from "lodash/debounce";
 import { Car } from "lucide-react";
+import Sheet from "@/components/ui/sheet";
+
 
 // Redux & store hooks
 import { useAppDispatch, useAppSelector } from "@/store/store";
