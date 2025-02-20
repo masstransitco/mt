@@ -32,6 +32,9 @@ interface DispatchState {
   route2: RouteInfo | null;
   routeStatus: "idle" | "loading" | "succeeded" | "failed";
   routeError: string | null;
+
+  // Sheet state to manage which sheet is open
+  openSheet: "none" | "car" | "list" | "detail";
 }
 
 const initialState: DispatchState = {
@@ -43,6 +46,9 @@ const initialState: DispatchState = {
   route2: null,
   routeStatus: "idle",
   routeError: null,
+
+  // Default sheet is 'none', meaning no sheet is open
+  openSheet: "none",
 };
 
 // 1) Thunk to fetch static dispatch locations
@@ -121,6 +127,16 @@ const dispatchSlice = createSlice({
       state.routeStatus = "idle";
       state.routeError = null;
     },
+    
+    /** Sets the open sheet state */
+    openNewSheet: (state, action: PayloadAction<"none" | "car" | "list" | "detail">) => {
+      state.openSheet = action.payload;
+    },
+    
+    /** Closes the currently open sheet */
+    closeSheet: (state) => {
+      state.openSheet = "none";
+    },
   },
   extraReducers: (builder) => {
     // ------ fetchDispatchLocations ------
@@ -162,7 +178,7 @@ const dispatchSlice = createSlice({
 export default dispatchSlice.reducer;
 
 // Actions
-export const { clearDispatchRoute } = dispatchSlice.actions;
+export const { clearDispatchRoute, openNewSheet, closeSheet } = dispatchSlice.actions;
 
 /* --------------------------- Selectors --------------------------- */
 export const selectAllDispatchLocations = (state: RootState) => state.dispatch.locations;
@@ -173,3 +189,6 @@ export const selectDispatchError = (state: RootState) => state.dispatch.error;
 export const selectDispatchRoute = (state: RootState) => state.dispatch.route2;
 export const selectDispatchRouteStatus = (state: RootState) => state.dispatch.routeStatus;
 export const selectDispatchRouteError = (state: RootState) => state.dispatch.routeError;
+
+/** The open sheet state */
+export const selectOpenSheet = (state: RootState) => state.dispatch.openSheet;
