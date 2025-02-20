@@ -17,6 +17,7 @@ import {
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { openNewSheet } from "@/store/dispatchSlice"; // Import the action to open the sheet
+import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
 
 /* -----------------------------------------------------------
    Reusable Icons
@@ -193,6 +194,7 @@ export default function StationSelector({
   onClearArrival,
 }: StationSelectorProps) {
   const dispatch = useAppDispatch();
+  const viewState = useAppSelector((state) => state.ui.viewState);
   const step = useAppSelector(selectBookingStep);
 
   // Booking slice: selected departure & arrival station IDs
@@ -237,13 +239,13 @@ export default function StationSelector({
   };
 
   // Handle "Car" button click for CarSheet visibility toggling
- const handleCarToggle = () => {
-    if (openSheet === "car") {
-      // Instead of closeCurrentSheet, just dispatch an action to set openSheet to "none" (close the sheet)
+const handleCarToggle = () => {
+    if (viewState === "showCar") {
+      // Close the car sheet
       dispatch(closeCurrentSheet());
     } else {
-      // Dispatch action to open the "car" sheet
-      dispatch(openNewSheet("car"));
+      // Open the car sheet
+      dispatch(setViewState("showCar"));
     }
   };
 
@@ -372,10 +374,9 @@ export default function StationSelector({
               Car
             </button>
             <CarSheet
-        isOpen={openSheet === "car"}  // This will control whether the CarSheet is shown
+        isOpen={viewState === "showCar"} // Control visibility based on the Redux state
         onToggle={handleCarToggle}
       />
-          </div>
         )}
       </div>
     </div>
