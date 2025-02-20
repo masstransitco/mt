@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import debounce from "lodash/debounce";
+import { Car } from "lucide-react";
 
+// Redux & store hooks
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
@@ -233,6 +235,12 @@ export default function StationSelector({
     );
   };
 
+  // Handle "Car" button click (to toggle car sheet)
+  const handleCarToggle = () => {
+    // Reusing the car toggle logic from GMap to open the car sheet
+    dispatch(openNewSheet("car"));
+  };
+
   return (
     <div
       className="absolute top-[2px] left-5 right-5 z-10
@@ -339,14 +347,22 @@ export default function StationSelector({
           </div>
         )}
 
-        {/* Locate Me Button */}
+        {/* Locate Me & Car Button */}
         {(step === 1 || step === 2) && (
-          <button
-            onClick={handleLocateMe}
-            className="mt-2 px-4 py-2 text-sm bg-accent text-white rounded-full hover:bg-accent/80 w-full"
-          >
-            Near me
-          </button>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={handleLocateMe}
+              className="px-4 py-2 text-sm bg-accent text-white rounded-full hover:bg-accent/80 w-full"
+            >
+              Near me
+            </button>
+            <button
+              onClick={handleCarToggle}
+              className="px-4 py-2 text-sm bg-accent text-white rounded-full hover:bg-accent/80 w-full"
+            >
+              Car
+            </button>
+          </div>
         )}
       </div>
     </div>
