@@ -10,7 +10,7 @@ export interface TopSheetProps {
   className?: string;
   title?: string;
   subtitle?: string;
-  count?: number;
+  count?: number;  // Add count as a prop here
   countLabel?: string;
   onDismiss?: () => void;
 }
@@ -27,15 +27,19 @@ const SheetHeader = ({
   onDismiss,
   setIsInfoOpen,
   isInfoOpen,
-  handlePointerDown,  // <-- Added handlePointerDown prop here
+  handlePointerDown,
+  count,  // Accept count as a prop
+  countLabel,  // Accept countLabel as a prop
 }: {
   onDismiss?: () => void;
   setIsInfoOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isInfoOpen: boolean;
-  handlePointerDown: (e: React.PointerEvent<HTMLDivElement>) => void; // <-- Added type for the function
+  handlePointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  count: number;  // Type for count
+  countLabel?: string;
 }) => (
   <div
-    onPointerDown={handlePointerDown}  // <-- Use the handlePointerDown passed as a prop
+    onPointerDown={handlePointerDown}
     className="cursor-grab active:cursor-grabbing px-4 pt-4 flex items-center justify-between"
   >
     {/* Dispatch car button and info icon in the same row */}
@@ -64,7 +68,7 @@ export default function TopSheet({
   className,
   title,
   subtitle,
-  count,
+  count = 0,  // Default count to 0 if not passed
   countLabel,
   onDismiss,
 }: TopSheetProps) {
@@ -141,7 +145,9 @@ export default function TopSheet({
                 onDismiss={onDismiss}
                 setIsInfoOpen={setIsInfoOpen}
                 isInfoOpen={isInfoOpen}
-                handlePointerDown={handlePointerDown}  // <-- Pass handlePointerDown here
+                handlePointerDown={handlePointerDown}
+                count={count}  // Pass count here
+                countLabel={countLabel}
               />
             </div>
           </motion.div>
