@@ -75,6 +75,7 @@ const AddressSearch = ({
     if (!input.trim() || !autocompleteService.current) return;
 
     try {
+       // @ts-ignore
       const request: google.maps.places.AutocompleteRequest = {
         input,
         types: ["establishment", "geocode"],
