@@ -1,8 +1,7 @@
-// src/components/booking/CarSheet.tsx
 import React from "react";
 import { useAppSelector } from "@/store/store";
 import { selectAvailableForDispatch } from "@/store/carSlice";
-import Sheet from "@/components/ui/sheet";
+import TopSheet from "@/components/ui/TopSheet"; // Import the TopSheet component
 import CarGrid from "@/components/booking/CarGrid";
 
 interface CarSheetProps {
@@ -22,12 +21,12 @@ export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
   };
 
   return (
-    <Sheet isOpen={isOpen} onDismiss={handleDismiss} title="Dispatch a car" subtitle={carsSubtitle}>
+    <TopSheet isOpen={isOpen} onDismiss={handleDismiss} title="Dispatch a car" subtitle={carsSubtitle}>
       <div className="px-4 py-2">
         <div onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
           <CarGrid />
         </div>
       </div>
-    </Sheet>
+    </TopSheet>
   );
 }
