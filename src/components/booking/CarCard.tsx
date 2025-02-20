@@ -38,7 +38,7 @@ function CarCardComponent({
       { threshold: 0.5 }
     );
 
-    const element = document.getElementById(car.id);
+    const element = document.getElementById(String(car.id));  // Convert to string here
     if (element) observer.observe(element);
 
     return () => {
@@ -69,7 +69,7 @@ function CarCardComponent({
       animate={{ scale: selected ? 1.0 : 0.98 }}
       transition={{ type: "tween", duration: 0.3 }}
       onClick={onClick}
-      id={car.id} // Ensure the car has an id for observation
+      id={String(car.id)} // Convert to string here
       className={`
         relative overflow-hidden rounded-2xl bg-card cursor-pointer
         transition-all duration-300
