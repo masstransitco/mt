@@ -37,8 +37,11 @@ const SheetHeader = ({
     className="cursor-grab active:cursor-grabbing px-4 pt-4 flex items-center justify-between"
   >
     {/* Dispatch car button and info icon in the same row */}
-    <button className="flex-grow text-left text-lg font-semibold" onClick={onDismiss}>
-      Dispatch a car
+    <button
+      className="bg-gray-300 text-black text-center py-2 px-4 rounded-md text-lg font-medium hover:bg-gray-400 transition-colors"
+      onClick={onDismiss}
+    >
+      Dispatch car
     </button>
 
     {/* Info button */}
