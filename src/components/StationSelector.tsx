@@ -10,7 +10,7 @@ import CarSheet from "@/components/booking/CarSheet"; // Import CarSheet to hand
 import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle } from "lucide-react";
 import { toast } from "react-hot-toast";
 import debounce from "lodash/debounce";
-import { Car } from "lucide-react";
+import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon"; // Import the CarSignalIcon component
 
 /* -----------------------------------------------------------
    Reusable Icons
@@ -319,19 +319,21 @@ export default function StationSelector({
             </button>
             <button
               onClick={handleCarToggle}
-              className="px-4 py-2 text-sm bg-accent text-white rounded-full hover:bg-accent/80 w-full"
+              className="p-2 bg-accent text-white rounded-full hover:bg-accent/80 w-12 h-12 flex items-center justify-center"
             >
-              Car
+              <CarSignalIcon className="w-6 h-6" />
             </button>
           </div>
         )}
       </div>
 
-      {/* CarSheet */}
-      <CarSheet
-        isOpen={viewState === "showCar"}
-        onToggle={handleCarToggle}
-      />
+      {/* CarSheet below */}
+      <div className="mt-2">
+        <CarSheet
+          isOpen={viewState === "showCar"}
+          onToggle={handleCarToggle}
+        />
+      </div>
     </div>
   );
 }
