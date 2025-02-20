@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, ReactNode, useMemo } from "react";
-import { AnimatePresence, motion, useMotionValue, useDragControls } from "framer-motion";
+import React, { useState, useRef, useEffect, ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PulsatingStrip } from "./PulsatingStrip"; // Import the PulsatingStrip component
+
+// (Remove import of PulsatingStrip and any references to it)
 
 export interface TopSheetProps {
   isOpen: boolean;
@@ -10,11 +11,14 @@ export interface TopSheetProps {
   className?: string;
   title?: string;
   subtitle?: string;
-  count?: number; // Add count as a prop here
+  count?: number;
   countLabel?: string;
   onDismiss?: () => void;
 }
 
+/* -----------------------------------------------------------
+   InfoBox Subcomponent
+----------------------------------------------------------- */
 const InfoBox = ({ count, countLabel }: { count: number; countLabel?: string }) => (
   <div className="absolute top-0 right-0 bg-white p-4 shadow-md rounded-lg">
     <p className="text-sm text-gray-700">
@@ -23,85 +27,26 @@ const InfoBox = ({ count, countLabel }: { count: number; countLabel?: string }) 
   </div>
 );
 
-const SheetHeader = ({
-  onDismiss,
-  setIsInfoOpen,
-  isInfoOpen,
-  handlePointerDown,
-  count, // Accept count as a prop
-  countLabel, // Accept countLabel as a prop
-}: {
-  onDismiss?: () => void;
-  setIsInfoOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isInfoOpen: boolean;
-  handlePointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
-  count: number; // Type for count
-  countLabel?: string;
-}) => (
-  <div
-    onPointerDown={handlePointerDown}
-    className="cursor-grab active:cursor-grabbing px-4 pt-4 flex items-center justify-between"
-  >
-    {/* Dispatch car button and info icon in the same row */}
-    <button
-      className="bg-gray-300 text-black text-center py-2 px-4 rounded-md text-lg font-medium hover:bg-gray-400 transition-colors"
-      onClick={onDismiss}
-    >
-      Dispatch car
-    </button>
-
-    {/* Info button */}
-    <button className="p-2 rounded-full hover:bg-white/10 transition-colors" onClick={() => setIsInfoOpen(!isInfoOpen)}>
-      <Info className="w-5 h-5" />
-    </button>
-
-    {/* Display InfoBox if visible */}
-    {isInfoOpen && <InfoBox count={count} countLabel={countLabel} />}
-    
-    <PulsatingStrip className="mt-2 mx-auto" />
-  </div>
-);
-
+/* -----------------------------------------------------------
+   TopSheet Component
+----------------------------------------------------------- */
 export default function TopSheet({
   isOpen,
   children,
   className,
   title,
   subtitle,
-  count = 0, // Default count to 0 if not passed
+  count = 0,
   countLabel,
   onDismiss,
 }: TopSheetProps) {
-  const [isInfoOpen, setIsInfoOpen] = useState(false); // State to control InfoBox visibility
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const y = useMotionValue(-100); // Start the sheet above the viewport
-  const dragControls = useDragControls();
-
+  // You can keep this scrollable content area if desired
   useEffect(() => {
-    if (!isOpen) y.set(-100); // Reset position when closed
-  }, [isOpen, y]);
-
-  const handleDragEnd = useCallback(
-    (_: PointerEvent, info: { offset: { y: number } }) => {
-      if (info.offset.y > 100) {
-        onDismiss?.();
-      }
-    },
-    [onDismiss]
-  );
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    dragControls.start(e);
-  };
-
-  const combinedStyle = useMemo(
-    () => ({
-      ...{ y },
-      touchAction: "pan-y",
-    }),
-    [y]
-  );
+    // If you had any logic for overflow, you can remove it or leave it out.
+  }, [children]);
 
   return (
     <AnimatePresence>
@@ -116,38 +61,51 @@ export default function TopSheet({
             onClick={onDismiss}
           />
 
-          {/* Draggable sheet container */}
+          {/* Slide-in TopSheet (no drag) */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
-            style={combinedStyle}
             initial={{ y: "-100%" }}
             animate={{ y: 0 }}
             exit={{ y: "-100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false} // only drag from header
-            dragConstraints={{ top: 0, bottom: 0 }}
-            onDragEnd={handleDragEnd}
           >
-            <div className={cn("relative bg-background rounded-2xl shadow-xl", className)}> {/* Increased corner radius */}
-              {/* Body content */}
-              <div ref={contentRef} className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto">
+            <div
+              className={cn(
+                "relative bg-background rounded-2xl shadow-xl",
+                className
+              )}
+              style={{ fontFamily: "Helvetica Neue" }}
+            >
+              {/* Scrollable body content */}
+              <div
+                ref={contentRef}
+                className="px-4 pt-4 pb-6 max-h-[70vh] overflow-y-auto"
+              >
                 {children}
               </div>
 
-              {/* Pulsating Strip Divider */}
-              <PulsatingStrip className="mt-4" />
+              {/* Bottom row: Info & Dispatch button. 
+                  Dispatch button flexes to fill remaining space. */}
+              <div className="relative flex items-center px-4 pb-4 gap-2">
+                {/* Info Button */}
+                <button
+                  className="p-2 rounded-full hover:bg-white/10 transition-colors"
+                  onClick={() => setIsInfoOpen(!isInfoOpen)}
+                >
+                  <Info className="w-5 h-5" />
+                </button>
 
-              {/* Header content moved below */}
-              <SheetHeader
-                onDismiss={onDismiss}
-                setIsInfoOpen={setIsInfoOpen}
-                isInfoOpen={isInfoOpen}
-                handlePointerDown={handlePointerDown}
-                count={count} // Pass count here
-                countLabel={countLabel}
-              />
+                {/* Dispatch Car Button (takes full width until the icon) */}
+                <button
+                  className="flex-1 bg-gray-300 text-black py-2 px-4 rounded-md text-lg font-medium hover:bg-gray-400 transition-colors"
+                  onClick={onDismiss}
+                >
+                  Dispatch car
+                </button>
+
+                {/* InfoBox (absolute) */}
+                {isInfoOpen && <InfoBox count={count} countLabel={countLabel} />}
+              </div>
             </div>
           </motion.div>
         </div>
