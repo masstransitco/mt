@@ -3,7 +3,6 @@
 import React, { useEffect, useCallback, useState, memo, Suspense } from "react";
 import { GoogleMap, Polyline, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
-import { Car, Locate } from "lucide-react";
 import * as THREE from "three";
 import dynamic from "next/dynamic";
 
@@ -52,7 +51,6 @@ import {
 import Sheet from "@/components/ui/sheet";
 import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
-import CarSheet from "@/components/booking/CarSheet";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
 
@@ -634,12 +632,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
             onClearDeparture={handleClearDepartureInSelector}
             onClearArrival={handleClearArrivalInSelector}
           />
-
-          {/* Car Sheet */}
-          <CarSheet isOpen={openSheet === "car"} onToggle={() => {
-            // Dummy toggle function for CarSheet
-            setOpenSheet((prev) => (prev === "car" ? "none" : "car"));
-          }} />
 
           {/* Station list sheet */}
           <Sheet
