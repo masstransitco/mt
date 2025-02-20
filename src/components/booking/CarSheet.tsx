@@ -7,6 +7,7 @@ import CarGrid from "@/components/booking/CarGrid";
 interface CarSheetProps {
   isOpen: boolean;
   onToggle?: () => void;
+  className?: string;
 }
 
 export default function CarSheet({ isOpen, onToggle }: CarSheetProps) {
