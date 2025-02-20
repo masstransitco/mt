@@ -658,9 +658,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
 
 
-      {/* Car Sheet */}
-      <CarSheet isOpen={isCarOpen} onToggle={handleCarToggle} />
-
       {/* Station list sheet */}
       <Sheet
         isOpen={isListOpen}
