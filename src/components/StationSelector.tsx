@@ -375,27 +375,27 @@ function StationSelector({
           </div>
         )}
 
-        {/* Locate Me & Car Button - Only render when needed */}
-        {(step === 1 || step === 2) && (
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={handleLocateMe}
-              className="px-4 py-2 text-sm bg-accent text-white rounded-full hover:bg-accent/80 w-full"
-              type="button"
-            >
-              Near me
-            </button>
-            <button
-              onClick={handleCarToggle}
-              className="p-2 bg-accent text-white rounded-full hover:bg-accent/80 w-12 h-12 flex items-center justify-center"
-              type="button"
-              aria-label="Toggle car view"
-            >
-              <CarSignalIcon className="w-6 h-6" />
-            </button>
-          </div>
-        )}
-      </div>
+{/* Locate Me & Car Button - Only render when needed */}
+{(step === 1 || step === 2) && (
+  <div className="mt-2 flex gap-2">
+    <button
+      onClick={handleLocateMe}
+      className="px-4 py-2 text-sm font-medium bg-indigo-500/90 text-white rounded-full hover:bg-indigo-600 transition-colors w-full shadow-sm"
+      type="button"
+    >
+      Near me
+    </button>
+    <button
+      onClick={handleCarToggle}
+      className="p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors w-12 h-12 flex items-center justify-center shadow-sm"
+      type="button"
+      aria-label="Toggle car view"
+    >
+      <CarSignalIcon className="w-6 h-6" />
+    </button>
+  </div>
+)}
+</div>
 
       {/* Only render CarSheet when needed */}
       {showCarSheet && (
