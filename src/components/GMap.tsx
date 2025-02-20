@@ -215,6 +215,25 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
+   // Handle errors
+  const hasError = stationsError || carsError || loadError;
+  if (hasError) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
+        <div className="text-center space-y-2">
+          <p className="font-medium">Error loading map data</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm underline hover:text-destructive/80"
+          >
+            Try reloading
+          </button>
+        </div>
+      </div>
+    );
+  }
+ 
+  
   const { overlayRef, stationCubesRef } = useThreeOverlay(
     actualMap,
     stations,
@@ -313,23 +332,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return () => clearInterval(intervalId);
   }, [overlayRef, stationCubesRef, actualMap]);
 
-  // 5) Handle errors
-  const hasError = stationsError || carsError || loadError;
-  if (hasError) {
-    return (
-      <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
-        <div className="text-center space-y-2">
-          <p className="font-medium">Error loading map data</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="text-sm underline hover:text-destructive/80"
-          >
-            Try reloading
-          </button>
-        </div>
-      </div>
-    );
-  }
+
 
   // ------------------ Booking + Dispatch routes ------------------
 
