@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"; // Add missing imports
 import { useAppDispatch, useAppSelector } from "@/store/store";
-import { selectBookingStep, selectDepartureStationId, selectArrivalStationId } from "@/store/bookingSlice";
+import { selectBookingStep, selectDepartureStationId, selectArrivalStationId, selectRoute } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
