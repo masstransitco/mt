@@ -18,9 +18,9 @@ import {
 import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/* ----------------------------------------------------------------
-   1) Animation constants for our PulsatingStrip
----------------------------------------------------------------- */
+/* ---------------------------------------
+   1) Animation constants for PulsatingStrip
+--------------------------------------- */
 type AnimationColor = string;
 type Scale = number;
 
@@ -58,9 +58,9 @@ function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
 
-/* ----------------------------------------------------------------
+/* ---------------------------------------
    2) PulsatingStrip component
----------------------------------------------------------------- */
+--------------------------------------- */
 function PulsatingStrip({ className }: { className?: string }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
@@ -104,12 +104,11 @@ function PulsatingStrip({ className }: { className?: string }) {
       shadowIntensity = 0.3;
     }
 
-    if (stripRef.current) {
-      stripRef.current.style.transform = `scale(${scale})`;
-      stripRef.current.style.backgroundColor = color;
-      stripRef.current.style.opacity = opacity.toString();
-      stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
-    }
+    // Apply style to the ref
+    stripRef.current.style.transform = `scale(${scale})`;
+    stripRef.current.style.backgroundColor = color;
+    stripRef.current.style.opacity = opacity.toString();
+    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
 
     animationRef.current = requestAnimationFrame(animate);
   }, []);
@@ -140,9 +139,9 @@ function PulsatingStrip({ className }: { className?: string }) {
   );
 }
 
-/* ----------------------------------------------------------------
-   3) Optional InfoModal component
----------------------------------------------------------------- */
+/* ---------------------------------------
+   3) Optional InfoModal
+--------------------------------------- */
 function InfoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   if (!isOpen) return null;
   return createPortal(
@@ -158,9 +157,9 @@ function InfoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }
   );
 }
 
-/* ----------------------------------------------------------------
+/* ---------------------------------------
    4) SheetProps interface
----------------------------------------------------------------- */
+--------------------------------------- */
 export interface SheetProps {
   isOpen: boolean;
   children: ReactNode;
@@ -172,9 +171,9 @@ export interface SheetProps {
   onDismiss?: () => void;
 }
 
-/* ----------------------------------------------------------------
-   5) Revised Sheet component with manual drag handle
----------------------------------------------------------------- */
+/* ---------------------------------------
+   5) Sheet component with manual drag handle
+--------------------------------------- */
 export default function Sheet({
   isOpen,
   children,
@@ -185,12 +184,21 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Instead of locking browser scrolling globally, we lock scroll events only on the body
-
-  // Track if the sheet's content is scrolled to the top
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
 
+  // Lock scroll on the <body> behind the sheet
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  // Check if user has scrolled the sheet body
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
       setIsAtTop(contentRef.current.scrollTop <= 0);
@@ -204,21 +212,19 @@ export default function Sheet({
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Framer Motion values for vertical drag
+  // Framer Motion for vertical drag
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
-
-  // ADDED: We’ll useDragControls to manage “when” we start dragging
   const dragControls = useDragControls();
 
-  // CHANGED: On mount/unmount of the sheet, reset y
+  // Reset y when isOpen changes
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
     }
   }, [isOpen, y]);
 
-  // When dragged down >100px, dismiss the sheet
+  // If user drags the sheet downward >100px, dismiss
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       if (info.offset.y > 100) {
@@ -228,18 +234,19 @@ export default function Sheet({
     [onDismiss]
   );
 
-  // ADDED: Start the drag only when user presses on the header
+  // Only start drag from the header
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     dragControls.start(e);
   };
 
+  // Header content
   const SheetHeader = (
     <div
-      // CHANGED: Only the header can initiate the drag
       onPointerDown={handlePointerDown}
-      className="cursor-grab active:cursor-grabbing"
+      className="cursor-grab active:cursor-grabbing px-4 pt-4"
     >
-      <div className="flex items-center justify-between px-4 pt-4">
+      {/* Title/subtitle/count */}
+      <div className="flex items-center justify-between">
         <div className="text-left">
           {title && <h2 className="text-lg font-semibold">{title}</h2>}
           {subtitle && <p className="text-sm text-gray-300">{subtitle}</p>}
@@ -249,11 +256,14 @@ export default function Sheet({
             </p>
           )}
         </div>
+
+        {/* Example Info button */}
         <button className="p-2 rounded-full hover:bg-white/10 transition-colors">
           <Info className="w-5 h-5" />
         </button>
       </div>
-      <PulsatingStrip className="mt-2 mx-4" />
+
+      <PulsatingStrip className="mt-2 mx-auto" />
     </div>
   );
 
@@ -261,7 +271,7 @@ export default function Sheet({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-          {/* Backdrop */}
+          {/* Backdrop - clicking it dismisses the sheet */}
           <motion.div
             className="absolute inset-0 bg-black/50 pointer-events-auto"
             initial={{ opacity: 0 }}
@@ -269,6 +279,7 @@ export default function Sheet({
             exit={{ opacity: 0 }}
             onClick={onDismiss}
           />
+
           {/* Draggable sheet container */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
@@ -277,14 +288,12 @@ export default function Sheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            // CHANGED: We still want vertical drag, but only started from the header
             drag="y"
             dragControls={dragControls}
-            dragListener={false} // <— important so it doesn’t drag from body
+            dragListener={false} // only drag from header
             dragConstraints={{ top: 0, bottom: 0 }}
             onDragEnd={handleDragEnd}
-            // Also helpful on mobile to ensure we can drag vertically from the header:
-            style={{ touchAction: "pan-y" }}
+            style={{ touchAction: "pan-y" }} // helps on mobile
           >
             <div
               className={cn(
@@ -292,14 +301,13 @@ export default function Sheet({
                 className
               )}
             >
+              {/* Header */}
               {SheetHeader}
-              {/* Body: scrollable content area */}
+
+              {/* Body: scrollable content */}
               <div
                 ref={contentRef}
                 className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
-                // We do NOT stopPropagation() for Touch here
-                // because we want normal scrolling inside.
-                // onWheel={(e) => e.stopPropagation()} // optional if you need to block wheel in nested contexts
               >
                 {children}
               </div>
@@ -308,10 +316,5 @@ export default function Sheet({
         </div>
       )}
     </AnimatePresence>
-  );
-}
-        )}
-      </AnimatePresence>
-    </>
   );
 }
