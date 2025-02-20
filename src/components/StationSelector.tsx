@@ -18,79 +18,21 @@ import { clearDispatchRoute } from "@/store/dispatchSlice";
 /* -----------------------------------------------------------
    Reusable Icons
 ----------------------------------------------------------- */
+import { ArrowRightFromLine, ArrowRightToLine } from "lucide-react";
+
 function DepartureIcon({ highlight }: { highlight: boolean }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="-1 -7 6 8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={0.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <ArrowRightFromLine
       className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
-    >
-      <g transform="translate(3, 0)">
-        <path
-          d="
-            M 0 0
-              L -2 0
-              L -2 -4
-              L -1 -4
-
-            M 1 -4
-              L 2 -4
-              L 2 0
-              L 0 0
-
-            M 0 -2
-              L 0 -6
-              L -1 -5
-
-            M 0 -6
-              L 1 -5
-          "
-        />
-      </g>
-    </svg>
+    />
   );
 }
 
 function ArrivalIcon({ highlight }: { highlight: boolean }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="-1 -7 6 8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={0.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <ArrowRightToLine
       className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
-    >
-      <g transform="translate(3, 0)">
-        <path
-          d="
-            M 0 0
-              L -2 0
-              L -2 -4
-              L -1 -4
-
-            M 1 -4
-              L 2 -4
-              L 2 0
-              L 0 0
-
-            M 0 -2
-              L 0 -6
-
-            M -1 -3
-              L 0 -2
-              L 1 -3
-          "
-        />
-      </g>
-    </svg>
+    />
   );
 }
 
