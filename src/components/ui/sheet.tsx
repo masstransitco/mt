@@ -254,6 +254,11 @@ export default function Sheet({
     </div>
   );
 
+  const combinedStyle = {
+    ...{ y, opacity: sheetOpacity },
+    touchAction: "pan-y",
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -270,7 +275,7 @@ export default function Sheet({
           {/* Draggable sheet container */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
-            style={{ y, opacity: sheetOpacity }}
+            style={combinedStyle}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -280,7 +285,6 @@ export default function Sheet({
             dragListener={false} // only drag from header
             dragConstraints={{ top: 0, bottom: 0 }}
             onDragEnd={handleDragEnd}
-            style={{ touchAction: "pan-y" }}
           >
             <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
               {SheetHeader}
