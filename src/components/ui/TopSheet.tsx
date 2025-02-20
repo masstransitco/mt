@@ -1,5 +1,3 @@
-"use client";
-
 import React, { useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { AnimatePresence, motion, useMotionValue, useTransform, useDragControls } from "framer-motion";
 import { Info } from "lucide-react";
@@ -86,7 +84,7 @@ function PulsatingStrip({ className }: { className?: string }) {
 }
 
 /* ---------------------------------------
-   TopSheet Component with Dragging from Top
+   TopSheet Component with Dragging from Bottom to Close
 --------------------------------------- */
 export interface TopSheetProps {
   isOpen: boolean;
@@ -121,7 +119,7 @@ export default function TopSheet({
 
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
-      if (info.offset.y > 100) {
+      if (info.offset.y < -100) {
         onDismiss?.();
       }
     },
@@ -192,11 +190,11 @@ export default function TopSheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             onDragEnd={handleDragEnd}
           >
-            <div className={cn("relative bg-background rounded-b-xl shadow-xl", className)}>
-              {SheetHeader}
+            <div className={cn("relative bg-background rounded-t-xl shadow-xl", className)}>
               <div ref={contentRef} className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto">
                 {children}
               </div>
+              {SheetHeader} {/* Header moved to bottom */}
             </div>
           </motion.div>
         </div>
