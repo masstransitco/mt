@@ -6,12 +6,10 @@ import dynamic from "next/dynamic";
 import { Gauge, Battery } from "lucide-react";
 import type { Car } from "@/types/cars";
 
-// Dynamically load the Car3DViewer to minimize initial page load
+// Lazy load the 3D viewer component
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-full bg-card animate-pulse rounded-2xl" />
-  ),
+  loading: () => <div className="w-full h-full bg-card animate-pulse rounded-2xl" />,
 });
 
 interface CarCardProps {
@@ -31,14 +29,13 @@ function CarCardComponent({
 }: CarCardProps) {
   const [isInViewport, setIsInViewport] = useState(false);
 
-  // Detect when the component is in the viewport (for lazy loading of 3D model)
+  // 1. Track whether the card is in the viewport
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsInViewport(entry.isIntersecting),
-      { threshold: 0.5 }
-    );
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsInViewport(entry.isIntersecting);
+    }, { threshold: 0.5 });
 
-    const element = document.getElementById(String(car.id));  // Convert to string here
+    const element = document.getElementById(String(car.id));
     if (element) observer.observe(element);
 
     return () => {
@@ -46,30 +43,14 @@ function CarCardComponent({
     };
   }, [car.id]);
 
-  // Debug logs to track battery value processing
-  console.log("Battery raw:", car.electric_battery_percentage_left);
-  
-  const rawBattery = car.electric_battery_percentage_left;
-  const parsedBattery = typeof rawBattery === 'number' ? rawBattery : 
-                        (rawBattery ? parseFloat(String(rawBattery)) : NaN);
-  
-  console.log("Parsed battery:", parsedBattery);
-  
-  const isValidBatteryValue = 
-    !isNaN(parsedBattery) && parsedBattery >= 1 && parsedBattery <= 100;
-  
-  console.log("Is valid battery:", isValidBatteryValue);
-  
-  const batteryPercentage = isValidBatteryValue ? parsedBattery : 92;
-  console.log("Final battery percentage:", batteryPercentage);
-
+  // 2. Only mount the 3D viewer when `isInViewport` is true
   return (
     <motion.div
       initial={{ scale: 0.98 }}
       animate={{ scale: selected ? 1.0 : 0.98 }}
       transition={{ type: "tween", duration: 0.3 }}
       onClick={onClick}
-      id={String(car.id)} // Convert to string here
+      id={String(car.id)}
       className={`
         relative overflow-hidden rounded-2xl bg-card cursor-pointer
         transition-all duration-300
@@ -87,8 +68,7 @@ function CarCardComponent({
       )}
 
       <div className="relative w-full aspect-[3/2]">
-        {/* Lazy-load Car3DViewer when in the viewport */}
-        {isInViewport && isVisible && (
+        {isInViewport && isVisible ? (
           <Car3DViewer
             modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
             imageUrl={car.image}
@@ -97,6 +77,12 @@ function CarCardComponent({
             width="100%"
             isVisible={isVisible}
           />
+        ) : (
+          <img
+            src={car.image}
+            alt={car.model}
+            className="w-full h-full object-cover"
+          />
         )}
       </div>
 
@@ -104,13 +90,11 @@ function CarCardComponent({
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex flex-col">
             <p className="font-bold text-foreground text-lg">{car.model}</p>
-
-            {/* Battery with fallback */}
+            {/* Battery */}
             <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
               <Battery className="w-4 h-4" />
-              <span>{batteryPercentage}%</span>
+              <span>{car.electric_battery_percentage_left}%</span>
             </div>
-
             {/* Odometer */}
             <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
               <Gauge className="w-4 h-4" />
