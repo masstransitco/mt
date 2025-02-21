@@ -588,7 +588,7 @@ function StationSelector({
           </div>
 
           {departureStation && arrivalStation && distanceInKm && (
-            <div className="text-xs font-medium text-gray-800">
+            <div className="text-xs font-medium text-slate-200">
               Drive Distance: {distanceInKm} km
             </div>
           )}
