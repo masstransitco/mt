@@ -1,23 +1,24 @@
 // src/store/stationsSlice.ts
+"use client";
 
 import {
   createSlice,
   createAsyncThunk,
   PayloadAction,
   createSelector,
-} from '@reduxjs/toolkit';
-import type { RootState } from './store';
-import { selectUserLocation } from './userSlice';
+} from "@reduxjs/toolkit";
+import type { RootState } from "./store";
+import { selectUserLocation } from "./userSlice";
 
 /**
  * A single station feature from /stations.geojson
- * (optionally extended with a 'distance' property later).
+ * (now extended with 'distance' and 'walkTime' fields).
  */
 export interface StationFeature {
-  type: 'Feature';
+  type: "Feature";
   id: number;
   geometry: {
-    type: 'Point';
+    type: "Point";
     coordinates: [number, number]; // [longitude, latitude]
   };
   properties: {
@@ -33,8 +34,10 @@ export interface StationFeature {
      */
     ObjectId: number;
   };
-  /** Distance from user's location, computed later */
+  /** Distance from user's location (in km), computed later */
   distance?: number;
+  /** Estimated walking time in minutes, computed locally */
+  walkTime?: number;
 }
 
 interface StationsState {
@@ -58,9 +61,9 @@ export const fetchStations = createAsyncThunk<
   { data: StationFeature[]; timestamp: number },
   void,
   { rejectValue: string }
->('stations/fetchStations', async (_, { rejectWithValue }) => {
+>("stations/fetchStations", async (_, { rejectWithValue }) => {
   try {
-    const cached = localStorage.getItem('stations');
+    const cached = localStorage.getItem("stations");
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       // Cache valid for 1 hour
@@ -70,21 +73,21 @@ export const fetchStations = createAsyncThunk<
     }
 
     // If no valid cache, fetch fresh data
-    const response = await fetch('/stations.geojson');
+    const response = await fetch("/stations.geojson");
     if (!response.ok) {
-      throw new Error('Failed to fetch stations');
+      throw new Error("Failed to fetch stations");
     }
     const data = await response.json();
 
-    if (data.type === 'FeatureCollection') {
+    if (data.type === "FeatureCollection") {
       const features: StationFeature[] = data.features;
       localStorage.setItem(
-        'stations',
+        "stations",
         JSON.stringify({ data: features, timestamp: Date.now() })
       );
       return { data: features, timestamp: Date.now() };
     }
-    throw new Error('Invalid data format');
+    throw new Error("Invalid data format");
   } catch (error: any) {
     return rejectWithValue(error.message);
   }
@@ -110,11 +113,11 @@ export const fetchStationVacancy = createAsyncThunk<
   number,                                     // stationId arg
   { rejectValue: string }
 >(
-  'stations/fetchStationVacancy',
+  "stations/fetchStationVacancy",
   async (stationId, { getState, rejectWithValue }) => {
     try {
       const state = getState() as RootState;
-      const station = state.stations.items.find(s => s.id === stationId);
+      const station = state.stations.items.find((s) => s.id === stationId);
       if (!station) {
         throw new Error(`Station #${stationId} not found`);
       }
@@ -151,7 +154,7 @@ export const fetchStationVacancy = createAsyncThunk<
 
 /* --------------------------- Slice --------------------------- */
 const stationsSlice = createSlice({
-  name: 'stations',
+  name: "stations",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
@@ -184,7 +187,7 @@ const stationsSlice = createSlice({
         }
       })
       .addCase(fetchStationVacancy.rejected, (state, action) => {
-        console.error('Station vacancy fetch error:', action.payload);
+        console.error("Station vacancy fetch error:", action.payload);
       });
   },
 });
@@ -197,13 +200,13 @@ export const selectStationsLoading = (state: RootState) => state.stations.loadin
 export const selectStationsError = (state: RootState) => state.stations.error;
 
 /**
- * Basic Haversine formula to compute distance between two lat/lng points.
+ * Basic Haversine formula to compute distance (in km) between two lat/lng points.
  */
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (val: number) => (val * Math.PI) / 180;
   const R = 6371; // Earth radius in km
   const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lat2 - lng1);
+  const dLng = toRad(lng2 - lng1);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) *
@@ -215,7 +218,9 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 
 /**
  * Memoized selector:
- * Sorts stations by distance from the user's location if available.
+ * 1) Sorts stations by distance from userLocation
+ * 2) Also sets an approximate walkTime in minutes, 
+ *    assuming ~12 min per km speed
  */
 export const selectStationsWithDistance = createSelector(
   [selectAllStations, selectUserLocation],
@@ -223,11 +228,26 @@ export const selectStationsWithDistance = createSelector(
     if (!userLocation) return stations;
 
     const { lat: userLat, lng: userLng } = userLocation;
+    const MIN_PER_KM = 12; // walk pace => 12 min per km
+
     return stations
       .map((station) => {
-        const [lng, lat] = station.geometry.coordinates;
-        const distance = calculateDistance(userLat, userLng, lat, lng);
-        return { ...station, distance };
+        const [stationLng, stationLat] = station.geometry.coordinates;
+        const distance = calculateDistance(
+          userLat,
+          userLng,
+          stationLat,
+          stationLng
+        );
+        // distance => in km
+        // walkTime => distance * 12, then round
+        const walkTime = Math.round(distance * MIN_PER_KM);
+
+        return {
+          ...station,
+          distance,
+          walkTime,
+        };
       })
       .sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0));
   }
