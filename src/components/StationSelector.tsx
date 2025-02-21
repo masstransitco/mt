@@ -174,6 +174,7 @@ const AddressSearch = React.memo(
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.place_id}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
                     className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
                     type="button"
