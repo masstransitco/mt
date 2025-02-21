@@ -21,6 +21,7 @@ interface UserState {
   // We removed departureStationId & arrivalStationId from here,
   // because we handle those in bookingSlice now.
   userLocation: google.maps.LatLngLiteral | null;
+  searchLocation: google.maps.LatLngLiteral | null; // <--- new field
   viewState: "showCar" | "showMap";
 
   // Auth fields
@@ -32,6 +33,7 @@ const initialState: UserState = {
   selectedCarId: null,
   userLocation: null,
   viewState: "showCar",
+  searchLocation: null,
 
   // Auth
   authUser: null,
@@ -49,6 +51,10 @@ export const userSlice = createSlice({
 
     setUserLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
       state.userLocation = action.payload;
+    },
+
+    setSearchLocation: (state, action: PayloadAction<google.maps.LatLngLiteral>) => {
+      state.searchLocation = action.payload;
     },
 
     setViewState: (state, action: PayloadAction<"showCar" | "showMap">) => {
@@ -77,6 +83,7 @@ export const userSlice = createSlice({
 export const {
   selectCar,
   setUserLocation,
+  setSearchLocation,
   setViewState,
   resetUserSelections,
   setAuthUser,
@@ -86,6 +93,7 @@ export const {
 // Selectors
 export const selectSelectedCarId = (state: RootState) => state.user.selectedCarId;
 export const selectUserLocation = (state: RootState) => state.user.userLocation;
+export const selectSearchLocation = (state: RootState) => state.user.searchLocation;
 export const selectViewState = (state: RootState) => state.user.viewState;
 export const selectAuthUser = (state: RootState) => state.user.authUser;
 export const selectIsSignedIn = (state: RootState) => state.user.isSignedIn;
