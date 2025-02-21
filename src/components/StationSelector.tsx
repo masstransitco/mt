@@ -152,7 +152,7 @@ const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
 ArrivalIcon.displayName = "ArrivalIcon";
 
 /* -----------------------------------------------------------
-   AddressSearch Component
+   AddressSearch Component (same as before)
 ----------------------------------------------------------- */
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
@@ -171,20 +171,26 @@ const AddressSearch = React.memo(
     const geocoder = useRef<google.maps.Geocoder | null>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    // Initialize Google services once
     useEffect(() => {
       if (window.google && !autocompleteService.current) {
         autocompleteService.current = new google.maps.places.AutocompleteService();
         geocoder.current = new google.maps.Geocoder();
       }
       return () => {
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        if (searchTimeoutRef.current) {
+          clearTimeout(searchTimeoutRef.current);
+        }
       };
     }, []);
 
+    // If a station is already selected, we just show it in read-only mode
     const isStationSelected = Boolean(selectedStation);
 
     const searchPlaces = useCallback((input: string) => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
       if (!input.trim() || !autocompleteService.current) {
         setPredictions([]);
         return;
@@ -197,7 +203,8 @@ const AddressSearch = React.memo(
             types: ["establishment", "geocode"],
             componentRestrictions: { country: "HK" },
           };
-          const response = await autocompleteService.current.getPlacePredictions(request);
+          const response = await autocompleteService.current!.getPlacePredictions(request);
+          // Limit to 5 predictions
           setPredictions(response.predictions.slice(0, 5));
           setIsDropdownOpen(response.predictions.length > 0);
         } catch (error) {
@@ -218,7 +225,9 @@ const AddressSearch = React.memo(
           const result = response.results[0];
           if (result?.geometry?.location) {
             const { lat, lng } = result.geometry.location;
+            // Pass the final { lat, lng } to the parent
             onAddressSelect({ lat: lat(), lng: lng() });
+            // Update our local input
             setSearchText(prediction.structured_formatting.main_text);
             setPredictions([]);
             setIsDropdownOpen(false);
@@ -234,7 +243,7 @@ const AddressSearch = React.memo(
     return (
       <div className="flex-1">
         {isStationSelected ? (
-          <div className="px-1 py-1 text-gray-900 font-medium">
+          <div className="px-1 py-1 text-foreground font-medium">
             {selectedStation!.properties.Place}
           </div>
         ) : (
@@ -251,20 +260,7 @@ const AddressSearch = React.memo(
                 onBlur={() => setIsDropdownOpen(false)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="
-                  w-full
-                  bg-[#F2F2F7]
-                  text-gray-800
-                  border
-                  border-gray-300
-                  rounded-md
-                  focus:outline-none
-                  focus:border-blue-400
-                  placeholder:text-gray-500
-                  disabled:cursor-not-allowed
-                  p-1 text-sm
-                  transition-colors
-                "
+                className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
               />
               {searchText && (
                 <button
@@ -273,49 +269,27 @@ const AddressSearch = React.memo(
                     setPredictions([]);
                     setIsDropdownOpen(false);
                   }}
-                  className="
-                    absolute right-1 top-1/2 -translate-y-1/2
-                    text-gray-700 hover:bg-gray-200
-                    p-1 rounded-full transition-colors
-                  "
+                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
                   type="button"
-                  aria-label="Clear input"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
             {isDropdownOpen && predictions.length > 0 && (
-              <div
-                className="
-                  absolute top-full left-0 right-0 mt-1
-                  bg-white
-                  border border-gray-200
-                  rounded-md shadow-md
-                  z-50
-                  max-h-64
-                  overflow-y-auto
-                "
-              >
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-9999 max-h-64 overflow-y-auto">
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.place_id}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
-                    className="
-                      w-full
-                      px-2 py-1
-                      text-left text-sm
-                      text-gray-800
-                      hover:bg-gray-100
-                      transition-colors
-                    "
+                    className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
                     type="button"
                   >
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium">
                       {prediction.structured_formatting.main_text}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       {prediction.structured_formatting.secondary_text}
                     </div>
                   </button>
@@ -328,6 +302,7 @@ const AddressSearch = React.memo(
     );
   }
 );
+
 AddressSearch.displayName = "AddressSearch";
 
 /* -----------------------------------------------------------
