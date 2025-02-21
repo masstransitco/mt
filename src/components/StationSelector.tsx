@@ -112,8 +112,6 @@ const AddressSearch = React.memo(
         try {
           const response = await geocoder.current.geocode({
             placeId: prediction.place_id,
-            // @ts-ignore
-            fields: ["geometry.location"],
           });
           const result = response.results[0];
           if (result?.geometry?.location) {
