@@ -170,7 +170,7 @@ const AddressSearch = React.memo(
               )}
             </div>
             {isDropdownOpen && predictions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-50 max-h-64 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-9999 max-h-64 overflow-y-auto">
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.place_id}
