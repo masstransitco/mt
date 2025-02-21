@@ -52,10 +52,6 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
-const handleClickOutside = () => {
-  setIsDropdownOpen(false);
-};
-
 const AddressSearch = React.memo(
   ({ onAddressSelect, disabled, placeholder, selectedStation }: AddressSearchProps) => {
     const [searchText, setSearchText] = useState("");
@@ -453,8 +449,6 @@ function StationSelector({
           </div>
         )}
       </div>
-
-      <div onClick={handleClickOutside}></div>
 
       {/* Conditionally render CarSheet */}
       {showCarSheet && (
