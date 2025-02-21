@@ -270,7 +270,7 @@ const AddressSearch = React.memo(
                   focus:border-blue-400
                   placeholder:text-gray-500
                   disabled:cursor-not-allowed
-                  p-1 text-sm
+                  p-1 text-base
                   transition-colors"
               />
               {searchText && (
