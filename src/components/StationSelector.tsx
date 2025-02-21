@@ -262,7 +262,7 @@ const AddressSearch = React.memo(
                 placeholder={placeholder}
                 className="w-full
                   bg-[#F2F2F7]
-                  text-gray-800
+                  text-black
                   border
                   border-gray-300
                   rounded-md
