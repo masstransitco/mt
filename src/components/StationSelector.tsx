@@ -528,7 +528,7 @@ function StationSelector({
                 h-8
                 text-sm
                 font-medium
-                bg-sky-600
+                bg-primary
                 text-white
                 rounded-full
                 hover:bg-blue-400
