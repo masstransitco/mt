@@ -476,7 +476,7 @@ function StationSelector({
               className="
                 p-1 hover:bg-gray-300 transition-colors 
                 flex-shrink-0 m-1 rounded-md 
-                text-gray-700
+                text-black
               "
               type="button"
               aria-label="Clear departure"
@@ -507,7 +507,7 @@ function StationSelector({
                 className="
                   p-1 hover:bg-gray-300 transition-colors 
                   flex-shrink-0 m-1 rounded-md 
-                  text-gray-700
+                  text-black
                 "
                 type="button"
                 aria-label="Clear arrival"
