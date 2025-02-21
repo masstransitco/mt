@@ -138,7 +138,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         </div>
       )}
 
-      <div className="relative w-full aspect-[3/2]">
+      <div className="relative w-full aspect-[5/3]">
         {isVisible && (
           <Car3DViewer
             modelUrl={modelUrl}
