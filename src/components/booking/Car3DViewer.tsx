@@ -184,22 +184,22 @@ function Car3DViewer({
         gl={{
           antialias: true,
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.0,
+          toneMappingExposure: 0.8,
           preserveDrawingBuffer: false,
           powerPreference: "high-performance",
-          premultipliedAlpha: false,
-          logarithmicDepthBuffer: true,
+          premultipliedAlpha: true,
+          logarithmicDepthBuffer: false,
         }}
         shadows
         camera={{ position: [0, 2, 3], fov: 15 }}
-        dpr={[1, 1.2]}
+        dpr={[1, 1.5]}
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <SceneLighting />
         <PostProcessing interactive={interactive} />
         <Environment preset="sunset" background={false} />
-        <color attach="background" args={["#1a1a1a"]} />
+      
 
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup interactive={interactive} />
