@@ -12,7 +12,7 @@ import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlic
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
 import dynamic from "next/dynamic";
-import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle } from "lucide-react";
+import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon";
 import { setSearchLocation } from "@/store/userSlice";
@@ -26,21 +26,38 @@ const CarSheet = dynamic(() => import("@/components/booking/CarSheet"), {
 });
 
 /* -----------------------------------------------------------
-   Reusable Icons - Memoized
+   Conditional Icons for Departure & Arrival
 ----------------------------------------------------------- */
-const DepartureIcon = React.memo(({ highlight }: { highlight: boolean }) => (
-  <ArrowRightFromLine
-    className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
-    style={{ marginLeft: "12px" }}
-  />
-));
+interface IconProps {
+  highlight: boolean;
+  step: number;
+}
 
-const ArrivalIcon = React.memo(({ highlight }: { highlight: boolean }) => (
-  <ArrowRightToLine
-    className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground"}`}
-    style={{ marginLeft: "12px" }}
-  />
-));
+const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
+  // Step 1 uses Search icon; otherwise ArrowRightFromLine
+  const Icon = step === 1 ? Search : ArrowRightFromLine;
+  return (
+    <Icon
+      className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground/80"}`}
+      style={{ marginLeft: "12px" }}
+    />
+  );
+});
+
+DepartureIcon.displayName = "DepartureIcon";
+
+const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
+  // Step 3 uses Search icon; otherwise ArrowRightToLine
+  const Icon = step === 3 ? Search : ArrowRightToLine;
+  return (
+    <Icon
+      className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground/80"}`}
+      style={{ marginLeft: "12px" }}
+    />
+  );
+});
+
+ArrivalIcon.displayName = "ArrivalIcon";
 
 /* -----------------------------------------------------------
    AddressSearch Component (same as before)
@@ -130,8 +147,6 @@ const AddressSearch = React.memo(
       },
       [onAddressSelect]
     );
-  
-    
 
     return (
       <div className="flex-1">
@@ -260,8 +275,9 @@ function StationSelector({
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         toast.success("Location found!");
-        // Here we can do the same pattern: dispatch to Redux + call parent's callback
+        // Also store in Redux, if needed
         dispatch(setSearchLocation(loc));
+        // Pass up to the parent so the map can pan/zoom
         onAddressSearch(loc);
       },
       (err) => {
@@ -274,14 +290,12 @@ function StationSelector({
 
   /**
    * 2) This is the main callback for AddressSearch.
-   *    We dispatch setSearchLocation so that the rest of the app can see it,
-   *    and also call onAddressSearch if GMap or a parent needs to do something specific.
+   *    We dispatch setSearchLocation so the rest of the app can see it,
+   *    and also call onAddressSearch if GMap or a parent needs it.
    */
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
-      // Save to Redux
       dispatch(setSearchLocation(location));
-      // Also call the parent if needed (e.g. to pan the map)
       onAddressSearch(location);
     },
     [dispatch, onAddressSearch]
@@ -349,7 +363,9 @@ function StationSelector({
             departureStation ? "bg-neutral-700" : "bg-neutral-800/70"
           }`}
         >
-          <DepartureIcon highlight={highlightDeparture} />
+          {/* Step 1 => Search icon, else Arrow icon */}
+          <DepartureIcon highlight={highlightDeparture} step={step} />
+
           <AddressSearch
             onAddressSelect={handleAddressSearch}
             disabled={step >= 3}
@@ -375,7 +391,9 @@ function StationSelector({
               arrivalStation ? "bg-neutral-700" : "bg-neutral-800/70"
             }`}
           >
-            <ArrivalIcon highlight={highlightArrival} />
+            {/* Step 3 => Search icon, else Arrow icon */}
+            <ArrivalIcon highlight={highlightArrival} step={step} />
+
             <AddressSearch
               onAddressSelect={handleAddressSearch}
               disabled={step < 3}
