@@ -240,7 +240,7 @@ const AddressSearch = React.memo(
       [onAddressSelect]
     );
 
-    return (
+     return (
       <div className="flex-1">
         {isStationSelected ? (
           <div className="px-1 py-1 text-foreground font-medium">
@@ -260,7 +260,18 @@ const AddressSearch = React.memo(
                 onBlur={() => setIsDropdownOpen(false)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
+                className="w-full
+                  bg-[#F2F2F7]
+                  text-gray-800
+                  border
+                  border-gray-300
+                  rounded-md
+                  focus:outline-none
+                  focus:border-blue-400
+                  placeholder:text-gray-500
+                  disabled:cursor-not-allowed
+                  p-1 text-sm
+                  transition-colors"
               />
               {searchText && (
                 <button
@@ -269,7 +280,9 @@ const AddressSearch = React.memo(
                     setPredictions([]);
                     setIsDropdownOpen(false);
                   }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2
+                    text-gray-700 hover:bg-gray-200
+                    p-1 rounded-full transition-colors"
                   type="button"
                 >
                   <X className="w-4 h-4" />
@@ -277,13 +290,25 @@ const AddressSearch = React.memo(
               )}
             </div>
             {isDropdownOpen && predictions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-9999 max-h-64 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1
+                  bg-white
+                  border border-gray-200
+                  rounded-md shadow-md
+                  z-50
+                  max-h-64
+                  overflow-y-auto">
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.place_id}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
-                    className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
+                    className="w-full
+                      px-2 py-1
+                      text-left text-sm
+                      text-gray-800
+                      hover:bg-gray-100
+                      transition-colors
+                    "
                     type="button"
                   >
                     <div className="font-medium">
