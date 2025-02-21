@@ -4,17 +4,14 @@ import React, { useState, useCallback } from "react";
 import Head from "next/head";
 import { Menu as MenuIcon } from "lucide-react";
 import Image from "next/image";
-
 import dynamic from "next/dynamic"; // <-- Import dynamic
 
 import GMapWithErrorBoundary from "@/components/GMap";
 import BookingDialog from "@/components/booking/BookingDialog";
 import SideSheet from "@/components/ui/SideSheet";
-
-// Import our new reusable icon component
 import { QrCodeIcon } from "@/components/ui/icons/QrCodeIcon";
 
-// 1. Dynamically import AppMenu and QrScannerOverlay with no SSR
+// Dynamically import AppMenu and QrScannerOverlay with no SSR
 const AppMenu = dynamic(() => import("@/components/ui/AppMenu"), {
   ssr: false,
 });
@@ -43,7 +40,15 @@ export default function Page() {
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
       </Head>
-      <main className="min-h-screen bg-background flex flex-col overflow-hidden">
+
+      {/* 
+        1) "overflow-hidden" => no scroll
+        2) style={{ touchAction: "none" }} => disable gestures 
+      */}
+      <main
+        className="min-h-screen bg-background flex flex-col overflow-hidden"
+        style={{ touchAction: "none" }}
+      >
         {/* Header */}
         <header
           className="
