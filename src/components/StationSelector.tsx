@@ -444,7 +444,7 @@ function StationSelector({
         rounded-md 
         border border-gray-400
       "
-      style={{ overscrollBehavior: "hidden", touchAction: "auto" }}
+      style={{ overscrollBehavior: "hidden", touchAction: "none" }}
     >
       {/* Inner wrapper */}
       <div className="px-2 py-2 space-y-2">
