@@ -267,11 +267,11 @@ function StationSelector({
   const showCarSheet = viewState === "showCar";
 
   return (
-    <div
-      className="absolute top-[2px] left-5 right-5 z-10 bg-background/90 backdrop-blur-sm border-b border-border rounded-md"
-      style={{ overscrollBehavior: "none", touchAction: "none" }}
-    >
-      <div className="px-2 py-2 space-y-2">
+<div
+  className="absolute top-[2px] left-5 right-5 z-10 bg-neutral-800/90 backdrop-blur-sm border-b border-neutral-700 rounded-md"
+  style={{ overscrollBehavior: "none", touchAction: "none" }}
+>
+  <div className="px-2 py-2 space-y-2">
 
 
         {/* Info Bar */}
@@ -293,57 +293,57 @@ function StationSelector({
           </div>
         )}
 
-        {/* DEPARTURE INPUT */}
-        <div
-          className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightDepartureClass} ${
-            departureStation ? "bg-accent/10" : "bg-muted/50"
-          }`}
-        >
-          <DepartureIcon highlight={highlightDeparture} />
-          <AddressSearch
-            onAddressSelect={onAddressSearch}
-            disabled={step >= 3}
-            placeholder="Search here"
-            selectedStation={departureStation}
-          />
-          {departureStation && step <= 3 && (
-            <button
-              onClick={handleClearDeparture}
-              className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
-              type="button"
-              aria-label="Clear departure"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+       {/* DEPARTURE INPUT */}
+<div
+  className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightDepartureClass} ${
+    departureStation ? "bg-neutral-700" : "bg-neutral-800/70"
+  }`}
+>
+  <DepartureIcon highlight={highlightDeparture} />
+  <AddressSearch
+    onAddressSelect={onAddressSearch}
+    disabled={step >= 3}
+    placeholder="Search here"
+    selectedStation={departureStation}
+  />
+  {departureStation && step <= 3 && (
+    <button
+      onClick={handleClearDeparture}
+      className="p-1 hover:bg-neutral-600 transition-colors flex-shrink-0 m-1 rounded-md"
+      type="button"
+      aria-label="Clear departure"
+    >
+      <X className="w-4 h-4" />
+    </button>
+  )}
+</div>
 
-        {/* ARRIVAL INPUT */}
-        {step >= 3 && (
-          <div
-            className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightArrivalClass} ${
-              arrivalStation ? "bg-accent/10" : "bg-muted/50"
-            }`}
-          >
-            <ArrivalIcon highlight={highlightArrival} />
-            <AddressSearch
-              onAddressSelect={onAddressSearch}
-              disabled={step < 3}
-              placeholder="Search here"
-              selectedStation={arrivalStation}
-            />
-            {arrivalStation && step <= 4 && (
-              <button
-                onClick={handleClearArrival}
-                className="p-1 hover:bg-muted transition-colors flex-shrink-0 m-1 rounded-md"
-                type="button"
-                aria-label="Clear arrival"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
+{/* ARRIVAL INPUT */}
+{step >= 3 && (
+  <div
+    className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightArrivalClass} ${
+      arrivalStation ? "bg-neutral-700" : "bg-neutral-800/70"
+    }`}
+  >
+    <ArrivalIcon highlight={highlightArrival} />
+    <AddressSearch
+      onAddressSelect={onAddressSearch}
+      disabled={step < 3}
+      placeholder="Search here"
+      selectedStation={arrivalStation}
+    />
+    {arrivalStation && step <= 4 && (
+      <button
+        onClick={handleClearArrival}
+        className="p-1 hover:bg-neutral-600 transition-colors flex-shrink-0 m-1 rounded-md"
+        type="button"
+        aria-label="Clear arrival"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    )}
+  </div>
+)}
 
          {/* Locate Me & Car Button */}
          {(step === 1 || step === 2) && (
@@ -351,46 +351,50 @@ function StationSelector({
             <button
               onClick={handleLocateMe}
               className="
-                px-3
-                h-10
-                text-sm
-                font-medium
-                bg-gray-50
-                text-gray-800
-                rounded-full
-                hover:bg-slate-600
-                transition-colors
-                flex-1
-                shadow-sm
-                flex
-                items-center
-                justify-center
-              "
-              type="button"
-            >
+              px-3
+              h-8
+              text-sm
+              font-medium
+              bg-blue-600
+              text-white
+              rounded-full
+              hover:bg-blue-500
+              transition-colors
+              flex-1
+              shadow-md
+              flex
+              items-center
+              justify-center
+           "
+           type="button"
+         >
               Near me
             </button>
             <button
-              onClick={handleCarToggle}
-              className="
-                w-10
-                h-10
-                bg-zinc-700
-                text-gray-100
-                rounded-full
-                hover:bg-slate-600
-                transition-colors
-                flex
-                items-center
-                justify-center
-                shadow-sm
-                flex-shrink-0
-              "
-              type="button"
-              aria-label="Toggle car view"
-            >
-              <CarSignalIcon className="w-5 h-5" />
-            </button>
+  onClick={handleCarToggle}
+  className="
+    w-8
+    h-8
+    bg-neutral-800
+    text-gray-100
+    rounded-full
+    hover:bg-neutral-700
+    transition-colors
+    flex
+    items-center
+    justify-center
+    shadow-md
+    flex-shrink-0
+    focus:outline-none
+    focus:ring-2
+    focus:ring-offset-2
+    focus:ring-neutral-500
+  "
+  type="button"
+  aria-label="Toggle car view"
+>
+  <CarSignalIcon className="w-5 h-5" />
+</button>
           </div>
         )}
       </div>
