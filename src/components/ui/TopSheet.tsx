@@ -64,18 +64,21 @@ export default function TopSheet({
           {/* Slide-in TopSheet (no drag) */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
-            initial={{ y: "-100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "-100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            initial={{ y: -20 }}
+            animate={{ y: -40 }}
+            exit={{ y: -50 }}
+            transition={{ type: "spring", damping: 50, stiffness: 200 }}
           >
             <div
               className={cn(
-                "relative bg-background rounded-2xl shadow-xl",
+                "relative bg-background rounded-2xl shadow-xl overflow-hidden",
                 className
               )}
               style={{ fontFamily: "Helvetica Neue" }}
             >
+              {/* Gradient shadow overlay */}
+              <div className="absolute inset-x-0 bottom-0 h-10 z-10 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+
               {/* Scrollable body content */}
               <div
                 ref={contentRef}
@@ -100,7 +103,7 @@ export default function TopSheet({
                   className="flex-1 bg-gray-300 text-black py-2 px-4 rounded-md text-lg font-medium hover:bg-gray-400 transition-colors"
                   onClick={onDismiss}
                 >
-                  Dispatch car
+                  Dispatch for pick-up
                 </button>
 
                 {/* InfoBox (absolute) */}
