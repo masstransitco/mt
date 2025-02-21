@@ -320,7 +320,7 @@ function StationSelector({
   return (
     <div
       className="absolute top-[2px] left-5 right-5 z-10 bg-neutral-800/90 backdrop-blur-sm border-b border-neutral-700 rounded-md"
-      style={{ overscrollBehavior: "none", touchAction: "none" }}
+      style={{ overscrollBehavior: "none", touchAction: "auto" }}
     >
       <div className="px-2 py-2 space-y-2">
         {/* Info Bar */}
