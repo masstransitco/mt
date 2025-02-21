@@ -19,7 +19,7 @@ import type { Car } from "@/types/cars";
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full bg-card animate-pulse rounded-2xl" />
+    <div className="w-full h-full bg-neutral-200 animate-pulse rounded-2xl" />
   ),
 });
 
@@ -119,16 +119,18 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
       transition={{ type: "tween", duration: 0.3 }}
       className={`
         relative
-        overflow-hidden 
-        rounded-2xl 
-        bg-card 
-        transition-all 
-        duration-300 
-        border 
-        border-border/50
-        ${isGroupSelected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
+        overflow-hidden
+        rounded-md
+        bg-neutral-300
+        text-black
+        border border-gray-400
+        shadow-md
+        transition-all
+        duration-300
+        cursor-pointer
+        ${isGroupSelected ? "ring-2 ring-white" : ""}
       `}
-      style={{ width: 240, overflow: "hidden" }}
+      style={{ width: 260 }}
     >
       {isGroupSelected && (
         <div className="absolute top-3 right-3 z-10">
@@ -138,6 +140,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         </div>
       )}
 
+      {/* 3D Viewer Container - aspect ratio to keep it wide */}
       <div className="relative w-full aspect-[5/3]">
         {isVisible && (
           <Car3DViewer
@@ -151,15 +154,19 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         )}
       </div>
 
-      <div className="p-4">
+      {/* Content */}
+      <div className="p-3">
         <div className="flex items-start justify-between">
-          <p className="font-bold text-foreground text-lg">{selectedCar.model}</p>
+          {/* Car Model */}
+          <p className="font-bold text-lg leading-tight">{selectedCar.model}</p>
+
+          {/* Car Selector */}
           <div
             className="flex flex-col items-end relative"
             onClick={(e) => e.stopPropagation()}
           >
             <select
-              className="mb-1 cursor-pointer bg-card border text-foreground text-sm"
+              className="mb-1 cursor-pointer bg-neutral-200 border border-gray-300 rounded px-1 text-black text-sm"
               onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
               value={selectedCar.id}
             >
@@ -172,14 +179,15 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
         </div>
 
+        {/* Battery & Info Row */}
         <div className="flex items-center justify-between mt-1 relative">
           <div className="flex items-center gap-1">
             <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
-            <span className="text-sm">{batteryPercentage}%</span>
+            <span className="text-sm font-medium">{batteryPercentage}%</span>
           </div>
 
           <div
-            className="flex items-center gap-1 text-sm text-muted-foreground"
+            className="flex items-center gap-1 text-sm text-gray-600"
             onClick={(e) => e.stopPropagation()}
           >
             <Info
@@ -187,7 +195,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
               onClick={() => setShowOdometerPopup(!showOdometerPopup)}
             />
             {showOdometerPopup && (
-              <div className="absolute top-6 right-0 bg-white text-black text-xs px-2 py-1 rounded shadow-md">
+              <div className="absolute top-5 right-0 bg-white text-black text-xs px-2 py-1 rounded shadow-md">
                 Total distance driven: {selectedCar.odometer} km
               </div>
             )}
@@ -195,14 +203,16 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
         </div>
 
-        <div className="mt-2 flex items-center gap-2 text-muted-foreground">
+        {/* Range / Mileage */}
+        <div className="mt-2 flex items-center gap-2 text-gray-600">
           <Gauge className="w-4 h-4" />
           <span className="text-sm">{mileageRemaining} km</span>
         </div>
       </div>
 
+      {/* Last Driven Info */}
       {formattedLastDriven && (
-        <div className="bg-muted/10 text-muted-foreground text-xs px-4 py-2">
+        <div className="bg-gray-200 text-gray-700 text-xs px-4 py-2">
           Last driven on {formattedLastDriven}
         </div>
       )}
