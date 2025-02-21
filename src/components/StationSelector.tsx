@@ -52,6 +52,10 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
+const handleClickOutside = () => {
+  setIsDropdownOpen(false);
+};
+
 const AddressSearch = React.memo(
   ({ onAddressSelect, disabled, placeholder, selectedStation }: AddressSearchProps) => {
     const [searchText, setSearchText] = useState("");
@@ -132,6 +136,8 @@ const AddressSearch = React.memo(
       },
       [onAddressSelect]
     );
+  
+    
 
     return (
       <div className="flex-1">
@@ -150,7 +156,7 @@ const AddressSearch = React.memo(
                   searchPlaces(e.target.value);
                 }}
                 onFocus={() => setIsDropdownOpen(predictions.length > 0)}
-                onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                onBlur={() => setIsDropdownOpen(false)}
                 disabled={disabled}
                 placeholder={placeholder}
                 className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
@@ -447,6 +453,8 @@ function StationSelector({
           </div>
         )}
       </div>
+
+      <div onClick={handleClickOutside}></div>
 
       {/* Conditionally render CarSheet */}
       {showCarSheet && (
