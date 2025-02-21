@@ -1,6 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle, Search } from "lucide-react";
+import { toast } from "react-hot-toast";
+
+// Redux
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
@@ -11,56 +16,143 @@ import {
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
-import dynamic from "next/dynamic";
-import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle, Search } from "lucide-react";
-import { toast } from "react-hot-toast";
-import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon";
 import { setSearchLocation } from "@/store/userSlice";
 
-/* -----------------------------------------------------------
-   Dynamically import CarSheet (no SSR)
------------------------------------------------------------ */
+// Icons / Components
+import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon";
+
+// Dynamically import CarSheet
 const CarSheet = dynamic(() => import("@/components/booking/CarSheet"), {
   ssr: false,
-  loading: () => <div className="h-10 bg-muted animate-pulse rounded-md"></div>,
+  loading: () => <div className="h-10 bg-gray-200 animate-pulse rounded-md"></div>,
 });
 
 /* -----------------------------------------------------------
-   Conditional Icons for Departure & Arrival
+   Typing & Dot Animations
+----------------------------------------------------------- */
+// 1) A custom hook that waits 1.5s, types text char-by-char,
+//    waits 2s, then resets.
+
+function useSynchronizedAnimation(text: string) {
+  const [typedText, setTypedText] = React.useState("");
+  const textRef = React.useRef(text);
+  const indexRef = React.useRef(0);
+
+  React.useEffect(() => {
+    // If text changes (e.g. new step), reset
+    textRef.current = text;
+    setTypedText("");
+    indexRef.current = 0;
+  }, [text]);
+
+  React.useEffect(() => {
+    let dotDelayTimeout: NodeJS.Timeout;
+    let typingInterval: NodeJS.Timeout;
+    let cycleEndTimeout: NodeJS.Timeout;
+
+    // A helper function that starts the entire "dot wait + type + wait + reset" cycle
+    function beginCycle() {
+      // Step A: Wait 1.5s before typing (dot alone)
+      dotDelayTimeout = setTimeout(() => {
+        // Step B: type text every 50ms
+        typingInterval = setInterval(() => {
+          const full = textRef.current;
+          if (indexRef.current < full.length) {
+            indexRef.current++;
+            setTypedText(full.slice(0, indexRef.current));
+          } else {
+            // Done typing
+            clearInterval(typingInterval);
+            // Step C: Wait 2s, then reset & restart
+            cycleEndTimeout = setTimeout(() => {
+              setTypedText("");
+              indexRef.current = 0;
+              beginCycle(); // ← CALL AGAIN to start a new cycle
+            }, 2000);
+          }
+        }, 50);
+      }, 1500);
+    }
+
+    // Kick off the first cycle
+    beginCycle();
+
+    return () => {
+      clearTimeout(dotDelayTimeout);
+      clearTimeout(cycleEndTimeout);
+      clearInterval(typingInterval);
+    };
+  }, []);
+
+  return typedText;
+}
+
+// 2) The text component that uses that hook
+function AnimatedInfoText({ text }: { text: string }) {
+  const typedText = useSynchronizedAnimation(text);
+  return <>{typedText}</>;
+}
+
+// 3) Permanently animating dot (no step-based logic)
+function AnimatedDot() {
+  return (
+    <>
+      <style jsx>{`
+        @keyframes expandShrink {
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(2);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+        .dot-animate {
+          animation: expandShrink 1.5s ease-in-out infinite;
+        }
+      `}</style>
+
+      <div className="w-2 h-2 rounded-full bg-gray-700 dot-animate px-1 py-1" />
+    </>
+  );
+}
+
+/* -----------------------------------------------------------
+   Departure / Arrival Icons
 ----------------------------------------------------------- */
 interface IconProps {
   highlight: boolean;
   step: number;
 }
 
+// Step 1 => Search icon, else ArrowRightFromLine
 const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
-  // Step 1 uses Search icon; otherwise ArrowRightFromLine
   const Icon = step === 1 ? Search : ArrowRightFromLine;
   return (
     <Icon
-      className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground/80"}`}
+      className={`w-5 h-5 ${highlight ? "text-black" : "text-gray-800"} transition-colors`}
       style={{ marginLeft: "12px" }}
     />
   );
 });
-
 DepartureIcon.displayName = "DepartureIcon";
 
+// Step 3 => Search icon, else ArrowRightToLine
 const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
-  // Step 3 uses Search icon; otherwise ArrowRightToLine
   const Icon = step === 3 ? Search : ArrowRightToLine;
   return (
     <Icon
-      className={`w-5 h-5 ${highlight ? "text-white" : "text-muted-foreground/80"}`}
+      className={`w-5 h-5 ${highlight ? "text-black" : "text-gray-800"} transition-colors`}
       style={{ marginLeft: "12px" }}
     />
   );
 });
-
 ArrivalIcon.displayName = "ArrivalIcon";
 
 /* -----------------------------------------------------------
-   AddressSearch Component (same as before)
+   AddressSearch Component
 ----------------------------------------------------------- */
 interface AddressSearchProps {
   onAddressSelect: (location: google.maps.LatLngLiteral) => void;
@@ -79,26 +171,20 @@ const AddressSearch = React.memo(
     const geocoder = useRef<google.maps.Geocoder | null>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Initialize Google services once
     useEffect(() => {
       if (window.google && !autocompleteService.current) {
         autocompleteService.current = new google.maps.places.AutocompleteService();
         geocoder.current = new google.maps.Geocoder();
       }
       return () => {
-        if (searchTimeoutRef.current) {
-          clearTimeout(searchTimeoutRef.current);
-        }
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
       };
     }, []);
 
-    // If a station is already selected, we just show it in read-only mode
     const isStationSelected = Boolean(selectedStation);
 
     const searchPlaces = useCallback((input: string) => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
       if (!input.trim() || !autocompleteService.current) {
         setPredictions([]);
         return;
@@ -111,8 +197,7 @@ const AddressSearch = React.memo(
             types: ["establishment", "geocode"],
             componentRestrictions: { country: "HK" },
           };
-          const response = await autocompleteService.current!.getPlacePredictions(request);
-          // Limit to 5 predictions
+          const response = await autocompleteService.current.getPlacePredictions(request);
           setPredictions(response.predictions.slice(0, 5));
           setIsDropdownOpen(response.predictions.length > 0);
         } catch (error) {
@@ -133,9 +218,7 @@ const AddressSearch = React.memo(
           const result = response.results[0];
           if (result?.geometry?.location) {
             const { lat, lng } = result.geometry.location;
-            // Pass the final { lat, lng } to the parent
             onAddressSelect({ lat: lat(), lng: lng() });
-            // Update our local input
             setSearchText(prediction.structured_formatting.main_text);
             setPredictions([]);
             setIsDropdownOpen(false);
@@ -151,7 +234,7 @@ const AddressSearch = React.memo(
     return (
       <div className="flex-1">
         {isStationSelected ? (
-          <div className="px-1 py-1 text-foreground font-medium">
+          <div className="px-1 py-1 text-gray-900 font-medium">
             {selectedStation!.properties.Place}
           </div>
         ) : (
@@ -168,7 +251,20 @@ const AddressSearch = React.memo(
                 onBlur={() => setIsDropdownOpen(false)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="w-full bg-transparent border-none focus:outline-none disabled:cursor-not-allowed placeholder:text-muted-foreground/60 p-1 text-base"
+                className="
+                  w-full
+                  bg-[#F2F2F7]
+                  text-gray-800
+                  border
+                  border-gray-300
+                  rounded-md
+                  focus:outline-none
+                  focus:border-blue-400
+                  placeholder:text-gray-500
+                  disabled:cursor-not-allowed
+                  p-1 text-sm
+                  transition-colors
+                "
               />
               {searchText && (
                 <button
@@ -177,27 +273,49 @@ const AddressSearch = React.memo(
                     setPredictions([]);
                     setIsDropdownOpen(false);
                   }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full transition-colors"
+                  className="
+                    absolute right-1 top-1/2 -translate-y-1/2
+                    text-gray-700 hover:bg-gray-200
+                    p-1 rounded-full transition-colors
+                  "
                   type="button"
+                  aria-label="Clear input"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
             {isDropdownOpen && predictions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-border rounded-lg shadow-md z-9999 max-h-64 overflow-y-auto">
+              <div
+                className="
+                  absolute top-full left-0 right-0 mt-1
+                  bg-white
+                  border border-gray-200
+                  rounded-md shadow-md
+                  z-50
+                  max-h-64
+                  overflow-y-auto
+                "
+              >
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.place_id}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
-                    className="w-full px-2 py-1 text-left hover:bg-muted/50 text-sm"
+                    className="
+                      w-full
+                      px-2 py-1
+                      text-left text-sm
+                      text-gray-800
+                      hover:bg-gray-100
+                      transition-colors
+                    "
                     type="button"
                   >
-                    <div className="font-medium">
+                    <div className="font-medium text-gray-900">
                       {prediction.structured_formatting.main_text}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-gray-500">
                       {prediction.structured_formatting.secondary_text}
                     </div>
                   </button>
@@ -210,14 +328,12 @@ const AddressSearch = React.memo(
     );
   }
 );
-
 AddressSearch.displayName = "AddressSearch";
 
 /* -----------------------------------------------------------
-   StationSelector Component - with setSearchLocation
+   6) Main StationSelector Component
 ----------------------------------------------------------- */
 interface StationSelectorProps {
-  // Parent or GMap callback if needed
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
   onClearDeparture?: () => void;
   onClearArrival?: () => void;
@@ -230,17 +346,17 @@ function StationSelector({
 }: StationSelectorProps) {
   const dispatch = useAppDispatch();
 
-  // Booking state
+  // Booking
   const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
   const stations = useAppSelector(selectStationsWithDistance);
   const bookingRoute = useAppSelector(selectRoute);
 
-  // UI state
+  // UI
   const viewState = useAppSelector((state) => state.ui.viewState);
 
-  // Memoized station lookups
+  // Lookups
   const departureStation = useMemo(
     () => stations.find((s) => s.id === departureId),
     [stations, departureId]
@@ -254,18 +370,20 @@ function StationSelector({
     [bookingRoute]
   );
 
-  // Step display logic
+  // Step logic
   const uiStepNumber = step < 3 ? 1 : 2;
   const highlightDeparture = step <= 2;
   const highlightArrival = step >= 3;
 
-  const highlightDepartureClass = highlightDeparture ? "ring-1 ring-white bg-background" : "";
-  const highlightArrivalClass = highlightArrival ? "ring-1 ring-white bg-background" : "";
+  // Subtle highlight vs default
+  const highlightDepartureClass = highlightDeparture
+    ? "ring-1 ring-white bg-[#F2F2F7]"
+    : "bg-[#E5E5EA]";
+  const highlightArrivalClass = highlightArrival
+    ? "ring-1 ring-white bg-[#F2F2F7]"
+    : "bg-[#E5E5EA]";
 
-  /**
-   * 1) If user hits "Locate me", we set location in GMap
-   *    or in Redux (via onAddressSearch?), then toast success.
-   */
+  // "Locate me"
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
@@ -275,9 +393,7 @@ function StationSelector({
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         toast.success("Location found!");
-        // Also store in Redux, if needed
         dispatch(setSearchLocation(loc));
-        // Pass up to the parent so the map can pan/zoom
         onAddressSearch(loc);
       },
       (err) => {
@@ -288,11 +404,7 @@ function StationSelector({
     );
   }, [dispatch, onAddressSearch]);
 
-  /**
-   * 2) This is the main callback for AddressSearch.
-   *    We dispatch setSearchLocation so the rest of the app can see it,
-   *    and also call onAddressSearch if GMap or a parent needs it.
-   */
+  // Address search
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       dispatch(setSearchLocation(location));
@@ -301,7 +413,7 @@ function StationSelector({
     [dispatch, onAddressSearch]
   );
 
-  // Show/hide the CarSheet
+  // Toggle CarSheet
   const handleCarToggle = useCallback(() => {
     if (viewState === "showCar") {
       dispatch(closeCurrentSheet());
@@ -313,45 +425,32 @@ function StationSelector({
   // Clear departure
   const handleClearDeparture = useCallback(() => {
     dispatch(clearDispatchRoute());
-    if (onClearDeparture) {
-      onClearDeparture();
-    } else {
-      toast.success("Departure station cleared");
-    }
+    onClearDeparture?.();
   }, [dispatch, onClearDeparture]);
 
   // Clear arrival
   const handleClearArrival = useCallback(() => {
-    if (onClearArrival) {
-      onClearArrival();
-    } else {
-      toast.success("Arrival station cleared");
-    }
+    onClearArrival?.();
   }, [onClearArrival]);
 
-  // Decide if we show CarSheet
+  // Show CarSheet?
   const showCarSheet = viewState === "showCar";
 
   return (
     <div
-      className="absolute top-[2px] left-5 right-5 z-10 bg-neutral-800/90 backdrop-blur-sm border-b border-neutral-700 rounded-md"
+      className="
+        absolute top-[2px] left-5 right-5 z-10 
+        bg-neutral-300 
+        rounded-md 
+        border border-gray-400
+      "
       style={{ overscrollBehavior: "none", touchAction: "auto" }}
     >
+      {/* Inner wrapper */}
       <div className="px-2 py-2 space-y-2">
-        {/* Info Bar */}
-        <div className="flex items-center justify-between px-1 py-1">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>•</span>
-            {uiStepNumber === 1 ? "Choose pick-up station" : "Select arrival station"}
-          </div>
-          {departureStation && arrivalStation && distanceInKm && (
-            <div className="text-xs font-medium">Drive Distance: {distanceInKm} km</div>
-          )}
-        </div>
-
-        {/* Validation for same-station error */}
+        {/* Same-station error */}
         {departureId && arrivalId && departureId === arrivalId && (
-          <div className="flex items-center gap-2 px-1 py-1 text-xs text-destructive">
+          <div className="flex items-center gap-2 px-1 py-1 text-xs text-red-600">
             <AlertCircle className="w-4 h-4" />
             <span>Departure and arrival stations cannot be the same</span>
           </div>
@@ -359,23 +458,26 @@ function StationSelector({
 
         {/* DEPARTURE INPUT */}
         <div
-          className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightDepartureClass} ${
-            departureStation ? "bg-neutral-700" : "bg-neutral-800/70"
-          }`}
+          className={`
+            flex items-center gap-2 rounded-md transition-all duration-200 
+            ${highlightDepartureClass}
+          `}
         >
-          {/* Step 1 => Search icon, else Arrow icon */}
           <DepartureIcon highlight={highlightDeparture} step={step} />
-
           <AddressSearch
             onAddressSelect={handleAddressSearch}
             disabled={step >= 3}
-            placeholder="Search here"
+            placeholder="  Search here"
             selectedStation={departureStation}
           />
           {departureStation && step <= 3 && (
             <button
               onClick={handleClearDeparture}
-              className="p-1 hover:bg-neutral-600 transition-colors flex-shrink-0 m-1 rounded-md"
+              className="
+                p-1 hover:bg-gray-300 transition-colors 
+                flex-shrink-0 m-1 rounded-md 
+                text-gray-700
+              "
               type="button"
               aria-label="Clear departure"
             >
@@ -387,23 +489,26 @@ function StationSelector({
         {/* ARRIVAL INPUT */}
         {step >= 3 && (
           <div
-            className={`flex items-center gap-2 rounded-md transition-all duration-200 ${highlightArrivalClass} ${
-              arrivalStation ? "bg-neutral-700" : "bg-neutral-800/70"
-            }`}
+            className={`
+              flex items-center gap-2 rounded-md transition-all duration-200
+              ${highlightArrivalClass}
+            `}
           >
-            {/* Step 3 => Search icon, else Arrow icon */}
             <ArrivalIcon highlight={highlightArrival} step={step} />
-
             <AddressSearch
               onAddressSelect={handleAddressSearch}
               disabled={step < 3}
-              placeholder="Search here"
+              placeholder="  Search here"
               selectedStation={arrivalStation}
             />
             {arrivalStation && step <= 4 && (
               <button
                 onClick={handleClearArrival}
-                className="p-1 hover:bg-neutral-600 transition-colors flex-shrink-0 m-1 rounded-md"
+                className="
+                  p-1 hover:bg-gray-300 transition-colors 
+                  flex-shrink-0 m-1 rounded-md 
+                  text-gray-700
+                "
                 type="button"
                 aria-label="Clear arrival"
               >
@@ -413,7 +518,7 @@ function StationSelector({
           </div>
         )}
 
-        {/* Locate Me & Car Button (only during steps 1 or 2) */}
+        {/* Locate Me & Car Button (only steps 1 or 2) */}
         {(step === 1 || step === 2) && (
           <div className="mt-2 flex gap-2">
             <button
@@ -423,10 +528,10 @@ function StationSelector({
                 h-8
                 text-sm
                 font-medium
-                bg-blue-600
+                bg-blue-500
                 text-white
                 rounded-full
-                hover:bg-blue-500
+                hover:bg-blue-400
                 transition-colors
                 flex-1
                 shadow-md
@@ -443,10 +548,10 @@ function StationSelector({
               className="
                 w-8
                 h-8
-                bg-neutral-800
-                text-gray-100
+                bg-[#F2F2F7]
+                text-gray-700
                 rounded-full
-                hover:bg-neutral-700
+                hover:bg-gray-300
                 transition-colors
                 flex
                 items-center
@@ -456,7 +561,7 @@ function StationSelector({
                 focus:outline-none
                 focus:ring-2
                 focus:ring-offset-2
-                focus:ring-neutral-500
+                focus:ring-blue-400
               "
               type="button"
               aria-label="Toggle car view"
@@ -465,12 +570,37 @@ function StationSelector({
             </button>
           </div>
         )}
+
+        {/* Info Bar (dot + typed text) */}
+        <div className="flex items-center justify-between px-1 py-1">
+          {/* Dot is always animating */}
+          <div className="flex items-center gap-2">
+            <AnimatedDot />
+            <span className="text-xs text-gray-700 px-1 py-1
+                 min-w-[14ch] 
+                 whitespace-nowrap">
+              <AnimatedInfoText
+                text={step < 3 ? "Choose pick-up station" : "Select arrival station"}
+              />
+            </span>
+          </div>
+
+          {departureStation && arrivalStation && distanceInKm && (
+            <div className="text-xs font-medium text-gray-800">
+              Drive Distance: {distanceInKm} km
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Conditionally render CarSheet */}
+      {/* CarSheet */}
       {showCarSheet && (
         <div className="mt-2">
-          <CarSheet isOpen={true} onToggle={handleCarToggle} className="max-w-screen-md mx-auto mt-10" />
+          <CarSheet
+            isOpen
+            onToggle={handleCarToggle}
+            className="max-w-screen-md mx-auto mt-10"
+          />
         </div>
       )}
     </div>
