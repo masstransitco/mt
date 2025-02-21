@@ -67,7 +67,7 @@ function CarCardComponent({
         </div>
       )}
 
-      <div className="relative w-full aspect-[5/3]">
+      <div className="relative w-full aspect-[16/5]">
         {isInViewport && isVisible ? (
           <Car3DViewer
             modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
