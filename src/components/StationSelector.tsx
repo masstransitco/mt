@@ -132,7 +132,7 @@ const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
   const Icon = step === 1 ? Search : ArrowRightFromLine;
   return (
     <Icon
-      className={`w-5 h-5 ${highlight ? "text-black" : "text-gray-800"} transition-colors`}
+      className={`w-5 h-5 ${highlight ? "text-black" : "text-black"} transition-colors`}
       style={{ marginLeft: "12px" }}
     />
   );
@@ -144,7 +144,7 @@ const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
   const Icon = step === 3 ? Search : ArrowRightToLine;
   return (
     <Icon
-      className={`w-5 h-5 ${highlight ? "text-black" : "text-gray-800"} transition-colors`}
+      className={`w-5 h-5 ${highlight ? "text-black" : "text-black"} transition-colors`}
       style={{ marginLeft: "12px" }}
     />
   );
