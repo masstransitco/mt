@@ -54,15 +54,14 @@ export default function TopSheet({
             onClick={onDismiss}
           />
 
-          {/* Centered container */}
+          {/* Centered container at 80vw wide, 50vh tall */}
           <motion.div
             className="
-              relative 
-              flex 
-              flex-col 
-              w-full 
-              max-w-md 
-              max-h-[90vh]  /* ensures it doesn't exceed screen height */
+              relative
+              flex
+              flex-col
+              w-[80vw]
+              h-[50vh]
             "
             variants={variants}
             initial="initial"
@@ -71,7 +70,7 @@ export default function TopSheet({
           >
             <div
               className={cn(
-                "bg-neutral-300 text-black border border-gray-400 rounded-md shadow-md overflow-hidden",
+                "bg-neutral-300 text-black border border-gray-400 rounded-md shadow-md overflow-hidden w-full h-full",
                 className
               )}
             >
@@ -84,11 +83,12 @@ export default function TopSheet({
               <div
                 ref={contentRef}
                 className="
-                  px-4 
-                  pt-3 
-                  pb-6 
+                  px-4
+                  pt-3
+                  pb-6
                   overflow-y-auto
-                  max-h-[70vh] /* or 80vh, etc. so content scrolls if tall */
+                  w-full
+                  h-full
                 "
               >
                 {children}
