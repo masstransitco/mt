@@ -243,7 +243,7 @@ const AddressSearch = React.memo(
      return (
       <div className="flex-1">
         {isStationSelected ? (
-          <div className="px-1 py-1 text-foreground font-medium">
+          <div className="px-1 py-1 text-black font-medium">
             {selectedStation!.properties.Place}
           </div>
         ) : (
