@@ -68,10 +68,10 @@ function useSynchronizedAnimation(text: string) {
               setTypedText("");
               indexRef.current = 0;
               beginCycle(); // ← CALL AGAIN to start a new cycle
-            }, 2000);
+            }, 3500);
           }
         }, 50);
-      }, 1500);
+      }, 2500);
     }
 
     // Kick off the first cycle
@@ -103,18 +103,18 @@ function AnimatedDot() {
             transform: scale(1);
           }
           50% {
-            transform: scale(2);
+            transform: scale(1.75);
           }
           100% {
             transform: scale(1);
           }
         }
         .dot-animate {
-          animation: expandShrink 1.5s ease-in-out infinite;
+          animation: expandShrink 1.8s ease-in-out infinite;
         }
       `}</style>
 
-      <div className="w-2 h-2 rounded-full bg-gray-700 dot-animate px-1 py-1" />
+      <div className="w-2 h-2 rounded-full bg-slate-200 dot-animate px-1 py-1" />
     </>
   );
 }
@@ -264,10 +264,10 @@ const AddressSearch = React.memo(
                   bg-[#F2F2F7]
                   text-black
                   border
-                  border-gray-300
+                  border-gray-100
                   rounded-md
                   focus:outline-none
-                  focus:border-blue-400
+                  focus:border-gray-400
                   placeholder:text-gray-500
                   disabled:cursor-not-allowed
                   p-1 text-base
@@ -440,9 +440,10 @@ function StationSelector({
     <div
       className="
         absolute top-[2px] left-5 right-5 z-10 
-        bg-neutral-300 
+        bg-zinc-950
         rounded-md 
-        border border-gray-400
+        border 
+        border-zinc-600
       "
       style={{ overscrollBehavior: "hidden", touchAction: "none" }}
     >
@@ -528,7 +529,7 @@ function StationSelector({
                 h-8
                 text-sm
                 font-medium
-                bg-primary
+                bg-sky-700
                 text-white
                 rounded-full
                 hover:bg-blue-400
@@ -548,10 +549,11 @@ function StationSelector({
               className="
                 w-8
                 h-8
-                bg-[#F2F2F7]
-                text-black
+                text-slate-950
+                bg-gray-300
                 rounded-full
                 hover:bg-gray-300
+                hover:text-black
                 transition-colors
                 flex
                 items-center
@@ -576,7 +578,7 @@ function StationSelector({
           {/* Dot is always animating */}
           <div className="flex items-center gap-2">
             <AnimatedDot />
-            <span className="text-xs text-gray-700 px-1 py-1
+            <span className="text-xs text-zinc-300 px-1 py-1
                  min-w-[14ch] 
                  whitespace-nowrap">
               <AnimatedInfoText
