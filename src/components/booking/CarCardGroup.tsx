@@ -128,7 +128,7 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         border-border/50
         ${isGroupSelected ? "shadow-[0_0_10px_rgba(255,255,255,0.8)] ring-2 ring-white" : ""}
       `}
-      style={{ width: 320, overflow: "hidden" }}
+      style={{ width: 240, overflow: "hidden" }}
     >
       {isGroupSelected && (
         <div className="absolute top-3 right-3 z-10">
