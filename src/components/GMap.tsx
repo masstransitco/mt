@@ -182,7 +182,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         dispatch(selectArrivalStation(station.id));
         toast.success("Arrival station re-selected!");
       } else {
-        toast.info(`Station clicked, but no action—already at step ${bookingStepRef.current}`);
+        toast(`Station clicked, but no action—already at step ${bookingStepRef.current}`);
       }
       setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
