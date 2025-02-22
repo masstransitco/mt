@@ -1,8 +1,9 @@
 "use client";
 
-import React, { memo, useMemo, useState, useEffect } from "react";
+import React, { memo, useMemo, useState, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectCar } from "@/store/userSlice";
+
 import {
   BatteryFull,
   BatteryMedium,
@@ -15,76 +16,129 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import type { Car } from "@/types/cars";
 
-// Dynamically load the Car3DViewer only when it's required (using lazy load)
-const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
+// Lazy-load Car3DViewer
+const Car3DViewer = dynamic(() => import("./Car3DViewer").then(mod => mod.default), {
   ssr: false,
-  loading: () => (
-    <div className="w-full h-full bg-neutral-200 animate-pulse rounded-2xl" />
-  ),
+  loading: () => <ViewerSkeleton />,
 });
 
-/** A grouping of cars that share the same `model` */
-interface CarGroup {
+/** A group of cars (all with the same model). */
+export interface CarGroup {
   model: string;
   cars: Car[];
 }
 
 interface CarCardGroupProps {
   group: CarGroup;
+  /** If the entire grid (or parent) is visible or not. */
   isVisible?: boolean;
+  /**
+   * Optionally pass a ref to a scrollable container
+   * if you want IntersectionObserver to detect horizontal scrolling.
+   */
+  rootRef?: React.RefObject<HTMLDivElement>;
 }
 
-function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
+/** Fallback skeleton while the 3D viewer loads. */
+const ViewerSkeleton = () => (
+  <div className="relative w-full h-full bg-neutral-200 rounded-t-md overflow-hidden">
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200" />
+  </div>
+);
+
+function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
   const [showOdometerPopup, setShowOdometerPopup] = useState(false);
+  const [shouldRender3D, setShouldRender3D] = useState(false);
 
-  // Find the selected car, fallback to the first car in the group
+  const popupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (popupTimeoutRef.current) {
+        clearTimeout(popupTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // IntersectionObserver: load 3D only if card is visible in the scroll container
+  useEffect(() => {
+    // If the parent/entire grid is hidden, or we have no container ref, bail out
+    if (!isVisible) {
+      setShouldRender3D(false);
+      return;
+    }
+    if (!cardRef.current) return;
+
+    const options: IntersectionObserverInit = {
+      threshold: 0.1,
+      // If you have a custom scroll container, use it as the root
+      // Otherwise omit 'root' to use the browser viewport
+      root: rootRef?.current ?? null,
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          setShouldRender3D(true);
+        }
+      });
+    }, options);
+
+    observer.observe(cardRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isVisible, rootRef]);
+
+  // Decide which car is selected in this group (or default to the first one)
   const selectedCar = useMemo(() => {
     return group.cars.find((c) => c.id === selectedCarId) || group.cars[0];
   }, [group.cars, selectedCarId]);
 
+  // If the user has selected any car in this group
   const isGroupSelected = useMemo(() => {
     return group.cars.some((c) => c.id === selectedCarId);
   }, [group.cars, selectedCarId]);
 
+  // 3D model URL
   const modelUrl = selectedCar?.modelUrl || "/cars/defaultModel.glb";
 
-  const handleSelectCar = (carId: number) => {
-    dispatch(selectCar(carId));
-    setShowOdometerPopup(false);
-  };
+  // Battery calculations
+  const { batteryPercentage, BatteryIcon, batteryIconColor } = useMemo(() => {
+    const rawBattery = selectedCar.electric_battery_percentage_left;
+    const parsed = rawBattery != null ? Number(rawBattery) : NaN;
+    const percentage = !isNaN(parsed) && parsed >= 1 && parsed <= 100 ? parsed : 92;
 
-  // -----------------------------------------
-  // 1) Battery fallback logic
-  const rawBattery = selectedCar.electric_battery_percentage_left;
-  const parsed = rawBattery != null ? parseFloat(String(rawBattery)) : NaN;
-  const isValid = !isNaN(parsed) && parsed >= 1 && parsed <= 100;
-  const batteryPercentage = isValid ? parsed : 92;
+    let Icon = BatteryFull;
+    let color = "text-green-500";
 
-  // -----------------------------------------
-  // 2) Battery icon + color logic
-  let BatteryIcon = BatteryFull;
-  let batteryIconColor = "text-green-500";
-  if (batteryPercentage <= 9) {
-    BatteryIcon = BatteryWarning;
-    batteryIconColor = "text-red-500";
-  } else if (batteryPercentage < 40) {
-    BatteryIcon = BatteryLow;
-    batteryIconColor = "text-orange-500";
-  } else if (batteryPercentage < 80) {
-    BatteryIcon = BatteryMedium;
-    batteryIconColor = "text-lime-400";
-  }
+    if (percentage <= 9) {
+      Icon = BatteryWarning;
+      color = "text-red-500";
+    } else if (percentage < 40) {
+      Icon = BatteryLow;
+      color = "text-orange-500";
+    } else if (percentage < 80) {
+      Icon = BatteryMedium;
+      color = "text-lime-400";
+    }
 
-  // -----------------------------------------
-  // 3) Format "location_updated" date
-  const locationUpdated = selectedCar.location_updated;
-  const formattedLastDriven = React.useMemo(() => {
+    return { batteryPercentage: percentage, BatteryIcon: Icon, batteryIconColor: color };
+  }, [selectedCar.electric_battery_percentage_left]);
+
+  // Format date/time
+  const formattedLastDriven = useMemo(() => {
+    const locationUpdated = selectedCar.location_updated;
     if (!locationUpdated) return "";
     const d = new Date(locationUpdated);
-    if (isNaN(d.getTime())) return "";
+    if (Number.isNaN(d.getTime())) return "";
+
     const day = d.getDate();
     const suffix = getDaySuffix(day);
     const monthNames = [
@@ -98,25 +152,41 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
     const hours12 = hours % 12 || 12;
     const ampm = isPM ? "pm" : "am";
     const minutesStr = String(minutes).padStart(2, "0");
+
     return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
-  }, [locationUpdated]);
+  }, [selectedCar.location_updated]);
 
-  // -----------------------------------------
-  // 4) "Mileage remaining" calculation
-  const mileageRemaining = (batteryPercentage * 3.51).toFixed(1);
-
+  // Handlers
   const handleCardClick = () => {
     if (!isGroupSelected) {
       dispatch(selectCar(selectedCar.id));
     }
   };
 
+  const handleSelectCar = (carId: number) => {
+    dispatch(selectCar(carId));
+    setShowOdometerPopup(false);
+  };
+
+  const handleOdometerClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowOdometerPopup(prev => !prev);
+    // Reset auto-hide timer
+    if (popupTimeoutRef.current) {
+      clearTimeout(popupTimeoutRef.current);
+    }
+    popupTimeoutRef.current = setTimeout(() => {
+      setShowOdometerPopup(false);
+    }, 3000);
+  };
+
   return (
     <motion.div
+      ref={cardRef}
       onClick={handleCardClick}
       initial={{ scale: 0.98 }}
       animate={{ scale: isGroupSelected ? 1.0 : 0.98 }}
-      transition={{ type: "tween", duration: 0.3 }}
+      transition={{ type: "tween", duration: 0.2 }}
       className={`
         relative
         overflow-hidden
@@ -125,13 +195,17 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         text-black
         border border-gray-400
         shadow-md
-        transition-all
-        duration-300
+        transition-colors
         cursor-pointer
         ${isGroupSelected ? "ring-2 ring-white" : ""}
       `}
-      style={{ width: 260 }}
+      style={{
+        width: 260,
+        contain: "content",
+        willChange: isGroupSelected ? "transform" : "auto",
+      }}
     >
+      {/* Badge if user selected a car from this group */}
       {isGroupSelected && (
         <div className="absolute top-3 right-3 z-10">
           <div className="px-2 py-1 rounded-full bg-white text-black text-sm">
@@ -140,27 +214,26 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
         </div>
       )}
 
-      {/* 3D Viewer Container - aspect ratio to keep it wide */}
+      {/* 3D Viewer Container */}
       <div className="relative w-full aspect-[5/3]">
-        {isVisible && (
+        {shouldRender3D && isVisible ? (
           <Car3DViewer
             modelUrl={modelUrl}
             imageUrl={selectedCar?.image}
             interactive={isGroupSelected}
             height="100%"
             width="100%"
-            isVisible
+            isVisible={true}
           />
+        ) : (
+          <ViewerSkeleton />
         )}
       </div>
 
       {/* Content */}
       <div className="p-3">
         <div className="flex items-start justify-between">
-          {/* Car Model */}
           <p className="font-bold text-lg leading-tight">{selectedCar.model}</p>
-
-          {/* Car Selector */}
           <div
             className="flex flex-col items-end relative"
             onClick={(e) => e.stopPropagation()}
@@ -179,21 +252,14 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
         </div>
 
-        {/* Battery & Info Row */}
         <div className="flex items-center justify-between mt-1 relative">
           <div className="flex items-center gap-1">
             <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
             <span className="text-sm font-medium">{batteryPercentage}%</span>
           </div>
 
-          <div
-            className="flex items-center gap-1 text-sm text-gray-600"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Info
-              className="w-4 h-4 cursor-pointer"
-              onClick={() => setShowOdometerPopup(!showOdometerPopup)}
-            />
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <Info className="w-4 h-4 cursor-pointer" onClick={handleOdometerClick} />
             {showOdometerPopup && (
               <div className="absolute top-5 right-0 bg-white text-black text-xs px-2 py-1 rounded shadow-md">
                 Total distance driven: {selectedCar.odometer} km
@@ -203,14 +269,12 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
           </div>
         </div>
 
-        {/* Range / Mileage */}
         <div className="mt-2 flex items-center gap-2 text-gray-600">
           <Gauge className="w-4 h-4" />
-          <span className="text-sm">{mileageRemaining} km</span>
+          <span className="text-sm">{(batteryPercentage * 3.51).toFixed(1)} km</span>
         </div>
       </div>
 
-      {/* Last Driven Info */}
       {formattedLastDriven && (
         <div className="bg-gray-200 text-gray-700 text-xs px-4 py-2">
           Last driven on {formattedLastDriven}
@@ -220,14 +284,24 @@ function CarCardGroup({ group, isVisible = true }: CarCardGroupProps) {
   );
 }
 
-export default memo(CarCardGroup);
-
 function getDaySuffix(day: number): string {
   if (day >= 11 && day <= 13) return "th";
   switch (day % 10) {
-    case 1:  return "st";
-    case 2:  return "nd";
-    case 3:  return "rd";
-    default: return "th";
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
   }
 }
+
+export default memo(CarCardGroup, (prev, next) => {
+  return (
+    prev.isVisible === next.isVisible &&
+    prev.group.model === next.group.model &&
+    prev.group.cars.length === next.group.cars.length
+  );
+});

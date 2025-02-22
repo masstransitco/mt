@@ -1,14 +1,19 @@
-import React, { useMemo, useCallback, useState, useEffect } from "react";
+"use client";
+
+import React, { Suspense, useCallback, useState, useEffect } from "react";
 import { useAppSelector } from "@/store/store";
 import { selectAvailableForDispatch } from "@/store/carSlice";
 import dynamic from 'next/dynamic';
-import TopSheet from "@/components/ui/TopSheet";
+import Sheet from "@/components/ui/sheet";
 
-// Dynamic import for CarGrid with loading fallback
-const CarGrid = dynamic(() => import("@/components/booking/CarGrid"), {
-  loading: () => <div className="h-48 w-full animate-pulse bg-muted/50 rounded-lg"></div>,
-  ssr: false
-});
+// Dynamic import with loading state
+const CarGrid = dynamic(
+  () => import("@/components/booking/CarGrid"),
+  { 
+    ssr: false,
+    loading: () => <GridSkeleton />
+  }
+);
 
 interface CarSheetProps {
   isOpen: boolean;
@@ -17,56 +22,68 @@ interface CarSheetProps {
 }
 
 export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps) {
-  // Move the selector outside the effect - always call hooks at the top level
+  const [isContentVisible, setIsContentVisible] = useState(false);
   const availableCars = useAppSelector(selectAvailableForDispatch);
-  const [carCount, setCarCount] = useState<number>(0);
-  
-  // Update carCount when sheet is open or cars change
+
+  // Handle visibility with proper timing
   useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
     if (isOpen) {
-      setCarCount(availableCars.length);
+      timer = setTimeout(() => {
+        setIsContentVisible(true);
+      }, 300); // Wait for sheet animation
+    } else {
+      setIsContentVisible(false);
     }
-  }, [isOpen, availableCars]);
-  
-  // Memoize subtitle
-  const carsSubtitle = useMemo(() => 
-    carCount === 1 ? "1 car available" : `${carCount} cars available`,
-    [carCount]
-  );
-  
-  // Memoize handlers
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isOpen]);
+
   const handleDismiss = useCallback(() => {
-    if (onToggle) {
-      onToggle();
-    }
+    onToggle?.();
   }, [onToggle]);
-  
-  // Use passive event listeners for better scrolling performance
-  const preventPropagation = useCallback((e: React.SyntheticEvent) => {
-    e.stopPropagation();
-  }, []);
-  
-  // Only render grid content when sheet is open
-  const renderContent = isOpen && (
-    <div 
-      className="px-4 py-2"
-      onWheel={preventPropagation} 
-      onTouchMove={preventPropagation}
-      style={{ overscrollBehavior: 'contain' }}
-    >
-      <CarGrid />
-    </div>
-  );
-  
+
   return (
-    <TopSheet
+    <Sheet
       isOpen={isOpen}
       onDismiss={handleDismiss}
       title="Dispatch a car"
-      subtitle={carsSubtitle}
-      className={className}
+      subtitle="Select a vehicle to dispatch"
+      count={availableCars.length}
+      countLabel="available"
+      className="w-full max-w-none rounded-t-lg"
     >
-      {renderContent}
-    </TopSheet>
+      <div 
+        className="min-h-[50vh] max-h-[85vh] overflow-y-auto px-4 pb-safe"
+        style={{
+          overscrollBehavior: 'contain',
+        }}
+      >
+        <Suspense fallback={<GridSkeleton />}>
+          {isContentVisible && (
+            <CarGrid 
+              isVisible={isContentVisible}
+              className="pb-4" 
+            />
+          )}
+        </Suspense>
+      </div>
+    </Sheet>
   );
 }
+
+const GridSkeleton = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+    {[...Array(4)].map((_, i) => (
+      <div 
+        key={i} 
+        className="relative h-48 bg-neutral-200 rounded-lg overflow-hidden"
+      >
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200" />
+      </div>
+    ))}
+  </div>
+);
