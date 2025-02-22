@@ -132,7 +132,7 @@ const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
   const Icon = step === 1 ? Search : ArrowRightFromLine;
   return (
     <Icon
-      className={`w-5 h-5 ${highlight ? "text-black" : "text-black"} transition-colors`}
+      className={`w-5 h-5 ${highlight ? "text-zinc-800" : "text-zinc-700"} transition-colors`}
       style={{ marginLeft: "12px" }}
     />
   );
@@ -144,7 +144,7 @@ const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
   const Icon = step === 3 ? Search : ArrowRightToLine;
   return (
     <Icon
-      className={`w-5 h-5 ${highlight ? "text-black" : "text-black"} transition-colors`}
+      className={`w-5 h-5 ${highlight ? "text-zinc-800" : "text-zinc-700"} transition-colors`}
       style={{ marginLeft: "12px" }}
     />
   );
@@ -243,7 +243,7 @@ const AddressSearch = React.memo(
      return (
       <div className="flex-1">
         {isStationSelected ? (
-          <div className="px-1 py-1 text-black font-medium">
+          <div className="px-1 py-1 text-gray-700 font-medium">
             {selectedStation!.properties.Place}
           </div>
         ) : (
@@ -261,10 +261,11 @@ const AddressSearch = React.memo(
                 disabled={disabled}
                 placeholder={placeholder}
                 className="w-full
-                  bg-[#F2F2F7]
-                  text-black
+                  bg-zinc-200
+                  text-gray-700
                   border
                   border-gray-100
+                  backdrop-blur-md
                   rounded-md
                   focus:outline-none
                   focus:border-gray-400
@@ -440,9 +441,10 @@ function StationSelector({
     <div
       className="
         absolute top-[2px] left-5 right-5 z-10 
-        bg-zinc-950
+        bg-zinc-800/90
         rounded-md 
-        border 
+        backdrop-blur-md
+        border-0
         border-zinc-600
       "
       style={{ overscrollBehavior: "hidden", touchAction: "none" }}
@@ -460,7 +462,7 @@ function StationSelector({
         {/* DEPARTURE INPUT */}
         <div
           className={`
-            flex items-center gap-2 rounded-md transition-all duration-200 
+            flex items-center gap-2 rounded-xl transition-all duration-200 
             ${highlightDepartureClass}
           `}
         >
@@ -468,7 +470,7 @@ function StationSelector({
           <AddressSearch
             onAddressSelect={handleAddressSearch}
             disabled={step >= 3}
-            placeholder="  Search here"
+            placeholder="  Where from?"
             selectedStation={departureStation}
           />
           {departureStation && step <= 3 && (
@@ -477,7 +479,7 @@ function StationSelector({
               className="
                 p-1 hover:bg-gray-300 transition-colors 
                 flex-shrink-0 m-1 rounded-md 
-                text-black
+                text-zinc-400/80
               "
               type="button"
               aria-label="Clear departure"
@@ -491,7 +493,7 @@ function StationSelector({
         {step >= 3 && (
           <div
             className={`
-              flex items-center gap-2 rounded-md transition-all duration-200
+              flex items-center gap-2 rounded-xl transition-all duration-200
               ${highlightArrivalClass}
             `}
           >
@@ -508,7 +510,7 @@ function StationSelector({
                 className="
                   p-1 hover:bg-gray-300 transition-colors 
                   flex-shrink-0 m-1 rounded-md 
-                  text-black
+                  text-zinc-400/80
                 "
                 type="button"
                 aria-label="Clear arrival"
@@ -529,9 +531,9 @@ function StationSelector({
                 h-8
                 text-sm
                 font-medium
-                bg-sky-700
-                text-white
-                rounded-full
+                bg-blue-600/80
+                text-zinc-200
+                rounded-xl
                 hover:bg-blue-400
                 transition-colors
                 flex-1
@@ -550,8 +552,8 @@ function StationSelector({
                 w-8
                 h-8
                 text-slate-950
-                bg-gray-300
-                rounded-full
+                bg-zinc-200/80
+                rounded-xl
                 hover:bg-gray-300
                 hover:text-black
                 transition-colors
