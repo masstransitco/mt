@@ -1,4 +1,3 @@
-// src/hooks/useThreeOverlay.ts
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -8,44 +7,56 @@ import { StationFeature } from "@/store/stationsSlice";
 import { DISPATCH_HUB } from "@/constants/map";
 
 /**
- * Hook: useThreeOverlay
- * 
- * This hook sets up and tears down a Three.js overlay on top of a Google Map.
- * It draws:
- *   - A "Dispatch Cube" at the DISPATCH_HUB coords
- *   - Smaller "Station Cubes" at each station coordinate
- * It also updates the color of each Station Cube based on whether
- * it's the selected departure station (blue) or arrival station (red).
+ * Hook: useThreeOverlay (Optimized + TypeScript-friendly)
  *
- * Props:
- *   - googleMap: the Google Map instance to attach the overlay
- *   - stations: array of StationFeature objects
- *   - departureStationId: numeric ID of the selected departure station (or null)
- *   - arrivalStationId: numeric ID of the selected arrival station (or null)
+ * 1) Reuses a SINGLE BoxGeometry for all station cubes.
+ * 2) Reuses three Materials (grey, blue, red).
+ * 3) Creates a separate single geometry/material for the dispatch cube.
+ * 4) Removes large scaling to reduce potential confusion or overlap.
+ * 5) Cleans up gracefully when unmounted.
+ * 6) Uses typed Mesh generics to avoid casting.
  */
+
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
   stations: StationFeature[],
   departureStationId: number | null,
   arrivalStationId: number | null
 ) {
-  // References to the overlay, scene, and station cubes
+  // References to the overlay and scene
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const stationCubesRef = useRef<THREE.Mesh[]>([]);
 
+  // Keep track of station meshes (all BoxGeometry + MeshPhongMaterial)
+  const stationCubesRef = useRef<
+    THREE.Mesh<THREE.BoxGeometry, THREE.MeshPhongMaterial>[]
+  >([]);
+
+  // --- Refs for shared geometry and materials ---
+  const stationBoxGeoRef = useRef<THREE.BoxGeometry | null>(null);
+  const matGreyRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const matBlueRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null);
+
+  // Similarly for the dispatch cube
+  const dispatchBoxGeoRef = useRef<THREE.BoxGeometry | null>(null);
+  const dispatchMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+
+  // ------------------------------------------------------------------
+  // 1) Main effect to create the overlay & mesh objects
+  // ------------------------------------------------------------------
   useEffect(() => {
-    // 1) If no map or no stations, skip initialization
+    // If no map or no stations, skip creating the overlay
     if (!googleMap || stations.length === 0) return;
 
     console.log("[useThreeOverlay] Initializing Three.js overlay...");
 
-    // 2) Create a new Scene
+    // Create the Three.js scene
     const scene = new THREE.Scene();
     scene.background = null;
     sceneRef.current = scene;
 
-    // 3) Basic lighting
+    // Basic lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
     scene.add(ambientLight);
 
@@ -53,8 +64,7 @@ export function useThreeOverlay(
     directionalLight.position.set(0, 10, 50);
     scene.add(directionalLight);
 
-    // 4) Create the Overlay
-    //    We pass in the THREE module to the constructor
+    // Create the overlay
     const overlay = new ThreeJSOverlayView({
       map: googleMap,
       scene,
@@ -64,110 +74,164 @@ export function useThreeOverlay(
     });
     overlayRef.current = overlay;
 
-    // 5) Dispatch Cube (green)
-    const dispatchCubeGeo = new THREE.BoxGeometry(50, 50, 50);
-    const dispatchCubeMat = new THREE.MeshPhongMaterial({
-      color: 0x00ff00,
-      opacity: 0.8,
-      transparent: true,
-    });
-    const dispatchCube = new THREE.Mesh(dispatchCubeGeo, dispatchCubeMat);
+    // ----------------------------------
+    // Ensure shared geometry/materials
+    // ----------------------------------
+    if (!dispatchBoxGeoRef.current) {
+      dispatchBoxGeoRef.current = new THREE.BoxGeometry(50, 50, 50);
+    }
+    if (!dispatchMatRef.current) {
+      dispatchMatRef.current = new THREE.MeshPhongMaterial({
+        color: 0x00ff00, // green
+        opacity: 0.8,
+        transparent: true,
+      });
+    }
+    if (!stationBoxGeoRef.current) {
+      stationBoxGeoRef.current = new THREE.BoxGeometry(50, 50, 50);
+    }
+    if (!matGreyRef.current) {
+      matGreyRef.current = new THREE.MeshPhongMaterial({
+        color: 0xcccccc,
+        opacity: 0.8,
+        transparent: true,
+      });
+    }
+    if (!matBlueRef.current) {
+      matBlueRef.current = new THREE.MeshPhongMaterial({
+        color: 0x0000ff,
+        opacity: 0.8,
+        transparent: true,
+      });
+    }
+    if (!matRedRef.current) {
+      matRedRef.current = new THREE.MeshPhongMaterial({
+        color: 0xff0000,
+        opacity: 0.8,
+        transparent: true,
+      });
+    }
 
-    const dispatchCubePos = overlay.latLngAltitudeToVector3({
+    // ----------------------------------
+    // Create the "Dispatch Cube"
+    // ----------------------------------
+    const dispatchGeo = dispatchBoxGeoRef.current;
+    const dispatchMat = dispatchMatRef.current;
+
+    // Specify the geometry/material type generics to keep TS happy
+    const dispatchCube = new THREE.Mesh<
+      THREE.BoxGeometry,
+      THREE.MeshPhongMaterial
+    >(dispatchGeo!, dispatchMat!);
+
+    // Position the dispatch cube
+    const dispatchPos = overlay.latLngAltitudeToVector3({
       lat: DISPATCH_HUB.lat,
       lng: DISPATCH_HUB.lng,
       altitude: DISPATCH_HUB.altitude + 50,
     });
-    dispatchCube.position.copy(dispatchCubePos);
-    dispatchCube.scale.set(3, 3, 3);
+    dispatchCube.position.copy(dispatchPos);
+    dispatchCube.scale.set(1, 1, 1); // Optional: adjust scale as needed
+
     scene.add(dispatchCube);
 
-    // 6) Station Cubes (default grey)
-    const cubes: THREE.Mesh[] = [];
+    // ----------------------------------
+    // Create Station Cubes
+    // ----------------------------------
+    const cubes: THREE.Mesh<THREE.BoxGeometry, THREE.MeshPhongMaterial>[] = [];
+    const boxGeo = stationBoxGeoRef.current;
+    const greyMat = matGreyRef.current;
+
     stations.forEach((station) => {
       const [lng, lat] = station.geometry.coordinates;
-
-      // Convert lat/lng to a 3D position
-      const stationCubePos = overlay.latLngAltitudeToVector3({
+      const stationPos = overlay.latLngAltitudeToVector3({
         lat,
         lng,
         altitude: DISPATCH_HUB.altitude + 50,
       });
 
-      const stationCubeGeo = new THREE.BoxGeometry(50, 50, 50);
-      const stationCubeMat = new THREE.MeshPhongMaterial({
-        color: 0xcccccc, // default grey
-        opacity: 0.8,
-        transparent: true,
-      });
+      // Reuse the same geometry and the default grey material
+      const stationCube = new THREE.Mesh<
+        THREE.BoxGeometry,
+        THREE.MeshPhongMaterial
+      >(boxGeo!, greyMat!);
 
-      const stationCube = new THREE.Mesh(stationCubeGeo, stationCubeMat);
-      stationCube.position.copy(stationCubePos);
-      stationCube.scale.set(2.1, 2.1, 2.1);
+      stationCube.position.copy(stationPos);
+      stationCube.scale.set(1, 1, 1); // removed large scale
 
-      // Store station data for later reference (raycast, color updates)
+      // For raycasting or color updates
       stationCube.userData = { station };
 
       scene.add(stationCube);
       cubes.push(stationCube);
     });
+
     stationCubesRef.current = cubes;
 
-    // 7) Cleanup when stations/map changes or unmount
+    // ----------------------------------
+    // Cleanup on unmount or re-run
+    // ----------------------------------
     return () => {
       console.log("[useThreeOverlay] Cleaning up Three.js overlay...");
 
-      // Remove overlay from map
+      // Remove overlay from the map
       if (overlayRef.current) {
-        // @ts-ignore (overlay .setMap(null) is valid but not typed)
+        // @ts-ignore
         overlayRef.current.setMap(null);
         overlayRef.current = null;
       }
 
-      // Dispose geometry/material in the scene
+      // If you want to reuse the shared geometry/material, do NOT dispose them here,
+      // or be sure to re-initialize them next time. For now, we skip disposal:
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
-          obj.geometry.dispose();
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((mat) => mat.dispose());
-          } else if (obj.material instanceof THREE.Material) {
-            obj.material.dispose();
-          }
+          // If you prefer to recreate everything each time,
+          // you would dispose here, e.g.:
+          // obj.geometry.dispose();
+          // if (Array.isArray(obj.material)) {
+          //   obj.material.forEach((m) => m.dispose());
+          // } else {
+          //   obj.material.dispose();
+          // }
         }
       });
       scene.clear();
 
-      sceneRef.current = null;
       stationCubesRef.current = [];
+      sceneRef.current = null;
     };
   }, [googleMap, stations]);
 
-  // 8) Effect to update cube colours based on selected stations
+  // ------------------------------------------------------------------
+  // 2) Effect to update station cube colors if departure/arrival changes
+  // ------------------------------------------------------------------
   useEffect(() => {
-    if (!stationCubesRef.current || stationCubesRef.current.length === 0) return;
+    const blueMat = matBlueRef.current;
+    const redMat = matRedRef.current;
+    const greyMat = matGreyRef.current;
+
+    if (!stationCubesRef.current || stationCubesRef.current.length === 0) {
+      return;
+    }
 
     stationCubesRef.current.forEach((cube) => {
-      const station = cube.userData?.station;
+      const station = cube.userData?.station as StationFeature | undefined;
       if (!station) return;
 
-      // If this cube's station is the departure station, make it blue
       if (departureStationId !== null && station.id === departureStationId) {
-        (cube.material as THREE.MeshPhongMaterial).color.set(0x0000ff);
-      }
-      // If this cube's station is the arrival station, make it red
-      else if (arrivalStationId !== null && station.id === arrivalStationId) {
-        (cube.material as THREE.MeshPhongMaterial).color.set(0xff0000);
-      }
-      // Otherwise, revert to default grey
-      else {
-        (cube.material as THREE.MeshPhongMaterial).color.set(0xcccccc);
+        cube.material = blueMat!;
+      } else if (arrivalStationId !== null && station.id === arrivalStationId) {
+        cube.material = redMat!;
+      } else {
+        cube.material = greyMat!;
       }
     });
 
-    // Request a redraw so the new colors are visible
+    // Force redraw
     overlayRef.current?.requestRedraw();
   }, [departureStationId, arrivalStationId]);
 
+  // Return references if needed elsewhere
   return {
     overlayRef,
     sceneRef,
