@@ -53,10 +53,10 @@ export default function Page() {
         <header
           className="
             sticky top-0 z-50 
-            bg-neutral-300 
+            bg-zinc-950
             backdrop-blur-sm 
             border-b 
-            border-gray-400 
+            border-zinc-600
             h-[50px] 
             select-none
           "
@@ -65,7 +65,7 @@ export default function Page() {
             {/* Left: Logo */}
             <div className="flex items-center ml-2">
               <Image
-                src="/brand/logo_black.png"
+                src="/brand/logo.png"
                 alt="Logo"
                 width={50}
                 height={50}
@@ -81,7 +81,7 @@ export default function Page() {
                   flex items-center justify-center 
                   w-8 h-8 
                   rounded-full 
-                  text-black
+                  text-zinc-200
                   hover:text-gray-800
                   hover:bg-gray-200
                   active:bg-gray-100
@@ -92,7 +92,7 @@ export default function Page() {
               </button>
 
               {/* Divider */}
-              <div className="w-px h-6 bg-gray-500" />
+              <div className="w-px h-6 bg-zinc-800" />
 
               <button
                 onClick={toggleMenu}
@@ -100,7 +100,7 @@ export default function Page() {
                   flex items-center justify-center 
                   w-8 h-8 
                   rounded-full 
-                  text-black
+                  text-zinc-200
                   hover:text-gray-800
                   hover:bg-gray-200
                   active:bg-gray-100
