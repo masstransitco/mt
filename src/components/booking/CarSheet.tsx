@@ -57,7 +57,7 @@ export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps)
       className="w-full max-w-none rounded-t-lg"
     >
       <div 
-        className="min-h-[50vh] max-h-[85vh] overflow-y-auto px-4 pb-safe"
+        className="min-h-[30vh] max-h-[85vh] overflow-y-auto px-4 pb-safe"
         style={{
           overscrollBehavior: 'contain',
         }}
