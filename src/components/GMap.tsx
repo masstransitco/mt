@@ -8,7 +8,7 @@ import React, {
   memo,
   Suspense,
 } from "react";
-import { GoogleMap, Polyline, Marker, useJsApiLoader, MapMouseEvent, LatLngLiteral } from "@react-google-maps/api";
+import { GoogleMap, Polyline, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import * as THREE from "three";
 import dynamic from "next/dynamic";
@@ -113,7 +113,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Local State
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
-  const [searchLocation, setSearchLocation] = useState<LatLngLiteral | null>(null);
+  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
@@ -238,7 +238,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const mousePosition = new THREE.Vector2();
 
         // Add move listener
-        const moveListener = actualMap.addListener("mousemove", (ev: MapMouseEvent) => {
+        const moveListener = actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent;
           if (!domEvent || !(domEvent instanceof MouseEvent)) return;
           const { left, top, width, height } = mapDiv.getBoundingClientRect();
@@ -258,7 +258,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         };
 
         // Add click listener using our stable handleStationClick
-        const clickListener = actualMap.addListener("click", (ev: MapMouseEvent) => {
+        const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent;
           if (!domEvent || !(domEvent instanceof MouseEvent)) return;
           const { left, top, width, height } = mapDiv.getBoundingClientRect();
@@ -310,7 +310,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [departureStationId, stations, dispatch]);
 
   // Polyline decoding
-  const [decodedPath, setDecodedPath] = useState<LatLngLiteral[]>([]);
+  const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
       setDecodedPath([]);
@@ -320,7 +320,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedPath(path.map((latLng) => latLng.toJSON()));
   }, [route]);
 
-  const [decodedDispatchPath, setDecodedDispatchPath] = useState<LatLngLiteral[]>([]);
+  const [decodedDispatchPath, setDecodedDispatchPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!dispatchRoute?.polyline || !window.google?.maps?.geometry?.encoding) {
       setDecodedDispatchPath([]);
@@ -332,7 +332,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Station sorting
   const sortStationsByDistanceToPoint = useCallback(
-    (point: LatLngLiteral, stationsToSort: StationFeature[]) => {
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!window.google?.maps?.geometry?.spherical) return stationsToSort;
       const newStations = [...stationsToSort];
       return newStations.sort((a, b) => {
@@ -354,7 +354,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Address search handler
   const handleAddressSearch = useCallback(
-    (location: LatLngLiteral) => {
+    (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
       actualMap.panTo(location);
       actualMap.setZoom(15);
