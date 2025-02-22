@@ -13,7 +13,6 @@ import {
   Polyline,
   Marker,
   useJsApiLoader,
-  LatLngLiteral,
 } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import * as THREE from "three";
@@ -116,10 +115,10 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
-  // Local State
+  // Local State (using global types from google.maps)
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
-  const [searchLocation, setSearchLocation] = useState<LatLngLiteral | null>(null);
+  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
@@ -158,16 +157,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // --- Use a ref for the current booking step so our event handlers remain stable ---
+  // --- Use a ref for the current booking step ---
   const bookingStepRef = useRef(bookingStep);
   useEffect(() => {
     bookingStepRef.current = bookingStep;
   }, [bookingStep]);
 
-  // --- Unified station selection using the ref ---
+  // --- Unified Station Selection ---
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      // Use bookingStepRef.current to get the latest value
+      // Use bookingStepRef.current to get the latest booking step
       if (bookingStepRef.current === 1) {
         dispatch(selectDepartureStation(station.id));
         dispatch(advanceBookingStep(2));
@@ -193,15 +192,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  // Map click handler
+  // --- Map and List Handlers ---
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       handleStationSelection(station);
     },
     [handleStationSelection]
   );
-
-  // List selection handler
   const handleStationSelectedFromList = useCallback(
     (station: StationFeature) => {
       handleStationSelection(station);
@@ -209,7 +206,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [handleStationSelection]
   );
 
-  // Effects / Data Fetch
+  // --- Effects / Data Fetch ---
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -242,7 +239,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   useEffect(() => {
     if (!overlayRef.current || !stationCubesRef.current || !actualMap) return;
 
-    // Poll for overlay readiness only once
+    // Poll once for overlay readiness
     const intervalId = setInterval(() => {
       const overlayAny = overlayRef.current as any;
       if (overlayAny?.renderer && overlayAny?.camera) {
@@ -251,7 +248,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const mapDiv = actualMap.getDiv();
         const mousePosition = new THREE.Vector2();
 
-        // Add a mousemove listener
+        // Attach a stable mousemove listener
         const moveListener = actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent;
           if (!domEvent || !(domEvent instanceof MouseEvent)) return;
@@ -263,16 +260,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
           overlayAny.requestRedraw();
         });
 
-        // Preserve old onBeforeDraw to restore on cleanup
         const oldBeforeDraw = overlayAny.onBeforeDraw;
         overlayAny.onBeforeDraw = () => {
-          const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, { recursive: true });
+          const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, {
+            recursive: true,
+          });
           if (intersections.length === 0) {
             actualMap.setOptions({ draggableCursor: null });
           }
         };
 
-        // Add a click listener that uses our stable handleStationClick
+        // Attach a single click listener using our stable handleStationClick
         const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent;
           if (!domEvent || !(domEvent instanceof MouseEvent)) return;
@@ -291,7 +289,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           }
         });
 
-        // Cleanup: remove listeners and restore onBeforeDraw
         return () => {
           google.maps.event.removeListener(moveListener);
           google.maps.event.removeListener(clickListener);
@@ -326,7 +323,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [departureStationId, stations, dispatch]);
 
   // --- Polyline Decoding ---
-  const [decodedPath, setDecodedPath] = useState<LatLngLiteral[]>([]);
+  const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
       setDecodedPath([]);
@@ -336,7 +333,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedPath(path.map((latLng) => latLng.toJSON()));
   }, [route]);
 
-  const [decodedDispatchPath, setDecodedDispatchPath] = useState<LatLngLiteral[]>([]);
+  const [decodedDispatchPath, setDecodedDispatchPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!dispatchRoute?.polyline || !window.google?.maps?.geometry?.encoding) {
       setDecodedDispatchPath([]);
@@ -348,7 +345,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // --- Station Sorting ---
   const sortStationsByDistanceToPoint = useCallback(
-    (point: LatLngLiteral, stationsToSort: StationFeature[]) => {
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!window.google?.maps?.geometry?.spherical) return stationsToSort;
       const newStations = [...stationsToSort];
       return newStations.sort((a, b) => {
@@ -369,7 +366,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   const handleAddressSearch = useCallback(
-    (location: LatLngLiteral) => {
+    (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
       actualMap.panTo(location);
       actualMap.setZoom(15);
@@ -458,9 +455,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --- Derived State ---
   const hasError = stationsError || carsError || loadError;
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
-  const stationToShow = hasStationSelected
-    ? stations.find((s) => s.id === hasStationSelected)
-    : null;
+  const stationToShow = hasStationSelected ? stations.find((s) => s.id === hasStationSelected) : null;
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -477,9 +472,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </div>
         </div>
       )}
-
       {!hasError && overlayVisible && <LoadingSpinner />}
-
       {!hasError && !overlayVisible && (
         <>
           <div className="absolute inset-0">
@@ -513,7 +506,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   />
                 </>
               )}
-
               {/* Departure→Arrival polylines */}
               {decodedPath.length > 0 && (
                 <>
@@ -527,7 +519,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   />
                 </>
               )}
-
               {/* Car Markers */}
               <CarMarkers
                 cars={cars.map((c) => ({
