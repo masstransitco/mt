@@ -404,6 +404,7 @@ function StationSelector({
           border-zinc-600
           shadow-md
         "
+        style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
         {/* Same-station error */}
         {departureId && arrivalId && departureId === arrivalId && (
