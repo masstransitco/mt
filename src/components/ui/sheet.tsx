@@ -287,7 +287,7 @@ export default function Sheet({
               {SheetHeader}
               <div
                 ref={contentRef}
-                className="px-4 pt-2 pb-6 max-h-[80vh] overflow-y-auto"
+                className="px-4 pt-2 pb-6 max-h-[45vh] overflow-y-auto"
               >
                 {children}
               </div>
