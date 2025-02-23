@@ -52,13 +52,10 @@ import { fetchStations3D, selectStations3D } from "@/store/stations3DSlice";
 import {
   fetchDispatchDirections,
   clearDispatchRoute,
-  // Normal route selector (raw encoded):
   selectDispatchRoute,
-  // Memoized decoded route selector:
   selectDispatchRouteDecoded,
 } from "@/store/dispatchSlice";
-// If you have a memoized selector for booking route decode:
-import { selectRouteDecoded } from "@/store/bookingSlice"; // <-- you need to define this
+import { selectRouteDecoded } from "@/store/bookingSlice"; // If your memoized route decode is here
 
 // UI Components
 import Sheet from "@/components/ui/sheet";
@@ -116,7 +113,7 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
-  // Local State
+  // --- Local States ---
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
@@ -129,7 +126,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [detailKey, setDetailKey] = useState(0);
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
-  // Redux State
+  // --- Redux States ---
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
@@ -142,11 +139,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
 
-  // The raw route from booking slice (if you still need it)
-  // import { selectRoute } from "@/store/bookingSlice";
-  // const route = useAppSelector(selectRoute);
-
-  // **Decoded** route from booking slice (memoized):
+  // Booking route decode
   const decodedPath = useAppSelector(selectRouteDecoded);
 
   // Dispatch route (raw + decoded)
@@ -161,13 +154,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // 3D overlay
-  const { overlayRef, stationCubesRef } = useThreeOverlay(
-    actualMap,
-    stations,
-    departureStationId,
-    arrivalStationId
-  );
+  // 3D overlay (InstancedMesh-based)
+  const {
+    overlayRef,
+    stationIndexMapsRef,
+    greyInstancedMeshRef,
+    blueInstancedMeshRef,
+    redInstancedMeshRef,
+  } = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId);
 
   // Keep booking step in a ref to prevent stale closures
   const bookingStepRef = useRef(bookingStep);
@@ -205,12 +199,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  const handleStationClick = useCallback(
-    (station: StationFeature) => {
-      handleStationSelection(station);
-    },
-    [handleStationSelection]
-  );
   const handleStationSelectedFromList = useCallback(
     (station: StationFeature) => {
       handleStationSelection(station);
@@ -219,7 +207,84 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   // --------------------------
-  // Load icons / options
+  // Raycast on map click for station picking
+  // --------------------------
+  useEffect(() => {
+    if (!actualMap || !overlayRef.current) return;
+
+    // Setup a single click listener
+    const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
+      const overlayAny = overlayRef.current as any;
+      // If there's no .raycast method or no camera/scene yet, skip
+      if (!overlayAny?.raycast || !overlayAny?.camera) return;
+
+      const domEvent = ev.domEvent;
+      if (!domEvent || !(domEvent instanceof MouseEvent)) return;
+
+      // Convert the click to normalized device coords
+      const mapDiv = actualMap.getDiv();
+      const { left, top, width, height } = mapDiv.getBoundingClientRect();
+      const mouseX = domEvent.clientX - left;
+      const mouseY = domEvent.clientY - top;
+      const mouseVec = new THREE.Vector2(
+        (2 * mouseX) / width - 1,
+        1 - (2 * mouseY) / height
+      );
+
+      // Build array of InstancedMesh objects to test
+      const objectsToTest: THREE.Object3D[] = [];
+      if (greyInstancedMeshRef.current) objectsToTest.push(greyInstancedMeshRef.current);
+      if (blueInstancedMeshRef.current) objectsToTest.push(blueInstancedMeshRef.current);
+      if (redInstancedMeshRef.current) objectsToTest.push(redInstancedMeshRef.current);
+
+      // Perform the raycast
+      const intersections = overlayAny.raycast(mouseVec, objectsToTest, {
+        recursive: false,
+      });
+
+      if (intersections.length > 0) {
+        const intersect = intersections[0];
+        const meshHit = intersect.object as THREE.InstancedMesh;
+        const instanceId = intersect.instanceId;
+
+        if (instanceId != null) {
+          let stationId: number | undefined;
+          if (meshHit === greyInstancedMeshRef.current) {
+            stationId = stationIndexMapsRef.current.grey[instanceId];
+          } else if (meshHit === blueInstancedMeshRef.current) {
+            stationId = stationIndexMapsRef.current.blue[instanceId];
+          } else if (meshHit === redInstancedMeshRef.current) {
+            stationId = stationIndexMapsRef.current.red[instanceId];
+          }
+
+          if (stationId !== undefined) {
+            const stationClicked = stations.find((s) => s.id === stationId);
+            if (stationClicked) {
+              // This calls our normal station selection logic
+              handleStationSelection(stationClicked);
+              ev.stop(); // Prevent map from ignoring
+            }
+          }
+        }
+      }
+    });
+
+    return () => {
+      google.maps.event.removeListener(clickListener);
+    };
+  }, [
+    actualMap,
+    overlayRef,
+    greyInstancedMeshRef,
+    blueInstancedMeshRef,
+    redInstancedMeshRef,
+    stationIndexMapsRef,
+    stations,
+    handleStationSelection,
+  ]);
+
+  // --------------------------
+  // Load icons / map options
   // --------------------------
   useEffect(() => {
     if (isLoaded && window.google) {
@@ -253,77 +318,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [isLoaded, stationsLoading, carsLoading]);
 
   // --------------------------
-  // 3D Overlay Setup
-  // --------------------------
-  useEffect(() => {
-    if (!overlayRef.current || !stationCubesRef.current || !actualMap) return;
-
-    // Poll until overlay is ready
-    const intervalId = setInterval(() => {
-      const overlayAny = overlayRef.current as any;
-      if (overlayAny?.renderer && overlayAny?.camera) {
-        clearInterval(intervalId);
-
-        const mapDiv = actualMap.getDiv();
-        const mousePosition = new THREE.Vector2();
-
-        // Mouse move
-        const moveListener = actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
-          const domEvent = ev.domEvent;
-          if (!domEvent || !(domEvent instanceof MouseEvent)) return;
-          const { left, top, width, height } = mapDiv.getBoundingClientRect();
-          const mouseX = domEvent.clientX - left;
-          const mouseY = domEvent.clientY - top;
-          mousePosition.x = (2 * mouseX) / width - 1;
-          mousePosition.y = 1 - (2 * mouseY) / height;
-          overlayAny.requestRedraw();
-        });
-
-        // onBeforeDraw override
-        const oldBeforeDraw = overlayAny.onBeforeDraw;
-        overlayAny.onBeforeDraw = () => {
-          const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, {
-            recursive: true,
-          });
-          if (intersections.length === 0) {
-            actualMap.setOptions({ draggableCursor: null });
-          }
-        };
-
-        // Single click
-        const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
-          const domEvent = ev.domEvent;
-          if (!domEvent || !(domEvent instanceof MouseEvent)) return;
-          const { left, top, width, height } = mapDiv.getBoundingClientRect();
-          const mouseX = domEvent.clientX - left;
-          const mouseY = domEvent.clientY - top;
-          mousePosition.x = (2 * mouseX) / width - 1;
-          mousePosition.y = 1 - (2 * mouseY) / height;
-          const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, {
-            recursive: true,
-          });
-          if (intersections.length > 0) {
-            const clickedStation = intersections[0].object.userData.station;
-            if (clickedStation) {
-              handleStationClick(clickedStation);
-              ev.stop();
-            }
-          }
-        });
-
-        return () => {
-          google.maps.event.removeListener(moveListener);
-          google.maps.event.removeListener(clickListener);
-          overlayAny.onBeforeDraw = oldBeforeDraw;
-        };
-      }
-    }, 300);
-
-    return () => clearInterval(intervalId);
-  }, [overlayRef, stationCubesRef, actualMap, handleStationClick]);
-
-  // --------------------------
-  // Booking routes
+  // Booking route logic
   // --------------------------
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
@@ -475,7 +470,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   const hasError = stationsError || carsError || loadError;
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
-  const stationToShow = hasStationSelected ? stations.find((s) => s.id === hasStationSelected) : null;
+  const stationToShow = hasStationSelected
+    ? stations.find((s) => s.id === hasStationSelected)
+    : null;
 
   // --------------------------
   // Render
@@ -500,6 +497,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       {!hasError && !overlayVisible && (
         <>
+          {/* The GoogleMap container */}
           <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -583,8 +581,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   data={{
                     items: sortedStations,
                     onStationSelected: handleStationSelectedFromList,
-
-                    // Pass these so the StationListItem doesn't do Redux lookups directly:
                     departureId: departureStationId,
                     arrivalId: arrivalStationId,
                     dispatchRoute: dispatchRoute,
