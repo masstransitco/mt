@@ -115,7 +115,7 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
-  // Local State (using global types from google.maps)
+  // Local State
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
@@ -157,16 +157,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
     arrivalStationId
   );
 
-  // --- Use a ref for the current booking step ---
+  // --- Keep booking step in a ref to prevent stale closures
   const bookingStepRef = useRef(bookingStep);
   useEffect(() => {
     bookingStepRef.current = bookingStep;
   }, [bookingStep]);
 
-  // --- Unified Station Selection ---
+  // --- Station selection logic
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      // Use bookingStepRef.current to get the latest booking step
       if (bookingStepRef.current === 1) {
         dispatch(selectDepartureStation(station.id));
         dispatch(advanceBookingStep(2));
@@ -192,7 +191,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [dispatch]
   );
 
-  // --- Map and List Handlers ---
   const handleStationClick = useCallback(
     (station: StationFeature) => {
       handleStationSelection(station);
@@ -206,7 +204,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [handleStationSelection]
   );
 
-  // --- Effects / Data Fetch ---
+  // --- Load icons / options
   useEffect(() => {
     if (isLoaded && window.google) {
       setMapOptions(createMapOptions());
@@ -214,6 +212,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
+  // --- Fetch data
   useEffect(() => {
     (async () => {
       try {
@@ -235,11 +234,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, stationsLoading, carsLoading]);
 
-  // --- 3D Overlay / Raycasting Effect ---
+  // --- 3D Overlay
   useEffect(() => {
     if (!overlayRef.current || !stationCubesRef.current || !actualMap) return;
 
-    // Poll once for overlay readiness
+    // Poll until overlay is ready
     const intervalId = setInterval(() => {
       const overlayAny = overlayRef.current as any;
       if (overlayAny?.renderer && overlayAny?.camera) {
@@ -248,7 +247,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const mapDiv = actualMap.getDiv();
         const mousePosition = new THREE.Vector2();
 
-        // Attach a stable mousemove listener
+        // Mouse move
         const moveListener = actualMap.addListener("mousemove", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent;
           if (!domEvent || !(domEvent instanceof MouseEvent)) return;
@@ -260,6 +259,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           overlayAny.requestRedraw();
         });
 
+        // onBeforeDraw
         const oldBeforeDraw = overlayAny.onBeforeDraw;
         overlayAny.onBeforeDraw = () => {
           const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, {
@@ -270,7 +270,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           }
         };
 
-        // Attach a single click listener using our stable handleStationClick
+        // Single click
         const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
           const domEvent = ev.domEvent;
           if (!domEvent || !(domEvent instanceof MouseEvent)) return;
@@ -279,7 +279,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
           const mouseY = domEvent.clientY - top;
           mousePosition.x = (2 * mouseX) / width - 1;
           mousePosition.y = 1 - (2 * mouseY) / height;
-          const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, { recursive: true });
+          const intersections = overlayAny.raycast(mousePosition, stationCubesRef.current, {
+            recursive: true,
+          });
           if (intersections.length > 0) {
             const clickedStation = intersections[0].object.userData.station;
             if (clickedStation) {
@@ -298,9 +300,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }, 300);
 
     return () => clearInterval(intervalId);
-  }, [overlayRef, stationCubesRef, actualMap]); // no dependency on handleStationClick
+  }, [overlayRef, stationCubesRef, actualMap, handleStationClick]);
 
-  // --- Booking + Dispatch Routes ---
+  // --- Booking routes
   useEffect(() => {
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
@@ -322,7 +324,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, stations, dispatch]);
 
-  // --- Polyline Decoding ---
+  // --- Decode route polylines
   const [decodedPath, setDecodedPath] = useState<google.maps.LatLngLiteral[]>([]);
   useEffect(() => {
     if (!route?.polyline || !window.google?.maps?.geometry?.encoding) {
@@ -343,7 +345,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setDecodedDispatchPath(path.map((latLng) => latLng.toJSON()));
   }, [dispatchRoute]);
 
-  // --- Station Sorting ---
+  // --- Sort stations
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!window.google?.maps?.geometry?.spherical) return stationsToSort;
@@ -370,9 +372,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
       if (!actualMap) return;
       actualMap.panTo(location);
       actualMap.setZoom(15);
+
       const sorted = sortStationsByDistanceToPoint(location, stations);
       setSearchLocation(location);
       setSortedStations(sorted);
+
       if (openSheet !== "list") {
         setPreviousSheet(openSheet);
         setOpenSheet("list");
@@ -381,7 +385,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [actualMap, stations, openSheet, sortStationsByDistanceToPoint]
   );
 
-  // --- Clear Station Logic ---
+  // --- Clear station logic
   const handleClearDepartureInSelector = () => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
@@ -452,7 +456,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     );
   };
 
-  // --- Derived State ---
+  // --- Derived State
   const hasError = stationsError || carsError || loadError;
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected ? stations.find((s) => s.id === hasStationSelected) : null;
@@ -493,7 +497,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 }
               }}
             >
-              {/* DispatchHub→Departure polylines */}
+              {/* Dispatch polyline (hub -> departure) */}
               {decodedDispatchPath.length > 0 && (
                 <>
                   <Polyline
@@ -506,7 +510,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   />
                 </>
               )}
-              {/* Departure→Arrival polylines */}
+              {/* Main route (departure -> arrival) */}
               {decodedPath.length > 0 && (
                 <>
                   <Polyline
@@ -519,7 +523,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   />
                 </>
               )}
-              {/* Car Markers */}
+              {/* Car markers */}
               <CarMarkers
                 cars={cars.map((c) => ({
                   id: c.id,
@@ -555,6 +559,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
                   data={{
                     items: sortedStations,
                     onStationSelected: handleStationSelectedFromList,
+
+                    // Pass these so the StationListItem doesn't do Redux lookups:
+                    departureId: departureStationId,
+                    arrivalId: arrivalStationId,
+                    dispatchRoute: dispatchRoute,
                   }}
                 />
               ))}
