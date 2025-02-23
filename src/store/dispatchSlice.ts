@@ -1,6 +1,11 @@
 // src/store/dispatchSlice.ts
 
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  createAsyncThunk,
+  PayloadAction,
+  createSelector,
+} from "@reduxjs/toolkit";
 import type { RootState } from "./store";
 import { DISPATCH_HUB } from "@/constants/map";
 import { StationFeature } from "@/store/stationsSlice";
@@ -192,3 +197,30 @@ export const selectDispatchRouteError = (state: RootState) => state.dispatch.rou
 
 /** The open sheet state */
 export const selectOpenSheet = (state: RootState) => state.dispatch.openSheet;
+
+/* --------------------------------------------------------------
+   Memoized selector to decode the dispatch route polyline (if any)
+   -------------------------------------------------------------- */
+
+/**
+ * Decodes the polyline into an array of { lat, lng } objects
+ * only when route2.polyline changes (via Reselect memoization).
+ */
+export const selectDispatchRouteDecoded = createSelector(
+  [selectDispatchRoute],
+  (route) => {
+    if (!route || !route.polyline) return [];
+
+    // Make sure the Google Maps geometry library is available
+    if (!window.google?.maps?.geometry?.encoding) {
+      return [];
+    }
+
+    const decodedPath = window.google.maps.geometry.encoding.decodePath(
+      route.polyline
+    );
+
+    // Map each LatLng to a plain object { lat, lng }
+    return decodedPath.map((latLng) => latLng.toJSON());
+  }
+);

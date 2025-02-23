@@ -1,67 +1,65 @@
 // src/store/bookingSlice.ts
 "use client";
 
-import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
 import { StationFeature } from "./stationsSlice";
 
 /** The user’s chosen ticket plan. */
 type TicketPlan = "single" | "paygo" | null;
 
+/** Defines the route information between two stations. */
 interface RouteInfo {
-  /** distance in meters */
+  /** Distance in meters. */
   distance: number;
-  /** duration in seconds */
+  /** Duration in seconds. */
   duration: number;
-  /** The encoded polyline for the route (optional) */
+  /** The encoded polyline for the route. */
   polyline: string;
 }
 
+/** The overall state for booking. */
 export interface BookingState {
   /**
-   * The numerical step we’re on.
-   *  1 = selecting_departure_station
-   *  2 = selected_departure_station
-   *  3 = selecting_arrival_station
-   *  4 = selected_arrival_station
-   *  5 = payment
-   *  6 = finalizing
+   * The numerical step we’re on (1 → n).
+   * 1 = selecting_departure_station
+   * 2 = selected_departure_station
+   * 3 = selecting_arrival_station
+   * 4 = selected_arrival_station
+   * 5 = payment
+   * 6 = finalizing
    */
   step: number;
-  /** A string name for the current step (useful for debugging or UI conditions). */
+
+  /** A string name for the current step (for UI logic). */
   stepName: string;
-  /** An optional date field if you want the user to pick a departure date/time. */
+
+  /** Optional date/time the user plans to depart. */
   departureDate: Date | null;
-  /** An optional route object that stores distance, duration, etc. */
+
+  /** The route object (distance, duration, encoded polyline). */
   route: RouteInfo | null;
-  /** 'idle' | 'loading' | 'succeeded' | 'failed' */
+  /** 'idle' | 'loading' | 'succeeded' | 'failed'. */
   routeStatus: string;
-  /** Error message (if any) from route fetching. */
+  /** Error message (if any) for route fetching. */
   routeError: string | null;
 
-  /**
-   * The user’s selected ticket plan: 'single' or 'paygo' (or null if not chosen).
-   */
+  /** The user’s selected ticket plan, or null if not chosen. */
   ticketPlan: TicketPlan;
 
-  /**
-   * Moved from userSlice:
-   * Numeric station IDs for departure/arrival
-   */
+  /** Numeric station IDs for departure/arrival. */
   departureStationId: number | null;
   arrivalStationId: number | null;
 }
 
 /**
- * Thunk: fetchRoute
- * Uses Google Maps DirectionsService to fetch driving route
- * between two StationFeatures. If the call succeeds, we store
- * distance/duration/polyline in booking state.
+ * Thunk to fetch a route between two stations using the Google Maps API.
+ * On success, returns { distance, duration, polyline }.
  */
 export const fetchRoute = createAsyncThunk<
-  RouteInfo, // Return type of fulfilled action
-  { departure: StationFeature; arrival: StationFeature }, // Thunk argument
-  { rejectValue: string } // Rejected action payload
+  RouteInfo, // Return type
+  { departure: StationFeature; arrival: StationFeature }, // Args
+  { rejectValue: string } // Rejected payload
 >(
   "booking/fetchRoute",
   async ({ departure, arrival }, { rejectWithValue }) => {
@@ -70,7 +68,6 @@ export const fetchRoute = createAsyncThunk<
     }
     try {
       const directionsService = new google.maps.DirectionsService();
-
       const [depLng, depLat] = departure.geometry.coordinates;
       const [arrLng, arrLat] = arrival.geometry.coordinates;
 
@@ -81,19 +78,18 @@ export const fetchRoute = createAsyncThunk<
       };
 
       const response = await directionsService.route(request);
-
-      if (!response || !response.routes || !response.routes[0]) {
+      if (!response || !response.routes?.[0]) {
         return rejectWithValue("No route found");
       }
 
       const route = response.routes[0];
       const leg = route.legs?.[0];
-      if (!leg || !leg.distance || !leg.duration) {
+      if (!leg?.distance?.value || !leg?.duration?.value) {
         return rejectWithValue("Incomplete route data");
       }
 
-      const distance = leg.distance.value; // meters
-      const duration = leg.duration.value; // seconds
+      const distance = leg.distance.value;
+      const duration = leg.duration.value;
       const polyline = route.overview_polyline || "";
 
       return { distance, duration, polyline };
@@ -104,6 +100,7 @@ export const fetchRoute = createAsyncThunk<
   }
 );
 
+/** Initial booking state. */
 const initialState: BookingState = {
   step: 1,
   stepName: "selecting_departure_station",
@@ -113,7 +110,7 @@ const initialState: BookingState = {
   routeError: null,
   ticketPlan: null,
 
-  // Moved station IDs here
+  // Station IDs
   departureStationId: null,
   arrivalStationId: null,
 };
@@ -130,8 +127,8 @@ export const bookingSlice = createSlice({
     },
 
     /**
-     * Force-advances the booking flow to a specified step and sets the corresponding stepName.
-     * (Useful if you have an override or a button that explicitly sets step.)
+     * Advances or sets the booking flow to a specific step number
+     * (and updates stepName accordingly).
      */
     advanceBookingStep: (state, action: PayloadAction<number>) => {
       state.step = action.payload;
@@ -162,70 +159,63 @@ export const bookingSlice = createSlice({
     },
 
     /**
-     * Select a departure station (step 1 → 2).
-     * If step is already beyond 2, do nothing or show a warning (strict linear flow).
+     * Select or re-select a departure station.
+     * If step is 1, jump to step 2.
      */
     selectDepartureStation: (state, action: PayloadAction<number>) => {
-      // Only allow if step <= 2 (strict linear)
+      // Only allow if step <= 2 (linear flow)
       if (state.step <= 2) {
         state.departureStationId = action.payload;
-        // If step was 1, move to step 2
         if (state.step === 1) {
           state.step = 2;
           state.stepName = "selected_departure_station";
         }
       }
-      // else optionally show a toast in UI or do nothing
     },
 
     /**
-     * Clear departure station (returns to step 1).
+     * Clears the departure station, resetting to step 1.
      */
     clearDepartureStation: (state) => {
       state.departureStationId = null;
       state.step = 1;
       state.stepName = "selecting_departure_station";
-      // Potentially clear the route if it depends on departure
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
     },
 
     /**
-     * Select arrival station (step 3 → 4).
-     * Only allow if step >= 3 and step <= 4 (strict linear).
+     * Select or re-select an arrival station.
+     * If step is 3, jump to step 4.
      */
     selectArrivalStation: (state, action: PayloadAction<number>) => {
       // Only allow if step in [3, 4]
       if (state.step >= 3 && state.step <= 4) {
         state.arrivalStationId = action.payload;
-        // If step was 3, move to step 4
         if (state.step === 3) {
           state.step = 4;
           state.stepName = "selected_arrival_station";
         }
       }
-      // else optionally show a warning
     },
 
     /**
-     * Clear arrival station (returns to step 3 if user had selected an arrival).
+     * Clears the arrival station, returning to step 3 if needed.
      */
     clearArrivalStation: (state) => {
       state.arrivalStationId = null;
-      // Revert to step 3 if we were in step 4
       if (state.step >= 3) {
         state.step = 3;
         state.stepName = "selecting_arrival_station";
       }
-      // Clear route
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
     },
 
     /**
-     * Resets the entire booking flow to its initial state.
+     * Resets the entire booking process (back to step 1).
      */
     resetBookingFlow: (state) => {
       state.step = 1;
@@ -240,14 +230,14 @@ export const bookingSlice = createSlice({
     },
 
     /**
-     * Sets the user's chosen ticket plan (e.g., 'single' or 'paygo').
+     * Sets the user's chosen ticket plan (e.g. 'single' or 'paygo').
      */
     setTicketPlan: (state, action: PayloadAction<TicketPlan>) => {
       state.ticketPlan = action.payload;
     },
 
     /**
-     * Clears the route data so no polyline is rendered.
+     * Clears route data from state so no polyline is shown.
      */
     clearRoute: (state) => {
       state.route = null;
@@ -256,7 +246,7 @@ export const bookingSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // fetchRoute
+    // fetchRoute handling
     builder
       .addCase(fetchRoute.pending, (state) => {
         state.routeStatus = "loading";
@@ -291,19 +281,39 @@ export const {
 // Export the reducer
 export default bookingSlice.reducer;
 
-/* --------------------------- Selectors --------------------------- */
+/* ------------------------- Selectors ------------------------- */
+
+/** Step & stepName */
 export const selectBookingStep = (state: RootState) => state.booking.step;
 export const selectBookingStepName = (state: RootState) => state.booking.stepName;
+
+/** Departure date/time */
 export const selectDepartureDate = (state: RootState) => state.booking.departureDate;
 
-/** Route selectors */
+/** The raw route object (encoded polyline, distance, etc.) */
 export const selectRoute = (state: RootState) => state.booking.route;
 export const selectRouteStatus = (state: RootState) => state.booking.routeStatus;
 export const selectRouteError = (state: RootState) => state.booking.routeError;
 
-/** Ticket plan selector */
+/** Ticket plan */
 export const selectTicketPlan = (state: RootState) => state.booking.ticketPlan;
 
 /** Station IDs */
 export const selectDepartureStationId = (state: RootState) => state.booking.departureStationId;
 export const selectArrivalStationId = (state: RootState) => state.booking.arrivalStationId;
+
+/* --------------------------------------------------------------
+   Memoized selector to decode the route polyline (if any)
+   -------------------------------------------------------------- */
+export const selectRouteDecoded = createSelector(
+  [selectRoute],
+  (route) => {
+    if (!route || !route.polyline) return [];
+
+    // Ensure the Google Maps geometry library is loaded
+    if (!window.google?.maps?.geometry?.encoding) return [];
+
+    const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline);
+    return decodedPath.map((latLng) => latLng.toJSON());
+  }
+);
