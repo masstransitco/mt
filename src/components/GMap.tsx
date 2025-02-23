@@ -64,7 +64,7 @@ import Sheet from "@/components/ui/sheet";
 import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import StationDetail from "./StationDetail";
-import { StationListItem } from "./StationListItem";
+import StationList from "./StationList";
 
 // Map / 3D constants & hooks
 import {
@@ -552,20 +552,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
           >
             <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
               {sortedStations.map((station, idx) => (
-                <StationListItem
-                  key={station.id}
-                  index={idx}
-                  style={{}}
-                  data={{
-                    items: sortedStations,
-                    onStationSelected: handleStationSelectedFromList,
-
-                    // Pass these so the StationListItem doesn't do Redux lookups:
-                    departureId: departureStationId,
-                    arrivalId: arrivalStationId,
-                    dispatchRoute: dispatchRoute,
-                  }}
-                />
+                <StationList
+                // if you still have a callback you want:
+                onStationSelected={handleStationSelectedFromList}
+              />
               ))}
             </div>
           </Sheet>
