@@ -22,6 +22,7 @@ export interface StationFeature {
     coordinates: [number, number]; // [longitude, latitude]
   };
   properties: {
+    walkTime: number | undefined;
     Place: string;
     Address: string;
     maxPower: number;
