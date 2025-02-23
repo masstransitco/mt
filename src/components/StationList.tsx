@@ -1,79 +1,82 @@
 "use client";
 
-import React, { memo, useCallback, useMemo, useState } from "react";
+import React, { memo, useCallback } from "react";
 import { FixedSizeList as List, ListOnItemsRenderedProps } from "react-window";
 import {
   InfiniteLoader,
   InfiniteLoaderChildProps,
 } from "react-window-infinite-loader";
+import { useAppSelector, useAppDispatch } from "@/store/store";
 
-import { useAppSelector } from "@/store/store";
+import {
+  selectListStationsWithDistance,
+  selectHasMoreStations,
+  loadNextStationsPage,
+} from "@/store/stationsSlice";
 import {
   selectDepartureStationId,
   selectArrivalStationId,
 } from "@/store/bookingSlice";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
-import { StationFeature } from "@/store/stationsSlice";
-import StationListItem, { StationListItemData } from "./StationListItem";
-
-interface StationListProps {
-  /** An array of station data (e.g., your first page of stations). */
-  stations: StationFeature[];
-  /** A callback when user selects a station from the list. */
-  onStationSelected?: (station: StationFeature) => void;
-}
+import { StationListItem } from "./StationListItem";
 
 /**
- * A parent list component that:
- * - Subscribes to Redux once (for departureId, arrivalId, dispatchRoute)
- * - Uses react-window + react-window-infinite-loader for an "instagram-style" infinite scroll.
+ * If you still need a callback for when the user selects a station, keep it:
  */
-function StationList({ stations, onStationSelected }: StationListProps) {
-  // Example: track if there's more data to load from the server
-  const [hasMore, setHasMore] = useState(true);
+interface StationListProps {
+  onStationSelected?: (station: any) => void;
+}
 
-  // Single Redux subscription
+function StationList({ onStationSelected }: StationListProps) {
+  const dispatch = useAppDispatch();
+
+  // 1) Use your "paged" station selector
+  const stations = useAppSelector(selectListStationsWithDistance);
+  // 2) Also read whether there are more items
+  const hasMore = useAppSelector(selectHasMoreStations);
+
+  // Single Redux subscription for route details
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
   /**
-   * Build the list's "itemData" prop,
-   * so each row can access these fields without a separate Redux subscription.
+   * We build the itemData for each row to avoid additional Redux lookups
    */
-  const itemData = useMemo<StationListItemData>(() => {
-    return {
-      items: stations,
-      onStationSelected,
-      departureId,
-      arrivalId,
-      dispatchRoute,
-    };
-  }, [stations, onStationSelected, departureId, arrivalId, dispatchRoute]);
+  const itemData = {
+    items: stations,
+    onStationSelected,
+    departureId,
+    arrivalId,
+    dispatchRoute,
+  };
 
   /**
-   * InfiniteLoader setup.
-   * If we still have more data, we use "stations.length + 1" so we get a "placeholder row."
+   * itemCount = length plus one placeholder row if hasMore is true
    */
   const itemCount = hasMore ? stations.length + 1 : stations.length;
 
-  // Tells InfiniteLoader if item at `index` is already loaded
+  /**
+   * Tells InfiniteLoader if item at `index` is loaded.
+   * If index < stations.length, it's loaded.
+   */
   const isItemLoaded = useCallback(
     (index: number) => index < stations.length,
     [stations]
   );
 
-  // Called when user scrolls near the bottom & the placeholder row appears
+  /**
+   * Triggered when the placeholder row (index >= stations.length) appears,
+   * meaning the user scrolled near the bottom.
+   */
   const loadMoreItems = useCallback(
     async (startIndex: number, stopIndex: number) => {
       console.log(`Loading more items from ${startIndex} to ${stopIndex}...`);
-
-      // Example: If we do an API call here, we can update the stations in Redux or local state:
-      //   dispatch(...) or setStations([...stations, ...newStations])
-      //   if no more data remains:
-      //     setHasMore(false);
+      // Dispatch Redux action to load next 12
+      dispatch(loadNextStationsPage());
+      // The slice itself will set hasMore=false once we exhaust all stations.
     },
-    [hasMore]
+    [dispatch]
   );
 
   return (
@@ -88,15 +91,10 @@ function StationList({ stations, onStationSelected }: StationListProps) {
         return (
           <List
             height={300}
-            /** Must pass the same itemCount you gave InfiniteLoader: */
             itemCount={itemCount}
             itemSize={60}
             width="100%"
             itemData={itemData}
-            /** 
-             * The List expects (props: ListOnItemsRenderedProps) => void.
-             * Sometimes TS requires a cast if types don't match exactly.
-             */
             onItemsRendered={onItemsRendered as (props: ListOnItemsRenderedProps) => void}
             ref={ref}
           >
