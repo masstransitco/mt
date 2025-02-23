@@ -12,12 +12,6 @@ interface RouteInfo {
   polyline?: string;
 }
 
-/**
- * Data shape for each row:
- * - The subset of StationFeature objects (listStations)
- * - A callback for selection
- * - Possibly Redux-derived IDs and route
- */
 export interface StationListItemData {
   items: StationFeature[];
   onStationSelected?: (station: StationFeature) => void;
@@ -28,14 +22,12 @@ export interface StationListItemData {
 
 interface StationListItemProps extends ListChildComponentProps<StationListItemData> {}
 
-/**
- * One row in the infinite-scrolling list
- */
+/** The row component for a single station */
 function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
   const { items, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
 
-  // If index beyond loaded items => "Loading more..." placeholder
+  // If index is beyond the loaded items => "Loading more..." placeholder
   if (index >= items.length) {
     return (
       <div style={style} className="px-4 py-3 text-gray-500">
@@ -56,7 +48,6 @@ function StationListItemComponent(props: StationListItemProps) {
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // If station is the departure & dispatchRoute?.duration is set, show a pill
   let dispatchTimePill: JSX.Element | null = null;
   if (isDeparture && dispatchRoute?.duration) {
     const drivingMins = Math.round(dispatchRoute.duration / 60);
@@ -67,7 +58,6 @@ function StationListItemComponent(props: StationListItemProps) {
     );
   }
 
-  // Show walking time if available
   const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
 
   return (
@@ -81,9 +71,8 @@ function StationListItemComponent(props: StationListItemProps) {
       }`}
     >
       <div className="flex justify-between items-start">
-        {/* Left side: name, footprints */}
+        {/* LEFT: station name + footprints */}
         <div className="space-y-2">
-          {/* Station name row */}
           <div className="flex items-center gap-2">
             {isSelected && (
               <div className="text-blue-600">
@@ -99,21 +88,19 @@ function StationListItemComponent(props: StationListItemProps) {
             </h3>
           </div>
 
-          {/* Footprints + walkTime */}
           <div className="flex items-center gap-2 text-sm text-gray-900">
             <Footprints className="w-4 h-4" />
             <span>{walkTime} min walk</span>
           </div>
         </div>
 
-        {/* Right side: dispatch driving time pill */}
+        {/* RIGHT: dispatch driving time pill */}
         {dispatchTimePill}
       </div>
     </div>
   );
 }
 
+// Just named export:
 export const StationListItem = memo(StationListItemComponent);
 StationListItem.displayName = "StationListItem";
-
-export default StationListItem;
