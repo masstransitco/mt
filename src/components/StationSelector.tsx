@@ -300,6 +300,7 @@ interface StationSelectorProps {
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
   onClearDeparture?: () => void;
   onClearArrival?: () => void;
+  onLocateMe?: () => void;
 }
 
 function StationSelector({
