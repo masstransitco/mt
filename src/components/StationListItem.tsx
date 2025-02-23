@@ -6,7 +6,6 @@ import { MapPin, Navigation, Footprints } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { StationFeature } from "@/store/stationsSlice";
 
-/** If you define RouteInfo in your store, just import it. Otherwise, define here. */
 interface RouteInfo {
   duration?: number;
   distance?: number;
@@ -14,10 +13,10 @@ interface RouteInfo {
 }
 
 /**
- * The data shape we pass to react-window's List:
- * - Array of StationFeature
- * - Callback when user selects a station
- * - Redux-derived props so we don't do store lookups in each row
+ * Data shape for each row:
+ * - The subset of StationFeature objects (listStations)
+ * - A callback for selection
+ * - Possibly Redux-derived IDs and route
  */
 export interface StationListItemData {
   items: StationFeature[];
@@ -30,17 +29,14 @@ export interface StationListItemData {
 interface StationListItemProps extends ListChildComponentProps<StationListItemData> {}
 
 /**
- * A single row item in the station list (react-window).
+ * One row in the infinite-scrolling list
  */
 function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
-  const { items: stations, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
+  const { items, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
 
-  /** 
-   * If `index` is beyond `stations.length`, it means this row is the
-   * "placeholder" row for infinite loading. Render a loading UI here.
-   */
-  if (index >= stations.length) {
+  // If index beyond loaded items => "Loading more..." placeholder
+  if (index >= items.length) {
     return (
       <div style={style} className="px-4 py-3 text-gray-500">
         Loading more...
@@ -48,14 +44,10 @@ function StationListItemComponent(props: StationListItemProps) {
     );
   }
 
-  // Station for this row
-  const station = stations[index];
-
-  // Compare station.id (number) to departureId/arrivalId (number|null)
+  const station = items[index];
   const isSelected = station.id === departureId || station.id === arrivalId;
   const isDeparture = station.id === departureId;
 
-  // Click => parent's callback
   const handleClick = useCallback(() => {
     if (!onStationSelected) {
       toast("No onStationSelected callback provided.");
@@ -64,7 +56,7 @@ function StationListItemComponent(props: StationListItemProps) {
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // Show dispatch driving time if station is departure & route data is available
+  // If station is the departure & dispatchRoute?.duration is set, show a pill
   let dispatchTimePill: JSX.Element | null = null;
   if (isDeparture && dispatchRoute?.duration) {
     const drivingMins = Math.round(dispatchRoute.duration / 60);
@@ -75,21 +67,21 @@ function StationListItemComponent(props: StationListItemProps) {
     );
   }
 
-  // Show walking time from user → station (if available)
+  // Show walking time if available
   const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
 
   return (
     <div
       style={style}
       onClick={handleClick}
-      onWheel={(e) => e.stopPropagation()} // prevent scroll from bubbling up
+      onWheel={(e) => e.stopPropagation()}
       onTouchMove={(e) => e.stopPropagation()}
       className={`px-4 py-3 cursor-pointer hover:bg-gray-200 transition-colors ${
         isSelected ? "bg-gray-100" : ""
       }`}
     >
       <div className="flex justify-between items-start">
-        {/* LEFT: Station name + footprints icon */}
+        {/* Left side: name, footprints */}
         <div className="space-y-2">
           {/* Station name row */}
           <div className="flex items-center gap-2">
@@ -107,14 +99,14 @@ function StationListItemComponent(props: StationListItemProps) {
             </h3>
           </div>
 
-          {/* Footprints + walking time */}
+          {/* Footprints + walkTime */}
           <div className="flex items-center gap-2 text-sm text-gray-900">
             <Footprints className="w-4 h-4" />
             <span>{walkTime} min walk</span>
           </div>
         </div>
 
-        {/* RIGHT: Dispatch driving time pill (if any) */}
+        {/* Right side: dispatch driving time pill */}
         {dispatchTimePill}
       </div>
     </div>
