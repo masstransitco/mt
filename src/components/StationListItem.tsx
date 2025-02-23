@@ -6,10 +6,7 @@ import { MapPin, Navigation, Footprints } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { StationFeature } from "@/store/stationsSlice";
 
-/**
- * If you define your RouteInfo interface separately,
- * be sure it includes optional fields and can be null:
- */
+/** If you define RouteInfo in your store, just import it. Otherwise, define here. */
 interface RouteInfo {
   duration?: number;
   distance?: number;
@@ -18,18 +15,15 @@ interface RouteInfo {
 
 /**
  * The data shape we pass to react-window's List:
- * - an array of StationFeature
- * - a callback when user selects a station
- * - optional Redux-derived props, so we don't do store lookups here
+ * - Array of StationFeature
+ * - Callback when user selects a station
+ * - Redux-derived props so we don't do store lookups in each row
  */
 export interface StationListItemData {
   items: StationFeature[];
   onStationSelected?: (station: StationFeature) => void;
   departureId?: number | null;
   arrivalId?: number | null;
-  /**
-   * Must allow null if your store says dispatchRoute can be null
-   */
   dispatchRoute?: RouteInfo | null;
 }
 
@@ -42,22 +36,26 @@ function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
   const { items: stations, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
 
-  // The station for this row
-  const station = stations[index];
-
-  if (!station) {
-    // If this index is beyond our actual stations, you can render a placeholder
+  /** 
+   * If `index` is beyond `stations.length`, it means this row is the
+   * "placeholder" row for infinite loading. Render a loading UI here.
+   */
+  if (index >= stations.length) {
     return (
       <div style={style} className="px-4 py-3 text-gray-500">
-        Loading...
+        Loading more...
       </div>
     );
   }
 
-  // Compare station.id (number) to departureId/arrivalId (number | null)
+  // Station for this row
+  const station = stations[index];
+
+  // Compare station.id (number) to departureId/arrivalId (number|null)
   const isSelected = station.id === departureId || station.id === arrivalId;
   const isDeparture = station.id === departureId;
 
+  // Click => parent's callback
   const handleClick = useCallback(() => {
     if (!onStationSelected) {
       toast("No onStationSelected callback provided.");
@@ -66,7 +64,7 @@ function StationListItemComponent(props: StationListItemProps) {
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // Show "dispatch driving time" if station is departure & we have dispatchRoute
+  // Show dispatch driving time if station is departure & route data is available
   let dispatchTimePill: JSX.Element | null = null;
   if (isDeparture && dispatchRoute?.duration) {
     const drivingMins = Math.round(dispatchRoute.duration / 60);
@@ -84,7 +82,7 @@ function StationListItemComponent(props: StationListItemProps) {
     <div
       style={style}
       onClick={handleClick}
-      onWheel={(e) => e.stopPropagation()}   // prevent scroll from bubbling
+      onWheel={(e) => e.stopPropagation()} // prevent scroll from bubbling up
       onTouchMove={(e) => e.stopPropagation()}
       className={`px-4 py-3 cursor-pointer hover:bg-gray-200 transition-colors ${
         isSelected ? "bg-gray-100" : ""

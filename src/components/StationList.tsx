@@ -17,16 +17,16 @@ import { StationFeature } from "@/store/stationsSlice";
 import StationListItem, { StationListItemData } from "./StationListItem";
 
 interface StationListProps {
-  /** An array of station data (initially 5, for example). */
+  /** An array of station data (e.g., your first page of stations). */
   stations: StationFeature[];
   /** A callback when user selects a station from the list. */
   onStationSelected?: (station: StationFeature) => void;
 }
 
 /**
- * Parent list component that:
+ * A parent list component that:
  * - Subscribes to Redux once (for departureId, arrivalId, dispatchRoute)
- * - Uses react-window + react-window-infinite-loader for "instagram-style" infinite scrolling.
+ * - Uses react-window + react-window-infinite-loader for an "instagram-style" infinite scroll.
  */
 function StationList({ stations, onStationSelected }: StationListProps) {
   // Example: track if there's more data to load from the server
@@ -38,8 +38,8 @@ function StationList({ stations, onStationSelected }: StationListProps) {
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
   /**
-   * Build the list's "data" object that will be passed to each row
-   * so the row can access these fields without another Redux subscription.
+   * Build the list's "itemData" prop,
+   * so each row can access these fields without a separate Redux subscription.
    */
   const itemData = useMemo<StationListItemData>(() => {
     return {
@@ -52,54 +52,52 @@ function StationList({ stations, onStationSelected }: StationListProps) {
   }, [stations, onStationSelected, departureId, arrivalId, dispatchRoute]);
 
   /**
-   *  Infinite Loader Setup:
-   *  For demonstration, pretend there's more data if `hasMore` is true.
+   * InfiniteLoader setup.
+   * If we still have more data, we use "stations.length + 1" so we get a "placeholder row."
    */
-  // We'll tell the loader how many items we *think* we have in total:
-  // If there's more to load, add 1 as a "placeholder" row. (Adjust to fit your API logic.)
   const itemCount = hasMore ? stations.length + 1 : stations.length;
 
-  // Tells InfiniteLoader if we've loaded the item at `index`:
+  // Tells InfiniteLoader if item at `index` is already loaded
   const isItemLoaded = useCallback(
     (index: number) => index < stations.length,
     [stations]
   );
 
-  // Triggered when the user scrolls near the bottom
+  // Called when user scrolls near the bottom & the placeholder row appears
   const loadMoreItems = useCallback(
     async (startIndex: number, stopIndex: number) => {
       console.log(`Loading more items from ${startIndex} to ${stopIndex}...`);
 
-      // Example: If we do an API call here, we can update the stations in Redux or local state
-      // If there's no more data to load, set hasMore to false:
-      // setHasMore(false);
+      // Example: If we do an API call here, we can update the stations in Redux or local state:
+      //   dispatch(...) or setStations([...stations, ...newStations])
+      //   if no more data remains:
+      //     setHasMore(false);
     },
     [hasMore]
   );
 
-  // Render the list with infinite loading
   return (
     <InfiniteLoader
       isItemLoaded={isItemLoaded}
       itemCount={itemCount}
       loadMoreItems={loadMoreItems}
     >
-      {(
-        loaderProps: InfiniteLoaderChildProps // <-- typed from react-window-infinite-loader
-      ) => {
+      {(loaderProps: InfiniteLoaderChildProps) => {
         const { onItemsRendered, ref } = loaderProps;
 
         return (
           <List
             height={300}
-            itemCount={stations.length} // only render rows for the data we have
+            /** Must pass the same itemCount you gave InfiniteLoader: */
+            itemCount={itemCount}
             itemSize={60}
             width="100%"
             itemData={itemData}
-            // The List expects a function with type (props: ListOnItemsRenderedProps) => void
-            onItemsRendered={onItemsRendered as (
-              props: ListOnItemsRenderedProps
-            ) => void}
+            /** 
+             * The List expects (props: ListOnItemsRenderedProps) => void.
+             * Sometimes TS requires a cast if types don't match exactly.
+             */
+            onItemsRendered={onItemsRendered as (props: ListOnItemsRenderedProps) => void}
             ref={ref}
           >
             {StationListItem}
