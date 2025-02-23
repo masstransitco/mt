@@ -551,13 +551,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
             count={sortedStations.length}
           >
             <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-              {sortedStations.map((station, idx) => (
-                <StationList
-                // if you still have a callback you want:
-                onStationSelected={handleStationSelectedFromList}
-              />
-              ))}
-            </div>
+  <StationList onStationSelected={handleStationSelectedFromList} />
+</div>
           </Sheet>
 
           {/* Station Detail Sheet */}
