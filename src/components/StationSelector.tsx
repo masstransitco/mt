@@ -27,18 +27,18 @@ const CarSheet = dynamic(() => import("@/components/booking/CarSheet"), {
    Typing & Dot Animations
 ----------------------------------------------------------- */
 function useSynchronizedAnimation(text: string) {
-  const [typedText, setTypedText] = React.useState("");
-  const textRef = React.useRef(text);
-  const indexRef = React.useRef(0);
+  const [typedText, setTypedText] = useState("");
+  const textRef = useRef(text);
+  const indexRef = useRef(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     // If text changes (e.g. new step), reset
     textRef.current = text;
     setTypedText("");
     indexRef.current = 0;
   }, [text]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let dotDelayTimeout: NodeJS.Timeout;
     let typingInterval: NodeJS.Timeout;
     let cycleEndTimeout: NodeJS.Timeout;
@@ -240,10 +240,7 @@ const AddressSearch = React.memo(
                 onBlur={() => setIsDropdownOpen(false)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="w-full bg-zinc-200 text-gray-700 border border-gray-100
-                           rounded-md focus:outline-none focus:border-gray-400
-                           placeholder:text-gray-500 disabled:cursor-not-allowed
-                           p-1 text-base transition-colors"
+                className="w-full bg-zinc-200 text-gray-700 border border-gray-100 rounded-md focus:outline-none focus:border-gray-400 placeholder:text-gray-500 disabled:cursor-not-allowed p-1 text-base transition-colors"
               />
               {searchText && (
                 <button
@@ -252,9 +249,7 @@ const AddressSearch = React.memo(
                     setPredictions([]);
                     setIsDropdownOpen(false);
                   }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2
-                             text-gray-700 hover:bg-gray-200
-                             p-1 rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-700 hover:bg-gray-200 p-1 rounded-full transition-colors"
                   type="button"
                 >
                   <X className="w-4 h-4" />
@@ -262,16 +257,13 @@ const AddressSearch = React.memo(
               )}
             </div>
             {isDropdownOpen && predictions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white
-                              border border-gray-200 rounded-md shadow-md
-                              z-50 max-h-64 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-md z-50 max-h-64 overflow-y-auto">
                 {predictions.map((prediction) => (
                   <button
                     key={prediction.place_id}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
-                    className="w-full px-2 py-1 text-left text-sm text-gray-800
-                               hover:bg-gray-100 transition-colors"
+                    className="w-full px-2 py-1 text-left text-sm text-gray-800 hover:bg-gray-100 transition-colors"
                     type="button"
                   >
                     <div className="font-medium">
@@ -390,21 +382,9 @@ function StationSelector({
 
   return (
     <div className="relative z-10 w-full max-w-screen-md mx-auto px-2">
-      {/* 
-        Wrap the station selector in a normal (non-absolute) container 
-        so it can push other content down. 
-      */}
+      {/* Station Inputs Container */}
       <div
-        className="
-          bg-zinc-800/90
-          rounded-md 
-          backdrop-blur-md
-          px-2 py-2 
-          space-y-2
-          border-0
-          border-zinc-600
-          shadow-md
-        "
+        className="bg-zinc-800/90 rounded-md backdrop-blur-md px-2 py-2 space-y-2 border-0 border-zinc-600 shadow-md"
         style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
         {/* Same-station error */}
@@ -427,11 +407,7 @@ function StationSelector({
           {departureStation && step <= 3 && (
             <button
               onClick={handleClearDeparture}
-              className="
-                p-1 hover:bg-gray-300 transition-colors 
-                flex-shrink-0 m-1 rounded-md 
-                text-zinc-400/80
-              "
+              className="p-1 hover:bg-gray-300 transition-colors flex-shrink-0 m-1 rounded-md text-zinc-400/80"
               type="button"
               aria-label="Clear departure"
             >
@@ -453,11 +429,7 @@ function StationSelector({
             {arrivalStation && step <= 4 && (
               <button
                 onClick={handleClearArrival}
-                className="
-                  p-1 hover:bg-gray-300 transition-colors 
-                  flex-shrink-0 m-1 rounded-md 
-                  text-zinc-400/80
-                "
+                className="p-1 hover:bg-gray-300 transition-colors flex-shrink-0 m-1 rounded-md text-zinc-400/80"
                 type="button"
                 aria-label="Clear arrival"
               >
@@ -472,26 +444,14 @@ function StationSelector({
           <div className="mt-2 flex gap-2">
             <button
               onClick={handleLocateMe}
-              className="
-                px-3 h-8 text-sm font-medium
-                bg-blue-600/80 text-zinc-200
-                rounded-xl hover:bg-blue-400
-                transition-colors flex-1 shadow-md
-                flex items-center justify-center
-              "
+              className="px-3 h-8 text-sm font-medium bg-blue-600/80 text-zinc-200 rounded-xl hover:bg-blue-400 transition-colors flex-1 shadow-md flex items-center justify-center"
               type="button"
             >
               Near me
             </button>
             <button
               onClick={handleCarToggle}
-              className="
-                w-8 h-8
-                text-slate-950 bg-zinc-200/80
-                rounded-xl hover:bg-gray-300 hover:text-black
-                transition-colors flex items-center justify-center
-                shadow-md flex-shrink-0
-              "
+              className="w-8 h-8 text-slate-950 bg-zinc-200/80 rounded-xl hover:bg-gray-300 hover:text-black transition-colors flex items-center justify-center shadow-md flex-shrink-0"
               type="button"
               aria-label="Toggle car view"
             >
@@ -499,21 +459,17 @@ function StationSelector({
             </button>
           </div>
         )}
+      </div>
 
-        {/* Info Bar (dot + typed text) */}
+      {/* Info Bar rendered outside the station inputs container */}
+      <div className="mt-2">
         <div className="flex items-center justify-between px-1 py-1">
           <div className="flex items-center gap-2">
             <AnimatedDot />
-            <span
-              className="text-xs text-zinc-300 px-1 py-1
-                         min-w-[14ch] whitespace-nowrap"
-            >
-              <AnimatedInfoText
-                text={step < 3 ? "Choose pick-up station" : "Select arrival station"}
-              />
+            <span className="text-xs text-zinc-300 px-1 py-1 min-w-[14ch] whitespace-nowrap">
+              <AnimatedInfoText text={step < 3 ? "Choose pick-up station" : "Select arrival station"} />
             </span>
           </div>
-
           {departureStation && arrivalStation && distanceInKm && (
             <div className="text-xs font-medium text-slate-200">
               Drive Distance: {distanceInKm} km
@@ -522,17 +478,10 @@ function StationSelector({
         </div>
       </div>
 
-      {/* 
-        Render CarSheet *after* the selector, so it's not clipped. 
-        You can also make it absolutely positioned or a portal, if desired.
-      */}
+      {/* CarSheet rendered after the selector */}
       {showCarSheet && (
         <div className="mt-2">
-          <CarSheet
-            isOpen
-            onToggle={handleCarToggle}
-            className="max-w-screen-md mx-auto mt-10"
-          />
+          <CarSheet isOpen onToggle={handleCarToggle} className="max-w-screen-md mx-auto mt-10" />
         </div>
       )}
     </div>
