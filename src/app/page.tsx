@@ -6,12 +6,14 @@ import { Menu as MenuIcon } from "lucide-react";
 import Image from "next/image";
 import dynamic from "next/dynamic"; // <-- Import dynamic
 
-import GMapWithErrorBoundary from "@/components/GMap";
 import BookingDialog from "@/components/booking/BookingDialog";
 import SideSheet from "@/components/ui/SideSheet";
 import { QrCodeIcon } from "@/components/ui/icons/QrCodeIcon";
 
-// Dynamically import AppMenu and QrScannerOverlay with no SSR
+// Dynamically import with no SSR
+const GMapWithErrorBoundary = dynamic(() => import("@/components/GMap"), {
+  ssr: false,
+});
 const AppMenu = dynamic(() => import("@/components/ui/AppMenu"), {
   ssr: false,
 });
@@ -53,10 +55,10 @@ export default function Page() {
         <header
           className="
             sticky top-0 z-50 
-            bg-zinc-950
+            bg-zinc-900/90
             backdrop-blur-sm 
             border-b 
-            border-zinc-600
+            border-zinc-700
             h-[50px] 
             select-none
           "
