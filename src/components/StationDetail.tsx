@@ -115,7 +115,7 @@ function StationDetailComponent({
       <div className="space-y-2">
         {activeStation.properties.waitTime && (
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Est. Wait Time</span>
+            <span className="text-zinc-800">Est. Wait Time</span>
             <span className="font-medium">
               {activeStation.properties.waitTime} min
             </span>
@@ -125,18 +125,18 @@ function StationDetailComponent({
         {routeDistanceKm && routeDurationMin ? (
           <>
             <div className="flex justify-between text-zinc-900">
-              <span className="text-muted-foreground">Total Route Distance</span>
+              <span className="text-zinc-800">Total Route Distance</span>
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
             <div className="flex justify-between text-zinc-800">
-              <span className="text-muted-foreground">Estimated Drive Time</span>
+              <span className="text-zinc-800">Estimated Drive Time</span>
               <span className="font-medium">{routeDurationMin} min</span>
             </div>
           </>
         ) : (
           activeStation.distance !== undefined && (
             <div className="flex justify-between text-zinc-800">
-              <span className="text-muted-foreground">Distance from You</span>
+              <span className="text-zinc-800">Distance from You</span>
               <span className="font-medium">
                 {activeStation.distance.toFixed(1)} km
               </span>
