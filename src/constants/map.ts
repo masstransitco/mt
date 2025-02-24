@@ -32,100 +32,7 @@ export const MAP_STYLES = [
     elementType: 'labels.text.fill',
     stylers: [{ color: '#EAEAEA' }],
   },
-  {
-    featureType: 'all',
-    elementType: 'labels.text.stroke',
-    stylers: [
-      { color: '#1E1E1E' },
-      { lightness: -100 },
-      { visibility: 'simplified' },
-    ],
-  },
-  {
-    featureType: 'administrative',
-    elementType: 'geometry',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'administrative.land_parcel',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'landscape',
-    elementType: 'geometry',
-    stylers: [{ color: '#1B1B1B' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'geometry',
-    stylers: [{ color: '#202020' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry.fill',
-    stylers: [{ color: '#2B2B2B' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#353535' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#999999' }],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'geometry',
-    stylers: [{ color: '#333333' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry',
-    stylers: [{ color: '#3F3F3F' }],
-  },
-  {
-    featureType: 'road.highway.controlled_access',
-    elementType: 'geometry',
-    stylers: [{ color: '#4A4A4A' }],
-  },
-  {
-    featureType: 'road.local',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#777777' }],
-  },
-  {
-    featureType: 'transit',
-    elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'transit',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#0E1621' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#3A3A3A' }],
-  },
+
 ];
 
 // Create map options with a dark theme
@@ -138,7 +45,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   minZoom: 6,
   clickableIcons: false,
   styles: MAP_STYLES,
-  mapId: 'e18c09caf6c67ab3',
+  mapId: '3b537d3007b67ac',
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
