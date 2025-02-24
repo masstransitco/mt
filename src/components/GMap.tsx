@@ -503,14 +503,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
               options={mapOptions || {}}
               onLoad={(map: google.maps.Map) => {
                 setActualMap(map);
-                if (stations.length > 0) {
-                  const bounds = new window.google.maps.LatLngBounds();
-                  stations.forEach((station) => {
-                    const [lng, lat] = station.geometry.coordinates;
-                    bounds.extend({ lat, lng });
-                  });
-                  map.fitBounds(bounds, 50);
-                }
               }}
             >
               {/* Dispatch polyline (hub -> departure) */}
