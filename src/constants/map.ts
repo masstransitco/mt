@@ -40,7 +40,7 @@ export const MAP_STYLES = [
 export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
   zoomControl: false, // hide zoom controls
-  gestureHandling: 'auto',
+  gestureHandling: 'greedy',
     // @ts-ignore
   tiltGesturesEnabled: false,
   rotateGesturesEnabled: false,
