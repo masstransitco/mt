@@ -298,8 +298,10 @@ export function useThreeOverlay(
     if (!dispatchTubeMatRef.current) {
       dispatchTubeMatRef.current = new THREE.MeshPhongMaterial({
         color: 0xf5f5f5,
-        opacity: 0.8,
+        opacity: 0.3,
         transparent: true,
+        emissive: 0xffffff,        // glow color
+        emissiveIntensity: 0.5,    // strength of the glow
       });
     }
     if (!bookingTubeMatRef.current) {
