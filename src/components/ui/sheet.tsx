@@ -258,9 +258,9 @@ export default function Sheet({
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-black/50 pointer-events-auto"
+            className="absolute inset-0 bg-black/50 pointer-events-none"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: 0 }}
             exit={{ opacity: 0 }}
             onClick={onDismiss}
           />
