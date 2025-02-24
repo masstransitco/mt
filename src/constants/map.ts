@@ -41,6 +41,9 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
   zoomControl: false, // hide zoom controls
   gestureHandling: 'auto',
+    // @ts-ignore
+  tiltGesturesEnabled: false,
+  rotateGesturesEnabled: false,
   backgroundColor: '#212121',
   maxZoom: 19,
   minZoom: 6,
