@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import * as THREE from "three";
-
-// We no longer import @googlemaps/three or three.meshline at top-level.
-// Instead, we'll import them dynamically inside a useEffect.
+import { ThreeJSOverlayView } from "@googlemaps/three";
 
 // Redux + slices
 import { useAppSelector } from "@/store/store";
@@ -22,7 +20,7 @@ const tempVector = new THREE.Vector3();
 /**
  * Hook: useThreeOverlay with:
  *   1) InstancedMesh cubes for stations
- *   2) Thick lines (MeshLine) for the dispatch + booking routes
+ *   2) 3D lines for the dispatch route + booking route
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -30,15 +28,8 @@ export function useThreeOverlay(
   departureStationId: number | null,
   arrivalStationId: number | null
 ) {
-  // -- Dynamic references to the libraries once loaded
-  const [GoogleMapsThree, setGoogleMapsThree] = useState<any>(null);
-  const [MeshLineLib, setMeshLineLib] = useState<{
-    MeshLine: any;
-    MeshLineMaterial: any;
-  } | null>(null);
-
-  // Refs for the overlay and scene
-  const overlayRef = useRef<any>(null); // Will become an instance of ThreeJSOverlayView
+  // References to the overlay and scene
+  const overlayRef = useRef<ThreeJSOverlayView | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
 
   // Refs for the station InstancedMeshes
@@ -66,75 +57,146 @@ export function useThreeOverlay(
   const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const dispatchMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
 
-  // MeshLine route references (instead of THREE.Line)
-  const dispatchRouteMeshRef = useRef<THREE.Mesh | null>(null);
-  const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null);
+  // Lines for Dispatch & Booking routes
+  const dispatchRouteLineRef = useRef<THREE.Line | null>(null);
+  const bookingRouteLineRef = useRef<THREE.Line | null>(null);
 
-  // MeshLine materials
-  const dispatchLineMatRef = useRef<any>(null); // will store a MeshLineMaterial
-  const bookingLineMatRef = useRef<any>(null);
+  // Materials for lines
+  const dispatchLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  const bookingLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
 
   // Pull Decoded Routes from Redux
   const dispatchRouteDecoded = useAppSelector(selectDispatchRouteDecoded);
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded);
 
   // Lights (memoized)
-  const lights = useMemo(() => ({
-    ambient: new THREE.AmbientLight(0xffffff, 0.75),
-    directional: (() => {
-      const light = new THREE.DirectionalLight(0xffffff, 0.25);
-      light.position.set(0, 10, 50);
-      return light;
-    })(),
-  }), []);
+  const lights = useMemo(
+    () => ({
+      ambient: new THREE.AmbientLight(0xffffff, 0.75),
+      directional: (() => {
+        const light = new THREE.DirectionalLight(0xffffff, 0.25);
+        light.position.set(0, 10, 50);
+        return light;
+      })(),
+    }),
+    []
+  );
 
   // Altitude offset so lines are above ground
-  const ROUTE_ALTITUDE = 5;
+  const ROUTE_ALTITUDE = 100;
 
   // -------------------------------------------------
-  // 1) Dynamically import the libraries in the browser
+  // Function: populate station cubes in instanced meshes
+  // -------------------------------------------------
+  function populateInstancedMeshes() {
+    if (
+      !greyInstancedMeshRef.current ||
+      !blueInstancedMeshRef.current ||
+      !redInstancedMeshRef.current ||
+      !overlayRef.current
+    ) {
+      return;
+    }
+
+    const greyMesh = greyInstancedMeshRef.current;
+    const blueMesh = blueInstancedMeshRef.current;
+    const redMesh = redInstancedMeshRef.current;
+
+    let counts = { grey: 0, blue: 0, red: 0 };
+
+    // Clear existing maps
+    stationIndexMapsRef.current = { grey: [], blue: [], red: [] };
+
+    // Batch process stations
+    stations.forEach((station) => {
+      const [lng, lat] = station.geometry.coordinates;
+
+      // Convert lat/lng to 3D coords
+      overlayRef.current!.latLngAltitudeToVector3(
+        { lat, lng, altitude: DISPATCH_HUB.altitude + 50 },
+        tempVector
+      );
+
+      // Reuse tempMatrix for transform
+      tempMatrix.makeTranslation(tempVector.x, tempVector.y, tempVector.z);
+
+      // Color stations by departure/arrival or normal
+      if (station.id === departureStationId) {
+        blueMesh.setMatrixAt(counts.blue, tempMatrix);
+        stationIndexMapsRef.current.blue[counts.blue] = station.id;
+        counts.blue++;
+      } else if (station.id === arrivalStationId) {
+        redMesh.setMatrixAt(counts.red, tempMatrix);
+        stationIndexMapsRef.current.red[counts.red] = station.id;
+        counts.red++;
+      } else {
+        greyMesh.setMatrixAt(counts.grey, tempMatrix);
+        stationIndexMapsRef.current.grey[counts.grey] = station.id;
+        counts.grey++;
+      }
+    });
+
+    greyMesh.count = counts.grey;
+    blueMesh.count = counts.blue;
+    redMesh.count = counts.red;
+
+    greyMesh.instanceMatrix.needsUpdate = true;
+    blueMesh.instanceMatrix.needsUpdate = true;
+    redMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // -------------------------------------------------
+  // Function: create or update a 3D line from decoded route
+  // -------------------------------------------------
+  function createOrUpdateLine(
+    decodedPath: Array<{ lat: number; lng: number }>,
+    lineRef: React.MutableRefObject<THREE.Line | null>,
+    material: THREE.LineBasicMaterial,
+    scene: THREE.Scene,
+    overlay: ThreeJSOverlayView
+  ) {
+    // Skip if route is too short
+    if (!decodedPath || decodedPath.length < 2) {
+      return;
+    }
+
+    // Convert lat/lng to Vector3 array (with altitude offset)
+    const points = decodedPath.map(({ lat, lng }) => {
+      const vector = new THREE.Vector3();
+      overlay.latLngAltitudeToVector3({ lat, lng, altitude: ROUTE_ALTITUDE }, vector);
+      return vector;
+    });
+
+    if (!lineRef.current) {
+      // Create new geometry + line
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geometry, material);
+
+      // Ensure it’s always drawn on top
+      line.renderOrder = 999;
+      material.depthTest = false;
+      material.depthWrite = false;
+      material.transparent = true;
+      material.opacity = 0.8;
+
+      lineRef.current = line;
+      scene.add(line);
+    } else {
+      // Update existing geometry
+      const geometry = lineRef.current.geometry as THREE.BufferGeometry;
+      geometry.setFromPoints(points);
+      geometry.computeBoundingSphere();
+      geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  // -------------------------------------------------
+  // Initialize overlay + scene
   // -------------------------------------------------
   useEffect(() => {
-    if (typeof window === "undefined") return; // SSR safety
-
-    let isMounted = true;
-    Promise.all([
-      import("@googlemaps/three"),    // returns { ThreeJSOverlayView, ... }
-      // @ts-expect-error
-      import("three.meshline"),       // returns { MeshLine, MeshLineMaterial, ... }
-    ])
-      .then(([googleMapsThree, meshline]) => {
-        if (!isMounted) return;
-
-        // Save references in state
-        setGoogleMapsThree(googleMapsThree); // will contain .ThreeJSOverlayView
-        setMeshLineLib({
-          MeshLine: meshline.MeshLine,
-          MeshLineMaterial: meshline.MeshLineMaterial,
-        });
-      })
-      .catch((err) => {
-        console.error("Error importing dynamic libs:", err);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // -------------------------------------------------
-  // 2) Create or update the scene once libraries are loaded
-  // -------------------------------------------------
-  useEffect(() => {
-    // If the libraries aren't loaded or no map/stations yet, skip
-    if (!GoogleMapsThree || !MeshLineLib) return;
     if (!googleMap || stations.length === 0) return;
 
     console.log("[useThreeOverlay] Initializing Three.js overlay...");
-
-    // Extract the classes from the dynamic import
-    const { ThreeJSOverlayView } = GoogleMapsThree;
-    const { MeshLineMaterial } = MeshLineLib;
 
     // Create scene
     const scene = new THREE.Scene();
@@ -150,6 +212,7 @@ export function useThreeOverlay(
       map: googleMap,
       scene,
       anchor: DISPATCH_HUB,
+      // @ts-expect-error
       THREE,
     });
     overlayRef.current = overlay;
@@ -162,7 +225,7 @@ export function useThreeOverlay(
       stationBoxGeoRef.current = new THREE.BoxGeometry(50, 50, 50);
     }
 
-    // Create shared materials for dispatch/stations
+    // Create shared materials (dispatch + stations)
     if (!dispatchMatRef.current) {
       dispatchMatRef.current = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
@@ -192,23 +255,23 @@ export function useThreeOverlay(
       });
     }
 
-    // Create thick line materials via MeshLineMaterial
+    // Create materials for lines
     if (!dispatchLineMatRef.current) {
-      dispatchLineMatRef.current = new MeshLineMaterial({
-        color: new THREE.Color(0xf5f5f5), // light color
-        lineWidth: 15,                    // thick line width in world units
+      dispatchLineMatRef.current = new THREE.LineBasicMaterial({
+        color: 0xf5f5f5,
+        linewidth: 3,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.8,
         depthTest: false,
         depthWrite: false,
       });
     }
     if (!bookingLineMatRef.current) {
-      bookingLineMatRef.current = new MeshLineMaterial({
-        color: new THREE.Color(0x03a9f4), // bright-ish blue
-        lineWidth: 15,
+      bookingLineMatRef.current = new THREE.LineBasicMaterial({
+        color: 0x03a9f4,
+        linewidth: 3,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.8,
         depthTest: false,
         depthWrite: false,
       });
@@ -245,17 +308,16 @@ export function useThreeOverlay(
       meshRefs[color].current = mesh;
     });
 
-    // Populate station cubes initially
+    // Populate station cubes
     populateInstancedMeshes();
     overlay.requestRedraw();
 
-    // Cleanup
     return () => {
       console.log("[useThreeOverlay] Cleaning up Three.js overlay...");
 
       // Remove overlay
       if (overlayRef.current) {
-        overlayRef.current.setMap(null);
+        (overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null);
       }
 
       // Clear scene
@@ -283,26 +345,18 @@ export function useThreeOverlay(
       dispatchMatRef.current = null;
       dispatchLineMatRef.current = null;
       bookingLineMatRef.current = null;
-
       greyInstancedMeshRef.current = null;
       blueInstancedMeshRef.current = null;
       redInstancedMeshRef.current = null;
 
-      if (dispatchRouteMeshRef.current) {
-        dispatchRouteMeshRef.current.geometry.dispose();
-      }
-      dispatchRouteMeshRef.current = null;
-
-      if (bookingRouteMeshRef.current) {
-        bookingRouteMeshRef.current.geometry.dispose();
-      }
-      bookingRouteMeshRef.current = null;
+      dispatchRouteLineRef.current = null;
+      bookingRouteLineRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [GoogleMapsThree, MeshLineLib, googleMap, stations.length, lights]);
+  }, [googleMap, stations.length, lights]);
 
   // -------------------------------------------------
-  // 3) Populate station cubes when station selection changes
+  // Whenever station selection changes, re-populate cubes
   // -------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current || !googleMap || stations.length === 0) {
@@ -313,156 +367,47 @@ export function useThreeOverlay(
   }, [departureStationId, arrivalStationId, stations.length]);
 
   // -------------------------------------------------
-  // 4) Whenever routes change, draw MeshLine routes
+  // Whenever routes change, draw 3D lines
   // -------------------------------------------------
   useEffect(() => {
-    // If the scene or overlay isn't ready or the libs aren't loaded, skip
-    if (
-      !sceneRef.current ||
-      !overlayRef.current ||
-      !GoogleMapsThree ||
-      !MeshLineLib
-    ) {
-      return;
-    }
-
-    const scene = sceneRef.current;
-    const overlay = overlayRef.current;
-
-    // Helpers
-    const createOrUpdateMeshLine = (
-      decodedPath: Array<{ lat: number; lng: number }>,
-      meshRef: React.MutableRefObject<THREE.Mesh | null>,
-      meshLineMaterial: any
-    ) => {
-      // Skip if route is too short
-      if (!decodedPath || decodedPath.length < 2) return;
-
-      const { MeshLine } = MeshLineLib;
-
-      // Convert lat/lng to Vector3 array
-      const points: THREE.Vector3[] = decodedPath.map(({ lat, lng }) => {
-        const vector = new THREE.Vector3();
-        overlay.latLngAltitudeToVector3({ lat, lng, altitude: ROUTE_ALTITUDE }, vector);
-        return vector;
-      });
-
-      // Build the geometry
-      const lineGeometry = new MeshLine();
-      lineGeometry.setPoints(points);
-
-      // If there's no existing mesh, create a new one
-      if (!meshRef.current) {
-        const mesh = new THREE.Mesh(lineGeometry.geometry, meshLineMaterial);
-        mesh.renderOrder = 9999; // on top
-        meshRef.current = mesh;
-        scene.add(mesh);
-      } else {
-        // Update existing geometry
-        meshRef.current.geometry.dispose();
-        meshRef.current.geometry = lineGeometry.geometry;
-      }
-    };
+    if (!sceneRef.current || !overlayRef.current) return;
 
     // Dispatch route
     if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchLineMatRef.current) {
-      createOrUpdateMeshLine(
+      createOrUpdateLine(
         dispatchRouteDecoded,
-        dispatchRouteMeshRef,
-        dispatchLineMatRef.current
+        dispatchRouteLineRef,
+        dispatchLineMatRef.current,
+        sceneRef.current,
+        overlayRef.current
       );
-    } else if (dispatchRouteMeshRef.current) {
-      // Clear existing mesh if route is empty/short
-      scene.remove(dispatchRouteMeshRef.current);
-      dispatchRouteMeshRef.current.geometry.dispose();
-      dispatchRouteMeshRef.current = null;
+    } else if (dispatchRouteLineRef.current) {
+      // Clear existing line if route is empty or too short
+      sceneRef.current.remove(dispatchRouteLineRef.current);
+      dispatchRouteLineRef.current.geometry.dispose();
+      dispatchRouteLineRef.current = null;
     }
 
     // Booking route
     if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingLineMatRef.current) {
-      createOrUpdateMeshLine(
+      createOrUpdateLine(
         bookingRouteDecoded,
-        bookingRouteMeshRef,
-        bookingLineMatRef.current
+        bookingRouteLineRef,
+        bookingLineMatRef.current,
+        sceneRef.current,
+        overlayRef.current
       );
-    } else if (bookingRouteMeshRef.current) {
-      // Clear existing mesh if route is empty/short
-      scene.remove(bookingRouteMeshRef.current);
-      bookingRouteMeshRef.current.geometry.dispose();
-      bookingRouteMeshRef.current = null;
+    } else if (bookingRouteLineRef.current) {
+      // Clear existing line if route is empty or too short
+      sceneRef.current.remove(bookingRouteLineRef.current);
+      bookingRouteLineRef.current.geometry.dispose();
+      bookingRouteLineRef.current = null;
     }
 
-    overlay.requestRedraw();
-  }, [
-    dispatchRouteDecoded,
-    bookingRouteDecoded,
-    GoogleMapsThree,
-    MeshLineLib,
-  ]);
+    overlayRef.current.requestRedraw();
+  }, [dispatchRouteDecoded, bookingRouteDecoded]);
 
-  // -------------------------------------------------
-  // Helper to populate station cubes
-  // -------------------------------------------------
-  function populateInstancedMeshes() {
-    if (
-      !greyInstancedMeshRef.current ||
-      !blueInstancedMeshRef.current ||
-      !redInstancedMeshRef.current ||
-      !overlayRef.current
-    ) {
-      return;
-    }
-
-    const greyMesh = greyInstancedMeshRef.current;
-    const blueMesh = blueInstancedMeshRef.current;
-    const redMesh = redInstancedMeshRef.current;
-
-    let counts = { grey: 0, blue: 0, red: 0 };
-
-    // Clear existing maps
-    stationIndexMapsRef.current = { grey: [], blue: [], red: [] };
-
-    // Batch process stations
-    stations.forEach((station) => {
-      const [lng, lat] = station.geometry.coordinates;
-
-      // Convert lat/lng to 3D coords
-      overlayRef.current.latLngAltitudeToVector3(
-        { lat, lng, altitude: DISPATCH_HUB.altitude + 50 },
-        tempVector
-      );
-
-      // Reuse tempMatrix for transform
-      tempMatrix.makeTranslation(tempVector.x, tempVector.y, tempVector.z);
-
-      // Color stations by departure/arrival or normal
-      if (station.id === departureStationId) {
-        blueMesh.setMatrixAt(counts.blue, tempMatrix);
-        stationIndexMapsRef.current.blue[counts.blue] = station.id;
-        counts.blue++;
-      } else if (station.id === arrivalStationId) {
-        redMesh.setMatrixAt(counts.red, tempMatrix);
-        stationIndexMapsRef.current.red[counts.red] = station.id;
-        counts.red++;
-      } else {
-        greyMesh.setMatrixAt(counts.grey, tempMatrix);
-        stationIndexMapsRef.current.grey[counts.grey] = station.id;
-        counts.grey++;
-      }
-    });
-
-    greyMesh.count = counts.grey;
-    blueMesh.count = counts.blue;
-    redMesh.count = counts.red;
-
-    greyMesh.instanceMatrix.needsUpdate = true;
-    blueMesh.instanceMatrix.needsUpdate = true;
-    redMesh.instanceMatrix.needsUpdate = true;
-  }
-
-  // -------------------------------------------------
-  // Return any needed references
-  // -------------------------------------------------
+  // Return any refs or data you need
   return {
     overlayRef,
     sceneRef,
