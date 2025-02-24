@@ -13,7 +13,7 @@ export const DEFAULT_CENTER = {
   lng: 114.160,
 };
 
-export const DEFAULT_ZOOM = 14;
+export const DEFAULT_ZOOM = 17;
 
 export const LIBRARIES: Libraries = ['geometry', 'places'];
 
