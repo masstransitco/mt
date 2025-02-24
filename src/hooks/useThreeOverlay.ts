@@ -276,22 +276,20 @@ export function useThreeOverlay(
     }
     if (!matGreyRef.current) {
       matGreyRef.current = new THREE.MeshPhongMaterial({
-        color: 0xcccccc,
-        opacity: 0.8,
-        transparent: true,
+        color: 0xeeeeee,
       });
     }
     if (!matBlueRef.current) {
       matBlueRef.current = new THREE.MeshPhongMaterial({
         color: 0x0000ff,
-        opacity: 0.8,
+        opacity: 0.95,
         transparent: true,
       });
     }
     if (!matRedRef.current) {
       matRedRef.current = new THREE.MeshPhongMaterial({
         color: 0xff0000,
-        opacity: 0.8,
+        opacity: 0.95,
         transparent: true,
       });
     }
