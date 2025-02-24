@@ -1,3 +1,4 @@
+
 // src/constants/map.ts
 
 import type { Libraries } from '@react-google-maps/api';
@@ -9,11 +10,11 @@ export const MAP_CONTAINER_STYLE = {
 };
 
 export const DEFAULT_CENTER = {
-  lat: 22.210,
-  lng: 114.160,
+  lat: 22.280,
+  lng: 114.175,
 };
 
-export const DEFAULT_ZOOM = 17;
+export const DEFAULT_ZOOM = 13;
 
 export const LIBRARIES: Libraries = ['geometry', 'places'];
 
