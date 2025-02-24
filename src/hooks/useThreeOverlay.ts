@@ -4,6 +4,10 @@ import { useEffect, useRef, useMemo } from "react";
 import * as THREE from "three";
 import { ThreeJSOverlayView } from "@googlemaps/three";
 
+// MeshLine imports (v1.4.0)
+// @ts-expect-error
+import { MeshLine, MeshLineMaterial } from "three.meshline";
+
 // Redux + slices
 import { useAppSelector } from "@/store/store";
 import { StationFeature } from "@/store/stationsSlice";
@@ -20,7 +24,7 @@ const tempVector = new THREE.Vector3();
 /**
  * Hook: useThreeOverlay with:
  *   1) InstancedMesh cubes for stations
- *   2) 3D lines for the dispatch route + booking route
+ *   2) Thick lines (MeshLine) for the dispatch route + booking route
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -57,33 +61,31 @@ export function useThreeOverlay(
   const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const dispatchMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
 
-  // Lines for Dispatch & Booking routes
-  const dispatchRouteLineRef = useRef<THREE.Line | null>(null);
-  const bookingRouteLineRef = useRef<THREE.Line | null>(null);
+  // ---- MeshLine Refs for Dispatch & Booking routes ----
+  // Instead of THREE.Line, we store references to MeshLine-based Mesh
+  const dispatchRouteMeshRef = useRef<THREE.Mesh | null>(null);
+  const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null);
 
-  // Materials for lines
-  const dispatchLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
-  const bookingLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  // Materials for our thick lines
+  const dispatchLineMatRef = useRef<MeshLineMaterial | null>(null);
+  const bookingLineMatRef = useRef<MeshLineMaterial | null>(null);
 
   // Pull Decoded Routes from Redux
   const dispatchRouteDecoded = useAppSelector(selectDispatchRouteDecoded);
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded);
 
   // Lights (memoized)
-  const lights = useMemo(
-    () => ({
-      ambient: new THREE.AmbientLight(0xffffff, 0.75),
-      directional: (() => {
-        const light = new THREE.DirectionalLight(0xffffff, 0.25);
-        light.position.set(0, 10, 50);
-        return light;
-      })(),
-    }),
-    []
-  );
+  const lights = useMemo(() => ({
+    ambient: new THREE.AmbientLight(0xffffff, 0.75),
+    directional: (() => {
+      const light = new THREE.DirectionalLight(0xffffff, 0.25);
+      light.position.set(0, 10, 50);
+      return light;
+    })()
+  }), []);
 
   // Altitude offset so lines are above ground
-  const ROUTE_ALTITUDE = 100;
+  const ROUTE_ALTITUDE = 5;
 
   // -------------------------------------------------
   // Function: populate station cubes in instanced meshes
@@ -146,12 +148,12 @@ export function useThreeOverlay(
   }
 
   // -------------------------------------------------
-  // Function: create or update a 3D line from decoded route
+  // createOrUpdateMeshLine() using MeshLine geometry
   // -------------------------------------------------
-  function createOrUpdateLine(
+  function createOrUpdateMeshLine(
     decodedPath: Array<{ lat: number; lng: number }>,
-    lineRef: React.MutableRefObject<THREE.Line | null>,
-    material: THREE.LineBasicMaterial,
+    meshRef: React.MutableRefObject<THREE.Mesh | null>,
+    meshLineMaterial: MeshLineMaterial,
     scene: THREE.Scene,
     overlay: ThreeJSOverlayView
   ) {
@@ -160,33 +162,35 @@ export function useThreeOverlay(
       return;
     }
 
-    // Convert lat/lng to Vector3 array (with altitude offset)
-    const points = decodedPath.map(({ lat, lng }) => {
+    // Convert lat/lng to Vector3 array
+    const points: THREE.Vector3[] = decodedPath.map(({ lat, lng }) => {
       const vector = new THREE.Vector3();
       overlay.latLngAltitudeToVector3({ lat, lng, altitude: ROUTE_ALTITUDE }, vector);
       return vector;
     });
 
-    if (!lineRef.current) {
-      // Create new geometry + line
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const line = new THREE.Line(geometry, material);
+    // 1) Create or update MeshLine geometry
+    const lineGeometry = new MeshLine();
+    // .setPoints() can accept an array of Vector3
+    lineGeometry.setPoints(points);
 
-      // Ensure it’s always drawn on top
-      line.renderOrder = 999;
-      material.depthTest = false;
-      material.depthWrite = false;
-      material.transparent = true;
-      material.opacity = 0.8;
+    if (!meshRef.current) {
+      // 2) Create Mesh with MeshLine geometry + material
+      const mesh = new THREE.Mesh(lineGeometry.geometry, meshLineMaterial);
 
-      lineRef.current = line;
-      scene.add(line);
+      // If you want raycasting to work on these lines:
+      // mesh.raycast = MeshLineRaycast; // from "three.meshline"
+
+      // Render on top
+      mesh.renderOrder = 9999;
+
+      meshRef.current = mesh;
+      scene.add(mesh);
     } else {
-      // Update existing geometry
-      const geometry = lineRef.current.geometry as THREE.BufferGeometry;
-      geometry.setFromPoints(points);
-      geometry.computeBoundingSphere();
-      geometry.attributes.position.needsUpdate = true;
+      // Update existing mesh geometry in place
+      // We can replace the geometry entirely
+      meshRef.current.geometry.dispose(); // free old geometry
+      meshRef.current.geometry = lineGeometry.geometry;
     }
   }
 
@@ -212,7 +216,7 @@ export function useThreeOverlay(
       map: googleMap,
       scene,
       anchor: DISPATCH_HUB,
-      // @ts-expect-error
+      // @ts-expect-error - ignoring type mismatch
       THREE,
     });
     overlayRef.current = overlay;
@@ -255,23 +259,24 @@ export function useThreeOverlay(
       });
     }
 
-    // Create materials for lines
+    // Create thick line materials via MeshLineMaterial
     if (!dispatchLineMatRef.current) {
-      dispatchLineMatRef.current = new THREE.LineBasicMaterial({
-        color: 0xf5f5f5,
-        linewidth: 3,
+      dispatchLineMatRef.current = new MeshLineMaterial({
+        color: new THREE.Color(0xf5f5f5), // light color
+        lineWidth: 15,                    // thick line width in world units
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         depthTest: false,
         depthWrite: false,
       });
     }
+
     if (!bookingLineMatRef.current) {
-      bookingLineMatRef.current = new THREE.LineBasicMaterial({
-        color: 0x03a9f4,
-        linewidth: 3,
+      bookingLineMatRef.current = new MeshLineMaterial({
+        color: new THREE.Color(0x03a9f4), // bright-ish blue
+        lineWidth: 15,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         depthTest: false,
         depthWrite: false,
       });
@@ -345,12 +350,20 @@ export function useThreeOverlay(
       dispatchMatRef.current = null;
       dispatchLineMatRef.current = null;
       bookingLineMatRef.current = null;
+
       greyInstancedMeshRef.current = null;
       blueInstancedMeshRef.current = null;
       redInstancedMeshRef.current = null;
 
-      dispatchRouteLineRef.current = null;
-      bookingRouteLineRef.current = null;
+      if (dispatchRouteMeshRef.current) {
+        dispatchRouteMeshRef.current.geometry.dispose();
+      }
+      dispatchRouteMeshRef.current = null;
+
+      if (bookingRouteMeshRef.current) {
+        bookingRouteMeshRef.current.geometry.dispose();
+      }
+      bookingRouteMeshRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleMap, stations.length, lights]);
@@ -367,41 +380,41 @@ export function useThreeOverlay(
   }, [departureStationId, arrivalStationId, stations.length]);
 
   // -------------------------------------------------
-  // Whenever routes change, draw 3D lines
+  // Whenever routes change, draw MeshLine routes
   // -------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return;
 
     // Dispatch route
     if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchLineMatRef.current) {
-      createOrUpdateLine(
+      createOrUpdateMeshLine(
         dispatchRouteDecoded,
-        dispatchRouteLineRef,
+        dispatchRouteMeshRef,
         dispatchLineMatRef.current,
         sceneRef.current,
         overlayRef.current
       );
-    } else if (dispatchRouteLineRef.current) {
-      // Clear existing line if route is empty or too short
-      sceneRef.current.remove(dispatchRouteLineRef.current);
-      dispatchRouteLineRef.current.geometry.dispose();
-      dispatchRouteLineRef.current = null;
+    } else if (dispatchRouteMeshRef.current) {
+      // Clear existing mesh if route is empty/short
+      sceneRef.current.remove(dispatchRouteMeshRef.current);
+      dispatchRouteMeshRef.current.geometry.dispose();
+      dispatchRouteMeshRef.current = null;
     }
 
     // Booking route
     if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingLineMatRef.current) {
-      createOrUpdateLine(
+      createOrUpdateMeshLine(
         bookingRouteDecoded,
-        bookingRouteLineRef,
+        bookingRouteMeshRef,
         bookingLineMatRef.current,
         sceneRef.current,
         overlayRef.current
       );
-    } else if (bookingRouteLineRef.current) {
-      // Clear existing line if route is empty or too short
-      sceneRef.current.remove(bookingRouteLineRef.current);
-      bookingRouteLineRef.current.geometry.dispose();
-      bookingRouteLineRef.current = null;
+    } else if (bookingRouteMeshRef.current) {
+      // Clear existing mesh if route is empty/short
+      sceneRef.current.remove(bookingRouteMeshRef.current);
+      bookingRouteMeshRef.current.geometry.dispose();
+      bookingRouteMeshRef.current = null;
     }
 
     overlayRef.current.requestRedraw();
