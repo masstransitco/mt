@@ -10,7 +10,6 @@ import React, {
 } from "react";
 import {
   GoogleMap,
-  Marker,
   useJsApiLoader,
 } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
@@ -73,27 +72,6 @@ import {
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
-interface CarMarkersProps {
-  cars: { id: number; lat: number; lng: number; name: string }[];
-  markerIcons: any;
-}
-
-const CarMarkers = memo(function CarMarkers({ cars, markerIcons }: CarMarkersProps) {
-  if (!markerIcons) return null;
-  return (
-    <>
-      {cars.map((car) => (
-        <Marker
-          key={car.id}
-          position={{ lat: car.lat, lng: car.lng }}
-          icon={markerIcons.car}
-          title={car.name}
-        />
-      ))}
-    </>
-  );
-});
-
 const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
   suspense: true,
 });
@@ -147,14 +125,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // 3D overlay (InstancedMesh-based) - station cubes
+  // Pass cars into our 3D overlay
   const {
     overlayRef,
     stationIndexMapsRef,
     greyInstancedMeshRef,
     blueInstancedMeshRef,
     redInstancedMeshRef,
-  } = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId);
+  } = useThreeOverlay(
+    actualMap,
+    stations,
+    departureStationId,
+    arrivalStationId,
+    cars // <-- now passed here
+  );
 
   // Keep booking step in a ref to prevent stale closures
   const bookingStepRef = useRef(bookingStep);
@@ -287,7 +271,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [isLoaded]);
 
   // --------------------------
-  // Fetch data
+  // Fetch data (stations + cars)
   // --------------------------
   useEffect(() => {
     (async () => {
@@ -303,6 +287,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
+  // Once loaded, hide the spinner overlay
   useEffect(() => {
     if (isLoaded && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -500,18 +485,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 setActualMap(map);
               }}
             >
-              {/* No Google polylines here, all routes are drawn via Three.js overlay */}
-
-              {/* Car markers */}
-              <CarMarkers
-                cars={cars.map((c) => ({
-                  id: c.id,
-                  lat: c.lat,
-                  lng: c.lng,
-                  name: c.name,
-                }))}
-                markerIcons={markerIcons}
-              />
+              {/* 
+                NOTE: We've removed <CarMarkers> here 
+                because the cars are now rendered as 3D spheres 
+                in the useThreeOverlay hook. 
+              */}
             </GoogleMap>
           </div>
 
