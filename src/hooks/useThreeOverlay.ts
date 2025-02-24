@@ -72,10 +72,10 @@ function createOrUpdateTube(
   const curve = new CustomCurve(points);
 
   // Increase segments for smoother tube
-  const tubularSegments = Math.max(points.length * 2, 30); // adjustable
-  const radius = 8;      // thickness of the tube in world units
+  const tubularSegments = Math.max(points.length * 2, 30);
+  const radius = 8;          // thickness of the tube in world units
   const radialSegments = 6;  // how many segments around the radius
-  const closed = false;   // typically false, as we have an open route
+  const closed = false;      // open route
 
   // Create a new TubeGeometry
   const geometry = new THREE.TubeGeometry(
@@ -92,7 +92,7 @@ function createOrUpdateTube(
 
     // Ensure it’s drawn “on top”
     mesh.renderOrder = 999;
-    
+
     meshRef.current = mesh;
     scene.add(mesh);
   } else {
@@ -106,12 +106,14 @@ function createOrUpdateTube(
  * Hook: useThreeOverlay with:
  *   1) InstancedMesh cubes for stations
  *   2) 3D Tube geometry for dispatch/booking routes
+ *   3) InstancedMesh spheres for cars
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
   stations: StationFeature[],
   departureStationId: number | null,
-  arrivalStationId: number | null
+  arrivalStationId: number | null,
+  cars: Array<{ id: number; lat: number; lng: number }> // <-- NEW parameter
 ) {
   // References to the overlay and scene
   const overlayRef = useRef<ThreeJSOverlayView | null>(null);
@@ -150,6 +152,11 @@ export function useThreeOverlay(
   // Materials for tubes
   const dispatchTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const bookingTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+
+  // --- NEW: Cars references ---
+  const carsSphereGeoRef = useRef<THREE.SphereGeometry | null>(null);
+  const carsMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const carsInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null);
 
   // Pull Decoded Routes from Redux
   const dispatchRouteDecoded = useAppSelector(selectDispatchRouteDecoded);
@@ -232,9 +239,36 @@ export function useThreeOverlay(
   }
 
   // -------------------------------------------------
+  // NEW: Populate cars InstancedMesh
+  // -------------------------------------------------
+  function populateCarsInstancedMesh() {
+    if (!carsInstancedMeshRef.current || !overlayRef.current) return;
+
+    const mesh = carsInstancedMeshRef.current;
+    let i = 0;
+
+    // Position each car
+    cars.forEach((car) => {
+      overlayRef.current!.latLngAltitudeToVector3(
+        { lat: car.lat, lng: car.lng, altitude: 50 }, // adjust altitude as desired
+        tempVector
+      );
+
+      tempMatrix.makeTranslation(tempVector.x, tempVector.y, tempVector.z);
+      mesh.setMatrixAt(i, tempMatrix);
+      i++;
+    });
+
+    // If cars array shrinks, this ensures only the needed instances are rendered
+    mesh.count = i;
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // -------------------------------------------------
   // Initialize overlay + scene
   // -------------------------------------------------
   useEffect(() => {
+    // Only init once map + stations are loaded
     if (!googleMap || stations.length === 0) return;
 
     console.log("[useThreeOverlay] Initializing Three.js overlay...");
@@ -253,12 +287,12 @@ export function useThreeOverlay(
       map: googleMap,
       scene,
       anchor: DISPATCH_HUB,
-      // @ts-expect-error
+      // @ts-expect-error - (typings for Google Maps + Three might need ignoring)
       THREE,
     });
     overlayRef.current = overlay;
 
-    // Create shared geometries
+    // Create shared geometries (station boxes, dispatch box)
     if (!dispatchBoxGeoRef.current) {
       dispatchBoxGeoRef.current = new THREE.BoxGeometry(50, 50, 50);
     }
@@ -298,10 +332,8 @@ export function useThreeOverlay(
     if (!dispatchTubeMatRef.current) {
       dispatchTubeMatRef.current = new THREE.MeshPhongMaterial({
         color: 0xf5f5f5,
-        opacity: 0.7,
+        opacity: 0.5,
         transparent: true,
-        emissive: 0xffffff,        // glow color
-        emissiveIntensity: 0.5,    // strength of the glow
       });
     }
     if (!bookingTubeMatRef.current) {
@@ -337,14 +369,41 @@ export function useThreeOverlay(
     };
 
     colors.forEach((color) => {
-      const mesh = new THREE.InstancedMesh(stationBoxGeoRef.current!, materials[color], maxInstances);
+      const mesh = new THREE.InstancedMesh(
+        stationBoxGeoRef.current!,
+        materials[color],
+        maxInstances
+      );
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       scene.add(mesh);
       meshRefs[color].current = mesh;
     });
 
-    // Populate station cubes
+    // --- NEW: Create geometry + material + InstancedMesh for cars
+    if (!carsSphereGeoRef.current) {
+      carsSphereGeoRef.current = new THREE.SphereGeometry(7, 16, 8); // radius, segments
+    }
+    if (!carsMatRef.current) {
+      carsMatRef.current = new THREE.MeshPhongMaterial({
+        color: 0x444444, // dark gray
+        opacity: 0.9,
+        transparent: true,
+      });
+    }
+
+    // Create an InstancedMesh for cars (size it to however many cars we have)
+    const maxCars = Math.max(1, cars.length);
+    carsInstancedMeshRef.current = new THREE.InstancedMesh(
+      carsSphereGeoRef.current,
+      carsMatRef.current,
+      maxCars
+    );
+    carsInstancedMeshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    scene.add(carsInstancedMeshRef.current);
+
+    // Populate station cubes, cars, etc.
     populateInstancedMeshes();
+    populateCarsInstancedMesh();
     overlay.requestRedraw();
 
     // Cleanup
@@ -360,17 +419,23 @@ export function useThreeOverlay(
       scene.clear();
       sceneRef.current = null;
 
-      // Dispose geometries
+      // Dispose station box geometry
       dispatchBoxGeoRef.current?.dispose();
       stationBoxGeoRef.current?.dispose();
 
-      // Dispose materials
+      // Dispose station materials
       matGreyRef.current?.dispose();
       matBlueRef.current?.dispose();
       matRedRef.current?.dispose();
       dispatchMatRef.current?.dispose();
+
+      // Dispose route tube materials
       dispatchTubeMatRef.current?.dispose();
       bookingTubeMatRef.current?.dispose();
+
+      // Dispose car geometry + material
+      carsSphereGeoRef.current?.dispose();
+      carsMatRef.current?.dispose();
 
       // Null out references
       dispatchBoxGeoRef.current = null;
@@ -381,10 +446,13 @@ export function useThreeOverlay(
       dispatchMatRef.current = null;
       dispatchTubeMatRef.current = null;
       bookingTubeMatRef.current = null;
+      carsSphereGeoRef.current = null;
+      carsMatRef.current = null;
 
       greyInstancedMeshRef.current = null;
       blueInstancedMeshRef.current = null;
       redInstancedMeshRef.current = null;
+      carsInstancedMeshRef.current = null;
 
       // Remove route meshes
       if (dispatchRouteMeshRef.current) {
@@ -410,6 +478,15 @@ export function useThreeOverlay(
     populateInstancedMeshes();
     overlayRef.current.requestRedraw();
   }, [departureStationId, arrivalStationId, stations.length]);
+
+  // -------------------------------------------------
+  // Whenever cars change, re-populate the car instanced mesh
+  // -------------------------------------------------
+  useEffect(() => {
+    if (!sceneRef.current || !overlayRef.current) return;
+    populateCarsInstancedMesh();
+    overlayRef.current.requestRedraw();
+  }, [cars]);
 
   // -------------------------------------------------
   // Whenever routes change, draw TUBE geometry routes
@@ -461,6 +538,7 @@ export function useThreeOverlay(
     greyInstancedMeshRef,
     blueInstancedMeshRef,
     redInstancedMeshRef,
+    carsInstancedMeshRef, // optionally expose this
     stationIndexMapsRef,
   };
 }
