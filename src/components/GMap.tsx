@@ -10,7 +10,6 @@ import React, {
 } from "react";
 import {
   GoogleMap,
-  Polyline,
   Marker,
   useJsApiLoader,
 } from "@react-google-maps/api";
@@ -71,10 +70,6 @@ import {
   DEFAULT_ZOOM,
   createMapOptions,
   createMarkerIcons,
-  ROUTE_LINE_OPTIONS_SHADOW,
-  ROUTE_LINE_OPTIONS_FOREGROUND,
-  DISPATCH_ROUTE_LINE_OPTIONS_SHADOW,
-  DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND,
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
@@ -505,33 +500,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 setActualMap(map);
               }}
             >
-              {/* Dispatch polyline (hub -> departure) */}
-              {decodedDispatchPath.length > 0 && (
-                <>
-                  <Polyline
-                    path={decodedDispatchPath}
-                    options={DISPATCH_ROUTE_LINE_OPTIONS_SHADOW}
-                  />
-                  <Polyline
-                    path={decodedDispatchPath}
-                    options={DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND}
-                  />
-                </>
-              )}
-
-              {/* Main route (departure -> arrival) */}
-              {decodedPath.length > 0 && (
-                <>
-                  <Polyline
-                    path={decodedPath}
-                    options={ROUTE_LINE_OPTIONS_SHADOW}
-                  />
-                  <Polyline
-                    path={decodedPath}
-                    options={ROUTE_LINE_OPTIONS_FOREGROUND}
-                  />
-                </>
-              )}
+              {/* No Google polylines here, all routes are drawn via Three.js overlay */}
 
               {/* Car markers */}
               <CarMarkers
