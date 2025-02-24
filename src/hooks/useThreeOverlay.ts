@@ -298,7 +298,7 @@ export function useThreeOverlay(
     if (!dispatchTubeMatRef.current) {
       dispatchTubeMatRef.current = new THREE.MeshPhongMaterial({
         color: 0xf5f5f5,
-        opacity: 0.3,
+        opacity: 0.7,
         transparent: true,
         emissive: 0xffffff,        // glow color
         emissiveIntensity: 0.5,    // strength of the glow
