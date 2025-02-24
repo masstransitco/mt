@@ -9,8 +9,8 @@ export const MAP_CONTAINER_STYLE = {
 };
 
 export const DEFAULT_CENTER = {
-  lat: 22.3,
-  lng: 114.2,
+  lat: 22.289,
+  lng: 114.158,
 };
 
 export const DEFAULT_ZOOM = 12;
