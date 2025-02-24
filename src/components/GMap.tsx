@@ -47,15 +47,14 @@ import {
   clearDepartureStation,
   clearArrivalStation,
   clearRoute,
+  selectRouteDecoded,
 } from "@/store/bookingSlice";
-import { fetchStations3D, selectStations3D } from "@/store/stations3DSlice";
 import {
   fetchDispatchDirections,
   clearDispatchRoute,
   selectDispatchRoute,
   selectDispatchRouteDecoded,
 } from "@/store/dispatchSlice";
-import { selectRouteDecoded } from "@/store/bookingSlice"; // If your memoized route decode is here
 
 // UI Components
 import Sheet from "@/components/ui/sheet";
@@ -134,7 +133,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
   const userLocation = useAppSelector(selectUserLocation);
-  const stations3D = useAppSelector(selectStations3D);
   const bookingStep = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
@@ -154,7 +152,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // 3D overlay (InstancedMesh-based)
+  // 3D overlay (InstancedMesh-based) - station cubes
   const {
     overlayRef,
     stationIndexMapsRef,
@@ -301,7 +299,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       try {
         await Promise.all([
           dispatch(fetchStations()).unwrap(),
-          dispatch(fetchStations3D()).unwrap(),
           dispatch(fetchCars()).unwrap(),
         ]);
       } catch (err) {
