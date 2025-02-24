@@ -83,7 +83,7 @@ export function useThreeOverlay(
   );
 
   // Altitude offset so lines are above ground
-  const ROUTE_ALTITUDE = 100;
+  const ROUTE_ALTITUDE = 5;
 
   // -------------------------------------------------
   // Function: populate station cubes in instanced meshes
