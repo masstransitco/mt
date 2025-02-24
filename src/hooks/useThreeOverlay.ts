@@ -18,9 +18,94 @@ const tempMatrix = new THREE.Matrix4();
 const tempVector = new THREE.Vector3();
 
 /**
+ * A custom curve that interpolates between a set of points.
+ * TubeGeometry requires a Curve subclass.
+ */
+class CustomCurve extends THREE.Curve<THREE.Vector3> {
+  private points: THREE.Vector3[];
+
+  constructor(points: THREE.Vector3[]) {
+    super();
+    this.points = points;
+  }
+
+  getPoint(t: number, optionalTarget = new THREE.Vector3()) {
+    const segment = (this.points.length - 1) * t;
+    const index = Math.floor(segment);
+    const alpha = segment - index;
+
+    if (index >= this.points.length - 1) {
+      // If t is 1 or beyond, return the last point
+      return optionalTarget.copy(this.points[this.points.length - 1]);
+    }
+
+    const p0 = this.points[index];
+    const p1 = this.points[index + 1];
+    return optionalTarget.copy(p0).lerp(p1, alpha);
+  }
+}
+
+/**
+ * Function: create or update a 3D TUBE from decoded route
+ */
+function createOrUpdateTube(
+  decodedPath: Array<{ lat: number; lng: number }>,
+  meshRef: React.MutableRefObject<THREE.Mesh | null>,
+  material: THREE.MeshPhongMaterial,
+  scene: THREE.Scene,
+  overlay: ThreeJSOverlayView,
+  altitude: number
+) {
+  // Skip if route is too short
+  if (!decodedPath || decodedPath.length < 2) {
+    return;
+  }
+
+  // Convert lat/lng to Vector3 array (with altitude offset)
+  const points = decodedPath.map(({ lat, lng }) => {
+    const vector = new THREE.Vector3();
+    overlay.latLngAltitudeToVector3({ lat, lng, altitude }, vector);
+    return vector;
+  });
+
+  // Build a custom curve from these points
+  const curve = new CustomCurve(points);
+
+  // Increase segments for smoother tube
+  const tubularSegments = Math.max(points.length * 3, 60); // adjustable
+  const radius = 20;      // thickness of the tube in world units
+  const radialSegments = 8;  // how many segments around the radius
+  const closed = false;   // typically false, as we have an open route
+
+  // Create a new TubeGeometry
+  const geometry = new THREE.TubeGeometry(
+    curve,
+    tubularSegments,
+    radius,
+    radialSegments,
+    closed
+  );
+
+  if (!meshRef.current) {
+    // Create a new mesh
+    const mesh = new THREE.Mesh(geometry, material);
+
+    // Ensure it’s drawn “on top”
+    mesh.renderOrder = 999;
+    
+    meshRef.current = mesh;
+    scene.add(mesh);
+  } else {
+    // Update existing mesh geometry
+    meshRef.current.geometry.dispose();
+    meshRef.current.geometry = geometry;
+  }
+}
+
+/**
  * Hook: useThreeOverlay with:
  *   1) InstancedMesh cubes for stations
- *   2) 3D lines for the dispatch route + booking route
+ *   2) 3D Tube geometry for dispatch/booking routes
  */
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -52,18 +137,19 @@ export function useThreeOverlay(
   const stationBoxGeoRef = useRef<THREE.BoxGeometry | null>(null);
   const dispatchBoxGeoRef = useRef<THREE.BoxGeometry | null>(null);
 
+  // Tube mesh references
+  const dispatchRouteMeshRef = useRef<THREE.Mesh | null>(null);
+  const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null);
+
+  // Materials for station cubes
   const matGreyRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const matBlueRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null);
   const dispatchMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
 
-  // Lines for Dispatch & Booking routes
-  const dispatchRouteLineRef = useRef<THREE.Line | null>(null);
-  const bookingRouteLineRef = useRef<THREE.Line | null>(null);
-
-  // Materials for lines
-  const dispatchLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
-  const bookingLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+  // Materials for tubes
+  const dispatchTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
+  const bookingTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null);
 
   // Pull Decoded Routes from Redux
   const dispatchRouteDecoded = useAppSelector(selectDispatchRouteDecoded);
@@ -82,8 +168,8 @@ export function useThreeOverlay(
     []
   );
 
-  // Altitude offset so lines are above ground
-  const ROUTE_ALTITUDE = 5;
+  // How high the route tubes float above ground
+  const ROUTE_ALTITUDE = 100;
 
   // -------------------------------------------------
   // Function: populate station cubes in instanced meshes
@@ -146,51 +232,6 @@ export function useThreeOverlay(
   }
 
   // -------------------------------------------------
-  // Function: create or update a 3D line from decoded route
-  // -------------------------------------------------
-  function createOrUpdateLine(
-    decodedPath: Array<{ lat: number; lng: number }>,
-    lineRef: React.MutableRefObject<THREE.Line | null>,
-    material: THREE.LineBasicMaterial,
-    scene: THREE.Scene,
-    overlay: ThreeJSOverlayView
-  ) {
-    // Skip if route is too short
-    if (!decodedPath || decodedPath.length < 2) {
-      return;
-    }
-
-    // Convert lat/lng to Vector3 array (with altitude offset)
-    const points = decodedPath.map(({ lat, lng }) => {
-      const vector = new THREE.Vector3();
-      overlay.latLngAltitudeToVector3({ lat, lng, altitude: ROUTE_ALTITUDE }, vector);
-      return vector;
-    });
-
-    if (!lineRef.current) {
-      // Create new geometry + line
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const line = new THREE.Line(geometry, material);
-
-      // Ensure it’s always drawn on top
-      line.renderOrder = 999;
-      material.depthTest = false;
-      material.depthWrite = false;
-      material.transparent = true;
-      material.opacity = 0.8;
-
-      lineRef.current = line;
-      scene.add(line);
-    } else {
-      // Update existing geometry
-      const geometry = lineRef.current.geometry as THREE.BufferGeometry;
-      geometry.setFromPoints(points);
-      geometry.computeBoundingSphere();
-      geometry.attributes.position.needsUpdate = true;
-    }
-  }
-
-  // -------------------------------------------------
   // Initialize overlay + scene
   // -------------------------------------------------
   useEffect(() => {
@@ -225,7 +266,7 @@ export function useThreeOverlay(
       stationBoxGeoRef.current = new THREE.BoxGeometry(50, 50, 50);
     }
 
-    // Create shared materials (dispatch + stations)
+    // Create shared materials for station cubes
     if (!dispatchMatRef.current) {
       dispatchMatRef.current = new THREE.MeshPhongMaterial({
         color: 0x00ff00,
@@ -255,25 +296,19 @@ export function useThreeOverlay(
       });
     }
 
-    // Create materials for lines
-    if (!dispatchLineMatRef.current) {
-      dispatchLineMatRef.current = new THREE.LineBasicMaterial({
+    // Create materials for route tubes
+    if (!dispatchTubeMatRef.current) {
+      dispatchTubeMatRef.current = new THREE.MeshPhongMaterial({
         color: 0xf5f5f5,
-        linewidth: 3,
-        transparent: true,
         opacity: 0.8,
-        depthTest: false,
-        depthWrite: false,
+        transparent: true,
       });
     }
-    if (!bookingLineMatRef.current) {
-      bookingLineMatRef.current = new THREE.LineBasicMaterial({
+    if (!bookingTubeMatRef.current) {
+      bookingTubeMatRef.current = new THREE.MeshPhongMaterial({
         color: 0x03a9f4,
-        linewidth: 3,
-        transparent: true,
         opacity: 0.8,
-        depthTest: false,
-        depthWrite: false,
+        transparent: true,
       });
     }
 
@@ -312,6 +347,7 @@ export function useThreeOverlay(
     populateInstancedMeshes();
     overlay.requestRedraw();
 
+    // Cleanup
     return () => {
       console.log("[useThreeOverlay] Cleaning up Three.js overlay...");
 
@@ -333,8 +369,8 @@ export function useThreeOverlay(
       matBlueRef.current?.dispose();
       matRedRef.current?.dispose();
       dispatchMatRef.current?.dispose();
-      dispatchLineMatRef.current?.dispose();
-      bookingLineMatRef.current?.dispose();
+      dispatchTubeMatRef.current?.dispose();
+      bookingTubeMatRef.current?.dispose();
 
       // Null out references
       dispatchBoxGeoRef.current = null;
@@ -343,14 +379,23 @@ export function useThreeOverlay(
       matBlueRef.current = null;
       matRedRef.current = null;
       dispatchMatRef.current = null;
-      dispatchLineMatRef.current = null;
-      bookingLineMatRef.current = null;
+      dispatchTubeMatRef.current = null;
+      bookingTubeMatRef.current = null;
+
       greyInstancedMeshRef.current = null;
       blueInstancedMeshRef.current = null;
       redInstancedMeshRef.current = null;
 
-      dispatchRouteLineRef.current = null;
-      bookingRouteLineRef.current = null;
+      // Remove route meshes
+      if (dispatchRouteMeshRef.current) {
+        dispatchRouteMeshRef.current.geometry.dispose();
+      }
+      dispatchRouteMeshRef.current = null;
+
+      if (bookingRouteMeshRef.current) {
+        bookingRouteMeshRef.current.geometry.dispose();
+      }
+      bookingRouteMeshRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleMap, stations.length, lights]);
@@ -367,41 +412,43 @@ export function useThreeOverlay(
   }, [departureStationId, arrivalStationId, stations.length]);
 
   // -------------------------------------------------
-  // Whenever routes change, draw 3D lines
+  // Whenever routes change, draw TUBE geometry routes
   // -------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return;
 
     // Dispatch route
-    if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchLineMatRef.current) {
-      createOrUpdateLine(
+    if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchTubeMatRef.current) {
+      createOrUpdateTube(
         dispatchRouteDecoded,
-        dispatchRouteLineRef,
-        dispatchLineMatRef.current,
+        dispatchRouteMeshRef,
+        dispatchTubeMatRef.current,
         sceneRef.current,
-        overlayRef.current
+        overlayRef.current,
+        ROUTE_ALTITUDE
       );
-    } else if (dispatchRouteLineRef.current) {
-      // Clear existing line if route is empty or too short
-      sceneRef.current.remove(dispatchRouteLineRef.current);
-      dispatchRouteLineRef.current.geometry.dispose();
-      dispatchRouteLineRef.current = null;
+    } else if (dispatchRouteMeshRef.current) {
+      // Clear existing mesh if route is empty or too short
+      sceneRef.current.remove(dispatchRouteMeshRef.current);
+      dispatchRouteMeshRef.current.geometry.dispose();
+      dispatchRouteMeshRef.current = null;
     }
 
     // Booking route
-    if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingLineMatRef.current) {
-      createOrUpdateLine(
+    if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingTubeMatRef.current) {
+      createOrUpdateTube(
         bookingRouteDecoded,
-        bookingRouteLineRef,
-        bookingLineMatRef.current,
+        bookingRouteMeshRef,
+        bookingTubeMatRef.current,
         sceneRef.current,
-        overlayRef.current
+        overlayRef.current,
+        ROUTE_ALTITUDE
       );
-    } else if (bookingRouteLineRef.current) {
-      // Clear existing line if route is empty or too short
-      sceneRef.current.remove(bookingRouteLineRef.current);
-      bookingRouteLineRef.current.geometry.dispose();
-      bookingRouteLineRef.current = null;
+    } else if (bookingRouteMeshRef.current) {
+      // Clear existing mesh if route is empty or too short
+      sceneRef.current.remove(bookingRouteMeshRef.current);
+      bookingRouteMeshRef.current.geometry.dispose();
+      bookingRouteMeshRef.current = null;
     }
 
     overlayRef.current.requestRedraw();
