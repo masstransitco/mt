@@ -128,14 +128,14 @@ function StationDetailComponent({
               <span className="text-muted-foreground">Total Route Distance</span>
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-zinc-800">
               <span className="text-muted-foreground">Estimated Drive Time</span>
               <span className="font-medium">{routeDurationMin} min</span>
             </div>
           </>
         ) : (
           activeStation.distance !== undefined && (
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-zinc-800">
               <span className="text-muted-foreground">Distance from You</span>
               <span className="font-medium">
                 {activeStation.distance.toFixed(1)} km
