@@ -124,7 +124,7 @@ function StationDetailComponent({
 
         {routeDistanceKm && routeDurationMin ? (
           <>
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-zinc-900">
               <span className="text-muted-foreground">Total Route Distance</span>
               <span className="font-medium">{routeDistanceKm} km</span>
             </div>
