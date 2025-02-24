@@ -166,7 +166,7 @@ export const createMarkerIcons = () => {
 };
 
 // A “shadow” polyline (thicker, dark stroke)
-export const ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
+export const DISPATCH_ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
   strokeColor: "#2B2B2B",  // dark gray
   strokeWeight: 8,         // slightly thicker
   strokeOpacity: 0.9,
@@ -175,7 +175,7 @@ export const ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
 };
 
 // A “foreground” polyline (white or light gray)
-export const ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
+export const DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
   strokeColor: "#f5f5f5",  // light gray/white
   strokeWeight: 5,
   strokeOpacity: 1,
@@ -183,7 +183,7 @@ export const ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
   zIndex: 100,             // draw on top
 };
 
-export const DISPATCH_ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
+export const ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
   strokeColor: "#0A2239", // a darker "navy" or "blueprint"
   strokeWeight: 8,
   strokeOpacity: 0.9,
@@ -191,7 +191,7 @@ export const DISPATCH_ROUTE_LINE_OPTIONS_SHADOW: google.maps.PolylineOptions = {
   zIndex: 80, // slightly behind the normal route's lines
 };
 
-export const DISPATCH_ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
+export const ROUTE_LINE_OPTIONS_FOREGROUND: google.maps.PolylineOptions = {
   strokeColor: "#03A9F4", // bright "Uber-ish" blue
   strokeWeight: 5,
   strokeOpacity: 1,
