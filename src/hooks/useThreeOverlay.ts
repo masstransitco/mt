@@ -72,9 +72,9 @@ function createOrUpdateTube(
   const curve = new CustomCurve(points);
 
   // Increase segments for smoother tube
-  const tubularSegments = Math.max(points.length * 3, 60); // adjustable
-  const radius = 20;      // thickness of the tube in world units
-  const radialSegments = 8;  // how many segments around the radius
+  const tubularSegments = Math.max(points.length * 2, 30); // adjustable
+  const radius = 8;      // thickness of the tube in world units
+  const radialSegments = 6;  // how many segments around the radius
   const closed = false;   // typically false, as we have an open route
 
   // Create a new TubeGeometry
