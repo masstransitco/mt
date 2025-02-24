@@ -169,7 +169,7 @@ export function useThreeOverlay(
   );
 
   // How high the route tubes float above ground
-  const ROUTE_ALTITUDE = 100;
+  const ROUTE_ALTITUDE = 50;
 
   // -------------------------------------------------
   // Function: populate station cubes in instanced meshes
