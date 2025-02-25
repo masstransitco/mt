@@ -19,10 +19,15 @@ import {
   savePaymentMethod,
   deletePaymentMethod,
 } from "@/lib/stripe";
-import { CardElement, Elements, useStripe, useElements } from "@stripe/react-stripe-js";
+import {
+  CardElement,
+  Elements,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import { AnimatePresence, motion } from "framer-motion";
 
-// CardElement styles
+// Tailwind styles for the Stripe CardElement
 const cardStyle = {
   style: {
     base: {
@@ -30,9 +35,7 @@ const cardStyle = {
       fontFamily: "Inter, system-ui, sans-serif",
       fontSmoothing: "antialiased",
       fontSize: "16px",
-      "::placeholder": {
-        color: "var(--muted-foreground)",
-      },
+      "::placeholder": { color: "var(--muted-foreground)" },
     },
     invalid: {
       color: "var(--destructive)",
@@ -46,7 +49,7 @@ interface PaymentMethodCardProps {
   onDelete: (id: string) => Promise<void>;
 }
 
-const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
+function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -73,8 +76,7 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
       className="
         flex items-center justify-between 
         p-4 border border-white/20 
-        rounded-lg bg-white/10 
-        text-zinc-200
+        rounded-lg bg-white/10 text-zinc-200
       "
     >
       <div className="flex items-center gap-3">
@@ -104,17 +106,17 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
       </Button>
     </motion.div>
   );
-};
+}
 
 interface AddPaymentMethodFormProps {
   onSuccess: () => void;
-  existingMethods: SavedPaymentMethod[]; // For checking duplicates
+  existingMethods: SavedPaymentMethod[]; // for duplicate check
 }
 
-const AddPaymentMethodForm = ({
+function AddPaymentMethodForm({
   onSuccess,
   existingMethods,
-}: AddPaymentMethodFormProps) => {
+}: AddPaymentMethodFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -134,12 +136,12 @@ const AddPaymentMethodForm = ({
       });
 
       if (stripeError) {
-        setError(stripeError.message || "An error occurred.");
+        setError(stripeError.message || "An error occurred");
         return;
       }
 
       if (paymentMethod) {
-        // Check for duplicates
+        // Check duplicates
         const alreadyExists = existingMethods.some(
           (m) =>
             m.brand.toLowerCase() === paymentMethod.card?.brand.toLowerCase() &&
@@ -153,7 +155,7 @@ const AddPaymentMethodForm = ({
           return;
         }
 
-        // If not a duplicate, save in the backend
+        // Save if unique
         const result = await savePaymentMethod(auth.currentUser.uid, {
           id: paymentMethod.id,
           brand: paymentMethod.card!.brand,
@@ -166,10 +168,14 @@ const AddPaymentMethodForm = ({
         if (!result.success) {
           throw new Error(result.error);
         }
+
         onSuccess();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save payment method.");
+      console.error("Error creating payment method:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to save payment method"
+      );
     } finally {
       setLoading(false);
     }
@@ -199,7 +205,11 @@ const AddPaymentMethodForm = ({
           {error}
         </motion.div>
       )}
-      <Button type="submit" disabled={!stripe || loading} className="w-full">
+      <Button
+        type="submit"
+        disabled={!stripe || loading}
+        className="w-full"
+      >
         {loading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
@@ -208,7 +218,7 @@ const AddPaymentMethodForm = ({
       </Button>
     </motion.form>
   );
-};
+}
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -222,13 +232,14 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [error, setError] = useState<string | null>(null);
   const stripePromise = getStripe();
 
-  const loadPaymentMethods = async () => {
+  async function loadPaymentMethods() {
     if (!auth.currentUser) {
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
+
     try {
       const result = await getSavedPaymentMethods(auth.currentUser.uid);
       if (!result.success) {
@@ -238,15 +249,16 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     } catch (err) {
       console.error("Error loading payment methods:", err);
       setError(
-        err instanceof Error ? err.message : "Failed to load payment methods."
+        err instanceof Error ? err.message : "Failed to load payment methods"
       );
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
     if (isOpen && auth.currentUser) {
+      // Only load if modal is open and user is logged in
       loadPaymentMethods();
     } else {
       // Reset UI state when modal is closed
@@ -266,7 +278,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     } catch (err) {
       console.error("Error deleting payment method:", err);
       setError(
-        err instanceof Error ? err.message : "Failed to delete payment method."
+        err instanceof Error ? err.message : "Failed to delete payment method"
       );
     }
   };
@@ -274,21 +286,17 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   return (
     <Dialog
       open={isOpen}
-      // IMPORTANT: Use this pattern to avoid immediately calling onClose when opening
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      onOpenChange={onClose} // Same pattern as SignInModal
     >
       <DialogContent
         className="
-          relative w-11/12 max-w-2xl mx-4 my-4
+          relative w-11/12 max-w-2xl mx-4 my-8
           bg-gray-200/90 backdrop-blur-sm
           shadow-2xl rounded-lg
           overflow-hidden flex flex-col
           max-h-[80vh] z-[9999]
         "
       >
-        {/* Header */}
         <DialogHeader>
           <DialogTitle className="text-zinc-900">Payment Methods</DialogTitle>
           <DialogDescription className="text-zinc-600">
@@ -296,7 +304,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Main Content */}
         <div className="relative mt-4 flex-1">
           {error && (
             <motion.div
@@ -319,7 +326,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               {showAddCard ? (
                 <Elements stripe={stripePromise} key="addCardForm">
                   <AddPaymentMethodForm
-                    existingMethods={paymentMethods} // for duplicate check
+                    existingMethods={paymentMethods}
                     onSuccess={() => {
                       setShowAddCard(false);
                       loadPaymentMethods();
@@ -349,7 +356,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                     </div>
                   ) : (
                     <p className="text-center text-zinc-600 py-8">
-                      No payment methods saved yet.
+                      No payment methods saved yet
                     </p>
                   )}
                   <Button
@@ -366,7 +373,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           )}
         </div>
 
-        {/* Single close button (DialogClose) - top-right corner */}
+        {/* Single close button in top-right corner */}
         <DialogClose asChild>
           <Button
             variant="ghost"
