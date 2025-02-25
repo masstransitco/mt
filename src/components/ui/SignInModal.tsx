@@ -182,14 +182,14 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setError(null);
       cleanup();
 
-      // Get the container element for the reCAPTCHA widget
       const containerElement = document.getElementById("recaptcha-container");
       if (!containerElement) {
         throw new Error("Recaptcha container not found");
       }
 
-      // Create new reCAPTCHA instance using the container element
+      // Note: In Firebase v10 the parameter order is: auth, container, then configuration.
       const verifier = new RecaptchaVerifier(
+        auth,
         containerElement,
         {
           size: "invisible",
@@ -198,8 +198,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             setError("reCAPTCHA expired. Please try again.");
             setLoading(false);
           },
-        },
-        auth
+        }
       );
 
       window.recaptchaVerifier = verifier;
@@ -305,7 +304,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
-                    background: "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)",
+                    background:
+                      "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)",
                   }}
                 />
                 <div className="absolute inset-x-0 bottom-0 p-4">
