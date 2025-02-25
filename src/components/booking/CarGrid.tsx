@@ -9,8 +9,7 @@ import { selectCar } from "@/store/userSlice";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
 import CarCardGroup, { CarGroup } from "./CarCardGroup";
 
-// Example Car type for reference.
-// Adjust to match your real car properties in the store.
+// Example Car type for reference
 export interface Car {
   id: number;
   model?: string;
@@ -25,10 +24,10 @@ interface CarGridProps {
 
 export default function CarGrid({ className = "", isVisible = true }: CarGridProps) {
   const dispatch = useAppDispatch();
-  const availableCars = useAvailableCarsForDispatch(); // returns Car[] presumably
+  const availableCars = useAvailableCarsForDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
-  // This is our horizontal scroll container ref
+  // Horizontal scroll container ref
   const containerRef = useRef<HTMLDivElement>(null);
 
   // For controlling data fetch & skeletons
@@ -58,7 +57,7 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
   const groupedByModel: CarGroup[] = useMemo(() => {
     if (!isVisible) return [];
 
-    // We build a dictionary: { [modelName]: { model: string, cars: Car[] } }
+    // Build a dictionary: { [modelName]: { model: string, cars: Car[] } }
     const dict = availableCars.reduce((acc, car) => {
       const modelKey = car.model || "Unknown Model";
       if (!acc[modelKey]) {
@@ -77,8 +76,8 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
   if (isInitialLoad) {
     return (
       <div className="py-8 space-y-4">
-        <div className="w-full h-48 bg-neutral-200 animate-pulse rounded-lg" />
-        <div className="w-3/4 h-4 bg-neutral-200 animate-pulse rounded" />
+        <div className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg" />
+        <div className="w-3/4 h-4 bg-gray-900/50 animate-pulse rounded" />
       </div>
     );
   }
@@ -106,7 +105,6 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
           contain: "paint style layout",
         }}
       >
-        {/* In CarGrid.tsx, update the div containing the CarCardGroup */}
         <div className="flex flex-nowrap gap-3 py-2 px-1">
           <AnimatePresence mode="popLayout">
             {isVisible &&
@@ -124,7 +122,7 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
                   style={{
                     contain: "paint style layout",
                     willChange: "transform",
-                    width: "210px", // Smaller size here (adjust as needed)
+                    width: "210px",
                   }}
                   className="min-w-[210px]"
                 >
@@ -140,9 +138,9 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          className="py-12 text-center rounded-2xl bg-neutral-200 mt-4 mx-4"
+          className="py-12 text-center rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm mt-4 mx-4"
         >
-          <p className="text-gray-600">No cars available right now. Please check again later.</p>
+          <p className="text-gray-400">No cars available right now. Please check again later.</p>
         </motion.div>
       )}
     </div>
