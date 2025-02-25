@@ -222,16 +222,24 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   };
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent
-        className="p-0 gap-0 w-[90vw] max-w-md md:max-w-2xl overflow-hidden bg-black text-white max-h-[95vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+   <Dialog
+  open={isOpen}
+  onOpenChange={(open) => {
+    if (!open) onClose();
+  }}
+>
+  <DialogContent
+    className="p-0 gap-0 w-[90vw] max-w-md md:max-w-2xl overflow-hidden bg-black text-white max-h-[95vh] flex flex-col"
+    style={{
+      top: '2rem', // Position near the top instead of centered
+      transform: 'translateX(-50%)', // Keep horizontal centering
+      marginTop: 0,
+      // Override the default transform that centers vertically
+      height: 'auto',
+      maxHeight: 'calc(100vh - 4rem)' // Allow some space at top and bottom
+    }}
+    onClick={(e) => e.stopPropagation()}
+  >
         <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10 flex-shrink-0">
           <DialogTitle className="text-white">
             {success ? "Address Saved" : "Add Residential Address"}
