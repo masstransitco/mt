@@ -17,8 +17,16 @@ import { signOut, User } from 'firebase/auth';
 // Lazy-loaded modals
 const SignInModal = dynamic(() => import('./SignInModal'), { ssr: false });
 const WalletModal = dynamic(() => import('./WalletModal'), { ssr: false });
+const LicenseModal = dynamic(() => import('./LicenseModal'), { ssr: false });
 
 import { fetchHKWeather, WeatherData } from '@/lib/weather';
+
+// License Icon SVG Component
+const LicenseIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+    <path fillRule="evenodd" d="M4.5 3.75a3 3 0 0 0-3 3v10.5a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V6.75a3 3 0 0 0-3-3h-15Zm4.125 3a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Zm-3.873 8.703a4.126 4.126 0 0 1 7.746 0 .75.75 0 0 1-.351.92 7.47 7.47 0 0 1-3.522.877 7.47 7.47 0 0 1-3.522-.877.75.75 0 0 1-.351-.92ZM15 8.25a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 0-1.5H15ZM14.25 12a.75.75 0 0 1 .75-.75h3.75a.75.75 0 0 1 0 1.5H15a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 0-1.5H15Z" clipRule="evenodd" />
+  </svg>
+);
 
 interface AppMenuProps {
   onClose: () => void; // We'll call this to close the SideSheet
@@ -28,6 +36,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
   const [user, setUser] = useState<User | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Weather data
@@ -72,6 +81,15 @@ export default function AppMenu({ onClose }: AppMenuProps) {
       setShowSignInModal(true);
     } else {
       setShowWalletModal(true);
+    }
+  };
+
+  // License modal logic
+  const handleLicenseClick = () => {
+    if (!user) {
+      setShowSignInModal(true);
+    } else {
+      setShowLicenseModal(true);
     }
   };
 
@@ -265,6 +283,26 @@ export default function AppMenu({ onClose }: AppMenuProps) {
                 </div>
                 <ChevronRight className="w-5 h-5 text-muted-foreground" />
               </button>
+              
+              {/* New License Button */}
+              <button
+                onClick={handleLicenseClick}
+                className="
+                  w-full 
+                  flex items-center justify-between 
+                  py-2 px-3 
+                  rounded-lg 
+                  hover:bg-accent/10 
+                  transition-colors 
+                  duration-200
+                "
+              >
+                <div className="flex items-center gap-3">
+                  <LicenseIcon />
+                  <span className="font-medium">License & ID</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </button>
             </div>
           )}
         </div>
@@ -381,6 +419,10 @@ export default function AppMenu({ onClose }: AppMenuProps) {
       <WalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
+      />
+      <LicenseModal
+        isOpen={showLicenseModal}
+        onClose={() => setShowLicenseModal(false)}
       />
     </div>
   );
