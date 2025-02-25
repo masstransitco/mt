@@ -41,8 +41,8 @@ interface CarCardGroupProps {
 
 /** Fallback skeleton while the 3D viewer loads. */
 const ViewerSkeleton = () => (
-  <div className="relative w-full h-full bg-neutral-200 rounded-t-md overflow-hidden">
-    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200" />
+  <div className="relative w-full h-full bg-gray-900/30 rounded-l-lg overflow-hidden">
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
   </div>
 );
 
@@ -184,103 +184,120 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
     <motion.div
       ref={cardRef}
       onClick={handleCardClick}
-      initial={{ scale: 0.98 }}
-      animate={{ scale: isGroupSelected ? 1.0 : 0.98 }}
-      transition={{ type: "tween", duration: 0.2 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ 
+        opacity: 1, 
+        y: 0,
+        scale: isGroupSelected ? 1.0 : 0.98 
+      }}
+      transition={{ 
+        type: "tween", 
+        duration: 0.2,
+        delay: 0.05
+      }}
       className={`
         relative
         overflow-hidden
-        rounded-md
-        bg-neutral-300
-        text-black
-        border border-gray-400
+        rounded-lg
+        bg-gray-900/50
+        text-white
+        border border-gray-800
+        backdrop-blur-sm
         shadow-md
         transition-colors
         cursor-pointer
-        ${isGroupSelected ? "ring-2 ring-white" : ""}
+        mb-4
+        w-full
+        ${isGroupSelected ? "ring-1 ring-blue-500" : ""}
       `}
       style={{
-  width: "100%", // Full width of parent container
-  maxWidth: "260px", // Maximum size matching your original
-  contain: "content",
-  willChange: isGroupSelected ? "transform" : "auto",
-}}
+        contain: "content",
+        willChange: isGroupSelected ? "transform" : "auto",
+      }}
     >
       {/* Badge if user selected a car from this group */}
       {isGroupSelected && (
         <div className="absolute top-3 right-3 z-10">
-          <div className="px-2 py-1 rounded-full bg-white text-black text-sm">
-            5-Seater
+          <div className="px-2 py-1 rounded-full bg-blue-500/80 text-white text-xs backdrop-blur-sm">
+            Selected
           </div>
         </div>
       )}
 
-      {/* 3D Viewer Container */}
-      <div className="relative w-full aspect-[5/3]">
-        {shouldRender3D && isVisible ? (
-          <Car3DViewer
-            modelUrl={modelUrl}
-            imageUrl={selectedCar?.image}
-            interactive={isGroupSelected}
-            height="100%"
-            width="100%"
-            isVisible={true}
-          />
-        ) : (
-          <ViewerSkeleton />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-3">
-        <div className="flex items-start justify-between">
-          <p className="font-bold text-lg leading-tight">{selectedCar.model}</p>
-          <div
-            className="flex flex-col items-end relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <select
-              className="mb-1 cursor-pointer bg-neutral-200 border border-gray-300 rounded px-1 text-black text-sm"
-              onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
-              value={selectedCar.id}
-            >
-              {group.cars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="flex flex-col md:flex-row">
+        {/* 3D Viewer Container */}
+        <div className="relative w-full md:w-1/2 aspect-[5/3] md:aspect-auto">
+          {shouldRender3D && isVisible ? (
+            <Car3DViewer
+              modelUrl={modelUrl}
+              imageUrl={selectedCar?.image}
+              interactive={isGroupSelected}
+              height="100%"
+              width="100%"
+              isVisible={true}
+            />
+          ) : (
+            <ViewerSkeleton />
+          )}
         </div>
 
-        <div className="flex items-center justify-between mt-1 relative">
-          <div className="flex items-center gap-1">
-            <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
-            <span className="text-sm font-medium">{batteryPercentage}%</span>
-          </div>
-
-          <div className="flex items-center gap-1 text-sm text-gray-600">
-            <Info className="w-4 h-4 cursor-pointer" onClick={handleOdometerClick} />
-            {showOdometerPopup && (
-              <div className="absolute top-5 right-0 bg-white text-black text-xs px-2 py-1 rounded shadow-md">
-                Total distance driven: {selectedCar.odometer} km
+        {/* Content */}
+        <div className="p-4 md:w-1/2 flex flex-col justify-between">
+          <div>
+            <div className="flex items-start justify-between">
+              <p className="font-medium text-lg leading-tight text-white">{selectedCar.model}</p>
+              <div
+                className="flex flex-col items-end relative"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <select
+                  className="mb-1 cursor-pointer bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs"
+                  onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
+                  value={selectedCar.id}
+                >
+                  {group.cars.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
-            <span>{selectedCar.year}</span>
-          </div>
-        </div>
+            </div>
 
-        <div className="mt-2 flex items-center gap-2 text-gray-600">
-          <Gauge className="w-4 h-4" />
-          <span className="text-sm">{(batteryPercentage * 3.51).toFixed(1)} km</span>
+            <div className="flex items-center mt-3">
+              <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-2 py-1">
+                <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
+                <span className="text-xs font-medium">{batteryPercentage}%</span>
+              </div>
+              
+              <div className="ml-2 flex items-center gap-1 bg-gray-800/70 rounded-full px-2 py-1">
+                <Gauge className="w-4 h-4 text-blue-400" />
+                <span className="text-xs">{(batteryPercentage * 3.51).toFixed(0)} km</span>
+              </div>
+            </div>
+            
+            <div className="flex items-center mt-3 text-gray-400 text-xs">
+              <Info 
+                className="w-4 h-4 mr-1 cursor-pointer hover:text-white transition-colors" 
+                onClick={handleOdometerClick} 
+              />
+              <span>Year: {selectedCar.year}</span>
+              
+              {showOdometerPopup && (
+                <div className="absolute left-4 bottom-16 bg-gray-800 text-white text-xs px-3 py-2 rounded-md shadow-lg border border-gray-700 z-10">
+                  Total distance: {selectedCar.odometer} km
+                </div>
+              )}
+            </div>
+          </div>
+
+          {formattedLastDriven && (
+            <div className="mt-3 text-gray-400 text-xs">
+              Last driven: {formattedLastDriven}
+            </div>
+          )}
         </div>
       </div>
-
-      {formattedLastDriven && (
-        <div className="bg-gray-200 text-gray-700 text-xs px-4 py-2">
-          Last driven on {formattedLastDriven}
-        </div>
-      )}
     </motion.div>
   );
 }
