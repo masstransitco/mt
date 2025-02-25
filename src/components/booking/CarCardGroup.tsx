@@ -200,10 +200,11 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
         ${isGroupSelected ? "ring-2 ring-white" : ""}
       `}
       style={{
-        width: 260,
-        contain: "content",
-        willChange: isGroupSelected ? "transform" : "auto",
-      }}
+  width: "100%", // Full width of parent container
+  maxWidth: "260px", // Maximum size matching your original
+  contain: "content",
+  willChange: isGroupSelected ? "transform" : "auto",
+}}
     >
       {/* Badge if user selected a car from this group */}
       {isGroupSelected && (
