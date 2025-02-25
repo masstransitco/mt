@@ -2,6 +2,10 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+const authDomain = typeof window !== "undefined"
+  ? window.location.hostname
+  : "masstransitcompany.firebaseapp.com";
+
 // Your Firebase project config
 const firebaseConfig = {
   apiKey: "AIzaSyAj46uOcP-Y4T3X2ZpdlWt4_PxUWCTFwyM",
