@@ -76,14 +76,13 @@ export default function PhoneInput({ value, onChange, disabled }: PhoneInputProp
         <PopoverTrigger asChild>
           <button
             disabled={disabled}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border 
-                       hover:bg-accent/10 disabled:opacity-50 transition-colors min-w-[120px]"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-100 disabled:opacity-50 transition-colors min-w-[120px]"
           >
             <span className="text-xl">{selectedCountry.flag}</span>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-sm">
               +{selectedCountry.dialCode}
             </span>
-            <ChevronDown className="w-4 h-4 ml-auto text-muted-foreground" />
+            <ChevronDown className="w-4 h-4 ml-auto text-gray-600" />
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0" align="start">
@@ -96,15 +95,15 @@ export default function PhoneInput({ value, onChange, disabled }: PhoneInputProp
                   key={country.code}
                   value={`${country.name} ${country.dialCode}`}
                   onSelect={() => handleCountrySelect(country)}
-                  className="flex items-center gap-2 px-4 py-2 cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2 cursor-pointer hover:bg-gray-100"
                 >
                   <span className="text-xl">{country.flag}</span>
                   <span>{country.name}</span>
-                  <span className="text-sm text-muted-foreground ml-auto">
+                  <span className="text-sm text-gray-600 ml-auto">
                     +{country.dialCode}
                   </span>
                   {country.code === selectedCountry.code && (
-                    <Check className="w-4 h-4 text-primary" />
+                    <Check className="w-4 h-4 text-blue-500" />
                   )}
                 </CommandItem>
               ))}
@@ -120,8 +119,7 @@ export default function PhoneInput({ value, onChange, disabled }: PhoneInputProp
         onChange={handlePhoneInput}
         disabled={disabled}
         // Ensure font size is 16px to prevent mobile browsers from zooming in
-        className="flex-1 p-2 text-base rounded-lg border border-border bg-background 
-                   disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+        className="flex-1 p-2 text-base rounded-lg border border-gray-300 bg-white text-gray-900 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   );
