@@ -26,6 +26,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 // Tailwind styles for the Stripe CardElement
 const cardStyle = {
@@ -75,17 +76,17 @@ function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
       transition={{ type: "tween", duration: 0.2 }}
       className="
         flex items-center justify-between 
-        p-4 border border-white/20 
-        rounded-lg bg-white/10 text-zinc-200
+        p-4 border border-border/40
+        rounded-lg bg-card/10 text-foreground
       "
     >
       <div className="flex items-center gap-3">
-        <CreditCard className="w-5 h-5 text-zinc-300" />
+        <CreditCard className="w-5 h-5" />
         <div>
           <p className="font-medium uppercase">
             {method.brand} •••• {method.last4}
           </p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             Expires {method.expMonth}/{method.expYear}
           </p>
         </div>
@@ -95,7 +96,7 @@ function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
         size="icon"
         onClick={handleDelete}
         disabled={isDeleting}
-        className="text-zinc-400 hover:text-destructive hover:bg-destructive/10"
+        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
       >
         {isDeleting ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -189,9 +190,9 @@ function AddPaymentMethodForm({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
       onSubmit={handleSubmit}
-      className="space-y-4"
+      className="space-y-4 px-4"
     >
-      <div className="p-4 border border-white/20 rounded-lg bg-white/10 text-zinc-200">
+      <div className="p-4 border border-border/40 rounded-lg bg-card/10 text-foreground">
         <CardElement options={cardStyle} />
       </div>
       {error && (
@@ -231,6 +232,12 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const stripePromise = getStripe();
+  const [mounted, setMounted] = useState(false);
+  
+  // Ensure client-side only rendering for Stripe
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function loadPaymentMethods() {
     if (!auth.currentUser) {
@@ -257,15 +264,15 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   }
 
   useEffect(() => {
-    if (isOpen && auth.currentUser) {
-      // Only load if modal is open and user is logged in
+    if (isOpen && auth.currentUser && mounted) {
+      // Only load if modal is open, user is logged in, and component is mounted
       loadPaymentMethods();
-    } else {
+    } else if (!isOpen) {
       // Reset UI state when modal is closed
       setShowAddCard(false);
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, mounted]);
 
   const handleDeletePaymentMethod = async (paymentMethodId: string) => {
     if (!auth.currentUser) return;
@@ -283,37 +290,37 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   };
 
+  if (!mounted) {
+    return null;
+  }
+
   return (
-    <Dialog
-      open={isOpen}
-  onOpenChange={(open) => {
-    if (!open) onClose();
-  }}
+    <Dialog 
+      open={isOpen} 
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <DialogContent
-        className="
-          relative w-11/12 max-w-2xl mx-4 my-8
-          bg-gray-200/90 backdrop-blur-sm
-          shadow-2xl rounded-lg
-          overflow-hidden flex flex-col
-          max-h-[80vh] z-[9999]
-        "
-      >
-        <DialogHeader>
-          <DialogTitle className="text-zinc-900">Payment Methods</DialogTitle>
-          <DialogDescription className="text-zinc-600">
+      <DialogContent className={cn(
+        "p-0 gap-0", // Remove default padding
+        "max-w-md md:max-w-2xl", // Control width
+        "overflow-hidden" // Handle overflow
+      )}>
+        <DialogHeader className="px-6 py-4 bg-background border-b border-border/40">
+          <DialogTitle>Payment Methods</DialogTitle>
+          <DialogDescription>
             Manage your saved payment methods for bookings and payments.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative mt-4 flex-1">
+        <div className="px-6 py-4 overflow-y-auto max-h-[60vh]">
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="p-3 mb-3 text-sm text-destructive bg-destructive/10 rounded-lg"
+              className="p-3 mb-4 text-sm text-destructive bg-destructive/10 rounded-lg"
             >
               {error}
             </motion.div>
@@ -321,7 +328,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-zinc-600" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -357,14 +364,14 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                       </AnimatePresence>
                     </div>
                   ) : (
-                    <p className="text-center text-zinc-600 py-8">
+                    <p className="text-center text-muted-foreground py-8">
                       No payment methods saved yet
                     </p>
                   )}
                   <Button
                     variant="outline"
                     onClick={() => setShowAddCard(true)}
-                    className="w-full border-2 border-dashed text-zinc-700 hover:text-zinc-900"
+                    className="w-full border border-dashed"
                   >
                     <Plus className="mr-2 h-5 w-5" />
                     Add Payment Method
@@ -374,18 +381,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </AnimatePresence>
           )}
         </div>
-
-        {/* Single close button in top-right corner */}
-        <DialogClose asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-4 top-4 text-zinc-700 hover:text-zinc-900"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
-        </DialogClose>
       </DialogContent>
     </Dialog>
   );
