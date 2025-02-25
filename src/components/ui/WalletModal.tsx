@@ -19,12 +19,7 @@ import {
   savePaymentMethod,
   deletePaymentMethod,
 } from "@/lib/stripe";
-import {
-  CardElement,
-  Elements,
-  useStripe,
-  useElements,
-} from "@stripe/react-stripe-js";
+import { CardElement, Elements, useStripe, useElements } from "@stripe/react-stripe-js";
 import { AnimatePresence, motion } from "framer-motion";
 
 // CardElement styles
@@ -85,7 +80,9 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
       <div className="flex items-center gap-3">
         <CreditCard className="w-5 h-5 text-zinc-300" />
         <div>
-          <p className="font-medium">{method.brand.toUpperCase()} •••• {method.last4}</p>
+          <p className="font-medium uppercase">
+            {method.brand} •••• {method.last4}
+          </p>
           <p className="text-sm text-zinc-400">
             Expires {method.expMonth}/{method.expYear}
           </p>
@@ -131,34 +128,32 @@ const AddPaymentMethodForm = ({
     setError(null);
 
     try {
-      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod(
-        {
-          type: "card",
-          card: elements.getElement(CardElement)!,
-        }
-      );
+      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
+        type: "card",
+        card: elements.getElement(CardElement)!,
+      });
 
       if (stripeError) {
-        setError(stripeError.message || "An error occurred");
+        setError(stripeError.message || "An error occurred.");
         return;
       }
 
       if (paymentMethod) {
-        // Check for duplication before saving
-        const alreadyExists = existingMethods.some((m) => {
-          return (
+        // Check for duplicates
+        const alreadyExists = existingMethods.some(
+          (m) =>
             m.brand.toLowerCase() === paymentMethod.card?.brand.toLowerCase() &&
             m.last4 === paymentMethod.card?.last4 &&
             m.expMonth === paymentMethod.card?.exp_month &&
             m.expYear === paymentMethod.card?.exp_year
-          );
-        });
+        );
 
         if (alreadyExists) {
           setError("This card is already on file. Please use a different card.");
           return;
         }
 
+        // If not a duplicate, save in the backend
         const result = await savePaymentMethod(auth.currentUser.uid, {
           id: paymentMethod.id,
           brand: paymentMethod.card!.brand,
@@ -174,9 +169,7 @@ const AddPaymentMethodForm = ({
         onSuccess();
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to save payment method"
-      );
+      setError(err instanceof Error ? err.message : "Failed to save payment method.");
     } finally {
       setLoading(false);
     }
@@ -245,7 +238,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     } catch (err) {
       console.error("Error loading payment methods:", err);
       setError(
-        err instanceof Error ? err.message : "Failed to load payment methods"
+        err instanceof Error ? err.message : "Failed to load payment methods."
       );
     } finally {
       setLoading(false);
@@ -273,25 +266,29 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     } catch (err) {
       console.error("Error deleting payment method:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to delete payment method"
+        err instanceof Error ? err.message : "Failed to delete payment method."
       );
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      {/* Matches SignInModal styling: semi-transparent, blurred container */}
+    <Dialog
+      open={isOpen}
+      // IMPORTANT: Use this pattern to avoid immediately calling onClose when opening
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent
         className="
           relative w-11/12 max-w-2xl mx-4 my-4
           bg-gray-200/90 backdrop-blur-sm
           shadow-2xl rounded-lg
           overflow-hidden flex flex-col
-          max-h-[80vh]
+          max-h-[80vh] z-[9999]
         "
       >
+        {/* Header */}
         <DialogHeader>
           <DialogTitle className="text-zinc-900">Payment Methods</DialogTitle>
           <DialogDescription className="text-zinc-600">
@@ -299,7 +296,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Error or Content */}
+        {/* Main Content */}
         <div className="relative mt-4 flex-1">
           {error && (
             <motion.div
@@ -322,7 +319,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               {showAddCard ? (
                 <Elements stripe={stripePromise} key="addCardForm">
                   <AddPaymentMethodForm
-                    existingMethods={paymentMethods} // Pass existing methods to check duplicates
+                    existingMethods={paymentMethods} // for duplicate check
                     onSuccess={() => {
                       setShowAddCard(false);
                       loadPaymentMethods();
@@ -352,7 +349,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                     </div>
                   ) : (
                     <p className="text-center text-zinc-600 py-8">
-                      No payment methods saved yet
+                      No payment methods saved yet.
                     </p>
                   )}
                   <Button
@@ -369,16 +366,12 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           )}
         </div>
 
-        {/* Close button (DialogClose) - top-right corner */}
+        {/* Single close button (DialogClose) - top-right corner */}
         <DialogClose asChild>
           <Button
             variant="ghost"
             size="icon"
-            className="
-              absolute right-4 top-4
-              text-zinc-700
-              hover:text-zinc-900
-            "
+            className="absolute right-4 top-4 text-zinc-700 hover:text-zinc-900"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
