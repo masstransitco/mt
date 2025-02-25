@@ -27,7 +27,7 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
   const availableCars = useAvailableCarsForDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
-  // Horizontal scroll container ref
+  // Container ref
   const containerRef = useRef<HTMLDivElement>(null);
 
   // For controlling data fetch & skeletons
@@ -75,62 +75,34 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
 
   if (isInitialLoad) {
     return (
-      <div className="py-8 space-y-4">
-        <div className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg" />
-        <div className="w-3/4 h-4 bg-gray-900/50 animate-pulse rounded" />
+      <div className="py-4 space-y-4">
+        {[...Array(2)].map((_, index) => (
+          <div key={index} className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg" />
+        ))}
       </div>
     );
   }
 
   return (
-    <div className={`transition-all duration-300 ${className}`}>
-      <div
-        ref={containerRef}
-        className="
-          overflow-x-auto
-          touch-pan-x
-          overscroll-contain
-          max-w-full
-          will-change-scroll
-          pb-safe
-          hide-scrollbar
-        "
-        onScroll={(e) => e.stopPropagation()}
-        onWheel={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-        style={{
-          WebkitOverflowScrolling: "touch",
-          scrollbarWidth: "none",
-          msOverflowStyle: "none",
-          contain: "paint style layout",
-        }}
-      >
-        <div className="flex flex-nowrap gap-3 py-2 px-1">
-          <AnimatePresence mode="popLayout">
-            {isVisible &&
-              groupedByModel.map((group) => (
-                <motion.div
-                  key={group.model}
-                  layout="position"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{
-                    duration: 0.2,
-                    layout: { duration: 0.2 },
-                  }}
-                  style={{
-                    contain: "paint style layout",
-                    willChange: "transform",
-                    width: "210px",
-                  }}
-                  className="min-w-[210px]"
-                >
-                  <CarCardGroup group={group} isVisible={isVisible} rootRef={containerRef} />
-                </motion.div>
-              ))}
-          </AnimatePresence>
-        </div>
+    <div className={`transition-all duration-300 ${className}`} ref={containerRef}>
+      <div className="px-0 py-2">
+        <AnimatePresence>
+          {isVisible &&
+            groupedByModel.map((group, index) => (
+              <motion.div
+                key={group.model}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{
+                  duration: 0.3,
+                  delay: index * 0.1,
+                }}
+              >
+                <CarCardGroup group={group} isVisible={isVisible} rootRef={containerRef} />
+              </motion.div>
+            ))}
+        </AnimatePresence>
       </div>
 
       {isVisible && groupedByModel.length === 0 && !isInitialLoad && (
