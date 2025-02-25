@@ -1,10 +1,15 @@
 "use client";
-
 import React, { Suspense, useCallback, useState, useEffect } from "react";
 import { useAppSelector } from "@/store/store";
 import { selectAvailableForDispatch } from "@/store/carSlice";
 import dynamic from 'next/dynamic';
-import Sheet from "@/components/ui/sheet";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogDescription
+} from "@/components/ui/dialog";
 
 // Dynamic import with loading state
 const CarGrid = dynamic(
@@ -24,7 +29,7 @@ interface CarSheetProps {
 export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps) {
   const [isContentVisible, setIsContentVisible] = useState(false);
   const availableCars = useAppSelector(selectAvailableForDispatch);
-
+  
   // Handle visibility with proper timing
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -32,11 +37,10 @@ export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps)
     if (isOpen) {
       timer = setTimeout(() => {
         setIsContentVisible(true);
-      }, 300); // Wait for sheet animation
+      }, 300); // Wait for dialog animation
     } else {
       setIsContentVisible(false);
     }
-
     return () => {
       clearTimeout(timer);
     };
@@ -47,31 +51,36 @@ export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps)
   }, [onToggle]);
 
   return (
-    <Sheet
-      isOpen={isOpen}
-      onDismiss={handleDismiss}
-      title="Dispatch a car"
-      subtitle="Select a vehicle to dispatch"
-      count={availableCars.length}
-      countLabel="available"
-      className="w-full max-w-none rounded-t-lg"
-    >
-      <div 
-        className="min-h-[30vh] max-h-[85vh] overflow-y-auto px-4 pb-safe"
-        style={{
-          overscrollBehavior: 'contain',
-        }}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDismiss()}>
+      <DialogContent 
+        className={`w-[80vw] max-w-none rounded-lg ${className}`} 
+        onEscapeKeyDown={handleDismiss}
+        onInteractOutside={handleDismiss}
       >
-        <Suspense fallback={<GridSkeleton />}>
-          {isContentVisible && (
-            <CarGrid 
-              isVisible={isContentVisible}
-              className="pb-4" 
-            />
-          )}
-        </Suspense>
-      </div>
-    </Sheet>
+        <DialogHeader>
+          <DialogTitle>Dispatch a car</DialogTitle>
+          <DialogDescription>
+            {availableCars.length} available
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div 
+          className="min-h-[30vh] max-h-[85vh] overflow-y-auto px-4 pb-safe"
+          style={{
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <Suspense fallback={<GridSkeleton />}>
+            {isContentVisible && (
+              <CarGrid 
+                isVisible={isContentVisible}
+                className="pb-4" 
+              />
+            )}
+          </Suspense>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
