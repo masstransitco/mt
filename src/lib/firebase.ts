@@ -1,6 +1,8 @@
+// firebase.ts
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // Add this import
 
 // Use the actual hostname on the client, fallback to a static value on the server
 const authDomain = typeof window !== "undefined"
@@ -12,7 +14,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAj46uOcP-Y4T3X2ZpdlWt4_PxUWCTFwyM",
   authDomain, // Updated to use the computed value
   projectId: "masstransitcompany",
-  storageBucket: "masstransitcompany.firebasestorage.app",
+  storageBucket: "masstransitcompany.appspot.com", // Make sure this is correct
   messagingSenderId: "1039705984668",
   appId: "1:1039705984668:web:e85aafd14917825b3d6759",
   measurementId: "G-NMMQLPBJD1"
@@ -24,6 +26,7 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app); // Add this line
 
 // Optional: Initialization status check
-export const isInitialized = () => !!app && !!auth && !!db;
+export const isInitialized = () => !!app && !!auth && !!db && !!storage;
