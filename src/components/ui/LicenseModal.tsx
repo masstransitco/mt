@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { doc, getFirestore, getDoc } from "firebase/firestore";
 import IDCamera from "./IDCamera";
+import AddressInput from "./AddressInput";
 
 interface LicenseModalProps {
   isOpen: boolean;
@@ -28,15 +29,29 @@ interface DocumentStatus {
   verified?: boolean;
 }
 
+interface Address {
+  fullAddress: string;
+  location: {
+    lat: number;
+    lng: number;
+  };
+  block?: string;
+  floor?: string;
+  flat?: string;
+  timestamp: number;
+  verified: boolean;
+}
+
 interface UserDocuments {
   "id-document"?: DocumentStatus;
   "driving-license"?: DocumentStatus;
-  address?: DocumentStatus;
+  address?: Address;
 }
 
 export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
   const [mounted, setMounted] = useState(false);
   const [showCamera, setShowCamera] = useState<"identity" | "license" | null>(null);
+  const [showAddressInput, setShowAddressInput] = useState(false);
   const [documents, setDocuments] = useState<UserDocuments>({});
   const [loading, setLoading] = useState(true);
   const [viewingDocument, setViewingDocument] = useState<string | null>(null);
@@ -81,10 +96,9 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
     setShowCamera("license");
   };
 
-  // Handle address (to be implemented later)
+  // Open address input
   const handleAddAddress = () => {
-    console.log("Add address");
-    // Will implement later - could be a form instead of camera
+    setShowAddressInput(true);
   };
 
   // Handle successful document upload
@@ -97,6 +111,20 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
     if (documents[docType]?.url) {
       setViewingDocument(documents[docType]?.url || null);
     }
+  };
+
+  // Format address for display
+  const formatAddress = (address?: Address) => {
+    if (!address) return null;
+    
+    const parts = [
+      address.flat ? `Flat ${address.flat}` : '',
+      address.floor ? `Floor ${address.floor}` : '',
+      address.block ? `${address.block}` : '',
+      address.fullAddress
+    ].filter(Boolean);
+    
+    return parts.join(', ');
   };
 
   if (!mounted) {
@@ -142,7 +170,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
   return (
     <>
       <Dialog
-        open={isOpen && !showCamera}
+        open={isOpen && !showCamera && !showAddressInput}
         onOpenChange={(open) => {
           if (!open) onClose();
         }}
@@ -254,24 +282,44 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                       </div>
                       <div className="flex-1">
                         <h3 className="text-white font-medium mb-1">Residential Address</h3>
-                        <p className="text-gray-400 text-sm">
-                          Provide your current residential address
-                        </p>
-                        {documents.address?.verified && (
-                          <div className="mt-2 flex items-center text-green-500">
-                            <Check className="w-4 h-4 mr-1" />
-                            <span className="text-xs">Verified</span>
+                        {documents.address ? (
+                          <div>
+                            <p className="text-sm text-white break-words">
+                              {formatAddress(documents.address)}
+                            </p>
+                            <div className="mt-2 flex items-center">
+                              {documents.address.verified ? (
+                                <div className="flex items-center text-green-500">
+                                  <Check className="w-4 h-4 mr-1" />
+                                  <span className="text-xs">Verified</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center text-amber-500">
+                                  <AlertCircle className="w-4 h-4 mr-1" />
+                                  <span className="text-xs">Pending verification</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
+                        ) : (
+                          <p className="text-gray-400 text-sm">
+                            Provide your current residential address
+                          </p>
                         )}
                       </div>
                     </div>
                     <Button
                       onClick={handleAddAddress}
-                      className="w-full mt-4 bg-gray-800 hover:bg-gray-700 text-white border-none flex items-center justify-center"
+                      className={cn(
+                        "w-full mt-4 flex items-center justify-center",
+                        documents.address
+                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none" 
+                          : "bg-white hover:bg-gray-200 text-black border-none"
+                      )}
                       variant="outline"
                     >
                       <Plus className="mr-2 h-4 w-4" />
-                      Add Address
+                      {documents.address ? "Update Address" : "Add Address"}
                     </Button>
                   </div>
                 </motion.div>
@@ -299,6 +347,15 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
           isOpen={true}
           onClose={() => setShowCamera(null)}
           documentType={showCamera}
+          onSuccess={handleDocumentUploaded}
+        />
+      )}
+
+      {/* Address Input Component */}
+      {showAddressInput && (
+        <AddressInput
+          isOpen={true}
+          onClose={() => setShowAddressInput(false)}
           onSuccess={handleDocumentUploaded}
         />
       )}
