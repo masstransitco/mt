@@ -76,8 +76,8 @@ export default function PhoneInput({ value, onChange, disabled }: PhoneInputProp
         <PopoverTrigger asChild>
           <button
             disabled={disabled}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-border 
-                     hover:bg-accent/10 disabled:opacity-50 transition-colors min-w-[120px]`}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border 
+                       hover:bg-accent/10 disabled:opacity-50 transition-colors min-w-[120px]"
           >
             <span className="text-xl">{selectedCountry.flag}</span>
             <span className="text-sm text-muted-foreground">
@@ -119,9 +119,9 @@ export default function PhoneInput({ value, onChange, disabled }: PhoneInputProp
         value={phoneNumberWithoutCode}
         onChange={handlePhoneInput}
         disabled={disabled}
-        className="flex-1 p-2 rounded-lg border border-border bg-background 
-                   disabled:opacity-50 focus:outline-none focus:ring-2 
-                   focus:ring-primary/20"
+        // Ensure font size is 16px to prevent mobile browsers from zooming in
+        className="flex-1 p-2 text-base rounded-lg border border-border bg-background 
+                   disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary/20"
       />
     </div>
   );
