@@ -12,7 +12,7 @@ import {
   DialogClose
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Car } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 
@@ -73,7 +73,7 @@ export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps)
         <DialogHeader className="px-6 py-4 border-b border-gray-800">
           <DialogTitle className="text-white text-lg font-medium">Dispatch a car</DialogTitle>
           <DialogDescription className="text-gray-400">
-            {availableCars.length} available vehicles
+            {availableCars.length} available
           </DialogDescription>
         </DialogHeader>
         
@@ -88,18 +88,6 @@ export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps)
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="bg-gray-800 p-3 rounded-lg">
-                <Car className="w-6 h-6 text-gray-300" />
-              </div>
-              <div>
-                <h3 className="text-white font-medium">Select a vehicle</h3>
-                <p className="text-gray-400 text-sm">
-                  Choose from available vehicles in your fleet
-                </p>
-              </div>
-            </div>
-            
             <Suspense fallback={<GridSkeleton />}>
               {isContentVisible && (
                 <CarGrid 
