@@ -1,44 +1,49 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Loader2, X, CreditCard, Plus, Trash2 } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Loader2, X, CreditCard, Plus, Trash2 } from "lucide-react";
+import { auth } from "@/lib/firebase";
 import {
   getStripe,
   SavedPaymentMethod,
   getSavedPaymentMethods,
   savePaymentMethod,
-  deletePaymentMethod
-} from '@/lib/stripe';
-import { CardElement, Elements, useStripe, useElements } from '@stripe/react-stripe-js';
-import { AnimatePresence, motion } from 'framer-motion';
+  deletePaymentMethod,
+} from "@/lib/stripe";
+import {
+  CardElement,
+  Elements,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+import { AnimatePresence, motion } from "framer-motion";
 
 // CardElement styles
 const cardStyle = {
   style: {
     base: {
-      color: 'var(--foreground)',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      fontSmoothing: 'antialiased',
-      fontSize: '16px',
-      '::placeholder': {
-        color: 'var(--muted-foreground)'
-      }
+      color: "var(--foreground)",
+      fontFamily: "Inter, system-ui, sans-serif",
+      fontSmoothing: "antialiased",
+      fontSize: "16px",
+      "::placeholder": {
+        color: "var(--muted-foreground)",
+      },
     },
     invalid: {
-      color: 'var(--destructive)',
-      iconColor: 'var(--destructive)'
-    }
-  }
+      color: "var(--destructive)",
+      iconColor: "var(--destructive)",
+    },
+  },
 };
 
 interface PaymentMethodCardProps {
@@ -57,7 +62,7 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
     try {
       await onDelete(method.id);
     } catch (error) {
-      console.error('Failed to delete payment method:', error);
+      console.error("Failed to delete payment method:", error);
     } finally {
       setIsDeleting(false);
     }
@@ -69,16 +74,19 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      transition={{ type: 'tween', duration: 0.2 }}
-      className="flex items-center justify-between p-4 border border-border rounded-lg bg-card"
+      transition={{ type: "tween", duration: 0.2 }}
+      className="
+        flex items-center justify-between 
+        p-4 border border-white/20 
+        rounded-lg bg-white/10 
+        text-zinc-200
+      "
     >
       <div className="flex items-center gap-3">
-        <CreditCard className="w-5 h-5 text-muted-foreground" />
+        <CreditCard className="w-5 h-5 text-zinc-300" />
         <div>
-          <p className="font-medium text-card-foreground">
-            {method.brand.toUpperCase()} •••• {method.last4}
-          </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="font-medium">{method.brand.toUpperCase()} •••• {method.last4}</p>
+          <p className="text-sm text-zinc-400">
             Expires {method.expMonth}/{method.expYear}
           </p>
         </div>
@@ -88,7 +96,7 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
         size="icon"
         onClick={handleDelete}
         disabled={isDeleting}
-        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+        className="text-zinc-400 hover:text-destructive hover:bg-destructive/10"
       >
         {isDeleting ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -103,9 +111,13 @@ const PaymentMethodCard = ({ method, onDelete }: PaymentMethodCardProps) => {
 
 interface AddPaymentMethodFormProps {
   onSuccess: () => void;
+  existingMethods: SavedPaymentMethod[]; // For checking duplicates
 }
 
-const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
+const AddPaymentMethodForm = ({
+  onSuccess,
+  existingMethods,
+}: AddPaymentMethodFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -119,24 +131,41 @@ const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
     setError(null);
 
     try {
-      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
-        type: 'card',
-        card: elements.getElement(CardElement)!,
-      });
+      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod(
+        {
+          type: "card",
+          card: elements.getElement(CardElement)!,
+        }
+      );
 
       if (stripeError) {
-        setError(stripeError.message || 'An error occurred');
+        setError(stripeError.message || "An error occurred");
         return;
       }
 
       if (paymentMethod) {
+        // Check for duplication before saving
+        const alreadyExists = existingMethods.some((m) => {
+          return (
+            m.brand.toLowerCase() === paymentMethod.card?.brand.toLowerCase() &&
+            m.last4 === paymentMethod.card?.last4 &&
+            m.expMonth === paymentMethod.card?.exp_month &&
+            m.expYear === paymentMethod.card?.exp_year
+          );
+        });
+
+        if (alreadyExists) {
+          setError("This card is already on file. Please use a different card.");
+          return;
+        }
+
         const result = await savePaymentMethod(auth.currentUser.uid, {
           id: paymentMethod.id,
           brand: paymentMethod.card!.brand,
           last4: paymentMethod.card!.last4,
           expMonth: paymentMethod.card!.exp_month,
           expYear: paymentMethod.card!.exp_year,
-          isDefault: true
+          isDefault: true,
         });
 
         if (!result.success) {
@@ -146,7 +175,7 @@ const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Failed to save payment method'
+        err instanceof Error ? err.message : "Failed to save payment method"
       );
     } finally {
       setLoading(false);
@@ -159,17 +188,17 @@ const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 10 }}
-      transition={{ type: 'tween', duration: 0.2 }}
+      transition={{ type: "tween", duration: 0.2 }}
       onSubmit={handleSubmit}
       className="space-y-4"
     >
-      <div className="p-4 border border-border rounded-lg bg-card">
+      <div className="p-4 border border-white/20 rounded-lg bg-white/10 text-zinc-200">
         <CardElement options={cardStyle} />
       </div>
       {error && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
+          animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.3 }}
           className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg"
@@ -181,7 +210,7 @@ const AddPaymentMethodForm = ({ onSuccess }: AddPaymentMethodFormProps) => {
         {loading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
-          'Add Payment Method'
+          "Add Payment Method"
         )}
       </Button>
     </motion.form>
@@ -214,9 +243,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       }
       setPaymentMethods(result.data || []);
     } catch (err) {
-      console.error('Error loading payment methods:', err);
+      console.error("Error loading payment methods:", err);
       setError(
-        err instanceof Error ? err.message : 'Failed to load payment methods'
+        err instanceof Error ? err.message : "Failed to load payment methods"
       );
     } finally {
       setLoading(false);
@@ -242,26 +271,40 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       }
       await loadPaymentMethods();
     } catch (err) {
-      console.error('Error deleting payment method:', err);
-      setError(err instanceof Error ? err.message : 'Failed to delete payment method');
+      console.error("Error deleting payment method:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete payment method"
+      );
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      {/* Matches SignInModal styling: semi-transparent, blurred container */}
+      <DialogContent
+        className="
+          relative w-11/12 max-w-2xl mx-4 my-4
+          bg-gray-200/90 backdrop-blur-sm
+          shadow-2xl rounded-lg
+          overflow-hidden flex flex-col
+          max-h-[80vh]
+        "
+      >
         <DialogHeader>
-          <DialogTitle>Payment Methods</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-zinc-900">Payment Methods</DialogTitle>
+          <DialogDescription className="text-zinc-600">
             Manage your saved payment methods for bookings and payments.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative mt-4">
+        {/* Error or Content */}
+        <div className="relative mt-4 flex-1">
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
               className="p-3 mb-3 text-sm text-destructive bg-destructive/10 rounded-lg"
@@ -272,13 +315,14 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-zinc-600" />
             </div>
           ) : (
             <AnimatePresence mode="wait">
               {showAddCard ? (
                 <Elements stripe={stripePromise} key="addCardForm">
                   <AddPaymentMethodForm
+                    existingMethods={paymentMethods} // Pass existing methods to check duplicates
                     onSuccess={() => {
                       setShowAddCard(false);
                       loadPaymentMethods();
@@ -307,14 +351,14 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                       </AnimatePresence>
                     </div>
                   ) : (
-                    <p className="text-center text-muted-foreground py-8">
+                    <p className="text-center text-zinc-600 py-8">
                       No payment methods saved yet
                     </p>
                   )}
                   <Button
                     variant="outline"
                     onClick={() => setShowAddCard(true)}
-                    className="w-full border-2 border-dashed"
+                    className="w-full border-2 border-dashed text-zinc-700 hover:text-zinc-900"
                   >
                     <Plus className="mr-2 h-5 w-5" />
                     Add Payment Method
@@ -325,12 +369,16 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           )}
         </div>
 
-        {/* Single close button (DialogClose) in top-right, consistent with SignInModal */}
+        {/* Close button (DialogClose) - top-right corner */}
         <DialogClose asChild>
           <Button
             variant="ghost"
             size="icon"
-            className="absolute right-4 top-4"
+            className="
+              absolute right-4 top-4
+              text-zinc-700
+              hover:text-zinc-900
+            "
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
