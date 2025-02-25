@@ -106,32 +106,33 @@ export default function CarGrid({ className = "", isVisible = true }: CarGridPro
           contain: "paint style layout",
         }}
       >
-        <div className="flex flex-nowrap gap-3 py-2 px-1">
-          <AnimatePresence mode="popLayout">
-            {isVisible &&
-              groupedByModel.map((group) => (
-                <motion.div
-                  key={group.model}
-                  layout="position"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{
-                    duration: 0.2,
-                    layout: { duration: 0.2 },
-                  }}
-                  style={{
-                    contain: "paint style layout",
-                    willChange: "transform",
-                  }}
-                >
-                  {/* Pass the scroll container ref so CarCardGroup can observe inside it */}
-                  <CarCardGroup group={group} isVisible={isVisible} rootRef={containerRef} />
-                </motion.div>
-              ))}
-          </AnimatePresence>
-        </div>
-      </div>
+        // In CarGrid.tsx, update the div containing the CarCardGroup
+<div className="flex flex-nowrap gap-3 py-2 px-1">
+  <AnimatePresence mode="popLayout">
+    {isVisible &&
+      groupedByModel.map((group) => (
+        <motion.div
+          key={group.model}
+          layout="position"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{
+            duration: 0.2,
+            layout: { duration: 0.2 },
+          }}
+          style={{
+            contain: "paint style layout",
+            willChange: "transform",
+            width: "210px", // Smaller size here (adjust as needed)
+          }}
+          className="min-w-[210px]" // Add a minimum width class
+        >
+          <CarCardGroup group={group} isVisible={isVisible} rootRef={containerRef} />
+        </motion.div>
+      ))}
+  </AnimatePresence>
+</div>
 
       {isVisible && groupedByModel.length === 0 && !isInitialLoad && (
         <motion.div
