@@ -265,7 +265,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
@@ -274,7 +274,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       />
       {/* Outer Modal Container */}
       <div
-        className="relative w-11/12 max-w-2xl mx-4 my-4 bg-gray-200/90 backdrop-blur-sm
+        className="relative w-11/12 max-w-2xl mx-4 mt-[5px] bg-zinc-200/90 backdrop-blur-sm
                    shadow-2xl rounded-lg overflow-hidden flex flex-col max-h-[80vh]"
       >
         {/* Single Close Button (perfect circle) */}
