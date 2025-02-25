@@ -306,10 +306,10 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       }}
     >
       <DialogContent className={cn(
-        "p-0 gap-0", // Remove default padding
-        "max-w-md md:max-w-2xl", // Control width
-        "overflow-hidden" // Handle overflow
-      )}>
+  "p-0 gap-0", // Remove default padding
+  "w-[90vw] max-w-md md:max-w-2xl", // Add w-[90vw] to set width to 90% of viewport
+  "overflow-hidden" // Handle overflow
+)}>
         <DialogHeader className="px-6 py-4 bg-background border-b border-border/40">
           <DialogTitle>Wallet</DialogTitle>
           <DialogDescription>
