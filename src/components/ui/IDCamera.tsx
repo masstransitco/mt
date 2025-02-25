@@ -106,6 +106,7 @@ export default function IDCamera({
     stopCamera();
     setIsFrontCamera(!isFrontCamera);
     // startCamera will be called by the useEffect due to isFrontCamera change
+    setTimeout(() => startCamera(), 0);
   }, [isFrontCamera, stopCamera]);
 
   // Capture current frame from video
