@@ -10,11 +10,11 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Camera, X, RotateCcw, Check } from "lucide-react";
+import { Camera, X, RotateCcw, Check, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { auth, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { updateDoc, doc, getFirestore } from "firebase/firestore";
+import { updateDoc, doc, getDoc, setDoc, getFirestore } from "firebase/firestore";
 
 interface IDCameraProps {
   isOpen: boolean;
@@ -33,6 +33,7 @@ export default function IDCamera({
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isFrontCamera, setIsFrontCamera] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
@@ -57,6 +58,18 @@ export default function IDCamera({
       stopCamera();
     };
   }, [isOpen]);
+
+  // Auto-close after success message
+  useEffect(() => {
+    if (uploadSuccess) {
+      const timer = setTimeout(() => {
+        if (onSuccess) onSuccess();
+        onClose();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [uploadSuccess, onSuccess, onClose]);
 
   // Start camera with current facing mode
   const startCamera = useCallback(async () => {
@@ -107,7 +120,7 @@ export default function IDCamera({
     setIsFrontCamera(!isFrontCamera);
     // startCamera will be called by the useEffect due to isFrontCamera change
     setTimeout(() => startCamera(), 0);
-  }, [isFrontCamera, stopCamera]);
+  }, [isFrontCamera, stopCamera, startCamera]);
 
   // Capture current frame from video
   const captureImage = useCallback(() => {
@@ -164,34 +177,55 @@ export default function IDCamera({
       const docType = documentType === "identity" ? "id-document" : "driving-license";
       const imageRef = ref(storage, `users/${userId}/${docType}/${timestamp}.jpg`);
       
+      // Add detailed error logging
+      console.log("Attempting to upload to:", `users/${userId}/${docType}/${timestamp}.jpg`);
+      
       // Upload image
       await uploadBytes(imageRef, blob);
+      console.log("Storage upload successful");
       
       // Get the download URL
       const downloadURL = await getDownloadURL(imageRef);
       
-      // Update user's document in Firestore
+      // Check if user document exists in Firestore
       const userDocRef = doc(db, "users", userId);
-      await updateDoc(userDocRef, {
-        [`documents.${docType}`]: {
-          url: downloadURL,
-          uploadedAt: timestamp,
-          verified: false
-        }
-      });
+      const userDocSnap = await getDoc(userDocRef);
       
-      // Notify parent component of success
-      if (onSuccess) onSuccess();
+      if (userDocSnap.exists()) {
+        // Update existing document
+        await updateDoc(userDocRef, {
+          [`documents.${docType}`]: {
+            url: downloadURL,
+            uploadedAt: timestamp,
+            verified: false
+          }
+        });
+      } else {
+        // Create new document
+        await setDoc(userDocRef, {
+          userId: userId,
+          documents: {
+            [docType]: {
+              url: downloadURL,
+              uploadedAt: timestamp,
+              verified: false
+            }
+          }
+        });
+      }
       
-      // Close the dialog
-      onClose();
+      console.log("Firestore update successful");
+      
+      // Show success message
+      setUploadSuccess(true);
+      
     } catch (err) {
       console.error("Error uploading image:", err);
-      setErrorMessage("Failed to upload. Please try again.");
+      setErrorMessage(`Upload failed: ${err instanceof Error ? err.message : "Unknown error"}`);
     } finally {
       setIsUploading(false);
     }
-  }, [capturedImage, documentType, onClose, onSuccess]);
+  }, [capturedImage, documentType, onSuccess]);
 
   return (
     <Dialog 
@@ -209,11 +243,28 @@ export default function IDCamera({
       >
         <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10">
           <DialogTitle className="text-white">
-            {capturedImage ? `Confirm ${documentLabel}` : `Capture ${documentLabel}`}
+            {uploadSuccess 
+              ? "Document Uploaded" 
+              : capturedImage 
+                ? `Confirm ${documentLabel}` 
+                : `Capture ${documentLabel}`}
           </DialogTitle>
         </DialogHeader>
         
         <div className="relative w-full aspect-[3/4] bg-black">
+          {/* Success message */}
+          {uploadSuccess && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black"
+            >
+              <CheckCircle className="h-20 w-20 text-green-500 mb-4" />
+              <h3 className="text-xl font-medium text-white mb-2">Upload Successful</h3>
+              <p className="text-gray-400">Your document has been saved</p>
+            </motion.div>
+          )}
+        
           {/* Permission denied message */}
           {permissionDenied && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
@@ -251,7 +302,7 @@ export default function IDCamera({
           )}
           
           {/* Camera preview */}
-          {!capturedImage && !permissionDenied && !errorMessage && (
+          {!capturedImage && !permissionDenied && !errorMessage && !uploadSuccess && (
             <>
               <video
                 ref={videoRef}
@@ -277,7 +328,7 @@ export default function IDCamera({
           )}
           
           {/* Captured image preview */}
-          {capturedImage && (
+          {capturedImage && !uploadSuccess && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -295,68 +346,70 @@ export default function IDCamera({
           <canvas ref={canvasRef} className="hidden" />
         </div>
         
-        <DialogFooter className="p-4 bg-black border-t border-gray-800 flex flex-row justify-between">
-          {!capturedImage ? (
-            // Camera controls
-            <>
-              <Button 
-                variant="ghost" 
-                onClick={onClose}
-                className="text-white hover:bg-gray-800"
-              >
-                <X className="h-5 w-5 mr-2" />
-                Cancel
-              </Button>
-              
-              <div className="flex gap-2">
+        {!uploadSuccess && (
+          <DialogFooter className="p-4 bg-black border-t border-gray-800 flex flex-row justify-between">
+            {!capturedImage ? (
+              // Camera controls
+              <>
                 <Button 
-                  variant="outline" 
-                  onClick={switchCamera}
-                  className="text-white border-gray-700 hover:bg-gray-800"
+                  variant="ghost" 
+                  onClick={onClose}
+                  className="text-white hover:bg-gray-800"
                 >
-                  <RotateCcw className="h-5 w-5" />
+                  <X className="h-5 w-5 mr-2" />
+                  Cancel
+                </Button>
+                
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={switchCamera}
+                    className="text-white border-gray-700 hover:bg-gray-800"
+                  >
+                    <RotateCcw className="h-5 w-5" />
+                  </Button>
+                  
+                  <Button 
+                    onClick={captureImage}
+                    className="bg-white text-black hover:bg-gray-200 min-w-[100px]"
+                  >
+                    Capture
+                  </Button>
+                </div>
+              </>
+            ) : (
+              // Confirmation controls
+              <>
+                <Button 
+                  variant="ghost" 
+                  onClick={retakeImage}
+                  className="text-white hover:bg-gray-800"
+                >
+                  <RotateCcw className="h-5 w-5 mr-2" />
+                  Retake
                 </Button>
                 
                 <Button 
-                  onClick={captureImage}
+                  onClick={handleUpload}
+                  disabled={isUploading}
                   className="bg-white text-black hover:bg-gray-200 min-w-[100px]"
                 >
-                  Capture
+                  {isUploading ? (
+                    <span className="flex items-center">
+                      <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2"></span>
+                      Uploading...
+                    </span>
+                  ) : (
+                    <>
+                      <Check className="h-5 w-5 mr-2" />
+                      Confirm
+                    </>
+                  )}
                 </Button>
-              </div>
-            </>
-          ) : (
-            // Confirmation controls
-            <>
-              <Button 
-                variant="ghost" 
-                onClick={retakeImage}
-                className="text-white hover:bg-gray-800"
-              >
-                <RotateCcw className="h-5 w-5 mr-2" />
-                Retake
-              </Button>
-              
-              <Button 
-                onClick={handleUpload}
-                disabled={isUploading}
-                className="bg-white text-black hover:bg-gray-200 min-w-[100px]"
-              >
-                {isUploading ? (
-                  <span className="flex items-center">
-                    <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2"></span>
-                    Uploading...
-                  </span>
-                ) : (
-                  <>
-                    <Check className="h-5 w-5 mr-2" />
-                    Confirm
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
+              </>
+            )}
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
