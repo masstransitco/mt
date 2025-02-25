@@ -12,7 +12,6 @@ import {
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 
-// Add proper type declarations
 interface ExtendedWindow extends Window {
   recaptchaVerifier?: RecaptchaVerifier;
   confirmationResult?: ConfirmationResult;
@@ -20,7 +19,7 @@ interface ExtendedWindow extends Window {
 
 declare let window: ExtendedWindow;
 
-// Dynamically import ReactPlayer with loading state
+// Dynamically import ReactPlayer with a loading fallback
 const ReactPlayer = dynamic(() => import("react-player"), {
   ssr: false,
   loading: () => <div className="w-full h-full bg-gray-200 animate-pulse" />,
@@ -33,7 +32,13 @@ interface SignInModalProps {
   onClose: () => void;
 }
 
-function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
+function StepIndicator({
+  currentStep,
+  totalSteps,
+}: {
+  currentStep: number;
+  totalSteps: number;
+}) {
   return (
     <div className="flex items-center justify-center space-x-2 py-2">
       {Array.from({ length: totalSteps }, (_, index) => (
@@ -61,27 +66,30 @@ function PinInput({
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleChange = (index: number, value: string) => {
+    // Only allow digits
     if (!/^\d*$/.test(value)) return;
     const newValues = [...values];
     newValues[index] = value;
     setValues(newValues);
     onChange(newValues.join(""));
 
+    // Auto-focus next input on successful digit entry
     if (value && index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    // On backspace at empty input, jump back
     if (e.key === "Backspace" && !values[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
   useEffect(() => {
+    // Reset inputs when loading changes (e.g., after a new send)
     if (!loading) {
       setValues(Array(length).fill(""));
-      // Focus first input when resetting
       inputRefs.current[0]?.focus();
     }
   }, [loading, length]);
@@ -120,7 +128,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // Improved cleanup function to clear any existing reCAPTCHA instance
+  // Clean up any existing reCAPTCHA instance
   const cleanup = () => {
     if (window.recaptchaVerifier) {
       try {
@@ -133,6 +141,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   };
 
   useEffect(() => {
+    // Listen for auth state changes; close modal if user signs in
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         handleClose();
@@ -145,6 +154,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   }, []);
 
   const handleClose = () => {
+    // Reset all states and close
     setStep("welcome");
     setPhoneNumber("");
     setVerificationCode("");
@@ -156,9 +166,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     onClose();
   };
 
+  // Count down for resend
   useEffect(() => {
     let timerId: NodeJS.Timeout | null = null;
-
     if (!canResend && step === "verify") {
       timerId = setInterval(() => {
         setResendTimer((prev) => {
@@ -170,7 +180,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         });
       }, 1000);
     }
-
     return () => {
       if (timerId) clearInterval(timerId);
     };
@@ -187,19 +196,15 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         throw new Error("Recaptcha container not found");
       }
 
-      // Note: In Firebase v10 the parameter order is: auth, container, then configuration.
-      const verifier = new RecaptchaVerifier(
-        auth,
-        containerElement,
-        {
-          size: "invisible",
-          callback: () => {},
-          "expired-callback": () => {
-            setError("reCAPTCHA expired. Please try again.");
-            setLoading(false);
-          },
-        }
-      );
+      // In Firebase v10, the order is auth, containerElement, config
+      const verifier = new RecaptchaVerifier(auth, containerElement, {
+        size: "invisible",
+        callback: () => {},
+        "expired-callback": () => {
+          setError("reCAPTCHA expired. Please try again.");
+          setLoading(false);
+        },
+      });
 
       window.recaptchaVerifier = verifier;
       await verifier.render();
@@ -217,7 +222,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     } catch (err: any) {
       console.error("Phone sign-in error:", err);
       let errorMessage = "We could not send the verification code. Please try again.";
-
       if (err.code === "auth/invalid-phone-number") {
         errorMessage = "Invalid phone number. Please enter a valid number.";
       } else if (err.code === "auth/too-many-requests") {
@@ -234,7 +238,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setError("No verification code was sent. Please request a new code.");
       return;
     }
-
     try {
       setLoading(true);
       setError(null);
@@ -242,7 +245,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     } catch (err: any) {
       console.error("Code verification error:", err);
       let errorMessage = "Failed to verify code. Please try again.";
-
       if (err.code === "auth/invalid-verification-code") {
         errorMessage = "Invalid code. Please check and try again.";
       } else if (err.code === "auth/code-expired") {
@@ -264,80 +266,56 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
         onClick={handleClose}
         aria-hidden="true"
       />
-      <div className="relative w-11/12 max-w-2xl mx-4 my-4 bg-gray-200/90 backdrop-blur-sm
-                      shadow-2xl rounded-lg overflow-hidden flex flex-col max-h-[80vh]">
+      {/* Outer Modal Container */}
+      <div
+        className="relative w-11/12 max-w-2xl mx-4 my-4 bg-gray-200/90 backdrop-blur-sm
+                   shadow-2xl rounded-lg overflow-hidden flex flex-col max-h-[80vh]"
+      >
+        {/* Single Close Button (perfect circle) */}
         <button
           onClick={handleClose}
-          className="absolute top-3 right-3 p-1 rounded-full bg-gray-800 
-                     hover:bg-gray-700 z-10"
+          className="absolute top-3 right-3 p-1 rounded-full bg-gray-800
+                     hover:bg-gray-700 z-[100]"
           aria-label="Close modal"
         >
           <X className="w-6 h-6 text-white" />
         </button>
 
+        {/* Main content area */}
         <div className="flex-1 flex flex-col min-h-0">
+          {/* ---------------- WELCOME STEP ---------------- */}
           {step === "welcome" && (
-            <div className="flex flex-col h-full">
-              <div className="relative w-full h-[28vh] shrink-0">
-                <ReactPlayer
-                  url="/brand/cyber.mp4"
-                  playing
-                  muted
-                  loop
-                  controls={false}
-                  width="100%"
-                  height="100%"
-                  style={{ objectFit: "cover" }}
-                  config={{
-                    file: {
-                      attributes: {
-                        playsInline: true,
-                      },
-                    },
-                  }}
-                />
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)",
-                  }}
-                />
-                <div className="absolute inset-x-0 bottom-0 p-4">
-                  <h2 className="text-xl font-semibold text-gray-900 drop-shadow">
-                    Welcome to Mass Transit
-                  </h2>
-                </div>
-              </div>
+            <div className="relative flex-1 w-full h-full overflow-hidden">
 
-              <div className="flex-1 overflow-y-auto p-4 text-gray-900 space-y-4 text-sm">
-                <p>• Drive the MG4 Electric, Maxus MIFA7, and the Cyberquad.</p>
-                <p>• Access 150+ stations with seamless entry and exit.</p>
-                <p>• No deposits. Daily fares capped at $400.</p>
-                <p className="text-xs text-gray-700 leading-relaxed">
-                  By clicking "Continue," you confirm you're 18 or older with a valid
-                  driver's license or permit. Trip and driving data may be collected
-                  to improve services. See our{" "}
-                  <a
-                    href="/privacy"
-                    className="text-blue-500 underline"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Privacy Policy
-                  </a>{" "}
-                  for details.
-                </p>
+              {/* Text/CTA container with blur & zinc text */}
+              <div className="relative z-20 flex flex-col justify-end w-full h-full p-6 bg-white/10 backdrop-blur-md text-zinc-800">
+                <h2 className="text-2xl font-bold drop-shadow-md">Sign in</h2>
+                <div className="mt-4 space-y-2 text-sm max-w-md">
+                  <p className="text-xs leading-relaxed">
+                    By clicking "Continue," you confirm you're 18 or older with a valid
+                    driver's license or permit. Trip and driving data may be collected
+                    to improve services. See our{" "}
+                    <a
+                      href="/privacy"
+                      className="text-blue-300 underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Privacy Policy
+                    </a>{" "}
+                    for details.
+                  </p>
+                </div>
                 <button
                   onClick={() => setStep("phone")}
                   disabled={loading}
-                  className="w-full py-3 mt-1 rounded-md bg-blue-600 text-white 
-                           text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+                  className="w-full py-3 mt-4 rounded-md bg-blue-600 text-zinc-200 font-medium transition-colors z-50"
                 >
                   Continue
                 </button>
@@ -345,17 +323,14 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             </div>
           )}
 
+          {/* ---------------- PHONE STEP ---------------- */}
           {step === "phone" && (
             <div className="flex flex-col h-full">
               <div className="flex-1 p-6 space-y-4 text-gray-900 text-sm">
                 <h3 className="text-lg font-semibold">Enter Your Phone Number</h3>
                 <StepIndicator currentStep={1} totalSteps={2} />
                 <p>We'll text you a verification code to ensure it's really you.</p>
-                <PhoneInput 
-                  value={phoneNumber} 
-                  onChange={setPhoneNumber} 
-                  disabled={loading} 
-                />
+                <PhoneInput value={phoneNumber} onChange={setPhoneNumber} disabled={loading} />
                 {error && (
                   <div className="p-3 text-sm text-red-500 bg-red-100 rounded-lg">
                     {error}
@@ -369,8 +344,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   onClick={handlePhoneSignIn}
                   disabled={loading || !phoneNumber || phoneNumber.length < 8}
                   className="w-full p-3 rounded-md bg-blue-600 text-white text-sm
-                           font-medium hover:bg-blue-500 disabled:opacity-50
-                           transition-colors"
+                             font-medium hover:bg-blue-500 disabled:opacity-50
+                             transition-colors"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -382,7 +357,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   onClick={() => setStep("welcome")}
                   disabled={loading}
                   className="w-full p-3 text-sm text-gray-500 hover:text-gray-700
-                           disabled:opacity-50"
+                             disabled:opacity-50"
                 >
                   Back
                 </button>
@@ -390,6 +365,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             </div>
           )}
 
+          {/* ---------------- VERIFY STEP ---------------- */}
           {step === "verify" && (
             <div className="flex flex-col h-full">
               <div className="flex-1 p-6 space-y-4 text-gray-900 text-sm">
@@ -400,11 +376,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   <span className="font-medium">{phoneNumber}</span>
                 </p>
 
-                <PinInput
-                  length={6}
-                  loading={loading}
-                  onChange={setVerificationCode}
-                />
+                <PinInput length={6} loading={loading} onChange={setVerificationCode} />
 
                 {error && (
                   <div className="p-3 text-sm text-red-500 bg-red-100 rounded-lg">
@@ -431,8 +403,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   onClick={handleVerifyCode}
                   disabled={loading || verificationCode.length !== 6}
                   className="w-full p-3 rounded-md bg-blue-600 text-white text-sm
-                           font-medium hover:bg-blue-500 disabled:opacity-50
-                           transition-colors"
+                             font-medium hover:bg-blue-500 disabled:opacity-50
+                             transition-colors"
                 >
                   {loading ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -444,7 +416,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                   onClick={() => setStep("phone")}
                   disabled={loading}
                   className="w-full p-3 text-sm text-gray-500 hover:text-gray-700
-                           disabled:opacity-50"
+                             disabled:opacity-50"
                 >
                   Change Phone Number
                 </button>
