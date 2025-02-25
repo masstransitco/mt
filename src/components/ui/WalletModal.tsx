@@ -399,7 +399,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           <Button 
             variant="ghost" 
             size="icon"
-            className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-full h-8 w-8 p-0"
+            className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0"
           >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
