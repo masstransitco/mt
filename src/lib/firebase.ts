@@ -14,7 +14,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAj46uOcP-Y4T3X2ZpdlWt4_PxUWCTFwyM",
   authDomain, // Updated to use the computed value
   projectId: "masstransitcompany",
-  storageBucket: "masstransitcompany.appspot.com", // Make sure this is correct
+  storageBucket: "masstransitcompany.firebasestorage.app", 
   messagingSenderId: "1039705984668",
   appId: "1:1039705984668:web:e85aafd14917825b3d6759",
   measurementId: "G-NMMQLPBJD1"
