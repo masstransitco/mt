@@ -214,7 +214,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium truncate">
-                      {user.phoneNumber || '+85254491874'}
+                      {user.phoneNumber || '+852 *********'}
                     </h3>
                     <p className="text-sm text-muted-foreground truncate">
                       {user.email || user.phoneNumber || 'User'}
