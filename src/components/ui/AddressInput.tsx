@@ -222,40 +222,38 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   };
 
   return (
-   <Dialog
-  open={isOpen}
-  onOpenChange={(open) => {
-    if (!open) onClose();
-  }}
->
-  <DialogContent
-  className="p-0 gap-0 w-[90vw] max-w-md md:max-w-2xl bg-black text-white flex flex-col"
-  style={{
-    top: '2rem', // Position near the top instead of centered
-    transform: 'translateX(-50%)', // Keep horizontal centering
-    marginTop: 0,
-    // Override the default transform that centers vertically
-    height: 'auto',
-    maxHeight: 'calc(100vh - 4rem)', // Allow some space at top and bottom
-    overflow: 'visible' // Allow predictions dropdown to be visible outside the dialog
-  }}
-  onClick={(e) => e.stopPropagation()}
->
-  <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10 flex-shrink-0">
-    <DialogTitle className="text-white">
-      {success ? "Address Saved" : "Add Residential Address"}
-    </DialogTitle>
-  </DialogHeader>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        className="p-0 gap-0 w-[90vw] max-w-md md:max-w-2xl bg-black text-white flex flex-col"
+        style={{
+          top: '2rem', // Position near the top instead of centered
+          transform: 'translateX(-50%)', // Keep horizontal centering
+          marginTop: 0,
+          // Override the default transform that centers vertically
+          height: 'auto',
+          maxHeight: 'calc(100vh - 4rem)', // Allow some space at top and bottom
+          overflow: 'visible' // Allow predictions dropdown to be visible outside the dialog
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10 flex-shrink-0">
+          <DialogTitle className="text-white">
+            {success ? "Address Saved" : "Add Residential Address"}
+          </DialogTitle>
+        </DialogHeader>
 
-  <div 
-    className="flex-1 px-6 py-4"
-    style={{
-      overflowY: 'auto',
-      touchAction: 'none' // Disable touch actions on the scrollable area
-    }}
-  >
-
-        <div className="overflow-y-auto flex-1 px-6 py-4">
+        <div 
+          className="flex-1 px-6 py-4"
+          style={{
+            overflowY: 'auto',
+            touchAction: 'none' // Disable touch actions on the scrollable area
+          }}
+        >
           {/* Success message */}
           {success && (
             <motion.div
@@ -320,44 +318,44 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   </div>
                   
                   {/* Predictions dropdown - Above the field on mobile */}
-{isDropdownOpen && predictions.length > 0 && (
-  <div 
-    className="fixed bottom-auto bg-gray-900 border border-gray-800 rounded-md shadow-2xl overflow-y-auto"
-    style={{ 
-      maxHeight: '40vh', 
-      zIndex: 60, // Higher than DialogContent's z-50
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: 'calc(100% - 3rem)', // Match the content width considering padding
-      maxWidth: '2xl'
-    }}
-  >
-    <div className="flex justify-between items-center p-2 border-b border-gray-800">
-      <span className="text-xs text-gray-400">Select from suggestions</span>
-      <button 
-        onClick={() => setIsDropdownOpen(false)}
-        className="text-gray-400 hover:text-white p-1 rounded"
-      >
-        <X className="w-3 h-3" />
-      </button>
-    </div>
-    {predictions.map((prediction) => (
-      <button
-        key={prediction.place_id}
-        onClick={() => handleSelect(prediction)}
-        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
-        type="button"
-      >
-        <div className="font-medium">
-          {prediction.structured_formatting.main_text}
-        </div>
-        <div className="text-xs text-gray-400">
-          {prediction.structured_formatting.secondary_text}
-        </div>
-      </button>
-    ))}
-  </div>
-)}
+                  {isDropdownOpen && predictions.length > 0 && (
+                    <div 
+                      className="fixed bottom-auto bg-gray-900 border border-gray-800 rounded-md shadow-2xl overflow-y-auto"
+                      style={{ 
+                        maxHeight: '40vh', 
+                        zIndex: 60, // Higher than DialogContent's z-50
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 'calc(100% - 3rem)', // Match the content width considering padding
+                        maxWidth: '2xl'
+                      }}
+                    >
+                      <div className="flex justify-between items-center p-2 border-b border-gray-800">
+                        <span className="text-xs text-gray-400">Select from suggestions</span>
+                        <button 
+                          onClick={() => setIsDropdownOpen(false)}
+                          className="text-gray-400 hover:text-white p-1 rounded"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {predictions.map((prediction) => (
+                        <button
+                          key={prediction.place_id}
+                          onClick={() => handleSelect(prediction)}
+                          className="w-full px-4 py-3 text-left text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
+                          type="button"
+                        >
+                          <div className="font-medium">
+                            {prediction.structured_formatting.main_text}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {prediction.structured_formatting.secondary_text}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 
                 {predictions.length > 0 && !isDropdownOpen && focusedField === "search" && (
