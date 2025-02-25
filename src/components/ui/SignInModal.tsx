@@ -285,7 +285,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             <div className="flex flex-col h-full">
               <div className="relative w-full h-[28vh] shrink-0">
                 <ReactPlayer
-                  url="/brand/drive.mp4"
+                  url="/brand/cyber.mp4"
                   playing
                   muted
                   loop
