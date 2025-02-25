@@ -303,41 +303,44 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   </div>
                   
                   {/* Predictions dropdown - Above the field on mobile */}
-                  {isDropdownOpen && predictions.length > 0 && (
-                    <div 
-                      className="absolute bottom-full left-0 right-0 mb-1 bg-gray-900 border border-gray-800 rounded-md shadow-2xl z-50 max-h-64 overflow-y-auto"
-                      style={{ 
+{isDropdownOpen && predictions.length > 0 && (
+  <div 
+    className="fixed bottom-auto bg-gray-900 border border-gray-800 rounded-md shadow-2xl overflow-y-auto"
+    style={{ 
       maxHeight: '40vh', 
-      zIndex: 100, // Much higher z-index
-      transform: 'translateY(-2px)' // Slight offset to avoid border overlap
+      zIndex: 60, // Higher than DialogContent's z-50
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: 'calc(100% - 3rem)', // Match the content width considering padding
+      maxWidth: '2xl'
     }}
-                    >
-                      <div className="flex justify-between items-center p-2 border-b border-gray-800">
-                        <span className="text-xs text-gray-400">Select from suggestions</span>
-                        <button 
-                          onClick={() => setIsDropdownOpen(false)}
-                          className="text-gray-400 hover:text-white p-1 rounded"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                      {predictions.map((prediction) => (
-                        <button
-                          key={prediction.place_id}
-                          onClick={() => handleSelect(prediction)}
-                          className="w-full px-4 py-3 text-left text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
-                          type="button"
-                        >
-                          <div className="font-medium">
-                            {prediction.structured_formatting.main_text}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {prediction.structured_formatting.secondary_text}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+  >
+    <div className="flex justify-between items-center p-2 border-b border-gray-800">
+      <span className="text-xs text-gray-400">Select from suggestions</span>
+      <button 
+        onClick={() => setIsDropdownOpen(false)}
+        className="text-gray-400 hover:text-white p-1 rounded"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+    {predictions.map((prediction) => (
+      <button
+        key={prediction.place_id}
+        onClick={() => handleSelect(prediction)}
+        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
+        type="button"
+      >
+        <div className="font-medium">
+          {prediction.structured_formatting.main_text}
+        </div>
+        <div className="text-xs text-gray-400">
+          {prediction.structured_formatting.secondary_text}
+        </div>
+      </button>
+    ))}
+  </div>
+)}
                 </div>
                 
                 {predictions.length > 0 && !isDropdownOpen && focusedField === "search" && (
