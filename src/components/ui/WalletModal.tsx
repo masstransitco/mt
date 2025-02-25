@@ -286,7 +286,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   return (
     <Dialog
       open={isOpen}
-      onOpenChange={onClose} // Same pattern as SignInModal
+      onOpenChange={dialogOpen} 
     >
       <DialogContent
         className="
