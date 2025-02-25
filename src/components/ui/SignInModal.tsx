@@ -182,10 +182,15 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setError(null);
       cleanup();
 
-      // Create new reCAPTCHA instance with corrected parameter order:
-      // (container ID, configuration, auth instance)
+      // Get the container element for the reCAPTCHA widget
+      const containerElement = document.getElementById("recaptcha-container");
+      if (!containerElement) {
+        throw new Error("Recaptcha container not found");
+      }
+
+      // Create new reCAPTCHA instance using the container element
       const verifier = new RecaptchaVerifier(
-        "recaptcha-container",
+        containerElement,
         {
           size: "invisible",
           callback: () => {},
@@ -198,7 +203,6 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       );
 
       window.recaptchaVerifier = verifier;
-      // Render the reCAPTCHA widget
       await verifier.render();
 
       const confirmationResult = await signInWithPhoneNumber(
