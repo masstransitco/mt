@@ -306,7 +306,11 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   {isDropdownOpen && predictions.length > 0 && (
                     <div 
                       className="absolute bottom-full left-0 right-0 mb-1 bg-gray-900 border border-gray-800 rounded-md shadow-2xl z-50 max-h-64 overflow-y-auto"
-                      style={{ maxHeight: '40vh' }}
+                      style={{ 
+      maxHeight: '40vh', 
+      zIndex: 100, // Much higher z-index
+      transform: 'translateY(-2px)' // Slight offset to avoid border overlap
+    }}
                     >
                       <div className="flex justify-between items-center p-2 border-b border-gray-800">
                         <span className="text-xs text-gray-400">Select from suggestions</span>
