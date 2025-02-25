@@ -21,9 +21,9 @@ interface ExtendedWindow extends Window {
 declare let window: ExtendedWindow;
 
 // Dynamically import ReactPlayer with loading state
-const ReactPlayer = dynamic(() => import("react-player"), { 
+const ReactPlayer = dynamic(() => import("react-player"), {
   ssr: false,
-  loading: () => <div className="w-full h-full bg-gray-200 animate-pulse" />
+  loading: () => <div className="w-full h-full bg-gray-200 animate-pulse" />,
 });
 
 type AuthStep = "welcome" | "phone" | "verify";
@@ -120,10 +120,14 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [resendTimer, setResendTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // Cleanup function
+  // Improved cleanup function to clear any existing reCAPTCHA instance
   const cleanup = () => {
     if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (e) {
+        console.warn("reCAPTCHA cleanup error:", e);
+      }
       window.recaptchaVerifier = undefined;
     }
   };
@@ -178,9 +182,9 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setError(null);
       cleanup();
 
-      // Create new reCAPTCHA instance
+      // Create new reCAPTCHA instance with corrected parameter order:
+      // (container ID, configuration, auth instance)
       const verifier = new RecaptchaVerifier(
-        auth,
         "recaptcha-container",
         {
           size: "invisible",
@@ -189,12 +193,14 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
             setError("reCAPTCHA expired. Please try again.");
             setLoading(false);
           },
-        }
+        },
+        auth
       );
 
       window.recaptchaVerifier = verifier;
+      // Render the reCAPTCHA widget
       await verifier.render();
-      
+
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
@@ -295,7 +301,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                 <div
                   className="absolute inset-0 pointer-events-none"
                   style={{
-                    background: "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)"
+                    background: "linear-gradient(180deg, transparent 0%, rgba(229,231,235,0.9) 80%)",
                   }}
                 />
                 <div className="absolute inset-x-0 bottom-0 p-4">
