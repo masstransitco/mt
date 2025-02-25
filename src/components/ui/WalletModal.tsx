@@ -28,26 +28,25 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-// Tailwind styles for the Stripe CardElement
+// Tailwind styles for the Stripe CardElement - Dark theme
 const cardStyle = {
   style: {
-      base: {
-        color: "#ffffff", // Text color
-        fontFamily: "Inter, system-ui, sans-serif",
-        fontSmoothing: "antialiased",
-        fontSize: "16px",
-        "::placeholder": { 
-          color: "rgba(255, 255, 255, 0.5)" // Light placeholder text
-        },
-        // You can also customize other elements
-        iconColor: "#ffffff"
+    base: {
+      color: "#ffffff", // White text
+      fontFamily: "Inter, system-ui, sans-serif",
+      fontSmoothing: "antialiased",
+      fontSize: "16px",
+      "::placeholder": { 
+        color: "rgba(255, 255, 255, 0.5)" // Light placeholder text
       },
-      invalid: {
-        color: "#ef4444", // Destructive color
-        iconColor: "#ef4444"
-      },
-    }
-  };
+      iconColor: "#ffffff" // White icons
+    },
+    invalid: {
+      color: "#ef4444", // Destructive color
+      iconColor: "#ef4444"
+    },
+  }
+};
 
 interface PaymentMethodCardProps {
   method: SavedPaymentMethod;
@@ -80,17 +79,18 @@ function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
       transition={{ type: "tween", duration: 0.2 }}
       className="
         flex items-center justify-between 
-        p-4 border border-border/40
-        rounded-lg bg-card/10 text-foreground
+        p-4 border border-gray-800
+        rounded-lg bg-gray-900/50 backdrop-blur-sm
+        text-white
       "
     >
       <div className="flex items-center gap-3">
-        <CreditCard className="w-5 h-5" />
+        <CreditCard className="w-5 h-5 text-gray-300" />
         <div>
           <p className="font-medium uppercase">
             {method.brand} •••• {method.last4}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-gray-400">
             Expires {method.expMonth}/{method.expYear}
           </p>
         </div>
@@ -100,7 +100,7 @@ function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
         size="icon"
         onClick={handleDelete}
         disabled={isDeleting}
-        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+        className="text-gray-400 hover:text-destructive hover:bg-destructive/10"
       >
         {isDeleting ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -196,7 +196,7 @@ function AddPaymentMethodForm({
       onSubmit={handleSubmit}
       className="space-y-4 px-4"
     >
-      <div className="p-4 border border-border/40 rounded-lg bg-card/10 text-foreground">
+      <div className="p-4 border border-gray-800 rounded-lg bg-gray-900/50 text-white">
         <CardElement options={cardStyle} />
       </div>
       {error && (
@@ -205,7 +205,7 @@ function AddPaymentMethodForm({
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.3 }}
-          className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg"
+          className="p-3 text-sm text-red-400 bg-red-400/10 rounded-lg"
         >
           {error}
         </motion.div>
@@ -213,10 +213,13 @@ function AddPaymentMethodForm({
       <Button
         type="submit"
         disabled={!stripe || loading}
-        className="w-full"
+        className="w-full bg-white text-black hover:bg-gray-200"
       >
         {loading ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <span className="flex items-center">
+            <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2"></span>
+            Processing...
+          </span>
         ) : (
           "Add Payment Method"
         )}
@@ -306,25 +309,25 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       }}
     >
       <DialogContent className={cn(
-  "p-0 gap-0", // Remove default padding
-  "w-[90vw] max-w-md md:max-w-2xl", // Add w-[90vw] to set width to 90% of viewport
-  "overflow-hidden" // Handle overflow
-)}>
-        <DialogHeader className="px-6 py-4 bg-background border-b border-border/40">
-          <DialogTitle>Wallet</DialogTitle>
-          <DialogDescription>
+        "p-0 gap-0", 
+        "w-[90vw] max-w-md md:max-w-2xl",
+        "overflow-hidden bg-black text-white"
+      )}>
+        <DialogHeader className="px-6 py-4 border-b border-gray-800">
+          <DialogTitle className="text-white text-lg font-medium">Wallet</DialogTitle>
+          <DialogDescription className="text-gray-400">
             Manage your saved payment methods for MTC fare payments.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-6 py-4 overflow-y-auto max-h-[60vh]">
+        <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[60vh]">
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="p-3 mb-4 text-sm text-destructive bg-destructive/10 rounded-lg"
+              className="p-3 mb-4 text-sm text-red-400 bg-red-400/10 rounded-lg"
             >
               {error}
             </motion.div>
@@ -332,7 +335,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
           {loading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="animate-spin h-8 w-8 border-2 border-white rounded-full border-t-transparent"></div>
             </div>
           ) : (
             <AnimatePresence mode="wait">
@@ -349,9 +352,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               ) : (
                 <motion.div
                   key="paymentMethods"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
                   className="space-y-4"
                 >
@@ -368,23 +371,40 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                       </AnimatePresence>
                     </div>
                   ) : (
-                    <p className="text-center text-muted-foreground py-8">
+                    <p className="text-center text-gray-400 py-8">
                       No payment methods saved yet
                     </p>
                   )}
                   <Button
                     variant="outline"
                     onClick={() => setShowAddCard(true)}
-                    className="w-full border border-dashed"
+                    className={cn(
+                      "w-full mt-4 flex items-center justify-center",
+                      paymentMethods.length > 0
+                        ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none" 
+                        : "bg-white hover:bg-gray-200 text-black border-none"
+                    )}
                   >
-                    <Plus className="mr-2 h-5 w-5" />
-                    Add Payment Method
+                    <Plus className="mr-2 h-4 w-4" />
+                    {paymentMethods.length > 0 ? "Add Another Payment Method" : "Add Payment Method"}
                   </Button>
                 </motion.div>
               )}
             </AnimatePresence>
           )}
         </div>
+
+        {/* Close button */}
+        <DialogClose className="absolute right-4 top-4">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-full h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </DialogClose>
       </DialogContent>
     </Dialog>
   );
