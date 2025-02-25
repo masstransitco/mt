@@ -311,9 +311,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         "overflow-hidden" // Handle overflow
       )}>
         <DialogHeader className="px-6 py-4 bg-background border-b border-border/40">
-          <DialogTitle>Payment Methods</DialogTitle>
+          <DialogTitle>Wallet</DialogTitle>
           <DialogDescription>
-            Manage your saved payment methods for bookings and payments.
+            Manage your saved payment methods for MTC fare payments.
           </DialogDescription>
         </DialogHeader>
 
