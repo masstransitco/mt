@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 // Tailwind styles for the Stripe CardElement
 const cardStyle = {
   style: {
-    base: {
+      base: {
         color: "#ffffff", // Text color
         fontFamily: "Inter, system-ui, sans-serif",
         fontSmoothing: "antialiased",
@@ -39,12 +39,15 @@ const cardStyle = {
         "::placeholder": { 
           color: "rgba(255, 255, 255, 0.5)" // Light placeholder text
         },
-    invalid: {
+        // You can also customize other elements
+        iconColor: "#ffffff"
+      },
+      invalid: {
         color: "#ef4444", // Destructive color
         iconColor: "#ef4444"
-    },
-  },
-};
+      },
+    }
+  };
 
 interface PaymentMethodCardProps {
   method: SavedPaymentMethod;
