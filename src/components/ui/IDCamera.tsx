@@ -31,7 +31,7 @@ export default function IDCamera({
 }: IDCameraProps) {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [isFrontCamera, setIsFrontCamera] = useState(true);
+  const [isFrontCamera, setIsFrontCamera] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
