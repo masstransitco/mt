@@ -32,15 +32,16 @@ import { cn } from "@/lib/utils";
 const cardStyle = {
   style: {
     base: {
-      color: "var(--foreground)",
-      fontFamily: "Inter, system-ui, sans-serif",
-      fontSmoothing: "antialiased",
-      fontSize: "16px",
-      "::placeholder": { color: "var(--muted-foreground)" },
-    },
+        color: "#ffffff", // Text color
+        fontFamily: "Inter, system-ui, sans-serif",
+        fontSmoothing: "antialiased",
+        fontSize: "16px",
+        "::placeholder": { 
+          color: "rgba(255, 255, 255, 0.5)" // Light placeholder text
+        },
     invalid: {
-      color: "var(--destructive)",
-      iconColor: "var(--destructive)",
+        color: "#ef4444", // Destructive color
+        iconColor: "#ef4444"
     },
   },
 };
