@@ -8,8 +8,13 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle,
-  DialogDescription
+  DialogDescription,
+  DialogClose
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { X, Car } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 // Dynamic import with loading state
 const CarGrid = dynamic(
@@ -51,34 +56,72 @@ export default function CarSheet({ isOpen, onToggle, className }: CarSheetProps)
   }, [onToggle]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDismiss()}>
-      <DialogContent 
-        className={`w-[80vw] max-w-none rounded-lg ${className}`} 
+    <Dialog 
+      open={isOpen} 
+      onOpenChange={(open) => !open && handleDismiss()}
+    >
+      <DialogContent
+        className={cn(
+          "p-0 gap-0",
+          "w-[80vw] max-w-md md:max-w-2xl",
+          "overflow-hidden bg-black text-white",
+          className
+        )}
         onEscapeKeyDown={handleDismiss}
         onInteractOutside={handleDismiss}
       >
-        <DialogHeader>
-          <DialogTitle>Dispatch a car</DialogTitle>
-          <DialogDescription>
-            {availableCars.length} available
+        <DialogHeader className="px-6 py-4 border-b border-gray-800">
+          <DialogTitle className="text-white text-lg font-medium">Dispatch a car</DialogTitle>
+          <DialogDescription className="text-gray-400">
+            {availableCars.length} available vehicles
           </DialogDescription>
         </DialogHeader>
         
         <div 
-          className="min-h-[30vh] max-h-[85vh] overflow-y-auto px-4 pb-safe"
+          className="px-6 py-4 space-y-4 overflow-y-auto max-h-[60vh]"
           style={{
             overscrollBehavior: 'contain',
           }}
         >
-          <Suspense fallback={<GridSkeleton />}>
-            {isContentVisible && (
-              <CarGrid 
-                isVisible={isContentVisible}
-                className="pb-4" 
-              />
-            )}
-          </Suspense>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="flex items-center gap-4 mb-4">
+              <div className="bg-gray-800 p-3 rounded-lg">
+                <Car className="w-6 h-6 text-gray-300" />
+              </div>
+              <div>
+                <h3 className="text-white font-medium">Select a vehicle</h3>
+                <p className="text-gray-400 text-sm">
+                  Choose from available vehicles in your fleet
+                </p>
+              </div>
+            </div>
+            
+            <Suspense fallback={<GridSkeleton />}>
+              {isContentVisible && (
+                <CarGrid 
+                  isVisible={isContentVisible}
+                  className="pb-4" 
+                />
+              )}
+            </Suspense>
+          </motion.div>
         </div>
+
+        {/* Close button */}
+        <DialogClose className="absolute right-4 top-4">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-full h-8 w-8 p-0"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </DialogClose>
       </DialogContent>
     </Dialog>
   );
@@ -89,9 +132,9 @@ const GridSkeleton = () => (
     {[...Array(4)].map((_, i) => (
       <div 
         key={i} 
-        className="relative h-48 bg-neutral-200 rounded-lg overflow-hidden"
+        className="relative h-48 bg-gray-900/50 rounded-lg overflow-hidden border border-gray-800"
       >
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-neutral-200 via-neutral-300 to-neutral-200" />
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
       </div>
     ))}
   </div>
