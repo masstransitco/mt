@@ -106,7 +106,7 @@ function AnimatedDot() {
           animation: expandShrink 1.8s ease-in-out infinite;
         }
       `}</style>
-      <div className="w-2 h-2 rounded-full bg-blue-400/80 dot-animate px-1 py-1" />
+      <div className="w-2 h-2 rounded-full bg-blue-900/80 backdrop-blur-md dot-animate px-1 py-0" />
     </>
   );
 }
@@ -126,7 +126,7 @@ const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
       highlight ? "bg-blue-600" : "bg-gray-700"
     )}>
       {step === 1 ? (
-        <Search className="w-4 h-4 text-white" />
+        <Search className="w-4 h-4 backdrop-blur-md text-white" />
       ) : (
         <MapPinUp className="w-4 h-4 text-white" />
       )}
@@ -142,7 +142,7 @@ const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
       highlight ? "bg-blue-600" : "bg-gray-700"
     )}>
       {step === 3 ? (
-        <Search className="w-4 h-4 text-white" />
+        <Search className="w-4 h-4 backdrop-blur-md text-white" />
       ) : (
         <MapPinDown className="w-4 h-4 text-white" />
       )}
@@ -256,7 +256,7 @@ const AddressSearch = React.memo(
                 disabled={disabled}
                 placeholder={placeholder}
                 className={cn(
-                  "w-full bg-slate-950/90 text-white",
+                  "w-full bg-slate-950/90 bakcdrop-blur-md text-white",
                   "focus:outline-none",
                   "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 text-base transition-colors"
                 )}
@@ -414,7 +414,7 @@ function StationSelector({
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-zinc-800/80 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border border-gray-600/80 shadow-xl"
+        className="bg-zinc-800/50 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border-0.5 border-zinc-800/90 shadow-xl"
         style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
         {/* Same-station error */}
@@ -490,7 +490,7 @@ function StationSelector({
           {/* Left side - Info Text */}
           <div className="flex items-center gap-2">
             <AnimatedDot />
-            <span className="text-xs text-white px-2 py-1 min-w-[14ch] whitespace-nowrap bg-black/60 backdrop-blur-sm rounded-md">
+            <span className="text-xs text-white px-2 py-1 min-w-[14ch] whitespace-nowrap backdrop-blur-sm rounded-md">
               <AnimatedInfoText text={step < 3 ? "Choose pick-up station" : "Select arrival station"} />
             </span>
           </div>
