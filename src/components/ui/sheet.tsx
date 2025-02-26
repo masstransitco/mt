@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, ReactNode } from "react";
-import { createPortal } from "react-dom";
 import {
   AnimatePresence,
   motion,
@@ -9,12 +8,10 @@ import {
   useTransform,
   useDragControls,
 } from "framer-motion";
-import { Info } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/* -----------------------------------------------------------
-   1) Animation constants for PulsatingStrip
------------------------------------------------------------ */
+// Animation constants for PulsatingStrip
 type AnimationColor = string;
 type Scale = number;
 
@@ -52,9 +49,7 @@ function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
 
-/* -----------------------------------------------------------
-   2) PulsatingStrip component
------------------------------------------------------------ */
+// PulsatingStrip component
 function PulsatingStrip({ className }: { className?: string }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
@@ -120,7 +115,7 @@ function PulsatingStrip({ className }: { className?: string }) {
         ref={stripRef}
         style={{
           width: "110%",
-          height: "1px",
+          height: "2px",
           borderRadius: "1px",
           backgroundColor: ANIMATION_PARAMS.colors.primary,
           willChange: "transform, opacity, boxShadow",
@@ -132,9 +127,7 @@ function PulsatingStrip({ className }: { className?: string }) {
   );
 }
 
-/* -----------------------------------------------------------
-   3) SheetProps interface
------------------------------------------------------------ */
+// SheetProps interface
 export interface SheetProps {
   isOpen: boolean;
   children: ReactNode;
@@ -146,9 +139,7 @@ export interface SheetProps {
   onDismiss?: () => void;
 }
 
-/* -----------------------------------------------------------
-   4) Sheet component with manual drag handle
------------------------------------------------------------ */
+// Sheet component with manual drag handle
 export default function Sheet({
   isOpen,
   children,
@@ -159,7 +150,7 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Always call hooks at the top level
+  // State hooks
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -216,37 +207,29 @@ export default function Sheet({
   const SheetHeader = (
     <div
       onPointerDown={handlePointerDown}
-      className="
-        cursor-grab 
-        active:cursor-grabbing 
-        px-4 
-        pt-4 
-        text-black
-      "
+      className="cursor-grab active:cursor-grabbing px-4 pt-4 relative"
     >
       <div className="flex items-center justify-between">
         <div className="text-left">
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
-          {subtitle && <p className="text-sm text-gray-600">{subtitle}</p>}
+          {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
+          {subtitle && <p className="text-sm text-gray-300">{subtitle}</p>}
           {typeof count === "number" && (
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-300">
               {count} {countLabel ?? "items"}
             </p>
           )}
         </div>
-        <button
-          className="
-            p-2 
-            rounded-full 
-            hover:bg-black/10 
-            transition-colors
-          "
-          onClick={onDismiss}
-        >
-          <Info className="w-5 h-5 text-black" />
-        </button>
+        {onDismiss && (
+          <button
+            className="absolute right-3 top-3 p-1.5 rounded-full hover:bg-gray-700/50 transition-colors"
+            onClick={onDismiss}
+          >
+            <X className="w-5 h-5 text-gray-300" />
+            <span className="sr-only">Close</span>
+          </button>
+        )}
       </div>
-      <PulsatingStrip className="mt-2 mx-auto" />
+      <PulsatingStrip className="mt-3 mx-auto" />
     </div>
   );
 
@@ -258,9 +241,9 @@ export default function Sheet({
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-black/50 pointer-events-none"
+            className="absolute inset-0 bg-black/60 pointer-events-auto"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onDismiss}
           />
@@ -280,14 +263,14 @@ export default function Sheet({
           >
             <div
               className={cn(
-                "relative bg-neutral-300 text-black border border-gray-400 rounded-t-md shadow-md",
+                "relative bg-black text-white rounded-t-lg shadow-2xl border-t border-gray-800",
                 className
               )}
             >
               {SheetHeader}
               <div
                 ref={contentRef}
-                className="px-4 pt-2 pb-6 max-h-[45vh] overflow-y-auto"
+                className="px-4 pt-3 pb-8 max-h-[45vh] overflow-y-auto"
               >
                 {children}
               </div>
