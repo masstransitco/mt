@@ -3,12 +3,13 @@
 import React, { useState, useCallback } from "react";
 import Head from "next/head";
 import { Menu as MenuIcon } from "lucide-react";
-import Image from "next/image";
-import dynamic from "next/dynamic"; // <-- Import dynamic
+import dynamic from "next/dynamic";
 
 import BookingDialog from "@/components/booking/BookingDialog";
 import SideSheet from "@/components/ui/SideSheet";
 import { QrCodeIcon } from "@/components/ui/icons/QrCodeIcon";
+// New import for the inline SVG
+import { LogoSvg } from "@/components/ui/logo/LogoSvg";
 
 // Dynamically import with no SSR
 const GMapWithErrorBoundary = dynamic(() => import("@/components/GMap"), {
@@ -36,17 +37,13 @@ export default function Page() {
   return (
     <>
       <Head>
-        {/* This meta tag disables zooming by setting maximum-scale=1.0 and user-scalable=no */}
+        {/* Disable zooming */}
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
       </Head>
 
-      {/* 
-        1) "overflow-hidden" => no scroll
-        2) style={{ touchAction: "none" }} => disable gestures 
-      */}
       <main
         className="min-h-screen bg-background flex flex-col overflow-hidden"
         style={{ touchAction: "none" }}
@@ -66,9 +63,9 @@ export default function Page() {
           <div className="relative h-full flex items-center justify-between px-0">
             {/* Left: Logo */}
             <div className="flex items-center ml-2">
-              <Image
-                src="/brand/logo.png"
-                alt="Logo"
+              {/* Inline LogoSvg instead of the previous next/image */}
+              <LogoSvg
+                aria-label="Logo"
                 width={50}
                 height={50}
                 className="object-contain"
