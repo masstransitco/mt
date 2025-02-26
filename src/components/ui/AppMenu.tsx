@@ -6,13 +6,15 @@ import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import {
   LogOut,
-  Car,
   ChevronRight,
   Route,
   Wallet,
+  X,
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { signOut, User } from 'firebase/auth';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 // Lazy-loaded modals
 const SignInModal = dynamic(() => import('./SignInModal'), { ssr: false });
@@ -103,56 +105,44 @@ export default function AppMenu({ onClose }: AppMenuProps) {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-background">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="w-full h-full flex flex-col bg-black text-white"
+    >
       {/* Header */}
-      <header
-        className="
-          h-14 
-          border-b border-border/40 
-          flex items-center 
-          justify-between 
-          px-4
-        "
-      >
-        <h2
-          className="
-            text-base
-            font-medium
-            [font-family:'Helvetica Neue',Helvetica,Arial,sans-serif]
-          "
-        >
+      <header className="h-16 border-b border-gray-800 flex items-center justify-between px-4">
+        <h2 className="text-base font-medium text-white">
           Menu
         </h2>
 
-        {/* Close Button (ChevronRight) calls onClose */}
+        {/* Close Button (X) calls onClose */}
         <button
           onClick={onClose}
-          className="
-            flex items-center justify-center 
-            p-2 
-            rounded-full
-            hover:bg-accent/10 
-            transition-colors 
-            duration-200
-          "
+          className="flex items-center justify-center p-2 rounded-full hover:bg-gray-800 transition-colors duration-200"
           aria-label="Close menu"
         >
-          <ChevronRight className="w-6 h-6" />
+          <X className="w-5 h-5 text-gray-300" />
         </button>
       </header>
 
       {/* Weather Section */}
       {weather && (
-        <div className="border-b border-border/40 bg-card/20 px-4 py-3">
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <i className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl`} />
-            <span className="text-foreground font-medium">
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm px-4 py-4"
+        >
+          <div className="flex items-center gap-3 text-sm text-zinc-400">
+            <i className={`wi ${getWeatherIconClass(weather.weathercode)} text-xl text-zinc-200`} />
+            <span className="text-zinc-200 font-medium">
               {Math.round(weather.temperature)}°C
             </span>
 
             <span className="opacity-50">|</span>
             <div className="flex items-center gap-1">
-              <i className="wi wi-strong-wind" />
+              <i className="wi wi-strong-wind text-zinc-200" />
               <span>{Math.round(weather.windspeed)} km/h</span>
             </div>
 
@@ -160,7 +150,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
               <>
                 <span className="opacity-50">|</span>
                 <div className="flex items-center gap-1">
-                  <i className="wi wi-raindrops" />
+                  <i className="wi wi-raindrops text-zinc-200" />
                   <span>{weather.rainChance}%</span>
                 </div>
               </>
@@ -170,39 +160,38 @@ export default function AppMenu({ onClose }: AppMenuProps) {
               <>
                 <span className="opacity-50">|</span>
                 <div className="flex items-center gap-1">
-                  <i className="wi wi-smoke" />
+                  <span className="bg-zinc-800 px-2 py-0.5 rounded text-xs text-zinc-200">
+                    AQI
+                  </span>
                   <span>{weather.aqi}</span>
                 </div>
               </>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Main Content (scrollable) */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
+      <div className="flex-1 flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
         {/* User Profile / Sign In */}
-        <div className="px-4 py-4 border-b border-border/40">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="px-4 py-5 border-b border-gray-800"
+        >
           {!loading && (
             <div className="mb-4">
               {user ? (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
                   onClick={() => {
                     // open user profile or settings if needed
                   }}
-                  className="
-                    w-full 
-                    flex items-center gap-3 
-                    bg-card/20 
-                    hover:bg-card/30 
-                    rounded-lg 
-                    px-3 py-3
-                    text-left
-                    transition-colors
-                    duration-200
-                  "
+                  className="w-full flex items-center gap-3 bg-gray-800/70 hover:bg-gray-700 rounded-lg px-4 py-3.5 text-left transition-colors duration-200"
                 >
-                  <div className="w-12 h-12 rounded-full overflow-hidden bg-card flex-shrink-0">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 border border-gray-600">
                     <Image
                       src="/brand/profile.png"
                       alt="Profile"
@@ -213,33 +202,24 @@ export default function AppMenu({ onClose }: AppMenuProps) {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate">
+                    <h3 className="font-medium text-white truncate">
                       {user.phoneNumber || '+852 *********'}
                     </h3>
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="text-sm text-gray-300 truncate">
                       {user.email || user.phoneNumber || 'User'}
                     </p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                </button>
+                  <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                </motion.button>
               ) : (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
                   onClick={() => setShowSignInModal(true)}
-                  className="
-                    w-full 
-                    bg-primary 
-                    text-primary-foreground 
-                    px-6 py-3.5 
-                    rounded-lg 
-                    font-medium 
-                    transition-colors
-                    duration-200
-                    hover:opacity-90
-                    active:opacity-80
-                  "
+                  className="w-3/5 mx-auto bg-blue-600 text-white px-5 py-3 rounded-lg font-medium transition-colors duration-200 hover:bg-blue-700 active:bg-blue-800"
                 >
                   Sign In
-                </button>
+                </motion.button>
               )}
             </div>
           )}
@@ -247,81 +227,65 @@ export default function AppMenu({ onClose }: AppMenuProps) {
           {/* Quick Actions (for signed-in users) */}
           {user && (
             <div className="space-y-2">
-              <button
-                className="
-                  w-full 
-                  flex items-center justify-between 
-                  py-2 px-3 
-                  rounded-lg 
-                  hover:bg-accent/10 
-                  transition-colors 
-                  duration-200
-                "
+              <motion.button
+                whileHover={{ x: 2 }}
+                className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <Route className="w-5 h-5" />
-                  <span className="font-medium">Trips</span>
+                  <div className="p-1.5 rounded-full bg-blue-600/20">
+                    <Route className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <span className="font-medium text-gray-200">Trips</span>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
+                <ChevronRight className="w-5 h-5 text-gray-500" />
+              </motion.button>
 
-              <button
+              <motion.button
+                whileHover={{ x: 2 }}
                 onClick={handleWalletClick}
-                className="
-                  w-full 
-                  flex items-center justify-between 
-                  py-2 px-3 
-                  rounded-lg 
-                  hover:bg-accent/10 
-                  transition-colors 
-                  duration-200
-                "
+                className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <Wallet className="w-5 h-5" />
-                  <span className="font-medium">Wallet</span>
+                  <div className="p-1.5 rounded-full bg-blue-600/20">
+                    <Wallet className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <span className="font-medium text-gray-200">Wallet</span>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
+                <ChevronRight className="w-5 h-5 text-gray-500" />
+              </motion.button>
               
-              {/* New License Button */}
-              <button
+              {/* License Button */}
+              <motion.button
+                whileHover={{ x: 2 }}
                 onClick={handleLicenseClick}
-                className="
-                  w-full 
-                  flex items-center justify-between 
-                  py-2 px-3 
-                  rounded-lg 
-                  hover:bg-accent/10 
-                  transition-colors 
-                  duration-200
-                "
+                className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <LicenseIcon />
-                  <span className="font-medium">License & ID</span>
+                  <div className="p-1.5 rounded-full bg-blue-600/20">
+                    <LicenseIcon />
+                  </div>
+                  <span className="font-medium text-gray-200">License & ID</span>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
+                <ChevronRight className="w-5 h-5 text-gray-500" />
+              </motion.button>
             </div>
           )}
-        </div>
+        </motion.div>
 
-        {/* Middle Section - Featured */}
-        <div className="px-4 space-y-3 py-4 border-b border-border/40">
-          <button
+        {/* Middle Section - Featured (Discover only) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="px-4 space-y-3 py-5 border-b border-gray-800"
+        >
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
             onClick={handleDiscoverClick}
-            className="
-              w-full 
-              flex items-center gap-3 
-              rounded-lg 
-              p-3
-              hover:bg-accent/10 
-              transition-colors 
-              duration-200
-            "
+            className="w-full flex items-center gap-3 rounded-lg p-3 hover:bg-gray-800 transition-colors duration-200"
           >
-            <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0">
+            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
               <Image
                 src="/brand/discover.gif"
                 alt="Discover"
@@ -332,83 +296,49 @@ export default function AppMenu({ onClose }: AppMenuProps) {
               />
             </div>
             <div className="flex-1 text-left">
-              <h3 className="font-medium">Discover</h3>
-              <p className="text-sm text-muted-foreground">Research & Tech</p>
+              <h3 className="font-medium text-white">Discover</h3>
+              <p className="text-sm text-gray-400">Research & Tech</p>
             </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground" />
-          </button>
-
-          <button
-            className="
-              w-full
-              flex items-center gap-3
-              rounded-lg
-              p-3
-              hover:bg-accent/10
-              transition-colors
-              duration-200
-            "
-          >
-            <div className="w-12 h-12 rounded-lg bg-card flex items-center justify-center flex-shrink-0">
-              <Car className="w-6 h-6" />
-            </div>
-            <div className="flex-1 text-left">
-              <h3 className="font-medium">Commute With Us</h3>
-              <p className="text-sm text-muted-foreground">EV Transit Network</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground" />
-          </button>
-        </div>
+            <ChevronRight className="w-5 h-5 text-gray-500" />
+          </motion.button>
+        </motion.div>
 
         {/* Bottom Section */}
-        <div className="px-4 py-8 mt-auto">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="px-4 py-8 mt-auto"
+        >
           {user && (
-            <button
+            <motion.button
+              whileHover={{ x: 2, color: '#ef4444' }}
               onClick={handleSignOut}
-              className="
-                flex items-center gap-2 
-                text-destructive 
-                hover:text-destructive/80 
-                transition-colors 
-                duration-200 
-                mb-4
-              "
+              className="flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors duration-200 mb-6"
             >
               <LogOut className="w-5 h-5" />
               <span className="font-medium">Sign Out</span>
-            </button>
+            </motion.button>
           )}
 
           <div className="flex items-center justify-between">
             <div className="flex gap-4">
               <Link
                 href="/privacy"
-                className="
-                  text-sm 
-                  text-muted-foreground 
-                  hover:text-foreground 
-                  transition-colors 
-                  duration-200
-                "
+                className="text-sm text-gray-500 hover:text-gray-300 transition-colors duration-200"
               >
                 Privacy
               </Link>
               <Link
                 href="/legal"
-                className="
-                  text-sm 
-                  text-muted-foreground 
-                  hover:text-foreground 
-                  transition-colors 
-                  duration-200
-                "
+                className="text-sm text-gray-500 hover:text-gray-300 transition-colors duration-200"
               >
                 Legal
               </Link>
             </div>
-            <span className="text-sm text-muted-foreground">v4.40.1</span>
+            <span className="text-sm text-gray-600">v4.40.1</span>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Lazy-loaded Modals */}
@@ -424,6 +354,6 @@ export default function AppMenu({ onClose }: AppMenuProps) {
         isOpen={showLicenseModal}
         onClose={() => setShowLicenseModal(false)}
       />
-    </div>
+    </motion.div>
   );
 }
