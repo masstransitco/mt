@@ -106,7 +106,7 @@ function AnimatedDot() {
           animation: expandShrink 1.8s ease-in-out infinite;
         }
       `}</style>
-      <div className="w-2 h-2 rounded-full bg-blue-400 dot-animate px-1 py-1" />
+      <div className="w-2 h-2 rounded-full bg-blue-400/80 dot-animate px-1 py-1" />
     </>
   );
 }
@@ -256,9 +256,9 @@ const AddressSearch = React.memo(
                 disabled={disabled}
                 placeholder={placeholder}
                 className={cn(
-                  "w-full bg-gray-800 text-white rounded-md",
-                  "focus:outline-none focus:ring-1 focus:ring-blue-600",
-                  "placeholder:text-gray-500 disabled:cursor-not-allowed p-1 text-base transition-colors"
+                  "w-full bg-slate-950/90 text-white",
+                  "focus:outline-none",
+                  "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 text-base transition-colors"
                 )}
               />
               {searchText && (
@@ -355,10 +355,10 @@ function StationSelector({
 
   // Subtle highlight vs default - removed border color as requested
   const highlightDepartureClass = highlightDeparture
-    ? "bg-gray-800"
+    ? "bg-slate-950/80"
     : "bg-gray-900";
   const highlightArrivalClass = highlightArrival
-    ? "bg-gray-800"
+    ? "bg-slate-950/80"
     : "bg-gray-900";
 
   const handleLocateMe = useCallback(() => {
@@ -409,12 +409,12 @@ function StationSelector({
   const showCarSheet = viewState === "showCar";
 
   return (
-    <div className="relative z-10 w-full max-w-screen-md mx-auto px-2">
+    <div className="relative z-10 w-full max-w-screen-md mx-auto px-1">
       {/* Station Inputs Container */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-zinc-700/80 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border border-gray-600/80 shadow-xl"
+        className="bg-zinc-800/80 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border border-gray-600/80 shadow-xl"
         style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
         {/* Same-station error */}
@@ -424,7 +424,7 @@ function StationSelector({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-2 px-2 py-2 text-sm text-red-400 bg-red-900/30 rounded-md border border-red-800"
+              className="flex items-center gap-2 px-1 py-1 text-sm text-red-400 bg-red-900/30 rounded-md border border-red-800"
             >
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>Departure and arrival stations cannot be the same</span>
@@ -433,7 +433,7 @@ function StationSelector({
         </AnimatePresence>
 
         {/* DEPARTURE INPUT */}
-        <div className={`flex items-center gap-3 rounded-lg p-1 border border-gray-800 transition-all duration-200 ${highlightDepartureClass}`}>
+        <div className={`flex items-center gap-3 rounded-full p-1 border border-gray-800 transition-all duration-200 ${highlightDepartureClass}`}>
           <DepartureIcon highlight={highlightDeparture} step={step} />
           <AddressSearch
             onAddressSelect={handleAddressSearch}
@@ -460,7 +460,7 @@ function StationSelector({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className={`flex items-center gap-3 rounded-lg p-1 border border-gray-800 transition-all duration-200 ${highlightArrivalClass}`}
+              className={`flex items-center gap-3 rounded-full p-1 border border-gray-800 transition-all duration-200 ${highlightArrivalClass}`}
             >
               <ArrivalIcon highlight={highlightArrival} step={step} />
               <AddressSearch
@@ -508,7 +508,7 @@ function StationSelector({
               <>
                 <button
                   onClick={onLocateMe || handleLocateMe}
-                  className="w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
+                  className="w-10 h-10 bg-gray-800 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
                   type="button"
                   aria-label="Find stations near me"
                 >
