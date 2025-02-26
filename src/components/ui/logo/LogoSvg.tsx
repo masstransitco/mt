@@ -8,15 +8,18 @@ export const LogoSvg: React.FC<LogoSvgProps> = (props) => {
       xmlns="http://www.w3.org/2000/svg"
       xmlSpace="preserve"
       id="Layer_1"
-      width="2100"
-      height="950"
-      x="0"
-      y="0"
+      // Removed width/height so parent can control them
+      viewBox="0 0 2100 950"
       version="1.1"
       {...props}
     >
       <style>
-        {`.st11 { fill: #ededed; stroke: #e3e3e3; stroke-width: 5.4441; stroke-miterlimit: 10; }`}
+        {`.st11 {
+          fill: #ededed;
+          stroke: #e3e3e3;
+          stroke-width: 5.4441;
+          stroke-miterlimit: 10;
+        }`}
       </style>
 
       <path
