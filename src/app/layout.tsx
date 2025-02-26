@@ -1,21 +1,20 @@
-'use client';
+"use client";
 
-import '@/styles/globals.css';
-import { Inter } from 'next/font/google';
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { useRouter } from 'next/navigation';
+import "@/styles/globals.css";
+import { Inter } from "next/font/google";
+import { useEffect, useState } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { useRouter } from "next/navigation";
 
-import { auth } from '@/lib/firebase';
-import ChatWidget from '@/components/ChatWidget';
-import Spinner from '@/components/ui/spinner';
+import { auth } from "@/lib/firebase";
+import Spinner from "@/components/ui/spinner";
 
 // Redux
-import { ReduxProvider } from '@/providers/ReduxProvider';
-import { useAppDispatch } from '@/store/store';
-import { setAuthUser, signOutUser } from '@/store/userSlice';
+import { ReduxProvider } from "@/providers/ReduxProvider";
+import { useAppDispatch } from "@/store/store";
+import { setAuthUser, signOutUser } from "@/store/userSlice";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 /**
  * Component to disable pinch-to-zoom.
@@ -30,9 +29,9 @@ function DisablePinchZoom() {
       }
     };
 
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
     return () => {
-      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener("touchmove", handleTouchMove);
     };
   }, []);
 
@@ -80,14 +79,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <div className={`${inter.className} h-full flex flex-col relative`}>
       {children}
-      <ChatWidget />
+      {/* ChatWidget removed */}
     </div>
   );
 }
 
 /**
  * The actual Next.js RootLayout component.
- * 
+ *
  * Note: We do NOT call useAppDispatch() here, because ReduxProvider
  * only wraps <LayoutInner> (children), not this outer function.
  */
