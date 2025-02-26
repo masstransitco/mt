@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { ArrowRightFromLine, ArrowRightToLine, X, AlertCircle, Search } from "lucide-react";
+import { X, AlertCircle, Search } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
@@ -16,11 +17,15 @@ import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
 import { setSearchLocation } from "@/store/userSlice";
 import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon";
+import { MapPinDown } from "@/components/ui/icons/MapPinDown";
+import { MapPinUp } from "@/components/ui/icons/MapPinUp";
+import { NearPin } from "@/components/ui/icons/NearPin";
+import { cn } from "@/lib/utils";
 
 // Dynamically import CarSheet
 const CarSheet = dynamic(() => import("@/components/booking/CarSheet"), {
   ssr: false,
-  loading: () => <div className="h-10 bg-gray-200 animate-pulse rounded-md"></div>,
+  loading: () => <div className="h-10 bg-gray-800 animate-pulse rounded-md"></div>,
 });
 
 /* -----------------------------------------------------------
@@ -101,7 +106,7 @@ function AnimatedDot() {
           animation: expandShrink 1.8s ease-in-out infinite;
         }
       `}</style>
-      <div className="w-2 h-2 rounded-full bg-slate-200 dot-animate px-1 py-1" />
+      <div className="w-2 h-2 rounded-full bg-blue-400 dot-animate px-1 py-1" />
     </>
   );
 }
@@ -115,23 +120,33 @@ interface IconProps {
 }
 
 const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
-  const Icon = step === 1 ? Search : ArrowRightFromLine;
   return (
-    <Icon
-      className={`w-5 h-5 ${highlight ? "text-zinc-800" : "text-zinc-700"} transition-colors`}
-      style={{ marginLeft: "12px" }}
-    />
+    <div className={cn(
+      "p-1.5 rounded-full flex items-center justify-center",
+      highlight ? "bg-blue-600" : "bg-gray-700"
+    )}>
+      {step === 1 ? (
+        <Search className="w-4 h-4 text-white" />
+      ) : (
+        <MapPinUp className="w-4 h-4 text-white" />
+      )}
+    </div>
   );
 });
 DepartureIcon.displayName = "DepartureIcon";
 
 const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
-  const Icon = step === 3 ? Search : ArrowRightToLine;
   return (
-    <Icon
-      className={`w-5 h-5 ${highlight ? "text-zinc-800" : "text-zinc-700"} transition-colors`}
-      style={{ marginLeft: "12px" }}
-    />
+    <div className={cn(
+      "p-1.5 rounded-full flex items-center justify-center",
+      highlight ? "bg-blue-600" : "bg-gray-700"
+    )}>
+      {step === 3 ? (
+        <Search className="w-4 h-4 text-white" />
+      ) : (
+        <MapPinDown className="w-4 h-4 text-white" />
+      )}
+    </div>
   );
 });
 ArrivalIcon.displayName = "ArrivalIcon";
@@ -223,7 +238,7 @@ const AddressSearch = React.memo(
     return (
       <div className="flex-1">
         {isStationSelected ? (
-          <div className="px-1 py-1 text-gray-700 font-medium">
+          <div className="px-1 py-1 text-white font-medium">
             {selectedStation!.properties.Place}
           </div>
         ) : (
@@ -240,7 +255,11 @@ const AddressSearch = React.memo(
                 onBlur={() => setIsDropdownOpen(false)}
                 disabled={disabled}
                 placeholder={placeholder}
-                className="w-full bg-zinc-200 text-gray-700 border border-gray-100 rounded-md focus:outline-none focus:border-gray-400 placeholder:text-gray-500 disabled:cursor-not-allowed p-1 text-base transition-colors"
+                className={cn(
+                  "w-full bg-gray-800 text-white rounded-md",
+                  "focus:outline-none focus:ring-1 focus:ring-blue-600",
+                  "placeholder:text-gray-500 disabled:cursor-not-allowed p-1 text-base transition-colors"
+                )}
               />
               {searchText && (
                 <button
@@ -249,33 +268,41 @@ const AddressSearch = React.memo(
                     setPredictions([]);
                     setIsDropdownOpen(false);
                   }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-700 hover:bg-gray-200 p-1 rounded-full transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700 p-1 rounded-full transition-colors"
                   type="button"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
             </div>
-            {isDropdownOpen && predictions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-md z-50 max-h-64 overflow-y-auto">
-                {predictions.map((prediction) => (
-                  <button
-                    key={prediction.place_id}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelect(prediction)}
-                    className="w-full px-2 py-1 text-left text-sm text-gray-800 hover:bg-gray-100 transition-colors"
-                    type="button"
-                  >
-                    <div className="font-medium">
-                      {prediction.structured_formatting.main_text}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {prediction.structured_formatting.secondary_text}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+            <AnimatePresence>
+              {isDropdownOpen && predictions.length > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
+                >
+                  {predictions.map((prediction) => (
+                    <button
+                      key={prediction.place_id}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelect(prediction)}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-b-0"
+                      type="button"
+                    >
+                      <div className="font-medium">
+                        {prediction.structured_formatting.main_text}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {prediction.structured_formatting.secondary_text}
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>
@@ -299,6 +326,7 @@ function StationSelector({
   onAddressSearch,
   onClearDeparture,
   onClearArrival,
+  onLocateMe,
 }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -325,13 +353,13 @@ function StationSelector({
   const highlightDeparture = step <= 2;
   const highlightArrival = step >= 3;
 
-  // Subtle highlight vs default
+  // Subtle highlight vs default - removed border color as requested
   const highlightDepartureClass = highlightDeparture
-    ? "ring-1 ring-white bg-[#F2F2F7]"
-    : "bg-[#E5E5EA]";
+    ? "bg-gray-800"
+    : "bg-gray-900";
   const highlightArrivalClass = highlightArrival
-    ? "ring-1 ring-white bg-[#F2F2F7]"
-    : "bg-[#E5E5EA]";
+    ? "bg-gray-800"
+    : "bg-gray-900";
 
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
@@ -383,31 +411,40 @@ function StationSelector({
   return (
     <div className="relative z-10 w-full max-w-screen-md mx-auto px-2">
       {/* Station Inputs Container */}
-      <div
-        className="bg-zinc-800/90 rounded-md backdrop-blur-md px-2 py-2 space-y-2 border-0 border-zinc-600 shadow-md"
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-slate-800/80 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border border-gray-800 shadow-xl"
         style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
         {/* Same-station error */}
-        {departureId && arrivalId && departureId === arrivalId && (
-          <div className="flex items-center gap-2 px-1 py-1 text-xs text-red-600">
-            <AlertCircle className="w-4 h-4" />
-            <span>Departure and arrival stations cannot be the same</span>
-          </div>
-        )}
+        <AnimatePresence>
+          {departureId && arrivalId && departureId === arrivalId && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex items-center gap-2 px-2 py-2 text-sm text-red-400 bg-red-900/30 rounded-md border border-red-800"
+            >
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>Departure and arrival stations cannot be the same</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* DEPARTURE INPUT */}
-        <div className={`flex items-center gap-2 rounded-xl transition-all duration-200 ${highlightDepartureClass}`}>
+        <div className={`flex items-center gap-3 rounded-lg p-2 border border-gray-800 transition-all duration-200 ${highlightDepartureClass}`}>
           <DepartureIcon highlight={highlightDeparture} step={step} />
           <AddressSearch
             onAddressSelect={handleAddressSearch}
             disabled={step >= 3}
-            placeholder="  Where from?"
+            placeholder="Where from?"
             selectedStation={departureStation}
           />
           {departureStation && step <= 3 && (
             <button
               onClick={handleClearDeparture}
-              className="p-1 hover:bg-gray-300 transition-colors flex-shrink-0 m-1 rounded-md text-zinc-400/80"
+              className="p-1.5 hover:bg-gray-700 transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
               type="button"
               aria-label="Clear departure"
             >
@@ -417,73 +454,99 @@ function StationSelector({
         </div>
 
         {/* ARRIVAL INPUT */}
-        {step >= 3 && (
-          <div className={`flex items-center gap-2 rounded-xl transition-all duration-200 ${highlightArrivalClass}`}>
-            <ArrivalIcon highlight={highlightArrival} step={step} />
-            <AddressSearch
-              onAddressSelect={handleAddressSearch}
-              disabled={step < 3}
-              placeholder="  Search here"
-              selectedStation={arrivalStation}
-            />
-            {arrivalStation && step <= 4 && (
-              <button
-                onClick={handleClearArrival}
-                className="p-1 hover:bg-gray-300 transition-colors flex-shrink-0 m-1 rounded-md text-zinc-400/80"
-                type="button"
-                aria-label="Clear arrival"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* "Locate me" & Car Button (only in steps 1 or 2) */}
-        {(step === 1 || step === 2) && (
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={handleLocateMe}
-              className="px-3 h-8 text-sm font-medium bg-blue-600/80 text-zinc-200 rounded-xl hover:bg-blue-400 transition-colors flex-1 shadow-md flex items-center justify-center"
-              type="button"
+        <AnimatePresence>
+          {step >= 3 && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className={`flex items-center gap-3 rounded-lg p-2 border border-gray-800 transition-all duration-200 ${highlightArrivalClass}`}
             >
-              Near me
-            </button>
-            <button
-              onClick={handleCarToggle}
-              className="w-8 h-8 text-slate-950 bg-zinc-200/80 rounded-xl hover:bg-gray-300 hover:text-black transition-colors flex items-center justify-center shadow-md flex-shrink-0"
-              type="button"
-              aria-label="Toggle car view"
-            >
-              <CarSignalIcon className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-      </div>
+              <ArrivalIcon highlight={highlightArrival} step={step} />
+              <AddressSearch
+                onAddressSelect={handleAddressSearch}
+                disabled={step < 3}
+                placeholder="Where to?"
+                selectedStation={arrivalStation}
+              />
+              {arrivalStation && step <= 4 && (
+                <button
+                  onClick={handleClearArrival}
+                  className="p-1.5 hover:bg-gray-700 transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
+                  type="button"
+                  aria-label="Clear arrival"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
-      {/* Info Bar rendered outside the station inputs container */}
+      {/* Info Bar and Action Buttons */}
       <div className="mt-2">
-        <div className="flex items-center justify-between px-1 py-1">
+        <div className="flex items-center justify-between px-2 py-2">
+          {/* Left side - Info Text */}
           <div className="flex items-center gap-2">
             <AnimatedDot />
-            <span className="text-xs text-zinc-300 px-1 py-1 min-w-[14ch] whitespace-nowrap">
+            <span className="text-xs text-white px-2 py-1 min-w-[14ch] whitespace-nowrap bg-black/60 backdrop-blur-sm rounded-md">
               <AnimatedInfoText text={step < 3 ? "Choose pick-up station" : "Select arrival station"} />
             </span>
           </div>
-          {departureStation && arrivalStation && distanceInKm && (
-            <div className="text-xs font-medium text-slate-200">
-              Drive Distance: {distanceInKm} km
-            </div>
-          )}
+          
+          {/* Right side - Action Buttons and Distance */}
+          <div className="flex items-center gap-2">
+            {departureStation && arrivalStation && distanceInKm && (
+              <div className="text-xs font-medium text-white px-3 py-1 bg-blue-600/60 backdrop-blur-sm rounded-full mr-2">
+                {distanceInKm} km
+              </div>
+            )}
+            
+            {/* Only show these buttons in steps 1 or 2 */}
+            {(step === 1 || step === 2) && (
+              <>
+                <button
+                  onClick={onLocateMe || handleLocateMe}
+                  className="w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
+                  type="button"
+                  aria-label="Find stations near me"
+                >
+                  <NearPin className="w-5 h-5" />
+                </button>
+                
+                <button
+                  onClick={handleCarToggle}
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors",
+                    showCarSheet 
+                      ? "bg-blue-600 text-white hover:bg-blue-700" 
+                      : "bg-gray-800 text-white hover:bg-gray-700"
+                  )}
+                  type="button"
+                  aria-label="Toggle car view"
+                >
+                  <CarSignalIcon className="w-5 h-5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* CarSheet rendered after the selector */}
-      {showCarSheet && (
-        <div className="mt-2">
-          <CarSheet isOpen onToggle={handleCarToggle} className="max-w-screen-md mx-auto mt-10" />
-        </div>
-      )}
+      <AnimatePresence>
+        {showCarSheet && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="mt-2"
+          >
+            <CarSheet isOpen onToggle={handleCarToggle} className="max-w-screen-md mx-auto mt-10" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
