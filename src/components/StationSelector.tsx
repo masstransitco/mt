@@ -414,7 +414,7 @@ function StationSelector({
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-slate-800/80 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border border-gray-800 shadow-xl"
+        className="bg-zinc-700/80 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border border-gray-600/80 shadow-xl"
         style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
         {/* Same-station error */}
@@ -433,7 +433,7 @@ function StationSelector({
         </AnimatePresence>
 
         {/* DEPARTURE INPUT */}
-        <div className={`flex items-center gap-3 rounded-lg p-2 border border-gray-800 transition-all duration-200 ${highlightDepartureClass}`}>
+        <div className={`flex items-center gap-3 rounded-lg p-1 border border-gray-800 transition-all duration-200 ${highlightDepartureClass}`}>
           <DepartureIcon highlight={highlightDeparture} step={step} />
           <AddressSearch
             onAddressSelect={handleAddressSearch}
@@ -460,7 +460,7 @@ function StationSelector({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className={`flex items-center gap-3 rounded-lg p-2 border border-gray-800 transition-all duration-200 ${highlightArrivalClass}`}
+              className={`flex items-center gap-3 rounded-lg p-1 border border-gray-800 transition-all duration-200 ${highlightArrivalClass}`}
             >
               <ArrivalIcon highlight={highlightArrival} step={step} />
               <AddressSearch
