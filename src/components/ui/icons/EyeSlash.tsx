@@ -7,7 +7,7 @@ export type EyeSlashProps = React.SVGProps<SVGSVGElement>;
  * It uses `fill="currentColor"` and no fixed width/height,
  * allowing the parent to control color and size.
  */
-export const EyeSlash: React.FC<IconProps> = (props) => (
+export const EyeSlash: React.FC<EyeSlashProps> = (props) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 24 24"
