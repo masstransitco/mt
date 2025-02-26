@@ -8,7 +8,6 @@ export const LogoSvg: React.FC<LogoSvgProps> = (props) => {
       xmlns="http://www.w3.org/2000/svg"
       xmlSpace="preserve"
       id="Layer_1"
-      // Removed width/height so parent can control them
       viewBox="0 0 2100 950"
       version="1.1"
       {...props}
