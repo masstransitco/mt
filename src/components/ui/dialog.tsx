@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
+
+// If you don't need the DialogClose in parent components, remove this line too:
 const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<
@@ -52,21 +53,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      {/* Close button at top-right */}
-      <DialogPrimitive.Close
-        className="
-          absolute right-3 top-3 
-          inline-flex items-center justify-center 
-          rounded-full p-2 
-          bg-background/10 
-          hover:bg-background/20 
-          transition-opacity 
-          opacity-70 hover:opacity-100
-        "
-      >
-        <X className="h-5 w-5 text-white" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
+      {/* Removed the close button here */}
     </DialogPrimitive.Content>
   </DialogPortal>
 ));
@@ -84,7 +71,10 @@ const DialogFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col gap-2 p-6 border-t border-white/20", className)} {...props} />
+  <div
+    className={cn("flex flex-col gap-2 p-6 border-t border-white/20", className)}
+    {...props}
+  />
 );
 DialogFooter.displayName = "DialogFooter";
 
@@ -116,7 +106,7 @@ export {
   Dialog,
   DialogPortal,
   DialogOverlay,
-  DialogClose,
+  DialogClose, // Remove if unused
   DialogTrigger,
   DialogContent,
   DialogHeader,
