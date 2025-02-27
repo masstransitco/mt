@@ -68,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     // Initialize Tesseract worker and load both English and Traditional Chinese.
-    const worker = createWorker();
+    const worker = await createWorker();
     await worker.load();
     // Load both English and Chinese (Traditional) language data.
     await worker.loadLanguage('eng+chi_tra');
