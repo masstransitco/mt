@@ -7,9 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Set your Mapbox access token
-// Note: In production, use environment variables
-mapboxgl.accessToken = "pk.eyJ1IjoiZXhhbXBsZXVzZXIiLCJhIjoiY2syZzRqcGl1MDFtbTNocGJ1bm91eGVzMCJ9.example";
+mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
 
 interface MapCardProps {
   coordinates: [number, number]; // [longitude, latitude]
