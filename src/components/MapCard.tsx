@@ -31,6 +31,7 @@ const MapCard: React.FC<MapCardProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
   
   // Set appropriate bounds around the station location
   const getBoundingBox = (center: [number, number], radiusKm: number = 0.15) => {
@@ -73,17 +74,12 @@ const MapCard: React.FC<MapCardProps> = ({
         keyboard: false,
       });
 
-      // Add 3D building layer with focus on the station's building
+      // Add 3D building layer
       map.current.on("load", () => {
         if (!map.current) return;
 
-        // Query for the building at the station's location
-        const point = map.current.project(coordinates);
-        const features = map.current.queryRenderedFeatures(point, {
-          layers: ["building"] // Base building layer in Mapbox
-        });
-
-        // Add 3D buildings layer with custom styling
+        // Fix: Instead of using data expressions for fill-extrusion-opacity,
+        // use a consistent opacity value
         map.current.addLayer({
           id: "3d-buildings",
           source: "composite",
@@ -91,13 +87,8 @@ const MapCard: React.FC<MapCardProps> = ({
           type: "fill-extrusion",
           minzoom: 15,
           paint: {
-            // Base color for all buildings
-            "fill-extrusion-color": [
-              "case",
-              ["==", ["get", "id"], features.length > 0 ? features[0].id : ""],
-              "#3b82f6", // Blue color for the station building (if found)
-              "#aaa"     // Gray for other buildings
-            ],
+            // Fixed blue color for all buildings
+            "fill-extrusion-color": "#3b82f6", 
             "fill-extrusion-height": [
               "interpolate",
               ["linear"],
@@ -112,15 +103,38 @@ const MapCard: React.FC<MapCardProps> = ({
               15, 0,
               16, ["get", "min_height"]
             ],
-            // Higher opacity for station building, lower for surroundings
-            "fill-extrusion-opacity": [
-              "case",
-              ["==", ["get", "id"], features.length > 0 ? features[0].id : ""],
-              0.9, // Higher opacity for station building
-              0.6  // Lower opacity for surrounding buildings
-            ]
+            // Fixed opacity value
+            "fill-extrusion-opacity": 0.7
           }
         });
+
+        // Add a second layer for all other buildings in gray
+        map.current.addLayer({
+          id: "other-buildings",
+          source: "composite",
+          "source-layer": "building",
+          type: "fill-extrusion",
+          minzoom: 15,
+          paint: {
+            "fill-extrusion-color": "#aaa",
+            "fill-extrusion-height": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              15, 0,
+              16, ["get", "height"]
+            ],
+            "fill-extrusion-base": [
+              "interpolate",
+              ["linear"], 
+              ["zoom"],
+              15, 0,
+              16, ["get", "min_height"]
+            ],
+            "fill-extrusion-opacity": 0.5
+          },
+          // Add this before the 3d-buildings layer
+        }, "3d-buildings");
 
         // Add a glowing marker at the station location
         const el = document.createElement("div");
@@ -134,6 +148,42 @@ const MapCard: React.FC<MapCardProps> = ({
         new mapboxgl.Marker(el)
           .setLngLat(coordinates)
           .addTo(map.current);
+
+        // Create a small circle at the exact station point to highlight that specific building
+        map.current.addSource('station-point', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: coordinates
+            },
+            properties: {}
+          }
+        });
+
+        map.current.addLayer({
+          id: 'station-point-glow',
+          type: 'circle',
+          source: 'station-point',
+          paint: {
+            'circle-radius': 15,
+            'circle-color': '#3b82f6',
+            'circle-opacity': 0.4,
+            'circle-blur': 0.5
+          }
+        });
+
+        map.current.addLayer({
+          id: 'station-point',
+          type: 'circle',
+          source: 'station-point',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': '#3b82f6',
+            'circle-opacity': 0.8
+          }
+        });
 
         // Start entrance animation
         startEntranceAnimation();
