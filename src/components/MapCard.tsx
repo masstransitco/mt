@@ -33,6 +33,8 @@ const MapCard: React.FC<MapCardProps> = ({
   const marker = useRef<mapboxgl.Marker | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [lastCoordinates, setLastCoordinates] = useState<[number, number]>(coordinates);
+  const [wasOpen, setWasOpen] = useState(false);
 
   // Set appropriate bounds around the station location
   const getBoundingBox = (center: [number, number], radiusKm: number = 0.2) => {
@@ -80,11 +82,44 @@ const MapCard: React.FC<MapCardProps> = ({
     requestAnimationFrame(animate);
   };
 
+  // Track when isOpen changes to handle re-opening
+  useEffect(() => {
+    if (isOpen && !wasOpen) {
+      // Force re-initialization if we're reopening
+      if (map.current && !coordsEqual(coordinates, lastCoordinates)) {
+        // If coordinates changed, update them
+        setLastCoordinates(coordinates);
+        map.current.setCenter(coordinates);
+        
+        if (marker.current) {
+          marker.current.setLngLat(coordinates);
+        }
+      }
+      
+      // If map exists, make sure it's visible and properly sized
+      if (map.current) {
+        setTimeout(() => {
+          if (map.current) {
+            map.current.resize();
+          }
+        }, 100);
+      }
+    }
+    
+    setWasOpen(isOpen);
+  }, [isOpen, coordinates, lastCoordinates, wasOpen]);
+
+  // Helper to compare coordinates
+  const coordsEqual = (a: [number, number], b: [number, number]): boolean => {
+    return a[0] === b[0] && a[1] === b[1];
+  };
+
   // Initialize the map when component mounts
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
     
     console.log("Initializing map with coordinates:", coordinates);
+    setLastCoordinates(coordinates);
     
     // Calculate bounds for the map
     const bounds = getBoundingBox(coordinates);
@@ -92,18 +127,18 @@ const MapCard: React.FC<MapCardProps> = ({
     // Only initialize once
     if (!map.current) {
       try {
-        // Create map instance with bounds and reduced initial zoom (2-3 levels out)
+        // Create map instance with bounds and reduced initial zoom (one more level out)
         const newMap = new mapboxgl.Map({
           container: mapContainer.current,
           style: "mapbox://styles/mapbox/dark-v11", // Dark theme looks better
           center: coordinates,
-          zoom: 13.5, // Starting further away
+          zoom: 12.5, // Even further away (one more level)
           pitch: 40, // Lower initial pitch
           bearing: 0, // Initial bearing
           interactive: true,
           attributionControl: false,
           maxBounds: bounds, // Set max bounds to keep focus on station
-          minZoom: 12,      // Prevent zooming out too far
+          minZoom: 11,      // Prevent zooming out too far
           maxZoom: 19       // Limit max zoom
         });
 
@@ -144,6 +179,9 @@ const MapCard: React.FC<MapCardProps> = ({
           
           // Add initial camera animation
           startEntranceAnimation(newMap);
+          
+          // Set up orbit-style camera controls
+          setupOrbitControls(newMap, coordinates);
         });
         
         newMap.on('error', (e) => {
@@ -158,12 +196,46 @@ const MapCard: React.FC<MapCardProps> = ({
       // If map exists and is initialized, just update center
       map.current.setCenter(coordinates);
       map.current.setMaxBounds(bounds);
+      
+      // Update marker position if needed
+      if (marker.current) {
+        marker.current.setLngLat(coordinates);
+      }
     }
 
     return () => {
       // We don't remove the map here
     };
   }, [coordinates, isOpen, mapInitialized]);
+  
+  // Setup orbit camera controls that always face the station
+  const setupOrbitControls = (mapInstance: mapboxgl.Map, center: [number, number]) => {
+    // Use the dragRotate handler that's built into MapBox
+    // Modify its behavior to orbit around the center point
+    
+    mapInstance.on('drag', () => {
+      // Get the camera's current position
+      const cameraPosition = mapInstance.getFreeCameraOptions();
+      
+      // Calculate the distance from the camera to the center point
+      const zoom = mapInstance.getZoom();
+      const distance = Math.pow(2, 20 - zoom) * 10; // Approximation of distance based on zoom level
+      
+      // Get the bearing (horizontal angle)
+      const bearing = mapInstance.getBearing();
+      const pitch = mapInstance.getPitch();
+      
+      // Convert bearing to radians
+      const bearingRad = (bearing * Math.PI) / 180;
+      const pitchRad = (pitch * Math.PI) / 180;
+      
+      // Calculate new camera position to maintain distance
+      mapInstance.setCenter(center);
+      
+      // The drag will still move the map, but this ensures we stay centered
+      // This creates an orbit-like effect without custom code
+    });
+  };
   
   // Add entrance animation
   const startEntranceAnimation = (mapInstance: mapboxgl.Map) => {
