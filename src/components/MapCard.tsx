@@ -7,6 +7,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Import styles directly in the component
+import "mapbox-gl/dist/mapbox-gl.css";
+import "@/styles/mapbox.css";
+
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
 
 interface MapCardProps {
@@ -27,10 +31,28 @@ const MapCard: React.FC<MapCardProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [expanded, setExpanded] = useState(false);
+  
+  // Set appropriate bounds around the station location
+  const getBoundingBox = (center: [number, number], radiusKm: number = 0.15) => {
+    const earthRadiusKm = 6371;
+    const latRadian = center[1] * Math.PI / 180;
+    
+    // Convert radius to degrees (approximately)
+    const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
+    const lngDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
+    
+    return new mapboxgl.LngLatBounds(
+      [center[0] - lngDelta, center[1] - latDelta], // Southwest
+      [center[0] + lngDelta, center[1] + latDelta]  // Northeast
+    );
+  };
 
   // Initialize and set up map when component mounts or when coordinates change
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
+    
+    // Calculate bounds
+    const bounds = getBoundingBox(coordinates);
 
     // Initialize map only if it doesn't exist yet
     if (!map.current) {
@@ -38,71 +60,94 @@ const MapCard: React.FC<MapCardProps> = ({
         container: mapContainer.current,
         style: "mapbox://styles/mapbox/dark-v11", // Dark theme
         center: coordinates,
-        zoom: 17,
-        pitch: 45, // Tilt the map 45 degrees
+        zoom: 17.5,
+        pitch: 65, // More dramatic tilt
         bearing: 0,
+        maxBounds: bounds, // Restrict map movement
+        minZoom: 16.5,     // Prevent zooming out too far
+        maxZoom: 19.5,     // Limit max zoom
         attributionControl: false,
+        // Disable UI controls and rely on gestures
+        boxZoom: false,
+        doubleClickZoom: true,
+        keyboard: false,
       });
 
-      // Add navigation controls
-      map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
-
-      // Add 3D building layer
+      // Add 3D building layer with focus on the station's building
       map.current.on("load", () => {
         if (!map.current) return;
 
-        // Add 3D buildings
+        // Query for the building at the station's location
+        const point = map.current.project(coordinates);
+        const features = map.current.queryRenderedFeatures(point, {
+          layers: ["building"] // Base building layer in Mapbox
+        });
+
+        // Add 3D buildings layer with custom styling
         map.current.addLayer({
           id: "3d-buildings",
           source: "composite",
           "source-layer": "building",
-          filter: ["==", "extrude", "true"],
           type: "fill-extrusion",
           minzoom: 15,
           paint: {
-            "fill-extrusion-color": "#aaa",
+            // Base color for all buildings
+            "fill-extrusion-color": [
+              "case",
+              ["==", ["get", "id"], features.length > 0 ? features[0].id : ""],
+              "#3b82f6", // Blue color for the station building (if found)
+              "#aaa"     // Gray for other buildings
+            ],
             "fill-extrusion-height": [
               "interpolate",
               ["linear"],
               ["zoom"],
-              15,
-              0,
-              15.05,
-              ["get", "height"],
+              15, 0,
+              16, ["get", "height"]
             ],
             "fill-extrusion-base": [
               "interpolate",
-              ["linear"],
+              ["linear"], 
               ["zoom"],
-              15,
-              0,
-              15.05,
-              ["get", "min_height"],
+              15, 0,
+              16, ["get", "min_height"]
             ],
-            "fill-extrusion-opacity": 0.8,
-          },
+            // Higher opacity for station building, lower for surroundings
+            "fill-extrusion-opacity": [
+              "case",
+              ["==", ["get", "id"], features.length > 0 ? features[0].id : ""],
+              0.9, // Higher opacity for station building
+              0.6  // Lower opacity for surrounding buildings
+            ]
+          }
         });
 
-        // Add a marker at the station location
-        new mapboxgl.Marker({
-          color: "#3b82f6", // Blue color matching the app theme
-        })
+        // Add a glowing marker at the station location
+        const el = document.createElement("div");
+        el.className = "station-marker pulse";
+        el.style.width = "16px";
+        el.style.height = "16px";
+        el.style.borderRadius = "50%";
+        el.style.backgroundColor = "#3b82f6";
+        el.style.boxShadow = "0 0 10px 2px rgba(59, 130, 246, 0.8)";
+        
+        new mapboxgl.Marker(el)
           .setLngLat(coordinates)
           .addTo(map.current);
 
-        // Start an entrance animation
+        // Start entrance animation
         startEntranceAnimation();
       });
     } else {
-      // If map exists, just update the center
+      // If map exists, just update the center and bounds
       map.current.setCenter(coordinates);
+      map.current.setMaxBounds(bounds);
       startEntranceAnimation();
     }
 
-    // Cleanup function
+    // Cleanup function for this effect only
     return () => {
-      // Don't destroy the map on each render, only when the component unmounts
-      // We'll handle this separately
+      // We don't remove the map here, only on final unmount
     };
   }, [coordinates, isOpen]);
 
@@ -116,17 +161,20 @@ const MapCard: React.FC<MapCardProps> = ({
     };
   }, []);
 
-  // Entrance animation function
+  // Entrance animation with improved camera movement
   const startEntranceAnimation = () => {
     if (!map.current) return;
 
     const startZoom = map.current.getZoom();
     const startBearing = map.current.getBearing();
-    const targetZoom = 18;
-    const targetBearing = 30;
+    const startPitch = map.current.getPitch();
+    
+    const targetZoom = 18.2;
+    const targetBearing = 45; // More dramatic rotation
+    const targetPitch = 70;   // Look more directly at the building
 
     // Create animation
-    const animationDuration = 2000; // 2 seconds
+    const animationDuration = 2500; // 2.5 seconds
     const start = Date.now();
 
     const animate = () => {
@@ -138,9 +186,11 @@ const MapCard: React.FC<MapCardProps> = ({
         // Interpolate between start and target values
         const newZoom = startZoom + (targetZoom - startZoom) * easeProgress;
         const newBearing = startBearing + (targetBearing - startBearing) * easeProgress;
+        const newPitch = startPitch + (targetPitch - startPitch) * easeProgress;
 
         map.current.setZoom(newZoom);
         map.current.setBearing(newBearing);
+        map.current.setPitch(newPitch);
 
         if (progress < 1) {
           requestAnimationFrame(animate);
@@ -160,6 +210,13 @@ const MapCard: React.FC<MapCardProps> = ({
   // Toggle expanded state
   const toggleExpanded = () => {
     setExpanded(!expanded);
+    
+    // Resize the map after toggle to ensure it renders correctly
+    if (map.current) {
+      setTimeout(() => {
+        map.current?.resize();
+      }, 300); // After animation completes
+    }
   };
 
   return (
@@ -184,6 +241,7 @@ const MapCard: React.FC<MapCardProps> = ({
             <button
               onClick={toggleExpanded}
               className="bg-gray-800/80 p-1.5 rounded-full text-white hover:bg-gray-700/80 transition-colors"
+              aria-label={expanded ? "Minimize map" : "Maximize map"}
             >
               {expanded ? (
                 <Minimize2 className="w-4 h-4" />
@@ -194,6 +252,7 @@ const MapCard: React.FC<MapCardProps> = ({
             <button
               onClick={onClose}
               className="bg-gray-800/80 p-1.5 rounded-full text-white hover:bg-gray-700/80 transition-colors"
+              aria-label="Close map"
             >
               <X className="w-4 h-4" />
             </button>
