@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 
 // Import styles directly in the component
 import "mapbox-gl/dist/mapbox-gl.css";
-import "@/styles/mapbox.css";
 
+// Set your access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
 
 interface MapCardProps {
@@ -31,86 +31,76 @@ const MapCard: React.FC<MapCardProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [expanded, setExpanded] = useState(false);
-  
-  // Initialize and set up map when component mounts or when coordinates change
+  const [mapInitialized, setMapInitialized] = useState(false);
+
+  // Use a simpler style for better compatibility
+  const MAPBOX_STYLE = "mapbox://styles/mapbox/streets-v12";
+
+  // Initialize the map when component mounts
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
     
     console.log("Initializing map with coordinates:", coordinates);
     
-    // Initialize map only if it doesn't exist yet
+    // Only initialize once
     if (!map.current) {
       try {
-        map.current = new mapboxgl.Map({
+        // Create a simpler map instance with fewer custom options
+        const newMap = new mapboxgl.Map({
           container: mapContainer.current,
-          style: "mapbox://styles/mapbox/dark-v11", // Dark theme
+          style: MAPBOX_STYLE,
           center: coordinates,
-          zoom: 17,
-          pitch: 45,
-          bearing: 0,
+          zoom: 16,
+          pitch: 60,
+          bearing: 30,
+          interactive: true,
           attributionControl: false,
         });
 
-        // Add basic navigation controls
-        map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
-        
-        // Add a marker at the station location
-        new mapboxgl.Marker({
-          color: "#3b82f6" // Blue color matching the app theme
-        })
-          .setLngLat(coordinates)
-          .addTo(map.current);
-        
-        // Log when map loads and style loads
-        map.current.on('load', () => {
-          console.log("Map loaded successfully");
+        // Set up event listeners
+        newMap.on('load', () => {
+          console.log("Map fully loaded");
+          setMapInitialized(true);
           
-          // Simple 3D buildings layer with default settings
-          if (map.current) {
-            map.current.addLayer({
-              id: "3d-buildings",
-              source: "composite",
-              "source-layer": "building",
-              type: "fill-extrusion",
-              minzoom: 15,
-              paint: {
-                "fill-extrusion-color": "#aaa",
-                "fill-extrusion-height": ["get", "height"],
-                "fill-extrusion-base": ["get", "min_height"],
-                "fill-extrusion-opacity": 0.6
-              }
-            });
-          }
+          // Add a marker at the station location
+          new mapboxgl.Marker({
+            color: "#3b82f6"
+          })
+            .setLngLat(coordinates)
+            .addTo(newMap);
         });
         
-        // Handle potential style load errors
-        map.current.on('style.load', () => {
-          console.log("Style loaded successfully");
-        });
-        
-        // Log any errors
-        map.current.on('error', (e) => {
+        newMap.on('error', (e) => {
           console.error("Mapbox error:", e);
         });
-      } catch (error) {
-        console.error("Error initializing map:", error);
+        
+        map.current = newMap;
+      } catch (err) {
+        console.error("Error initializing Mapbox:", err);
       }
-    } else {
-      // If map exists, just update the center
+    } else if (mapInitialized) {
+      // If map exists and is initialized, just update center
       map.current.setCenter(coordinates);
     }
 
-    // Cleanup function for this effect only
     return () => {
-      // We don't remove the map here, only on final unmount
+      // We don't remove the map here
     };
-  }, [coordinates, isOpen]);
-
-  // Clean up the map when component unmounts
+  }, [coordinates, isOpen, mapInitialized]);
+  
+  // Handle resize and cleanup
   useEffect(() => {
-    return () => {
+    const handleResize = () => {
       if (map.current) {
-        console.log("Removing map instance");
+        map.current.resize();
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (map.current) {
         map.current.remove();
         map.current = null;
       }
@@ -121,14 +111,26 @@ const MapCard: React.FC<MapCardProps> = ({
   const toggleExpanded = () => {
     setExpanded(!expanded);
     
-    // Resize the map after toggle to ensure it renders correctly
-    if (map.current) {
-      setTimeout(() => {
-        map.current?.resize();
-        console.log("Map resized after expand/collapse");
-      }, 300);
-    }
+    // Trigger resize after animation completes
+    setTimeout(() => {
+      if (map.current) {
+        console.log("Resizing map after toggle");
+        map.current.resize();
+      }
+    }, 300);
   };
+
+  // Force map resize when visibility changes
+  useEffect(() => {
+    if (isOpen && map.current) {
+      setTimeout(() => {
+        if (map.current) {
+          console.log("Resizing map after visibility change");
+          map.current.resize();
+        }
+      }, 100);
+    }
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
@@ -144,15 +146,22 @@ const MapCard: React.FC<MapCardProps> = ({
             className
           )}
         >
-          {/* Map container */}
+          {/* Map container with fallback background */}
           <div 
             ref={mapContainer} 
-            className="absolute inset-0" 
-            style={{ backgroundColor: "#1f2937" }} // Fallback background color
+            className="absolute inset-0 bg-gray-800" 
+            style={{ width: '100%', height: '100%' }}
           />
 
+          {/* Loading indicator */}
+          {!mapInitialized && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
+              <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            </div>
+          )}
+
           {/* Overlay with controls */}
-          <div className="absolute top-2 right-2 flex space-x-2">
+          <div className="absolute top-2 right-2 flex space-x-2 z-10">
             <button
               onClick={toggleExpanded}
               className="bg-gray-800/80 p-1.5 rounded-full text-white hover:bg-gray-700/80 transition-colors"
@@ -174,7 +183,7 @@ const MapCard: React.FC<MapCardProps> = ({
           </div>
 
           {/* Location name overlay */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10">
             <div className="text-white text-sm font-medium">{name}</div>
           </div>
         </motion.div>
