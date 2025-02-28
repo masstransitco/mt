@@ -30,6 +30,7 @@ const MapCard: React.FC<MapCardProps> = ({
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const marker = useRef<mapboxgl.Marker | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
 
@@ -48,6 +49,37 @@ const MapCard: React.FC<MapCardProps> = ({
     );
   };
 
+  // Subtle marker animation
+  const animateMarker = () => {
+    if (!marker.current) return;
+    
+    const markerEl = marker.current.getElement();
+    const originalTransform = markerEl.style.transform || '';
+    const scaleFactor = 1.1; // Subtle scale increase
+    
+    // Animation duration and timing
+    const duration = 1500;
+    const start = Date.now();
+    
+    const animate = () => {
+      const elapsed = Date.now() - start;
+      const progress = (elapsed % duration) / duration;
+      
+      // Simple sine wave for smooth pulsing (0 to 1 to 0)
+      const scale = 1 + (Math.sin(progress * Math.PI * 2) * 0.5 + 0.5) * (scaleFactor - 1);
+      
+      // Apply the scale transformation while preserving original transform
+      markerEl.style.transform = `${originalTransform} scale(${scale})`;
+      
+      // Continue animation as long as marker exists
+      if (marker.current) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  };
+
   // Initialize the map when component mounts
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
@@ -60,18 +92,18 @@ const MapCard: React.FC<MapCardProps> = ({
     // Only initialize once
     if (!map.current) {
       try {
-        // Create map instance with bounds
+        // Create map instance with bounds and reduced initial zoom (2-3 levels out)
         const newMap = new mapboxgl.Map({
           container: mapContainer.current,
           style: "mapbox://styles/mapbox/dark-v11", // Dark theme looks better
           center: coordinates,
-          zoom: 16,
-          pitch: 60,
-          bearing: 30,
+          zoom: 13.5, // Starting further away
+          pitch: 40, // Lower initial pitch
+          bearing: 0, // Initial bearing
           interactive: true,
           attributionControl: false,
           maxBounds: bounds, // Set max bounds to keep focus on station
-          minZoom: 15,      // Prevent zooming out too far
+          minZoom: 12,      // Prevent zooming out too far
           maxZoom: 19       // Limit max zoom
         });
 
@@ -87,7 +119,7 @@ const MapCard: React.FC<MapCardProps> = ({
               source: "composite",
               "source-layer": "building",
               type: "fill-extrusion",
-              minzoom: 15,
+              minzoom: 14,
               paint: {
                 "fill-extrusion-color": "#aaa", // Gray color for buildings
                 "fill-extrusion-height": ["get", "height"],
@@ -100,19 +132,15 @@ const MapCard: React.FC<MapCardProps> = ({
             console.warn("Could not add 3D buildings layer:", error);
           }
           
-          // Add a marker at the station location
-          const el = document.createElement("div");
-          el.className = "station-marker";
-          el.style.width = "20px";
-          el.style.height = "20px";
-          el.style.borderRadius = "50%";
-          el.style.backgroundColor = "#3b82f6";
-          el.style.boxShadow = "0 0 10px 2px rgba(59, 130, 246, 0.8)";
-          el.style.animation = "pulse 2s infinite";
-          
-          new mapboxgl.Marker(el)
+          // Add a blue marker at the station location
+          marker.current = new mapboxgl.Marker({
+            color: "#3b82f6", // Blue color matching the app theme
+          })
             .setLngLat(coordinates)
             .addTo(newMap);
+          
+          // Start marker animation
+          animateMarker();
           
           // Add initial camera animation
           startEntranceAnimation(newMap);
@@ -143,12 +171,12 @@ const MapCard: React.FC<MapCardProps> = ({
     const startBearing = mapInstance.getBearing();
     const startPitch = mapInstance.getPitch();
     
-    const targetZoom = Math.min(startZoom + 0.8, 19);
-    const targetBearing = 45;
-    const targetPitch = 65;
+    const targetZoom = 16.5; // Closer but not too close
+    const targetBearing = 45; // Final bearing
+    const targetPitch = 65;   // Final pitch
     
     // Animation duration
-    const duration = 2000;
+    const duration = 2500; // A bit longer for a smoother animation
     const start = Date.now();
     
     const animate = () => {
@@ -195,6 +223,7 @@ const MapCard: React.FC<MapCardProps> = ({
         map.current.remove();
         map.current = null;
       }
+      marker.current = null;
     };
   }, []);
 
@@ -273,28 +302,19 @@ const MapCard: React.FC<MapCardProps> = ({
             </button>
           </div>
 
-          {/* Location name overlay */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10">
+          {/* Location name overlay with enhanced contrast */}
+          <div 
+            className="absolute bottom-0 left-0 right-0 z-10"
+            style={{
+              background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0) 100%)',
+              paddingTop: '40px',
+              paddingBottom: '14px',
+              paddingLeft: '12px',
+              paddingRight: '12px'
+            }}
+          >
             <div className="text-white text-sm font-medium">{name}</div>
           </div>
-          
-          {/* Add pulse animation styles */}
-          <style jsx>{`
-            @keyframes pulse {
-              0% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
-              }
-              70% {
-                transform: scale(1.2);
-                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
-              }
-              100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
-              }
-            }
-          `}</style>
         </motion.div>
       )}
     </AnimatePresence>
