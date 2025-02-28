@@ -37,7 +37,7 @@ const MapCard: React.FC<MapCardProps> = ({
   const [wasOpen, setWasOpen] = useState(false);
 
   // Set appropriate bounds around the station location
-  const getBoundingBox = (center: [number, number], radiusKm: number = 0.2) => {
+  const getBoundingBox = (center: [number, number], radiusKm: number = 0.25) => {
     const earthRadiusKm = 6371;
     const latRadian = center[1] * Math.PI / 180;
     
@@ -56,30 +56,54 @@ const MapCard: React.FC<MapCardProps> = ({
     if (!marker.current) return;
     
     const markerEl = marker.current.getElement();
-    const originalTransform = markerEl.style.transform || '';
     const scaleFactor = 1.1; // Subtle scale increase
     
     // Animation duration and timing
     const duration = 1500;
     const start = Date.now();
     
+    // Store original transformation to prevent loss after animation cycles
+    let frameId: number | null = null;
+    
     const animate = () => {
+      if (!marker.current) return;
+      
       const elapsed = Date.now() - start;
       const progress = (elapsed % duration) / duration;
       
       // Simple sine wave for smooth pulsing (0 to 1 to 0)
       const scale = 1 + (Math.sin(progress * Math.PI * 2) * 0.5 + 0.5) * (scaleFactor - 1);
       
-      // Apply the scale transformation while preserving original transform
-      markerEl.style.transform = `${originalTransform} scale(${scale})`;
+      // Get the marker element again in case it was recreated
+      const currentEl = marker.current.getElement();
+      
+      // Get the current transform that maintains position
+      const currentTransform = currentEl.style.transform || '';
+      
+      // Extract scale if already present
+      const scaleMatch = currentTransform.match(/scale\([0-9.]+\)/);
+      
+      // Replace existing scale or add new scale
+      const newTransform = scaleMatch 
+        ? currentTransform.replace(scaleMatch[0], `scale(${scale})`)
+        : `${currentTransform} scale(${scale})`;
+      
+      // Apply the transform
+      currentEl.style.transform = newTransform;
       
       // Continue animation as long as marker exists
-      if (marker.current) {
-        requestAnimationFrame(animate);
-      }
+      frameId = requestAnimationFrame(animate);
     };
     
-    requestAnimationFrame(animate);
+    // Start animation
+    frameId = requestAnimationFrame(animate);
+    
+    // Return cleanup function
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
+    };
   };
 
   // Track when isOpen changes to handle re-opening
@@ -127,15 +151,15 @@ const MapCard: React.FC<MapCardProps> = ({
     // Only initialize once
     if (!map.current) {
       try {
-        // Create map instance with bounds and reduced initial zoom (one more level out)
+        // Create map instance with bounds and reduced initial zoom
         const newMap = new mapboxgl.Map({
           container: mapContainer.current,
           style: "mapbox://styles/mapbox/dark-v11", // Dark theme looks better
           center: coordinates,
-          zoom: 12.5, // Even further away (one more level)
+          zoom: 12.5, // Starting further away
           pitch: 40, // Lower initial pitch
           bearing: 0, // Initial bearing
-          interactive: true,
+          interactive: true, // Allow user interaction
           attributionControl: false,
           maxBounds: bounds, // Set max bounds to keep focus on station
           minZoom: 11,      // Prevent zooming out too far
@@ -175,13 +199,10 @@ const MapCard: React.FC<MapCardProps> = ({
             .addTo(newMap);
           
           // Start marker animation
-          animateMarker();
+          const stopAnimation = animateMarker();
           
           // Add initial camera animation
           startEntranceAnimation(newMap);
-          
-          // Set up orbit-style camera controls
-          setupOrbitControls(newMap, coordinates);
         });
         
         newMap.on('error', (e) => {
@@ -193,11 +214,11 @@ const MapCard: React.FC<MapCardProps> = ({
         console.error("Error initializing Mapbox:", err);
       }
     } else if (mapInitialized) {
-      // If map exists and is initialized, just update center
+      // If map exists and is initialized, just update center and marker
       map.current.setCenter(coordinates);
       map.current.setMaxBounds(bounds);
       
-      // Update marker position if needed
+      // Update marker position
       if (marker.current) {
         marker.current.setLngLat(coordinates);
       }
@@ -207,35 +228,6 @@ const MapCard: React.FC<MapCardProps> = ({
       // We don't remove the map here
     };
   }, [coordinates, isOpen, mapInitialized]);
-  
-  // Setup orbit camera controls that always face the station
-  const setupOrbitControls = (mapInstance: mapboxgl.Map, center: [number, number]) => {
-    // Use the dragRotate handler that's built into MapBox
-    // Modify its behavior to orbit around the center point
-    
-    mapInstance.on('drag', () => {
-      // Get the camera's current position
-      const cameraPosition = mapInstance.getFreeCameraOptions();
-      
-      // Calculate the distance from the camera to the center point
-      const zoom = mapInstance.getZoom();
-      const distance = Math.pow(2, 20 - zoom) * 10; // Approximation of distance based on zoom level
-      
-      // Get the bearing (horizontal angle)
-      const bearing = mapInstance.getBearing();
-      const pitch = mapInstance.getPitch();
-      
-      // Convert bearing to radians
-      const bearingRad = (bearing * Math.PI) / 180;
-      const pitchRad = (pitch * Math.PI) / 180;
-      
-      // Calculate new camera position to maintain distance
-      mapInstance.setCenter(center);
-      
-      // The drag will still move the map, but this ensures we stay centered
-      // This creates an orbit-like effect without custom code
-    });
-  };
   
   // Add entrance animation
   const startEntranceAnimation = (mapInstance: mapboxgl.Map) => {
@@ -308,6 +300,12 @@ const MapCard: React.FC<MapCardProps> = ({
       if (map.current) {
         console.log("Resizing map after toggle");
         map.current.resize();
+        
+        // When resizing, make sure marker is properly updated
+        if (marker.current) {
+          const currentPos = marker.current.getLngLat();
+          marker.current.setLngLat(currentPos);
+        }
       }
     }, 300);
   };
@@ -319,6 +317,12 @@ const MapCard: React.FC<MapCardProps> = ({
         if (map.current) {
           console.log("Resizing map after visibility change");
           map.current.resize();
+          
+          // Ensure marker is correctly positioned after resize
+          if (marker.current) {
+            const currentPos = marker.current.getLngLat();
+            marker.current.setLngLat(currentPos);
+          }
         }
       }, 100);
     }
