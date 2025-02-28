@@ -31,168 +31,73 @@ const MapCard: React.FC<MapCardProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
   
-  // Set appropriate bounds around the station location
-  const getBoundingBox = (center: [number, number], radiusKm: number = 0.15) => {
-    const earthRadiusKm = 6371;
-    const latRadian = center[1] * Math.PI / 180;
-    
-    // Convert radius to degrees (approximately)
-    const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
-    const lngDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
-    
-    return new mapboxgl.LngLatBounds(
-      [center[0] - lngDelta, center[1] - latDelta], // Southwest
-      [center[0] + lngDelta, center[1] + latDelta]  // Northeast
-    );
-  };
-
   // Initialize and set up map when component mounts or when coordinates change
   useEffect(() => {
     if (!isOpen || !mapContainer.current) return;
     
-    // Calculate bounds
-    const bounds = getBoundingBox(coordinates);
-
+    console.log("Initializing map with coordinates:", coordinates);
+    
     // Initialize map only if it doesn't exist yet
     if (!map.current) {
-      map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/dark-v11", // Dark theme
-        center: coordinates,
-        zoom: 17.5,
-        pitch: 65, // More dramatic tilt
-        bearing: 0,
-        maxBounds: bounds, // Restrict map movement
-        minZoom: 16.5,     // Prevent zooming out too far
-        maxZoom: 19.5,     // Limit max zoom
-        attributionControl: false,
-        // Disable UI controls and rely on gestures
-        boxZoom: false,
-        doubleClickZoom: true,
-        keyboard: false,
-      });
-
-      // Add 3D building layer
-      map.current.on("load", () => {
-        if (!map.current) return;
-
-        // Fix: Instead of using data expressions for fill-extrusion-opacity,
-        // use a consistent opacity value
-        map.current.addLayer({
-          id: "3d-buildings",
-          source: "composite",
-          "source-layer": "building",
-          type: "fill-extrusion",
-          minzoom: 15,
-          paint: {
-            // Fixed blue color for all buildings
-            "fill-extrusion-color": "#3b82f6", 
-            "fill-extrusion-height": [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              15, 0,
-              16, ["get", "height"]
-            ],
-            "fill-extrusion-base": [
-              "interpolate",
-              ["linear"], 
-              ["zoom"],
-              15, 0,
-              16, ["get", "min_height"]
-            ],
-            // Fixed opacity value
-            "fill-extrusion-opacity": 0.7
-          }
+      try {
+        map.current = new mapboxgl.Map({
+          container: mapContainer.current,
+          style: "mapbox://styles/mapbox/dark-v11", // Dark theme
+          center: coordinates,
+          zoom: 17,
+          pitch: 45,
+          bearing: 0,
+          attributionControl: false,
         });
 
-        // Add a second layer for all other buildings in gray
-        map.current.addLayer({
-          id: "other-buildings",
-          source: "composite",
-          "source-layer": "building",
-          type: "fill-extrusion",
-          minzoom: 15,
-          paint: {
-            "fill-extrusion-color": "#aaa",
-            "fill-extrusion-height": [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              15, 0,
-              16, ["get", "height"]
-            ],
-            "fill-extrusion-base": [
-              "interpolate",
-              ["linear"], 
-              ["zoom"],
-              15, 0,
-              16, ["get", "min_height"]
-            ],
-            "fill-extrusion-opacity": 0.5
-          },
-          // Add this before the 3d-buildings layer
-        }, "3d-buildings");
-
-        // Add a glowing marker at the station location
-        const el = document.createElement("div");
-        el.className = "station-marker pulse";
-        el.style.width = "16px";
-        el.style.height = "16px";
-        el.style.borderRadius = "50%";
-        el.style.backgroundColor = "#3b82f6";
-        el.style.boxShadow = "0 0 10px 2px rgba(59, 130, 246, 0.8)";
+        // Add basic navigation controls
+        map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
         
-        new mapboxgl.Marker(el)
+        // Add a marker at the station location
+        new mapboxgl.Marker({
+          color: "#3b82f6" // Blue color matching the app theme
+        })
           .setLngLat(coordinates)
           .addTo(map.current);
-
-        // Create a small circle at the exact station point to highlight that specific building
-        map.current.addSource('station-point', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: coordinates
-            },
-            properties: {}
+        
+        // Log when map loads and style loads
+        map.current.on('load', () => {
+          console.log("Map loaded successfully");
+          
+          // Simple 3D buildings layer with default settings
+          if (map.current) {
+            map.current.addLayer({
+              id: "3d-buildings",
+              source: "composite",
+              "source-layer": "building",
+              type: "fill-extrusion",
+              minzoom: 15,
+              paint: {
+                "fill-extrusion-color": "#aaa",
+                "fill-extrusion-height": ["get", "height"],
+                "fill-extrusion-base": ["get", "min_height"],
+                "fill-extrusion-opacity": 0.6
+              }
+            });
           }
         });
-
-        map.current.addLayer({
-          id: 'station-point-glow',
-          type: 'circle',
-          source: 'station-point',
-          paint: {
-            'circle-radius': 15,
-            'circle-color': '#3b82f6',
-            'circle-opacity': 0.4,
-            'circle-blur': 0.5
-          }
+        
+        // Handle potential style load errors
+        map.current.on('style.load', () => {
+          console.log("Style loaded successfully");
         });
-
-        map.current.addLayer({
-          id: 'station-point',
-          type: 'circle',
-          source: 'station-point',
-          paint: {
-            'circle-radius': 6,
-            'circle-color': '#3b82f6',
-            'circle-opacity': 0.8
-          }
+        
+        // Log any errors
+        map.current.on('error', (e) => {
+          console.error("Mapbox error:", e);
         });
-
-        // Start entrance animation
-        startEntranceAnimation();
-      });
+      } catch (error) {
+        console.error("Error initializing map:", error);
+      }
     } else {
-      // If map exists, just update the center and bounds
+      // If map exists, just update the center
       map.current.setCenter(coordinates);
-      map.current.setMaxBounds(bounds);
-      startEntranceAnimation();
     }
 
     // Cleanup function for this effect only
@@ -205,57 +110,12 @@ const MapCard: React.FC<MapCardProps> = ({
   useEffect(() => {
     return () => {
       if (map.current) {
+        console.log("Removing map instance");
         map.current.remove();
         map.current = null;
       }
     };
   }, []);
-
-  // Entrance animation with improved camera movement
-  const startEntranceAnimation = () => {
-    if (!map.current) return;
-
-    const startZoom = map.current.getZoom();
-    const startBearing = map.current.getBearing();
-    const startPitch = map.current.getPitch();
-    
-    const targetZoom = 18.2;
-    const targetBearing = 45; // More dramatic rotation
-    const targetPitch = 70;   // Look more directly at the building
-
-    // Create animation
-    const animationDuration = 2500; // 2.5 seconds
-    const start = Date.now();
-
-    const animate = () => {
-      const elapsedMs = Date.now() - start;
-      const progress = Math.min(elapsedMs / animationDuration, 1);
-      const easeProgress = easeInOutCubic(progress);
-
-      if (map.current) {
-        // Interpolate between start and target values
-        const newZoom = startZoom + (targetZoom - startZoom) * easeProgress;
-        const newBearing = startBearing + (targetBearing - startBearing) * easeProgress;
-        const newPitch = startPitch + (targetPitch - startPitch) * easeProgress;
-
-        map.current.setZoom(newZoom);
-        map.current.setBearing(newBearing);
-        map.current.setPitch(newPitch);
-
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        }
-      }
-    };
-
-    // Start animation
-    requestAnimationFrame(animate);
-  };
-
-  // Easing function for smoother animation
-  const easeInOutCubic = (t: number): number => {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  };
 
   // Toggle expanded state
   const toggleExpanded = () => {
@@ -265,7 +125,8 @@ const MapCard: React.FC<MapCardProps> = ({
     if (map.current) {
       setTimeout(() => {
         map.current?.resize();
-      }, 300); // After animation completes
+        console.log("Map resized after expand/collapse");
+      }, 300);
     }
   };
 
@@ -284,7 +145,11 @@ const MapCard: React.FC<MapCardProps> = ({
           )}
         >
           {/* Map container */}
-          <div ref={mapContainer} className="absolute inset-0" />
+          <div 
+            ref={mapContainer} 
+            className="absolute inset-0" 
+            style={{ backgroundColor: "#1f2937" }} // Fallback background color
+          />
 
           {/* Overlay with controls */}
           <div className="absolute top-2 right-2 flex space-x-2">
