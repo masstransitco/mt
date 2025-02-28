@@ -33,8 +33,20 @@ const MapCard: React.FC<MapCardProps> = ({
   const [expanded, setExpanded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
 
-  // Use a simpler style for better compatibility
-  const MAPBOX_STYLE = "mapbox://styles/mapbox/streets-v12";
+  // Set appropriate bounds around the station location
+  const getBoundingBox = (center: [number, number], radiusKm: number = 0.2) => {
+    const earthRadiusKm = 6371;
+    const latRadian = center[1] * Math.PI / 180;
+    
+    // Convert radius to degrees (approximately)
+    const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
+    const lngDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
+    
+    return new mapboxgl.LngLatBounds(
+      [center[0] - lngDelta, center[1] - latDelta], // Southwest
+      [center[0] + lngDelta, center[1] + latDelta]  // Northeast
+    );
+  };
 
   // Initialize the map when component mounts
   useEffect(() => {
@@ -42,19 +54,25 @@ const MapCard: React.FC<MapCardProps> = ({
     
     console.log("Initializing map with coordinates:", coordinates);
     
+    // Calculate bounds for the map
+    const bounds = getBoundingBox(coordinates);
+    
     // Only initialize once
     if (!map.current) {
       try {
-        // Create a simpler map instance with fewer custom options
+        // Create map instance with bounds
         const newMap = new mapboxgl.Map({
           container: mapContainer.current,
-          style: MAPBOX_STYLE,
+          style: "mapbox://styles/mapbox/dark-v11", // Dark theme looks better
           center: coordinates,
           zoom: 16,
           pitch: 60,
           bearing: 30,
           interactive: true,
           attributionControl: false,
+          maxBounds: bounds, // Set max bounds to keep focus on station
+          minZoom: 15,      // Prevent zooming out too far
+          maxZoom: 19       // Limit max zoom
         });
 
         // Set up event listeners
@@ -62,12 +80,42 @@ const MapCard: React.FC<MapCardProps> = ({
           console.log("Map fully loaded");
           setMapInitialized(true);
           
+          // Try to add 3D buildings layer
+          try {
+            newMap.addLayer({
+              id: "3d-buildings",
+              source: "composite",
+              "source-layer": "building",
+              type: "fill-extrusion",
+              minzoom: 15,
+              paint: {
+                "fill-extrusion-color": "#aaa", // Gray color for buildings
+                "fill-extrusion-height": ["get", "height"],
+                "fill-extrusion-base": ["get", "min_height"],
+                "fill-extrusion-opacity": 0.6
+              }
+            });
+            console.log("3D buildings layer added successfully");
+          } catch (error) {
+            console.warn("Could not add 3D buildings layer:", error);
+          }
+          
           // Add a marker at the station location
-          new mapboxgl.Marker({
-            color: "#3b82f6"
-          })
+          const el = document.createElement("div");
+          el.className = "station-marker";
+          el.style.width = "20px";
+          el.style.height = "20px";
+          el.style.borderRadius = "50%";
+          el.style.backgroundColor = "#3b82f6";
+          el.style.boxShadow = "0 0 10px 2px rgba(59, 130, 246, 0.8)";
+          el.style.animation = "pulse 2s infinite";
+          
+          new mapboxgl.Marker(el)
             .setLngLat(coordinates)
             .addTo(newMap);
+          
+          // Add initial camera animation
+          startEntranceAnimation(newMap);
         });
         
         newMap.on('error', (e) => {
@@ -81,12 +129,55 @@ const MapCard: React.FC<MapCardProps> = ({
     } else if (mapInitialized) {
       // If map exists and is initialized, just update center
       map.current.setCenter(coordinates);
+      map.current.setMaxBounds(bounds);
     }
 
     return () => {
       // We don't remove the map here
     };
   }, [coordinates, isOpen, mapInitialized]);
+  
+  // Add entrance animation
+  const startEntranceAnimation = (mapInstance: mapboxgl.Map) => {
+    const startZoom = mapInstance.getZoom();
+    const startBearing = mapInstance.getBearing();
+    const startPitch = mapInstance.getPitch();
+    
+    const targetZoom = Math.min(startZoom + 0.8, 19);
+    const targetBearing = 45;
+    const targetPitch = 65;
+    
+    // Animation duration
+    const duration = 2000;
+    const start = Date.now();
+    
+    const animate = () => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Easing function for smoother animation
+      const easeProgress = easeInOutCubic(progress);
+      
+      const newZoom = startZoom + (targetZoom - startZoom) * easeProgress;
+      const newBearing = startBearing + (targetBearing - startBearing) * easeProgress;
+      const newPitch = startPitch + (targetPitch - startPitch) * easeProgress;
+      
+      mapInstance.setZoom(newZoom);
+      mapInstance.setBearing(newBearing);
+      mapInstance.setPitch(newPitch);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  };
+  
+  // Easing function
+  const easeInOutCubic = (t: number): number => {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
   
   // Handle resize and cleanup
   useEffect(() => {
@@ -186,6 +277,24 @@ const MapCard: React.FC<MapCardProps> = ({
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10">
             <div className="text-white text-sm font-medium">{name}</div>
           </div>
+          
+          {/* Add pulse animation styles */}
+          <style jsx>{`
+            @keyframes pulse {
+              0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+              }
+              70% {
+                transform: scale(1.2);
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+              }
+              100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+              }
+            }
+          `}</style>
         </motion.div>
       )}
     </AnimatePresence>
