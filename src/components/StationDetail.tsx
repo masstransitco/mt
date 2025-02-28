@@ -1,9 +1,10 @@
 "use client";
 
-import React, { memo, useEffect } from "react";
-import { MapPin, Navigation, Zap, Clock, CarFront, Route } from "lucide-react";
+import React, { memo, useEffect, useState, Suspense } from "react";
+import { MapPin, Navigation, Zap, Clock, CarFront, Route, Map } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
 
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
@@ -15,6 +16,16 @@ import {
 } from "@/store/bookingSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
+
+// Dynamically import MapCard only when needed
+const MapCard = dynamic(() => import("./MapCard"), {
+  loading: () => (
+    <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
+      <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+    </div>
+  ),
+  ssr: false, // Disable server-side rendering for this component
+});
 
 interface StationDetailProps {
   /**
@@ -39,6 +50,8 @@ function StationDetailComponent({
   onConfirmDeparture,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [mapCardLoaded, setMapCardLoaded] = useState(false);
 
   // Booking-related
   const step = useAppSelector(selectBookingStep);
@@ -54,6 +67,16 @@ function StationDetailComponent({
       console.log("[StationDetail] stations array length=", stations.length);
     }
   }, [step, stations]);
+
+  // Toggle map visibility
+  const toggleMap = () => {
+    setIsMapOpen(!isMapOpen);
+    
+    // If opening the map for the first time, mark it as loaded
+    if (!isMapOpen && !mapCardLoaded) {
+      setMapCardLoaded(true);
+    }
+  };
 
   // If there's no active station => show placeholder
   if (!activeStation) {
@@ -101,6 +124,11 @@ function StationDetailComponent({
     }
   };
 
+  // Extract coordinates for MapCard
+  const stationCoordinates = activeStation ? 
+    [activeStation.geometry.coordinates[0], activeStation.geometry.coordinates[1]] as [number, number] :
+    [0, 0] as [number, number];
+
   return (
     <motion.div 
       className="p-4 space-y-4"
@@ -118,11 +146,35 @@ function StationDetailComponent({
           <h4 className="text-base font-semibold text-white">
             {activeStation.properties.Place}
           </h4>
+          <button 
+            onClick={toggleMap}
+            className="ml-auto bg-gray-800 hover:bg-gray-700 p-1.5 rounded-full transition-colors"
+            aria-label={isMapOpen ? "Hide 3D map" : "Show 3D map"}
+          >
+            <Map className="w-4 h-4 text-blue-400" />
+          </button>
         </div>
         <p className="text-sm text-gray-300 ml-8">
           {activeStation.properties.Address}
         </p>
       </div>
+
+      {/* MapCard component - only rendered when needed */}
+      {(isMapOpen || mapCardLoaded) && (
+        <Suspense fallback={
+          <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
+            <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+          </div>
+        }>
+          <MapCard 
+            coordinates={stationCoordinates}
+            name={activeStation.properties.Place}
+            isOpen={isMapOpen}
+            onClose={() => setIsMapOpen(false)}
+            className="mt-2 mb-2"
+          />
+        </Suspense>
+      )}
 
       {/* Station stats card */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
