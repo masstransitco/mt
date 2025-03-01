@@ -1,6 +1,12 @@
 "use client";
 
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 import { FixedSizeList as List, ListOnItemsRenderedProps } from "react-window";
 import {
   InfiniteLoader,
@@ -18,102 +24,83 @@ import StationListItem, { StationListItemData } from "./StationListItem";
 import { MapPin, Navigation } from "lucide-react";
 
 interface StationListProps {
-  /** An array of station data (e.g., your first page of stations). */
   stations: StationFeature[];
-  /** A callback when user selects a station from the list. */
   onStationSelected?: (station: StationFeature) => void;
-  /** Optional height for the list container */
   height?: number;
-  /** Show a header with legend for station types */
   showLegend?: boolean;
-  /** User's current location to calculate walking times */
   userLocation?: google.maps.LatLngLiteral | null;
 }
 
-/**
- * Helper to calculate walking time based on distance
- */
-function calculateWalkingTime(station: StationFeature, userLocation: google.maps.LatLngLiteral | null): number {
+/** Helper to calculate walking time based on distance */
+function calculateWalkingTime(
+  station: StationFeature,
+  userLocation: google.maps.LatLngLiteral | null
+): number {
   if (!userLocation || !station.geometry?.coordinates) return 0;
-  
+
   const [lng, lat] = station.geometry.coordinates;
-  // Basic Haversine formula to calculate distance
+
+  // Basic Haversine formula to calculate distance in km
   const toRad = (val: number) => (val * Math.PI) / 180;
-  const R = 6371; // Earth radius in km
+  const R = 6371; // Earth’s radius in km
   const dLat = toRad(userLocation.lat - lat);
   const dLng = toRad(userLocation.lng - lng);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat)) *
-    Math.cos(toRad(userLocation.lat)) *
-    Math.sin(dLng / 2) ** 2;
+      Math.cos(toRad(userLocation.lat)) *
+      Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distanceKm = R * c;
-  
-  // Average walking speed: ~12 min per km
+
+  // e.g. ~12 min per km
   const MIN_PER_KM = 12;
   return Math.round(distanceKm * MIN_PER_KM);
 }
 
-/**
- * Calculate driving time from dispatch hub to each station
- */
+/** Helper to calculate driving time (demo version). */
 function calculateDrivingTime(station: StationFeature): number {
-  // In a real implementation, you would use the Google Maps Distance Matrix API
-  // For now, we'll use a simple formula based on the coordinates
-  
   if (!station.geometry?.coordinates) return 0;
-  
   const [lng, lat] = station.geometry.coordinates;
-  
-  // Center point - adjust these values to match your dispatch hub
-  const centerLat = 22.302; 
+
+  // Example center or dispatch hub
+  const centerLat = 22.302;
   const centerLng = 114.177;
-  
-  // Simple distance calculation (simplified for demo)
+
+  // Simple formula
   const distanceFactor = Math.abs(lat - centerLat) + Math.abs(lng - centerLng);
   return Math.max(5, Math.round(distanceFactor * 100));
 }
 
-/**
- * A parent list component that:
- * - Subscribes to Redux once (for departureId, arrivalId, dispatchRoute)
- * - Uses react-window + react-window-infinite-loader for an "instagram-style" infinite scroll.
- * - Now only loads a subset of stations at a time for better performance
- */
-function StationList({ 
-  stations, 
-  onStationSelected, 
+function StationList({
+  stations,
+  onStationSelected,
   height = 300,
   showLegend = true,
-  userLocation
+  userLocation,
 }: StationListProps) {
-  // Keep track of whether we have more data to load
-  const [hasMore, setHasMore] = useState(stations.length > 5);
-  // Store the processed stations (with calculated times)
-  const [visibleStations, setVisibleStations] = useState<StationFeature[]>([]);
-  // Store the full processed list for incremental loading
-  const [processedStations, setProcessedStations] = useState<StationFeature[]>([]);
-  // Track how many stations we've loaded
-  const [loadedCount, setLoadedCount] = useState(5);
-
   // Single Redux subscription
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
-  // Process all stations with walking and driving times when stations or userLocation changes
-  useEffect(() => {
-    if (stations.length === 0) return;
+  /**
+   * 1) Immediately “process” (augment) the raw stations so that
+   *    each station has station.walkTime and station.drivingTime.
+   *
+   * By putting this inside `useMemo`, we ensure that any time
+   * `stations` or `userLocation` changes, we recalc them.
+   * This means on the very first render that has stations,
+   * these times are already populated (no extra useEffect pass).
+   */
+  const processedStations = useMemo(() => {
+    if (!stations || stations.length === 0) return [];
 
-    // Process all stations immediately to avoid recalculation
-    const allProcessed = stations.map(station => {
-      // Calculate walking time based on user location
+    return stations.map((station) => {
       const walkTime = userLocation ? calculateWalkingTime(station, userLocation) : 0;
-      
-      // Calculate driving time for all stations
       const drivingTime = calculateDrivingTime(station);
-      
+
+      // Return a fresh object so we don’t mutate the original
       return {
         ...station,
         walkTime,
@@ -121,25 +108,37 @@ function StationList({
         properties: {
           ...station.properties,
           walkTime,
-          drivingTime
-        }
+          drivingTime,
+        },
       };
     });
-    
-    // Store all processed stations
-    setProcessedStations(allProcessed);
-    
-    // Only show initial batch (default 5)
-    const initialCount = Math.min(loadedCount, allProcessed.length);
-    setVisibleStations(allProcessed.slice(0, initialCount));
-    
-    // Update hasMore flag
-    setHasMore(initialCount < allProcessed.length);
   }, [stations, userLocation]);
 
   /**
-   * Build the list's "itemData" prop,
-   * so each row can access these fields without a separate Redux subscription.
+   * 2) Because you want infinite scrolling, we keep track of
+   *    how many of the processed stations are “visible”.
+   */
+  const [visibleStations, setVisibleStations] = useState<StationFeature[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadedCount, setLoadedCount] = useState(5);
+
+  /**
+   * Whenever “processedStations” changes, we reset the visible
+   * portion to the first `loadedCount`.
+   */
+  useEffect(() => {
+    if (processedStations.length === 0) {
+      setVisibleStations([]);
+      setHasMore(false);
+      return;
+    }
+    const initial = Math.min(loadedCount, processedStations.length);
+    setVisibleStations(processedStations.slice(0, initial));
+    setHasMore(initial < processedStations.length);
+  }, [processedStations, loadedCount]);
+
+  /**
+   * This is the data we pass to each row component in react-window.
    */
   const itemData = useMemo<StationListItemData>(() => {
     return {
@@ -152,34 +151,29 @@ function StationList({
   }, [visibleStations, onStationSelected, departureId, arrivalId, dispatchRoute]);
 
   /**
-   * InfiniteLoader setup.
-   * If we still have more data, we use visibleStations.length + 1 so we get a "placeholder row."
+   * 3) Infinite Loader config:
+   *    - itemCount includes an extra placeholder row if we “haveMore”
+   *    - isItemLoaded checks if index < visibleStations.length
+   *    - loadMoreItems increments how many stations we’re showing
    */
   const itemCount = hasMore ? visibleStations.length + 1 : visibleStations.length;
 
-  // Tells InfiniteLoader if item at `index` is already loaded
   const isItemLoaded = useCallback(
     (index: number) => index < visibleStations.length,
     [visibleStations]
   );
 
-  // Called when user scrolls near the bottom & the placeholder row appears
   const loadMoreItems = useCallback(
     async (startIndex: number, stopIndex: number) => {
-      console.log(`Loading more items from ${startIndex} to ${stopIndex}...`);
-      
-      // Load 5 more stations at a time
-      const nextBatchSize = 5;
-      const nextLoadedCount = Math.min(loadedCount + nextBatchSize, processedStations.length);
-      
-      // Update visible stations with next batch
-      setVisibleStations(processedStations.slice(0, nextLoadedCount));
-      setLoadedCount(nextLoadedCount);
-      
-      // Update hasMore flag
-      setHasMore(nextLoadedCount < processedStations.length);
+      // Load 5 more at a time, for example
+      const nextBatch = 5;
+      const newCount = loadedCount + nextBatch;
+      setLoadedCount((prev) => prev + nextBatch);
+
+      // After setLoadedCount triggers the effect above,
+      // “visibleStations” will become the next slice, etc.
     },
-    [loadedCount, processedStations]
+    [loadedCount]
   );
 
   return (
@@ -217,18 +211,15 @@ function StationList({
             return (
               <List
                 height={height}
-                /** Must pass the same itemCount you gave InfiniteLoader: */
                 itemCount={itemCount}
-                itemSize={70} /* Increased from 60 to accommodate new design */
+                itemSize={70}
                 width="100%"
                 itemData={itemData}
-                className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
-                /** 
-                 * The List expects (props: ListOnItemsRenderedProps) => void.
-                 * Sometimes TS requires a cast if types don't match exactly.
-                 */
-                onItemsRendered={onItemsRendered as (props: ListOnItemsRenderedProps) => void}
+                onItemsRendered={onItemsRendered as (
+                  props: ListOnItemsRenderedProps
+                ) => void}
                 ref={ref}
+                className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
               >
                 {StationListItem}
               </List>
