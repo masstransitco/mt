@@ -46,7 +46,6 @@ import {
   clearArrivalStation,
   clearRoute,
   selectRouteDecoded,
-  RouteInfo,
 } from "@/store/bookingSlice";
 import {
   fetchDispatchDirections,
@@ -442,7 +441,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
       }
     );
   };
-
+  // --------------------------
+  // Derived State
+  // --------------------------
+  const hasError = stationsError || carsError || loadError;
+  const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
+  const stationToShow = hasStationSelected
+    ? stations.find((s) => s.id === hasStationSelected)
+    : null;
   // --------------------------
   // Helper functions for Sheet title and subtitle
   // --------------------------
@@ -493,14 +499,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [bookingStep, stationToShow]);
 
-  // --------------------------
-  // Derived State
-  // --------------------------
-  const hasError = stationsError || carsError || loadError;
-  const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
-  const stationToShow = hasStationSelected
-    ? stations.find((s) => s.id === hasStationSelected)
-    : null;
+
 
   // --------------------------
   // Render
