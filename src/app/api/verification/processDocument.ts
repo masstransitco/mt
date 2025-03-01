@@ -1,4 +1,4 @@
-// pages/api/processDocument.ts
+// src/app/api/verification/processDocument.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createWorker } from 'tesseract.js';
 import { Storage } from '@google-cloud/storage';
