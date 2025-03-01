@@ -13,6 +13,7 @@ import { selectUserLocation } from "./userSlice";
  * A single station feature from /stations.geojson
  */
 export interface StationFeature {
+  drivingTime: any;
   type: "Feature";
   id: number;
   geometry: {
@@ -20,6 +21,7 @@ export interface StationFeature {
     coordinates: [number, number]; // [lng, lat]
   };
   properties: {
+    drivingTime: any;
     walkTime: number | undefined;
     Place: string;
     Address: string;
