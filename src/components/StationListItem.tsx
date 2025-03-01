@@ -1,11 +1,10 @@
 "use client";
 
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useEffect, useState } from "react";
 import { ListChildComponentProps } from "react-window";
-import { MapPin, Navigation, Footprints, Clock, CarFront } from "lucide-react";
+import { MapPin, Navigation, Footprints, Clock } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { StationFeature } from "@/store/stationsSlice";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,9 +42,21 @@ interface StationListItemProps extends ListChildComponentProps<StationListItemDa
 function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
   const { items: stations, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
+  
+  // State to ensure we have walking time calculated
+  const [calculatedWalkTime, setCalculatedWalkTime] = useState<number | null>(null);
 
   // The station for this row
   const station = stations[index];
+
+  // Calculate walk time when component mounts or station changes
+  useEffect(() => {
+    if (station) {
+      // Use the station's walkTime, fallback to properties.walkTime, or default to 0
+      const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
+      setCalculatedWalkTime(walkTime);
+    }
+  }, [station]);
 
   if (!station) {
     // If this index is beyond our actual stations, you can render a placeholder
@@ -73,24 +84,17 @@ function StationListItemComponent(props: StationListItemProps) {
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // Show "dispatch driving time" if station is departure & we have dispatchRoute
-  let dispatchTimePill: JSX.Element | null = null;
-  if (isDeparture && dispatchRoute?.duration) {
-    const drivingMins = Math.round(dispatchRoute.duration / 60);
-    dispatchTimePill = (
-      <div className="px-3 py-1.5 rounded-full bg-blue-600/60 text-sm text-white flex items-center gap-1.5">
-        <Clock className="w-3.5 h-3.5" />
-        <span>{drivingMins} min</span>
-      </div>
-    );
-  }
+  // Get the dispatch driving time if this is a departure station
+  const getDispatchDrivingTime = (): number | null => {
+    if (isDeparture && dispatchRoute?.duration) {
+      return Math.round(dispatchRoute.duration / 60);
+    }
+    return null;
+  };
 
-  // Show walking time from user → station (if available)
-  const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
-  
-  // Show available spots
-  const availableSpots = station.properties?.availableSpots ?? 0;
-  const totalSpots = station.properties?.totalSpots ?? 0;
+  // Walking time and dispatch time
+  const walkTime = calculatedWalkTime ?? 0;
+  const dispatchDrivingTime = getDispatchDrivingTime();
 
   return (
     <div
@@ -134,7 +138,7 @@ function StationListItemComponent(props: StationListItemProps) {
             </h3>
           </div>
 
-          {/* Bottom row with walk time and available spots */}
+          {/* Bottom row with walk time and dispatch time (if available) */}
           <div className="flex items-center gap-4 text-xs">
             {/* Footprints + walking time */}
             <div className="flex items-center gap-1.5 text-gray-400">
@@ -142,16 +146,17 @@ function StationListItemComponent(props: StationListItemProps) {
               <span>{walkTime} min walk</span>
             </div>
             
-            {/* Available spots */}
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <CarFront className="w-3.5 h-3.5 text-gray-500" />
-              <span>{availableSpots}/{totalSpots} spots</span>
-            </div>
+            {/* Dispatch driving time (instead of available spots) */}
+            {dispatchDrivingTime && (
+              <div className="flex items-center gap-1.5 text-gray-400">
+                <Clock className="w-3.5 h-3.5 text-gray-500" />
+                <span>{dispatchDrivingTime} min drive</span>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* RIGHT: Dispatch driving time pill (if any) */}
-        {dispatchTimePill}
+        
+        {/* RIGHT: Empty now that we moved dispatch time to the bottom row */}
       </div>
     </div>
   );
