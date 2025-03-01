@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo, useEffect, useState, useMemo } from "react";
-import { SquareParking, Clock, CarFront, Route, Navigation } from "lucide-react"; 
+import { CircleParking, Clock, CarFront, Route, Navigation } from "lucide-react"; 
 // ^^^ Imported Parking icon (instead of Zap)
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
@@ -95,7 +95,7 @@ function StationDetailComponent({
         </div>
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
-            <SquareParking className="w-4 h-4 text-blue-400" />
+            <CircleParking className="w-4 h-4 text-blue-400" />
             <span>View parking</span>
           </div>
           <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
