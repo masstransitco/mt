@@ -526,26 +526,47 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </div>
           </Sheet>
 
-          {/* Station Detail Sheet */}
-          <Sheet
-            key={detailKey}
-            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-            onDismiss={closeCurrentSheet}
-            title={bookingStep <= 2 ? "Pick-up station" : "Trip details"}
-            subtitle={
-              bookingStep <= 2
-                ? "Your car will be delivered here"
-                : "Return the car at your arrival station"
-            }
-          >
-            {stationToShow && (
-              <StationDetail
-                key={detailKey}
-                stations={searchLocation ? sortedStations : stations}
-                activeStation={stationToShow}
-              />
-            )}
-          </Sheet>
+         {/* Station Detail Sheet */}
+<Sheet
+  key={detailKey}
+  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+  onDismiss={closeCurrentSheet}
+  title={stationToShow ? (bookingStep <= 2 ? 
+    // Show the calculated pickup time or a default title
+    (dispatchRoute?.duration ? 
+      `Pickup car at ${(() => {
+        const now = new Date();
+        const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+        const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
+        
+        const formatTime = (date: Date) => {
+          let hours = date.getHours();
+          const minutes = date.getMinutes();
+          const ampm = hours >= 12 ? 'pm' : 'am';
+          hours = hours % 12;
+          hours = hours ? hours : 12;
+          const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+          return `${hours}:${minutesStr}${ampm}`;
+        };
+        
+        return `${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
+      })()}` : 
+      "Pick-up station") : 
+    "Trip details") : ""}
+  subtitle={stationToShow ? (bookingStep <= 2 ? 
+    "Your car will be delivered here" : 
+    (bookingStep === 4 ? 
+      <span>Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter</span> : 
+      "Return the car at your arrival station")) : ""}
+>
+  {stationToShow && (
+    <StationDetail
+      key={detailKey}
+      stations={searchLocation ? sortedStations : stations}
+      activeStation={stationToShow}
+    />
+  )}
+</Sheet>
 
           {/* GaussianSplatModal */}
           <Suspense fallback={<div>Loading modal...</div>}>
