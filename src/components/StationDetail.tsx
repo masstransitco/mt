@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useEffect, useState, Suspense } from "react";
+import React, { memo, useEffect, useState, useMemo } from "react";
 import { MapPin, Navigation, Zap, Clock, CarFront, Route, Map } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
@@ -14,6 +14,7 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
 } from "@/store/bookingSlice";
+import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,7 @@ function StationDetailComponent({
   const route = useAppSelector(selectRoute);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
+  const dispatchRoute = useAppSelector(selectDispatchRoute);
 
   const isDepartureFlow = step <= 2;
 
@@ -67,6 +69,33 @@ function StationDetailComponent({
       console.log("[StationDetail] stations array length=", stations.length);
     }
   }, [step, stations]);
+
+  // Calculate estimated pickup time based on dispatch route duration
+  const estimatedPickupTime = useMemo(() => {
+    if (!dispatchRoute?.duration) return null;
+    
+    const now = new Date();
+    const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+    
+    // Create a range with 15 minute window
+    const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
+    
+    // Format times
+    const formatTime = (date: Date) => {
+      let hours = date.getHours();
+      const minutes = date.getMinutes();
+      const ampm = hours >= 12 ? 'pm' : 'am';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // Convert 0 to 12
+      const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+      return `${hours}:${minutesStr}${ampm}`;
+    };
+    
+    return {
+      start: formatTime(arrivalTime),
+      end: formatTime(arrivalTimeEnd)
+    };
+  }, [dispatchRoute?.duration]);
 
   // Toggle map visibility
   const toggleMap = () => {
@@ -124,6 +153,27 @@ function StationDetailComponent({
     }
   };
 
+  // Generate titles based on step
+  const getHeaderTitle = () => {
+    if (step <= 2) {
+      return estimatedPickupTime 
+        ? `Pickup car at ${estimatedPickupTime.start}-${estimatedPickupTime.end}`
+        : "Pick-up station";
+    } else {
+      return "Trip details";
+    }
+  };
+
+  const getHeaderSubtitle = () => {
+    if (step <= 2) {
+      return "Your car will be delivered here";
+    } else if (step === 4) {
+      return <span>Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter</span>;
+    } else {
+      return "Return the car at your arrival station";
+    }
+  };
+
   // Extract coordinates for MapCard
   const stationCoordinates = activeStation ? 
     [activeStation.geometry.coordinates[0], activeStation.geometry.coordinates[1]] as [number, number] :
@@ -161,7 +211,7 @@ function StationDetailComponent({
 
       {/* MapCard component - only rendered when needed */}
       {(isMapOpen || mapCardLoaded) && (
-        <Suspense fallback={
+        <React.Suspense fallback={
           <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
           </div>
@@ -173,7 +223,7 @@ function StationDetailComponent({
             onClose={() => setIsMapOpen(false)}
             className="mt-2 mb-2"
           />
-        </Suspense>
+        </React.Suspense>
       )}
 
       {/* Station stats card */}
@@ -266,4 +316,5 @@ function StationDetailComponent({
   );
 }
 
+// Updated in Sheet usage to pass the new title and subtitle props
 export default memo(StationDetailComponent);
