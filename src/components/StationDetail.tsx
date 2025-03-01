@@ -1,7 +1,8 @@
 "use client";
 
 import React, { memo, useEffect, useState, useMemo } from "react";
-import { Zap, Clock, CarFront, Route, Navigation } from "lucide-react";
+import { Parking, Clock, CarFront, Route, Navigation } from "lucide-react"; 
+// ^^^ Imported Parking icon (instead of Zap)
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -60,14 +61,15 @@ function StationDetailComponent({
   }, [step, stations]);
 
   /** 
-   * Calculate an estimated pickup time window if we have a dispatch route.
-   * (We no longer display it here, but you can use it if needed.)
+   * If needed, an estimated pickup time window
+   * (we're no longer displaying it in the UI).
    */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
     const now = new Date();
     const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
     const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
+
     const formatTime = (date: Date) => {
       let hours = date.getHours();
       const minutes = date.getMinutes();
@@ -93,8 +95,8 @@ function StationDetailComponent({
         </div>
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
-            <Zap className="w-4 h-4 text-blue-400" />
-            <span>View charging capacity</span>
+            <Parking className="w-4 h-4 text-blue-400" />
+            <span>View parking</span>
           </div>
           <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
             <Clock className="w-4 h-4 text-blue-400" />
@@ -111,6 +113,14 @@ function StationDetailComponent({
   if (route && departureId && arrivalId) {
     routeDistanceKm = (route.distance / 1000).toFixed(1);
     routeDurationMin = Math.round(route.duration / 60).toString();
+  }
+
+  /** For step 2: "Touchless Exit", for step 4: "Touchless Entry". Otherwise blank. */
+  let parkingValue = "";
+  if (step === 2) {
+    parkingValue = "Touchless Exit";
+  } else if (step === 4) {
+    parkingValue = "Touchless Entry";
   }
 
   /** Handle confirmation flow */
@@ -143,7 +153,7 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/* MapCard rendered by default (no close button) */}
+      {/* MapCard rendered by default */}
       <MapCard
         coordinates={stationCoordinates}
         name={activeStation.properties.Place}
@@ -210,14 +220,14 @@ function StationDetailComponent({
           )
         )}
 
-        {/* Power info */}
+        {/* Parking row => replaced Zap icon with Parking & dynamic text */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
-            <Zap className="w-4 h-4 text-blue-400" />
-            <span>Max Charging Power</span>
+            <Parking className="w-4 h-4 text-blue-400" />
+            <span>Parking</span>
           </div>
           <span className="font-medium text-white">
-            {activeStation.properties.maxPower} kW
+            {parkingValue}
           </span>
         </div>
       </div>
