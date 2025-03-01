@@ -60,27 +60,22 @@ function StationDetailComponent({
   }, [step, stations]);
 
   /** 
-   * Calculate an estimated pickup time window if we have a dispatch route 
+   * Calculate an estimated pickup time window if we have a dispatch route.
+   * (We no longer display it here, but you can use it if needed.)
    */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
-
     const now = new Date();
     const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-
-    // Create a 15-minute window
     const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-
     const formatTime = (date: Date) => {
       let hours = date.getHours();
       const minutes = date.getMinutes();
       const ampm = hours >= 12 ? "pm" : "am";
-      hours = hours % 12;
-      hours = hours ? hours : 12;
+      hours = hours % 12 || 12;
       const minutesStr = minutes < 10 ? "0" + minutes : minutes;
       return `${hours}:${minutesStr}${ampm}`;
     };
-
     return {
       start: formatTime(arrivalTime),
       end: formatTime(arrivalTimeEnd),
@@ -134,31 +129,6 @@ function StationDetailComponent({
     }
   };
 
-  /** Decide the detail header text */
-  const getHeaderTitle = () => {
-    if (step <= 2) {
-      return estimatedPickupTime
-        ? `Pickup car at ${estimatedPickupTime.start}-${estimatedPickupTime.end}`
-        : "Pick-up station";
-    } else {
-      return "Trip details";
-    }
-  };
-
-  const getHeaderSubtitle = () => {
-    if (step <= 2) {
-      return "Your car will be delivered here";
-    } else if (step === 4) {
-      return (
-        <span>
-          Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
-        </span>
-      );
-    } else {
-      return "Return the car at your arrival station";
-    }
-  };
-
   // Coordinates for the always-visible map
   const stationCoordinates: [number, number] = [
     activeStation.geometry.coordinates[0],
@@ -173,15 +143,7 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/* Header text (e.g. pick-up station) */}
-      <div className="space-y-1">
-        <h4 className="text-base font-semibold text-white">
-          {getHeaderTitle()}
-        </h4>
-        <p className="text-sm text-gray-300">{getHeaderSubtitle()}</p>
-      </div>
-
-      {/* Always render the MapCard; no toggle or close button */}
+      {/* MapCard rendered by default (no close button) */}
       <MapCard
         coordinates={stationCoordinates}
         name={activeStation.properties.Place}
