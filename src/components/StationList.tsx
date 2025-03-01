@@ -56,9 +56,30 @@ function calculateWalkingTime(station: StationFeature, userLocation: google.maps
 }
 
 /**
+ * Calculate driving time from dispatch hub to each station
+ */
+function calculateDrivingTime(station: StationFeature): number {
+  // In a real implementation, you would use the Google Maps Distance Matrix API
+  // For now, we'll use a simple formula based on the coordinates
+  
+  if (!station.geometry?.coordinates) return 0;
+  
+  const [lng, lat] = station.geometry.coordinates;
+  
+  // Center point - adjust these values to match your dispatch hub
+  const centerLat = 22.302; 
+  const centerLng = 114.177;
+  
+  // Simple distance calculation (simplified for demo)
+  const distanceFactor = Math.abs(lat - centerLat) + Math.abs(lng - centerLng);
+  return Math.max(5, Math.round(distanceFactor * 100));
+}
+
+/**
  * A parent list component that:
  * - Subscribes to Redux once (for departureId, arrivalId, dispatchRoute)
  * - Uses react-window + react-window-infinite-loader for an "instagram-style" infinite scroll.
+ * - Now only loads a subset of stations at a time for better performance
  */
 function StationList({ 
   stations, 
@@ -67,34 +88,53 @@ function StationList({
   showLegend = true,
   userLocation
 }: StationListProps) {
-  // Example: track if there's more data to load from the server
-  const [hasMore, setHasMore] = useState(true);
-  // Store stations with calculated walk times
-  const [stationsWithWalkTimes, setStationsWithWalkTimes] = useState<StationFeature[]>(stations);
+  // Keep track of whether we have more data to load
+  const [hasMore, setHasMore] = useState(stations.length > 5);
+  // Store the processed stations (with calculated times)
+  const [visibleStations, setVisibleStations] = useState<StationFeature[]>([]);
+  // Store the full processed list for incremental loading
+  const [processedStations, setProcessedStations] = useState<StationFeature[]>([]);
+  // Track how many stations we've loaded
+  const [loadedCount, setLoadedCount] = useState(5);
 
   // Single Redux subscription
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
-  // Calculate walking times when stations or userLocation changes
+  // Process all stations with walking and driving times when stations or userLocation changes
   useEffect(() => {
-    if (stations.length > 0 && userLocation) {
-      const updatedStations = stations.map(station => {
-        const walkTime = calculateWalkingTime(station, userLocation);
-        return {
-          ...station,
+    if (stations.length === 0) return;
+
+    // Process all stations immediately to avoid recalculation
+    const allProcessed = stations.map(station => {
+      // Calculate walking time based on user location
+      const walkTime = userLocation ? calculateWalkingTime(station, userLocation) : 0;
+      
+      // Calculate driving time for all stations
+      const drivingTime = calculateDrivingTime(station);
+      
+      return {
+        ...station,
+        walkTime,
+        drivingTime,
+        properties: {
+          ...station.properties,
           walkTime,
-          properties: {
-            ...station.properties,
-            walkTime
-          }
-        };
-      });
-      setStationsWithWalkTimes(updatedStations);
-    } else {
-      setStationsWithWalkTimes(stations);
-    }
+          drivingTime
+        }
+      };
+    });
+    
+    // Store all processed stations
+    setProcessedStations(allProcessed);
+    
+    // Only show initial batch (default 5)
+    const initialCount = Math.min(loadedCount, allProcessed.length);
+    setVisibleStations(allProcessed.slice(0, initialCount));
+    
+    // Update hasMore flag
+    setHasMore(initialCount < allProcessed.length);
   }, [stations, userLocation]);
 
   /**
@@ -103,37 +143,43 @@ function StationList({
    */
   const itemData = useMemo<StationListItemData>(() => {
     return {
-      items: stationsWithWalkTimes,
+      items: visibleStations,
       onStationSelected,
       departureId,
       arrivalId,
       dispatchRoute,
     };
-  }, [stationsWithWalkTimes, onStationSelected, departureId, arrivalId, dispatchRoute]);
+  }, [visibleStations, onStationSelected, departureId, arrivalId, dispatchRoute]);
 
   /**
    * InfiniteLoader setup.
-   * If we still have more data, we use "stationsWithWalkTimes.length + 1" so we get a "placeholder row."
+   * If we still have more data, we use visibleStations.length + 1 so we get a "placeholder row."
    */
-  const itemCount = hasMore ? stationsWithWalkTimes.length + 1 : stationsWithWalkTimes.length;
+  const itemCount = hasMore ? visibleStations.length + 1 : visibleStations.length;
 
   // Tells InfiniteLoader if item at `index` is already loaded
   const isItemLoaded = useCallback(
-    (index: number) => index < stationsWithWalkTimes.length,
-    [stationsWithWalkTimes]
+    (index: number) => index < visibleStations.length,
+    [visibleStations]
   );
 
   // Called when user scrolls near the bottom & the placeholder row appears
   const loadMoreItems = useCallback(
     async (startIndex: number, stopIndex: number) => {
       console.log(`Loading more items from ${startIndex} to ${stopIndex}...`);
-
-      // Example: If we do an API call here, we can update the stations in Redux or local state:
-      //   dispatch(...) or setStations([...stations, ...newStations])
-      //   if no more data remains:
-      //     setHasMore(false);
+      
+      // Load 5 more stations at a time
+      const nextBatchSize = 5;
+      const nextLoadedCount = Math.min(loadedCount + nextBatchSize, processedStations.length);
+      
+      // Update visible stations with next batch
+      setVisibleStations(processedStations.slice(0, nextLoadedCount));
+      setLoadedCount(nextLoadedCount);
+      
+      // Update hasMore flag
+      setHasMore(nextLoadedCount < processedStations.length);
     },
-    [hasMore]
+    [loadedCount, processedStations]
   );
 
   return (
@@ -141,7 +187,7 @@ function StationList({
       {showLegend && (
         <div className="px-4 py-2 bg-gray-900/60 border-b border-gray-800 flex justify-between items-center">
           <div className="text-xs text-gray-400">
-            {stationsWithWalkTimes.length} stations found
+            {stations.length} stations found
           </div>
           <div className="flex gap-3">
             <div className="flex items-center gap-1.5">

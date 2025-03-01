@@ -1,8 +1,8 @@
 "use client";
 
-import React, { memo, useCallback, useEffect, useState } from "react";
+import React, { memo, useCallback } from "react";
 import { ListChildComponentProps } from "react-window";
-import { MapPin, Navigation, Footprints, Clock } from "lucide-react";
+import { MapPin, Navigation, Footprints, CarFront } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
@@ -42,21 +42,9 @@ interface StationListItemProps extends ListChildComponentProps<StationListItemDa
 function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
   const { items: stations, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
-  
-  // State to ensure we have walking time calculated
-  const [calculatedWalkTime, setCalculatedWalkTime] = useState<number | null>(null);
 
   // The station for this row
   const station = stations[index];
-
-  // Calculate walk time when component mounts or station changes
-  useEffect(() => {
-    if (station) {
-      // Use the station's walkTime, fallback to properties.walkTime, or default to 0
-      const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
-      setCalculatedWalkTime(walkTime);
-    }
-  }, [station]);
 
   if (!station) {
     // If this index is beyond our actual stations, you can render a placeholder
@@ -84,17 +72,14 @@ function StationListItemComponent(props: StationListItemProps) {
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // Get the dispatch driving time if this is a departure station
-  const getDispatchDrivingTime = (): number | null => {
-    if (isDeparture && dispatchRoute?.duration) {
-      return Math.round(dispatchRoute.duration / 60);
-    }
-    return null;
-  };
+  // Get the appropriate times
+  const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
+  const drivingTime = station.drivingTime ?? station.properties?.drivingTime ?? 0;
 
-  // Walking time and dispatch time
-  const walkTime = calculatedWalkTime ?? 0;
-  const dispatchDrivingTime = getDispatchDrivingTime();
+  // For departure station with dispatch route, use the calculated duration
+  const dispatchDuration = isDeparture && dispatchRoute?.duration 
+    ? Math.round(dispatchRoute.duration / 60)
+    : null;
 
   return (
     <div
@@ -138,7 +123,7 @@ function StationListItemComponent(props: StationListItemProps) {
             </h3>
           </div>
 
-          {/* Bottom row with walk time and dispatch time (if available) */}
+          {/* Bottom row with walk time and driving time */}
           <div className="flex items-center gap-4 text-xs">
             {/* Footprints + walking time */}
             <div className="flex items-center gap-1.5 text-gray-400">
@@ -146,17 +131,16 @@ function StationListItemComponent(props: StationListItemProps) {
               <span>{walkTime} min walk</span>
             </div>
             
-            {/* Dispatch driving time (instead of available spots) */}
-            {dispatchDrivingTime && (
-              <div className="flex items-center gap-1.5 text-gray-400">
-                <Clock className="w-3.5 h-3.5 text-gray-500" />
-                <span>{dispatchDrivingTime} min drive</span>
-              </div>
-            )}
+            {/* Car + driving time for all stations */}
+            <div className="flex items-center gap-1.5 text-gray-400">
+              <CarFront className="w-3.5 h-3.5 text-gray-500" />
+              <span>
+                {/* Use dispatch route time for departure station if available, otherwise use calculated drivingTime */}
+                {dispatchDuration || drivingTime} mins away
+              </span>
+            </div>
           </div>
         </div>
-        
-        {/* RIGHT: Empty now that we moved dispatch time to the bottom row */}
       </div>
     </div>
   );
