@@ -7,10 +7,7 @@ import { toast } from "react-hot-toast";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
 
-/**
- * If you define your RouteInfo interface separately,
- * be sure it includes optional fields and can be null:
- */
+/** If you define your RouteInfo interface separately. */
 interface RouteInfo {
   duration?: number;
   distance?: number;
@@ -28,13 +25,14 @@ export interface StationListItemData {
   onStationSelected?: (station: StationFeature) => void;
   departureId?: number | null;
   arrivalId?: number | null;
-  /**
+  /** 
    * Must allow null if your store says dispatchRoute can be null
    */
   dispatchRoute?: RouteInfo | null;
 }
 
-interface StationListItemProps extends ListChildComponentProps<StationListItemData> {}
+interface StationListItemProps
+  extends ListChildComponentProps<StationListItemData> {}
 
 /**
  * A single row item in the station list (react-window).
@@ -45,9 +43,8 @@ function StationListItemComponent(props: StationListItemProps) {
 
   // The station for this row
   const station = stations[index];
-
   if (!station) {
-    // If this index is beyond our actual stations, you can render a placeholder
+    // If this index is beyond our actual stations, render a placeholder
     return (
       <div 
         style={style} 
@@ -60,9 +57,9 @@ function StationListItemComponent(props: StationListItemProps) {
     );
   }
 
-  // Compare station.id (number) to departureId/arrivalId (number | null)
-  const isSelected = station.id === departureId || station.id === arrivalId;
+  // Compare station.id to departureId/arrivalId
   const isDeparture = station.id === departureId;
+  const isSelected = isDeparture || station.id === arrivalId;
 
   const handleClick = useCallback(() => {
     if (!onStationSelected) {
@@ -72,14 +69,21 @@ function StationListItemComponent(props: StationListItemProps) {
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // Get the appropriate times
+  // Pull out walking/driving times
+  // If walking is 0, we hide it. 
   const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
-  const drivingTime = station.drivingTime ?? station.properties?.drivingTime ?? 0;
+  const showWalkTime = walkTime > 0;
 
-  // For departure station with dispatch route, use the calculated duration
-  const dispatchDuration = isDeparture && dispatchRoute?.duration 
-    ? Math.round(dispatchRoute.duration / 60)
-    : null;
+  // For the car/driving time:
+  // Only show the dispatch time if this station is the departure + we have a route.
+  // Hide the car icon + "0" for stations that aren't selected as departure.
+  let displayTime = null;
+  let showCarIcon = false;
+  if (isDeparture && dispatchRoute?.duration) {
+    // If we do have a dispatch route, show its duration (in minutes).
+    displayTime = Math.round(dispatchRoute.duration / 60);
+    showCarIcon = true;
+  }
 
   return (
     <div
@@ -123,23 +127,26 @@ function StationListItemComponent(props: StationListItemProps) {
             </h3>
           </div>
 
-          {/* Bottom row with walk time and driving time */}
-          <div className="flex items-center gap-4 text-xs">
-            {/* Footprints + walking time */}
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <Footprints className="w-3.5 h-3.5 text-gray-500" />
-              <span>{walkTime} min walk</span>
+          {/* Bottom row — only render if we have either a nonzero walk time or a dispatch route time */}
+          {(showWalkTime || displayTime) && (
+            <div className="flex items-center gap-4 text-xs">
+              {/* Footprints + walking time */}
+              {showWalkTime && (
+                <div className="flex items-center gap-1.5 text-gray-400">
+                  <Footprints className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{walkTime} min walk</span>
+                </div>
+              )}
+
+              {/* Car + dispatch route time (only if isDeparture and dispatchRoute) */}
+              {showCarIcon && displayTime && (
+                <div className="flex items-center gap-1.5 text-gray-400">
+                  <CarFront className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{displayTime} mins away</span>
+                </div>
+              )}
             </div>
-            
-            {/* Car + driving time for all stations */}
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <CarFront className="w-3.5 h-3.5 text-gray-500" />
-              <span>
-                {/* Use dispatch route time for departure station if available, otherwise use calculated drivingTime */}
-                {dispatchDuration || drivingTime} mins away
-              </span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
