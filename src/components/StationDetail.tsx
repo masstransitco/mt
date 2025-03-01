@@ -1,8 +1,9 @@
 "use client";
 
 import React, { memo, useEffect, useState, useMemo } from "react";
-import { CircleParking, Clock, CarFront, Route, Navigation } from "lucide-react"; 
-// ^^^ Imported Parking icon (instead of Zap)
+// Remove Navigation, CarFront, Parking from lucide-react imports
+// and replace with your custom SVG icon imports:
+import { Clock, Route } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -18,6 +19,11 @@ import {
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
+
+// Import your custom icons:
+import { SteerWheel } from "@/components/ui/icons/SteerWheel";
+import { CarParkIcon } from "@/components/ui/icons/CarParkIcon";
+import { Parking } from "@/components/ui/icons/Parking";
 
 /** Dynamically import the MapCard (always visible now) */
 const MapCard = dynamic(() => import("./MapCard"), {
@@ -62,7 +68,7 @@ function StationDetailComponent({
 
   /** 
    * If needed, an estimated pickup time window
-   * (we're no longer displaying it in the UI).
+   * (not displayed in this version).
    */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
@@ -95,7 +101,7 @@ function StationDetailComponent({
         </div>
         <div className="grid grid-cols-2 gap-3 text-xs">
           <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
-            <CircleParking className="w-4 h-4 text-blue-400" />
+            <Parking className="w-4 h-4 text-blue-400" />
             <span>View parking</span>
           </div>
           <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
@@ -115,7 +121,7 @@ function StationDetailComponent({
     routeDurationMin = Math.round(route.duration / 60).toString();
   }
 
-  /** For step 2: "Touchless Exit", for step 4: "Touchless Entry". Otherwise blank. */
+  // For step 2: "Touchless Exit", for step 4: "Touchless Entry". Otherwise blank.
   let parkingValue = "";
   if (step === 2) {
     parkingValue = "Touchless Exit";
@@ -166,7 +172,7 @@ function StationDetailComponent({
         {/* Available spots */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
-            <CarFront className="w-4 h-4 text-blue-400" />
+            <CarParkIcon className="w-4 h-4 text-blue-400" />
             <span>Available Spots</span>
           </div>
           <span className="font-medium text-white">
@@ -199,7 +205,7 @@ function StationDetailComponent({
             </div>
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2 text-gray-300">
-                <Navigation className="w-4 h-4 text-blue-400" />
+                <SteerWheel className="w-4 h-4 text-blue-400" />
                 <span>Drive Time</span>
               </div>
               <span className="font-medium text-white">{routeDurationMin} min</span>
@@ -210,7 +216,7 @@ function StationDetailComponent({
           activeStation.distance !== undefined && (
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2 text-gray-300">
-                <Navigation className="w-4 h-4 text-blue-400" />
+                <SteerWheel className="w-4 h-4 text-blue-400" />
                 <span>Distance from You</span>
               </div>
               <span className="font-medium text-white">
@@ -220,7 +226,7 @@ function StationDetailComponent({
           )
         )}
 
-        {/* Parking row => replaced Zap icon with Parking & dynamic text */}
+        {/* Parking row => replaced old icon with your new Parking icon + dynamic text */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
             <Parking className="w-4 h-4 text-blue-400" />
