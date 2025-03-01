@@ -127,13 +127,13 @@ function PulsatingStrip({ className }: { className?: string }) {
   );
 }
 
-// SheetProps interface
+// SheetProps interface (updated subtitle to ReactNode)
 export interface SheetProps {
   isOpen: boolean;
   children: ReactNode;
   className?: string;
   title?: string;
-  subtitle?: string;
+  subtitle?: ReactNode; // Changed from string to ReactNode
   count?: number;
   countLabel?: string;
   onDismiss?: () => void;
@@ -212,7 +212,7 @@ export default function Sheet({
       <div className="flex items-center justify-between">
         <div className="text-left">
           {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
-          {subtitle && <p className="text-sm text-gray-300">{subtitle}</p>}
+          {subtitle && <div className="text-sm text-gray-300">{subtitle}</div>}
           {typeof count === "number" && (
             <p className="text-sm text-gray-300">
               {count} {countLabel ?? "items"}
