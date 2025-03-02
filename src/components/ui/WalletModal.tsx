@@ -100,9 +100,7 @@ function PaymentMethodCard({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
       transition={{ type: "tween", duration: 0.2 }}
-      className="flex items-center justify-between border border-gray-800 rounded bg-gray-900/50 text-white"
-      // Removed p-4, if you want absolutely no padding:
-      style={{ padding: "1rem" }}
+      className="flex items-center justify-between border border-gray-800 rounded bg-gray-900/50 text-white p-4"
     >
       <div className="flex items-center gap-2">
         <CreditCard className="w-5 h-5 text-gray-300" />
@@ -233,11 +231,9 @@ function AddPaymentMethodForm({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
       onSubmit={handleSubmit}
-      className="flex flex-col"
-      // Removed extra px-4 or py-4
-      style={{ gap: "1rem" }}
+      className="flex flex-col gap-4"
     >
-      <div className="border border-gray-800 rounded bg-gray-900/50 text-white">
+      <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
         <CardElement options={cardStyle} />
       </div>
       {error && (
@@ -246,8 +242,7 @@ function AddPaymentMethodForm({
           animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: 0.3 }}
-          className="text-sm text-red-400 bg-red-400/10 rounded"
-          style={{ padding: "0.75rem" }}
+          className="text-sm text-red-400 bg-red-400/10 rounded p-3"
         >
           {error}
         </motion.div>
@@ -339,7 +334,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   }
 
-  // **This** calls our server route that does a real Stripe charge on the default card:
   async function handleTopUp() {
     if (!auth.currentUser) return;
     const amountNum = parseFloat(topUpAmount);
@@ -416,17 +410,12 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         if (!open) onClose();
       }}
     >
-      <DialogContent
-        // 95vw, 95vh, no internal padding
-        className={cn(
-          "bg-black text-white w-[95vw] h-[95vh] overflow-hidden relative"
-        )}
+      <DialogContent 
+        className="bg-black text-white overflow-hidden relative p-0"
+        // Disable auto-focus to prevent keyboard appearing on mobile
+        autoFocus={false}
       >
-        {/* Header (no padding) */}
-        <DialogHeader
-          // remove px-6, py-4; keep border if you want
-          className="border-b border-gray-800"
-        >
+        <DialogHeader className="border-b border-gray-800 p-4">
           <DialogTitle className="text-white text-lg font-medium">
             Wallet
           </DialogTitle>
@@ -435,28 +424,20 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Main scrollable area */}
-        <div className="overflow-y-auto h-full w-full flex flex-col" 
-             style={{ gap: "1rem" }}
-        >
-          {/* Display errors */}
+        <div className="overflow-y-auto max-h-[70vh] p-4 space-y-4">
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="text-red-400 bg-red-400/10 rounded"
-              style={{ margin: "1rem", padding: "0.75rem" }}
+              className="text-red-400 bg-red-400/10 rounded p-3"
             >
               {error}
             </motion.div>
           )}
 
-          {/* Balance section */}
-          <div className="border border-gray-800 rounded bg-gray-900/50 text-white"
-               style={{ margin: "0 1rem", padding: "1rem" }}
-          >
+          <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
             <h3 className="text-sm text-gray-400">Mass Transit Cash</h3>
             {loadingBalance ? (
               <div className="flex justify-center py-2">
@@ -468,16 +449,17 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               </p>
             )}
 
-            {/* Top-up row */}
-            <div className="mt-3 flex items-center" style={{ gap: "0.5rem" }}>
+            <div className="mt-3 flex items-center gap-2">
               <input
                 type="number"
                 step="0.01"
-                className="border border-gray-700 rounded text-black"
-                style={{ width: "5rem", padding: "0.3rem 0.5rem" }}
+                className="border border-gray-700 rounded text-black p-2"
+                style={{ width: "5rem" }}
                 value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value)}
                 placeholder="Amount"
+                // Prevent auto focus
+                autoFocus={false}
               />
               <Button
                 onClick={handleTopUp}
@@ -488,10 +470,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </div>
           </div>
 
-          {/* Payment Methods */}
-          <div style={{ margin: "0 1rem", flexGrow: 1 }}>
+          <div className="space-y-4">
             {loading ? (
-              <div className="flex justify-center items-center h-full">
+              <div className="flex justify-center items-center h-24">
                 <div className="animate-spin h-8 w-8 border-2 border-white rounded-full border-t-transparent" />
               </div>
             ) : (
@@ -513,11 +494,10 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="flex flex-col"
-                    style={{ gap: "1rem", marginTop: "1rem" }}
+                    className="space-y-4"
                   >
                     {paymentMethods.length > 0 ? (
-                      <div className="flex flex-col" style={{ gap: "1rem" }}>
+                      <div className="space-y-3">
                         <AnimatePresence>
                           {paymentMethods.map((method) => (
                             <PaymentMethodCard
@@ -530,7 +510,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                         </AnimatePresence>
                       </div>
                     ) : (
-                      <p className="text-center text-gray-400 mt-4">
+                      <p className="text-center text-gray-400 py-4">
                         No payment methods saved yet
                       </p>
                     )}
@@ -539,7 +519,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                       variant="outline"
                       onClick={() => setShowAddCard(true)}
                       className={cn(
-                        "flex items-center justify-center",
+                        "flex items-center justify-center w-full",
                         paymentMethods.length > 0
                           ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none"
                           : "bg-white hover:bg-gray-200 text-black border-none"
@@ -557,7 +537,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </div>
         </div>
 
-        {/* Close button (absolute) */}
         <DialogClose className="absolute right-4 top-4">
           <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0">
             <X className="h-4 w-4" />
