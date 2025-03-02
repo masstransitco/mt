@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,14 +10,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import {
-  X,
-  Plus,
-  Check,
-  AlertCircle,
-  Eye,
-  Download
-} from "lucide-react";
+import { X, Plus, Check, AlertCircle, Eye, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { auth } from "@/lib/firebase";
@@ -71,7 +64,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
   const db = getFirestore();
 
-  React.useEffect(() => {
+  useEffect(() => {
     setMounted(true);
     if (isOpen && auth.currentUser) {
       fetchUserDocuments();
@@ -172,10 +165,11 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         }}
       >
         <DialogContent
+          // Removed inline height/width styles to let dialog.tsx handle positioning
           className={cn(
             "p-0 gap-0",
-            "w-[95vw] h-[95vh]",
-            "overflow-hidden bg-black text-white"
+            "bg-black text-white",
+            "overflow-hidden" // you can keep this if you want
           )}
         >
           <DialogHeader className="border-b border-gray-800">
@@ -202,7 +196,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="bg-gray-800 p-3 rounded-lg">
-                        {/* Replaced the credit card icon with IDCard */}
                         <IDCard className="w-6 h-6 text-gray-300" />
                       </div>
                       <div className="flex-1">
@@ -241,7 +234,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="bg-gray-800 p-3 rounded-lg">
-                        {/* Replaced the car icon with SteerWheel */}
                         <SteerWheel className="w-6 h-6 text-gray-300" />
                       </div>
                       <div className="flex-1">
@@ -280,7 +272,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="bg-gray-800 p-3 rounded-lg">
-                        {/* Replaced map pin with LocalHome */}
                         <LocalHome className="w-6 h-6 text-gray-300" />
                       </div>
                       <div className="flex-1">
@@ -370,10 +361,11 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         }}
       >
         <DialogContent
+          // Also remove custom w/h to let the shared dialog handle it
           className={cn(
             "p-0 gap-0",
-            "w-[95vw] h-[95vh]",
-            "overflow-hidden bg-black text-white"
+            "bg-black text-white",
+            "overflow-hidden" // keep if you want scroll control
           )}
         >
           <DialogHeader className="border-b border-gray-800">
