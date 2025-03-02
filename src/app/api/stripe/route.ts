@@ -14,7 +14,8 @@ const { db, auth } = initializeFirebaseAdmin();
 
 // Interfaces
 interface PaymentMethod {
-  id: string;         // The Stripe PaymentMethod ID
+  id?: string;         // The Stripe PaymentMethod ID
+  stripeId?: string;   // Alternative field name for the Stripe PaymentMethod ID
   brand: string;
   last4: string;
   expMonth: number;
@@ -29,7 +30,7 @@ interface CreatePaymentIntentData {
   userId: string;
 }
 
-// Auth middleware to verify the user’s Firebase ID token
+// Auth middleware to verify the user's Firebase ID token
 async function verifyAuth(req: NextRequest) {
   const headersList = headers();
   const authHeader = headersList.get('Authorization');
@@ -63,7 +64,7 @@ const successResponse = (data: any) => {
 // POST /api/stripe
 export async function POST(request: NextRequest) {
   try {
-    // Verify the user’s Firebase token
+    // Verify the user's Firebase token
     const authenticatedUserId = await verifyAuth(request);
 
     // Expect a JSON body with { action, userId, ...data }
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
 // GET /api/stripe
 export async function GET(request: NextRequest) {
   try {
-    // Verify the user’s Firebase token
+    // Verify the user's Firebase token
     const authenticatedUserId = await verifyAuth(request);
 
     const { searchParams } = new URL(request.url);
@@ -150,7 +151,7 @@ export async function GET(request: NextRequest) {
  * 1) Ensure the user has a Stripe Customer (create if needed).
  * 2) Attach the PaymentMethod to that Customer in Stripe.
  * 3) Create a doc in Firestore subcollection.
- * 4) If it’s the first or isDefault, store defaultPaymentMethodId in user doc.
+ * 4) If it's the first or isDefault, store defaultPaymentMethodId in user doc.
  */
 async function handleSavePaymentMethod({
   userId,
@@ -183,9 +184,15 @@ async function handleSavePaymentMethod({
       await userRef.update({ stripeCustomerId });
     }
 
+    // Get the payment method ID - support both id and stripeId fields
+    const paymentMethodId = paymentMethod.stripeId || paymentMethod.id;
+    if (!paymentMethodId) {
+      return errorResponse('Payment method ID is required', 400);
+    }
+
     // Attach this PaymentMethod to the Stripe customer
     // This ensures it can be reused for off-session charges
-    await stripe.paymentMethods.attach(paymentMethod.id, {
+    await stripe.paymentMethods.attach(paymentMethodId, {
       customer: stripeCustomerId,
     });
 
@@ -199,7 +206,7 @@ async function handleSavePaymentMethod({
     if (finalIsDefault) {
       // Make it the default in the customer's invoice settings
       await stripe.customers.update(stripeCustomerId, {
-        invoice_settings: { default_payment_method: paymentMethod.id },
+        invoice_settings: { default_payment_method: paymentMethodId },
       });
     }
 
@@ -207,6 +214,8 @@ async function handleSavePaymentMethod({
     const newPaymentMethodRef = paymentMethodsRef.doc(); // doc ID for Firestore
     await newPaymentMethodRef.set({
       ...paymentMethod,
+      // Ensure we always store the id field in Firestore
+      id: paymentMethodId,
       isDefault: finalIsDefault,
       createdAt: new Date().toISOString(),
     });
@@ -214,12 +223,13 @@ async function handleSavePaymentMethod({
     // If it's the first or isDefault, also update the user doc
     // so we store defaultPaymentMethodId = Stripe PM ID
     if (finalIsDefault) {
-      await userRef.update({ defaultPaymentMethodId: paymentMethod.id });
+      await userRef.update({ defaultPaymentMethodId: paymentMethodId });
     }
 
     return successResponse({
       paymentMethod: {
         ...paymentMethod,
+        id: paymentMethodId,
         isDefault: finalIsDefault,
       },
     });
