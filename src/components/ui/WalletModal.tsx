@@ -410,11 +410,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         if (!open) onClose();
       }}
     >
-      <DialogContent 
-        className="bg-black text-white overflow-hidden relative p-0"
-        // Disable auto-focus to prevent keyboard appearing on mobile
-        autoFocus={false}
-      >
+      {/* NOTE: We removed hard-coded w-[95vw], h-[95vh], etc. 
+               Now the parent dialog.tsx (Radix style) controls sizing/positioning. */}
+      <DialogContent className="bg-black text-white p-0 relative">
         <DialogHeader className="border-b border-gray-800 p-4">
           <DialogTitle className="text-white text-lg font-medium">
             Wallet
@@ -424,7 +422,8 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="overflow-y-auto max-h-full p-4 space-y-4">
+        {/* Main content */}
+        <div className="overflow-y-auto p-4 space-y-4">
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
@@ -437,6 +436,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </motion.div>
           )}
 
+          {/* Balance card */}
           <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
             <h3 className="text-sm text-gray-400">Mass Transit Cash</h3>
             {loadingBalance ? (
@@ -444,9 +444,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                 <div className="animate-spin h-6 w-6 border-2 border-white rounded-full border-t-transparent" />
               </div>
             ) : (
-              <p className="text-xl font-semibold mt-1">
-                ${balance.toFixed(2)}
-              </p>
+              <p className="text-xl font-semibold mt-1">${balance.toFixed(2)}</p>
             )}
 
             <div className="mt-3 flex items-center gap-2">
@@ -458,8 +456,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                 value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value)}
                 placeholder="Amount"
-                // Prevent auto focus
-                autoFocus={false}
               />
               <Button
                 onClick={handleTopUp}
@@ -470,6 +466,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </div>
           </div>
 
+          {/* Payment Methods */}
           <div className="space-y-4">
             {loading ? (
               <div className="flex justify-center items-center h-24">
@@ -537,8 +534,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </div>
         </div>
 
+        {/* Close button */}
         <DialogClose className="absolute right-4 top-4">
-          <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0"
+          >
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </Button>
