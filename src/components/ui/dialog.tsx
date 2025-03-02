@@ -40,8 +40,9 @@ const DialogContent = React.forwardRef<
         zIndex: 50,
         top: "50%",
         left: "50%",
+         transform: "translate(-50%, -50%)", 
         width: "95vw",
-        height: "95vh",
+        height: "80vh",
         borderRadius: "16px",
       }}
       className={cn(
