@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import dynamic from 'next/dynamic';
 import {
   LogOut,
   ChevronRight,
@@ -13,14 +12,7 @@ import {
 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { signOut, User } from 'firebase/auth';
-import { motion, AnimatePresence } from 'framer-motion';
-import { cn } from '@/lib/utils';
-
-// Lazy-loaded modals
-const SignInModal = dynamic(() => import('./SignInModal'), { ssr: false });
-const WalletModal = dynamic(() => import('./WalletModal'), { ssr: false });
-const LicenseModal = dynamic(() => import('./LicenseModal'), { ssr: false });
-
+import { motion } from 'framer-motion';
 import { fetchHKWeather, WeatherData } from '@/lib/weather';
 
 // License Icon SVG Component
@@ -32,13 +24,18 @@ const LicenseIcon = () => (
 
 interface AppMenuProps {
   onClose: () => void; // We'll call this to close the SideSheet
+  onOpenWallet: () => void; // Open wallet modal from parent component
+  onOpenSignIn: () => void; // Open sign in modal from parent component
+  onOpenLicense: () => void; // Open license modal from parent component
 }
 
-export default function AppMenu({ onClose }: AppMenuProps) {
+export default function AppMenu({ 
+  onClose, 
+  onOpenWallet, 
+  onOpenSignIn, 
+  onOpenLicense 
+}: AppMenuProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [showSignInModal, setShowSignInModal] = useState(false);
-  const [showWalletModal, setShowWalletModal] = useState(false);
-  const [showLicenseModal, setShowLicenseModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Weather data
@@ -77,22 +74,25 @@ export default function AppMenu({ onClose }: AppMenuProps) {
     window.open('https://home-nine-indol.vercel.app', '_blank');
   };
 
-  // Wallet logic
+  // Updated handlers to use parent component functions
   const handleWalletClick = () => {
     if (!user) {
-      setShowSignInModal(true);
+      onOpenSignIn();
     } else {
-      setShowWalletModal(true);
+      onOpenWallet();
     }
+    // Close side menu when opening a modal
+    onClose();
   };
 
-  // License modal logic
   const handleLicenseClick = () => {
     if (!user) {
-      setShowSignInModal(true);
+      onOpenSignIn();
     } else {
-      setShowLicenseModal(true);
+      onOpenLicense();
     }
+    // Close side menu when opening a modal
+    onClose();
   };
 
   // Weather Icons mapping
@@ -215,7 +215,10 @@ export default function AppMenu({ onClose }: AppMenuProps) {
                 <motion.button
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() => setShowSignInModal(true)}
+                  onClick={() => {
+                    onOpenSignIn();
+                    onClose();
+                  }}
                   className="w-3/5 mx-auto bg-blue-600 text-white px-5 py-3 rounded-lg font-medium transition-colors duration-200 hover:bg-blue-700 active:bg-blue-800"
                 >
                   Sign In
@@ -341,19 +344,7 @@ export default function AppMenu({ onClose }: AppMenuProps) {
         </motion.div>
       </div>
 
-      {/* Lazy-loaded Modals */}
-      <SignInModal
-        isOpen={showSignInModal}
-        onClose={() => setShowSignInModal(false)}
-      />
-      <WalletModal
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-      />
-      <LicenseModal
-        isOpen={showLicenseModal}
-        onClose={() => setShowLicenseModal(false)}
-      />
+      {/* Modals are now rendered at the Page level, not here */}
     </motion.div>
   );
 }
