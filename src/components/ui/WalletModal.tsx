@@ -424,7 +424,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="overflow-y-auto max-h-[70vh] p-4 space-y-4">
+        <div className="overflow-y-auto max-h-full p-4 space-y-4">
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
