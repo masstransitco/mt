@@ -10,11 +10,24 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Plus, CreditCard, MapPin, Car, Check, AlertCircle, Eye, Download } from "lucide-react";
+import {
+  X,
+  Plus,
+  Check,
+  AlertCircle,
+  Eye,
+  Download
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { doc, getFirestore, getDoc } from "firebase/firestore";
+
+// New icon imports
+import IDCard from "@/components/ui/icons/IDCard";
+import SteerWheel from "@/components/ui/icons/SteerWheel";
+import LocalHome from "@/components/ui/icons/LocalHome";
+
 import IDCamera from "./IDCamera";
 import AddressInput from "./AddressInput";
 
@@ -123,7 +136,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
     if (!document || !document.url) {
       return null;
     }
-
     return (
       <div className="mt-3 flex flex-col">
         <button
@@ -152,6 +164,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
   return (
     <>
+      {/* Main Modal */}
       <Dialog
         open={isOpen && !showCamera && !showAddressInput}
         onOpenChange={(open) => {
@@ -160,13 +173,11 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
       >
         <DialogContent
           className={cn(
-            // Set modal to 95% of viewport width/height and remove padding
             "p-0 gap-0",
             "w-[95vw] h-[95vh]",
             "overflow-hidden bg-black text-white"
           )}
         >
-          {/* Remove horizontal/vertical padding from header */}
           <DialogHeader className="border-b border-gray-800">
             <DialogTitle className="text-white text-lg font-medium">License & ID</DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -174,7 +185,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Remove the px-6 / py-4 from the content container */}
           <div className="space-y-4 overflow-y-auto max-h-full">
             {loading ? (
               <div className="flex justify-center py-8">
@@ -192,7 +202,8 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="bg-gray-800 p-3 rounded-lg">
-                        <CreditCard className="w-6 h-6 text-gray-300" />
+                        {/* Replaced the credit card icon with IDCard */}
+                        <IDCard className="w-6 h-6 text-gray-300" />
                       </div>
                       <div className="flex-1">
                         <h3 className="text-white font-medium mb-1">Identity Document</h3>
@@ -230,7 +241,8 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="bg-gray-800 p-3 rounded-lg">
-                        <Car className="w-6 h-6 text-gray-300" />
+                        {/* Replaced the car icon with SteerWheel */}
+                        <SteerWheel className="w-6 h-6 text-gray-300" />
                       </div>
                       <div className="flex-1">
                         <h3 className="text-white font-medium mb-1">Driving License</h3>
@@ -258,7 +270,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   </div>
                 </motion.div>
 
-                {/* Address */}
+                {/* Residential Address */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -268,7 +280,8 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                   <div className="p-4">
                     <div className="flex items-start gap-4">
                       <div className="bg-gray-800 p-3 rounded-lg">
-                        <MapPin className="w-6 h-6 text-gray-300" />
+                        {/* Replaced map pin with LocalHome */}
+                        <LocalHome className="w-6 h-6 text-gray-300" />
                       </div>
                       <div className="flex-1">
                         <h3 className="text-white font-medium mb-1">Residential Address</h3>
@@ -330,6 +343,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         </DialogContent>
       </Dialog>
 
+      {/* Camera Component */}
       {showCamera && (
         <IDCamera
           isOpen={true}
@@ -339,6 +353,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         />
       )}
 
+      {/* Address Input Component */}
       {showAddressInput && (
         <AddressInput
           isOpen={true}
@@ -347,6 +362,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         />
       )}
 
+      {/* Document Viewer */}
       <Dialog
         open={!!viewingDocument}
         onOpenChange={(open) => {
@@ -365,6 +381,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
               {viewingDocument?.includes("id-document") ? "Identity Document" : "Driving License"}
             </DialogTitle>
           </DialogHeader>
+
           <div className="p-4 overflow-hidden">
             <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-gray-900/30 backdrop-blur">
               {viewingDocument && (
@@ -375,6 +392,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                 />
               )}
             </div>
+
             <div className="mt-4 flex justify-between">
               <Button
                 variant="outline"
@@ -383,6 +401,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
               >
                 Close
               </Button>
+
               <Button
                 variant="outline"
                 className="text-white border-gray-700"
