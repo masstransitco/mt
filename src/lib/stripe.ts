@@ -76,7 +76,7 @@ export async function getSavedPaymentMethods(userId: string) {
  */
 export async function savePaymentMethod(
   userId: string,
-  paymentMethod: Omit<SavedPaymentMethod, "id">
+  paymentMethod: SavedPaymentMethod
 ) {
   if (!auth.currentUser) {
     return { success: false, error: "No user is logged in" };
