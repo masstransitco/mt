@@ -94,7 +94,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
     if (selectedAddress && detailsRef.current) {
       // Use a small timeout to allow animation to start
       setTimeout(() => {
-        detailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
     }
   }, [selectedAddress]);
@@ -229,17 +229,9 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
       }}
     >
       <DialogContent
-        className="p-0 gap-0 w-[90vw] max-w-md md:max-w-2xl bg-black text-white flex flex-col"
-        style={{
-          top: '2rem', // Position near the top instead of centered
-          transform: 'translateX(-50%)', // Keep horizontal centering
-          marginTop: 0,
-          // Override the default transform that centers vertically
-          height: 'auto',
-          maxHeight: 'calc(100vh - 4rem)', // Allow some space at top and bottom
-          overflow: 'visible' // Allow predictions dropdown to be visible outside the dialog
-        }}
-        onClick={(e) => e.stopPropagation()}
+        // Removed all explicit top/transform positioning styles
+        className="p-0 gap-0 bg-black text-white flex flex-col overflow-visible
+                   w-full max-w-md md:max-w-2xl"
       >
         <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10 flex-shrink-0">
           <DialogTitle className="text-white">
@@ -248,11 +240,8 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
         </DialogHeader>
 
         <div 
-          className="flex-1 px-6 py-4"
-          style={{
-            overflowY: 'auto',
-            touchAction: 'none' // Disable touch actions on the scrollable area
-          }}
+          className="flex-1 px-6 py-4 overflow-y-auto"
+          style={{ touchAction: "none" }} // optional if you want to disable swipe
         >
           {/* Success message */}
           {success && (
@@ -274,11 +263,9 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              {/* Address search - Fixed at the top */}
-              <div className="space-y-2 sticky top-0 bg-black pt-1 z-30">
-                <label className="block text-sm text-gray-400">
-                  Street Address
-                </label>
+              {/* Address search - (keep it at top, but no absolute positioning) */}
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">Street Address</label>
                 <div className="relative">
                   <div className="relative">
                     <input
@@ -317,17 +304,14 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                     )}
                   </div>
                   
-                  {/* Predictions dropdown - Above the field on mobile */}
+                  {/* Predictions dropdown */}
                   {isDropdownOpen && predictions.length > 0 && (
-                    <div 
-                      className="fixed bottom-auto bg-gray-900 border border-gray-800 rounded-md shadow-2xl overflow-y-auto"
+                    <div
+                      className="absolute left-0 mt-1 bg-gray-900 border border-gray-800 rounded-md shadow-2xl overflow-y-auto"
                       style={{ 
-                        maxHeight: '40vh', 
-                        zIndex: 60, // Higher than DialogContent's z-50
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: 'calc(100% - 3rem)', // Match the content width considering padding
-                        maxWidth: '2xl'
+                        maxHeight: "40vh",
+                        zIndex: 60, 
+                        width: "100%",
                       }}
                     >
                       <div className="flex justify-between items-center p-2 border-b border-gray-800">
@@ -375,7 +359,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   ref={detailsRef}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6 pt-1"
+                  className="space-y-6"
                 >
                   <div className="flex items-center gap-2 text-sm text-gray-300 bg-gray-800/50 p-2 rounded-md">
                     <MapPin className="h-4 w-4 flex-shrink-0" />
@@ -384,9 +368,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="block text-sm text-gray-400">
-                        Block / Tower
-                      </label>
+                      <label className="block text-sm text-gray-400">Block / Tower</label>
                       <input
                         type="text"
                         value={block}
@@ -399,9 +381,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                     </div>
                     
                     <div className="space-y-2">
-                      <label className="block text-sm text-gray-400">
-                        Floor
-                      </label>
+                      <label className="block text-sm text-gray-400">Floor</label>
                       <input
                         type="text"
                         value={floor}
@@ -414,9 +394,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                     </div>
                     
                     <div className="space-y-2">
-                      <label className="block text-sm text-gray-400">
-                        Flat / Unit
-                      </label>
+                      <label className="block text-sm text-gray-400">Flat / Unit</label>
                       <input
                         type="text"
                         value={flat}
@@ -441,6 +419,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
           )}
         </div>
 
+        {/* Footer */}
         {!success && (
           <DialogFooter className="p-4 bg-black border-t border-gray-800 flex flex-row justify-between flex-shrink-0">
             <Button
