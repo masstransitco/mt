@@ -33,13 +33,22 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      data-dialog-content="true"
+      style={{
+        position: "fixed",
+        zIndex: 50,
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        width: "95vw",
+        height: "95vh",
+        maxHeight: "95vh",
+        borderRadius: "16px",
+        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+      }}
       className={cn(
         // Base styling
-        "fixed z-50 bg-background p-0 shadow-2xl rounded-2xl",
-        // Centered positioning
-        "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
-        // Size - 95vw and 95vh as per requirement
-        "w-[95vw] h-[95vh] overflow-y-auto",
+        "bg-background overflow-y-auto p-0",
         // Animations
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
