@@ -1,5 +1,4 @@
 "use client";
-
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
@@ -7,7 +6,7 @@ import { cn } from "@/lib/utils";
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
-const DialogClose = DialogPrimitive.Close; // Only export if you need it
+const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -37,15 +36,14 @@ const DialogContent = React.forwardRef<
       className={cn(
         // Base styling
         "fixed z-50 bg-background p-0 shadow-2xl rounded-2xl",
-        // Fullscreen-ish
-        "inset-0 w-[95vw] h-[95vh] overflow-y-auto",
-        // Optional animations:
+        // Centered positioning
+        "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+        // Size - 95vw and 95vh as per requirement
+        "w-[95vw] h-[95vh] overflow-y-auto",
+        // Animations
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-        // Slide in/out from center—feel free to remove or adjust if you want a simpler effect
-        "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
-        "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
         className
       )}
       {...props}
