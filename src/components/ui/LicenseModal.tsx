@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { X, Plus, CreditCard, MapPin, Car, Check, AlertCircle, Eye, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { doc, getFirestore, getDoc } from "firebase/firestore";
 import IDCamera from "./IDCamera";
@@ -55,27 +55,22 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
   const [documents, setDocuments] = useState<UserDocuments>({});
   const [loading, setLoading] = useState(true);
   const [viewingDocument, setViewingDocument] = useState<string | null>(null);
-  
+
   const db = getFirestore();
 
-  // Ensure client-side only rendering and fetch user documents
   React.useEffect(() => {
     setMounted(true);
-    
     if (isOpen && auth.currentUser) {
       fetchUserDocuments();
     }
   }, [isOpen]);
 
-  // Fetch user's document status from Firestore
   const fetchUserDocuments = async () => {
     if (!auth.currentUser) return;
-    
     setLoading(true);
     try {
       const userDocRef = doc(db, "users", auth.currentUser.uid);
       const userDoc = await getDoc(userDocRef);
-      
       if (userDoc.exists() && userDoc.data().documents) {
         setDocuments(userDoc.data().documents as UserDocuments);
       }
@@ -86,52 +81,41 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
     }
   };
 
-  // Open camera for ID document capture
   const handleAddIdentity = () => {
     setShowCamera("identity");
   };
 
-  // Open camera for driving license capture
   const handleAddDrivingLicense = () => {
     setShowCamera("license");
   };
 
-  // Open address input
   const handleAddAddress = () => {
     setShowAddressInput(true);
   };
 
-  // Handle successful document upload
   const handleDocumentUploaded = () => {
     fetchUserDocuments();
   };
 
-  // View document
   const handleViewDocument = (docType: "id-document" | "driving-license") => {
     if (documents[docType]?.url) {
       setViewingDocument(documents[docType]?.url || null);
     }
   };
 
-  // Format address for display
   const formatAddress = (address?: Address) => {
     if (!address) return null;
-    
     const parts = [
-      address.flat ? `Flat ${address.flat}` : '',
-      address.floor ? `Floor ${address.floor}` : '',
-      address.block ? `${address.block}` : '',
-      address.fullAddress
+      address.flat ? `Flat ${address.flat}` : "",
+      address.floor ? `Floor ${address.floor}` : "",
+      address.block ? `${address.block}` : "",
+      address.fullAddress,
     ].filter(Boolean);
-    
-    return parts.join(', ');
+    return parts.join(", ");
   };
 
-  if (!mounted) {
-    return null;
-  }
+  if (!mounted) return null;
 
-  // Render document status
   const renderDocumentStatus = (
     type: "id-document" | "driving-license",
     document?: DocumentStatus
@@ -139,7 +123,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
     if (!document || !document.url) {
       return null;
     }
-    
+
     return (
       <div className="mt-3 flex flex-col">
         <button
@@ -149,7 +133,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
           <Eye className="w-3.5 h-3.5 mr-1.5" />
           View your {type === "id-document" ? "ID card" : "driving license or permit"}
         </button>
-        
         <div className="flex items-center">
           {document.verified ? (
             <div className="flex items-center text-green-500">
@@ -177,31 +160,34 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
       >
         <DialogContent
           className={cn(
+            // Set modal to 95% of viewport width/height and remove padding
             "p-0 gap-0",
-            "w-[90vw] max-w-md md:max-w-2xl",
+            "w-[95vw] h-[95vh]",
             "overflow-hidden bg-black text-white"
           )}
         >
-          <DialogHeader className="px-6 py-4 border-b border-gray-800">
+          {/* Remove horizontal/vertical padding from header */}
+          <DialogHeader className="border-b border-gray-800">
             <DialogTitle className="text-white text-lg font-medium">License & ID</DialogTitle>
             <DialogDescription className="text-gray-400">
               Manage your identification documents and driving licenses
             </DialogDescription>
           </DialogHeader>
 
-          <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[60vh]">
+          {/* Remove the px-6 / py-4 from the content container */}
+          <div className="space-y-4 overflow-y-auto max-h-full">
             {loading ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin h-8 w-8 border-2 border-white rounded-full border-t-transparent"></div>
               </div>
             ) : (
               <>
-                {/* Identity Document Container */}
+                {/* Identity Document */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="rounded-xl border border-gray-800 overflow-hidden bg-gray-900/50 backdrop-blur-sm"
+                  className="m-4 rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm"
                 >
                   <div className="p-4">
                     <div className="flex items-start gap-4">
@@ -220,24 +206,26 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                       onClick={handleAddIdentity}
                       className={cn(
                         "w-full mt-4 flex items-center justify-center",
-                        documents["id-document"]?.url 
-                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none" 
+                        documents["id-document"]?.url
+                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none"
                           : "bg-white hover:bg-gray-200 text-black border-none"
                       )}
                       variant="outline"
                     >
                       <Plus className="mr-2 h-4 w-4" />
-                      {documents["id-document"]?.url ? "Update Identity Document" : "Add Identity Document"}
+                      {documents["id-document"]?.url
+                        ? "Update Identity Document"
+                        : "Add Identity Document"}
                     </Button>
                   </div>
                 </motion.div>
 
-                {/* Driving License Container */}
+                {/* Driving License */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
-                  className="rounded-xl border border-gray-800 overflow-hidden bg-gray-900/50 backdrop-blur-sm"
+                  className="m-4 rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm"
                 >
                   <div className="p-4">
                     <div className="flex items-start gap-4">
@@ -256,24 +244,26 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                       onClick={handleAddDrivingLicense}
                       className={cn(
                         "w-full mt-4 flex items-center justify-center",
-                        documents["driving-license"]?.url 
-                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none" 
+                        documents["driving-license"]?.url
+                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none"
                           : "bg-white hover:bg-gray-200 text-black border-none"
                       )}
                       variant="outline"
                     >
                       <Plus className="mr-2 h-4 w-4" />
-                      {documents["driving-license"]?.url ? "Update Driving License" : "Add Driving License / Permit"}
+                      {documents["driving-license"]?.url
+                        ? "Update Driving License"
+                        : "Add Driving License / Permit"}
                     </Button>
                   </div>
                 </motion.div>
 
-                {/* Address Container */}
+                {/* Address */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="rounded-xl border border-gray-800 overflow-hidden bg-gray-900/50 backdrop-blur-sm"
+                  className="m-4 rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm"
                 >
                   <div className="p-4">
                     <div className="flex items-start gap-4">
@@ -313,7 +303,7 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
                       className={cn(
                         "w-full mt-4 flex items-center justify-center",
                         documents.address
-                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none" 
+                          ? "bg-gray-800/50 hover:bg-gray-700 text-white border-none"
                           : "bg-white hover:bg-gray-200 text-black border-none"
                       )}
                       variant="outline"
@@ -327,10 +317,9 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
             )}
           </div>
 
-          {/* Close button */}
           <DialogClose className="absolute right-4 top-4">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="icon"
               className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-full h-8 w-8 p-0"
             >
@@ -341,7 +330,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Camera Component */}
       {showCamera && (
         <IDCamera
           isOpen={true}
@@ -351,7 +339,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         />
       )}
 
-      {/* Address Input Component */}
       {showAddressInput && (
         <AddressInput
           isOpen={true}
@@ -360,7 +347,6 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         />
       )}
 
-      {/* Document Viewer */}
       <Dialog
         open={!!viewingDocument}
         onOpenChange={(open) => {
@@ -370,27 +356,25 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         <DialogContent
           className={cn(
             "p-0 gap-0",
-            "w-[90vw] max-w-md md:max-w-2xl",
+            "w-[95vw] h-[95vh]",
             "overflow-hidden bg-black text-white"
           )}
         >
-          <DialogHeader className="px-6 py-4 border-b border-gray-800">
+          <DialogHeader className="border-b border-gray-800">
             <DialogTitle className="text-white text-lg font-medium">
               {viewingDocument?.includes("id-document") ? "Identity Document" : "Driving License"}
             </DialogTitle>
           </DialogHeader>
-
           <div className="p-4 overflow-hidden">
             <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-gray-900/30 backdrop-blur">
               {viewingDocument && (
-                <img 
-                  src={viewingDocument} 
-                  alt="Document" 
+                <img
+                  src={viewingDocument}
+                  alt="Document"
                   className="w-full h-full object-contain"
                 />
               )}
             </div>
-
             <div className="mt-4 flex justify-between">
               <Button
                 variant="outline"
@@ -399,13 +383,12 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
               >
                 Close
               </Button>
-              
               <Button
                 variant="outline"
                 className="text-white border-gray-700"
                 onClick={() => {
                   if (viewingDocument) {
-                    window.open(viewingDocument, '_blank');
+                    window.open(viewingDocument, "_blank");
                   }
                 }}
               >
