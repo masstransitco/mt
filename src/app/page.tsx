@@ -18,13 +18,13 @@ const AppMenu = dynamic(() => import("@/components/ui/AppMenu"), {
 const QrScannerOverlay = dynamic(() => import("@/components/ui/QrScannerOverlay"), {
   ssr: false,
 });
-const WalletModal = dynamic(() => import("@/components/WalletModal"), { 
+const WalletModal = dynamic(() => import("@/components/ui/WalletModal"), { 
   ssr: false 
 });
-const SignInModal = dynamic(() => import("@/components/SignInModal"), { 
+const SignInModal = dynamic(() => import("@/components/ui/SignInModal"), { 
   ssr: false 
 });
-const LicenseModal = dynamic(() => import("@/components/LicenseModal"), { 
+const LicenseModal = dynamic(() => import("@/components/ui/LicenseModal"), { 
   ssr: false 
 });
 
