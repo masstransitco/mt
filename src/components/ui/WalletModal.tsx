@@ -51,26 +51,25 @@ const cardStyle = {
   },
 };
 
+// Represents one payment method in Firestore subcollection
 interface PaymentMethodCardProps {
-  method: SavedPaymentMethod;
-  onDelete: (id: string) => Promise<void>;
-  onSetDefault: (id: string) => Promise<void>;
+  method: SavedPaymentMethod;  // method.id is actually the subcollection doc ID
+  onDelete: (docId: string) => Promise<void>;
+  onSetDefault: (docId: string) => Promise<void>;
 }
 
-function PaymentMethodCard({
-  method,
-  onDelete,
-  onSetDefault,
-}: PaymentMethodCardProps) {
+function PaymentMethodCard({ method, onDelete, onSetDefault }: PaymentMethodCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingDefault, setIsSettingDefault] = useState(false);
 
+  // Delete card
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDeleting) return;
 
     setIsDeleting(true);
     try {
+      // Pass docId to server
       await onDelete(method.id);
     } catch (error) {
       console.error("Failed to delete payment method:", error);
@@ -79,13 +78,14 @@ function PaymentMethodCard({
     }
   };
 
+  // Set as default
   const handleSetDefault = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isSettingDefault || method.isDefault) return;
 
     setIsSettingDefault(true);
     try {
-      await onSetDefault(method.id);
+      await onSetDefault(method.id); // docId
     } catch (error) {
       console.error("Failed to set default payment method:", error);
     } finally {
@@ -118,6 +118,7 @@ function PaymentMethodCard({
           )}
         </div>
       </div>
+
       <div className="flex items-center gap-2">
         {!method.isDefault && (
           <Button
@@ -155,10 +156,7 @@ interface AddPaymentMethodFormProps {
   existingMethods: SavedPaymentMethod[];
 }
 
-function AddPaymentMethodForm({
-  onSuccess,
-  existingMethods,
-}: AddPaymentMethodFormProps) {
+function AddPaymentMethodForm({ onSuccess, existingMethods }: AddPaymentMethodFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -191,14 +189,14 @@ function AddPaymentMethodForm({
             m.expMonth === paymentMethod.card?.exp_month &&
             m.expYear === paymentMethod.card?.exp_year
         );
-
         if (alreadyExists) {
           setError("This card is already on file. Please use a different card.");
           return;
         }
 
-        // Save if unique (mark newly added card as default)
+        // Save if unique
         const result = await savePaymentMethod(auth.currentUser.uid, {
+          // We'll store the Stripe PaymentMethod ID in the doc
           id: paymentMethod.id,
           brand: paymentMethod.card!.brand,
           last4: paymentMethod.card!.last4,
@@ -215,9 +213,7 @@ function AddPaymentMethodForm({
       }
     } catch (err) {
       console.error("Error creating payment method:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to save payment method"
-      );
+      setError(err instanceof Error ? err.message : "Failed to save payment method");
     } finally {
       setLoading(false);
     }
@@ -254,7 +250,7 @@ function AddPaymentMethodForm({
       >
         {loading ? (
           <span className="flex items-center">
-            <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2" />
+            <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2"></span>
             Processing...
           </span>
         ) : (
@@ -271,11 +267,11 @@ interface WalletModalProps {
 }
 
 export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
-  // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const stripePromise = getStripe();
 
   // For user balance
@@ -283,12 +279,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState<string>("");
 
-  // Only render in client
+  // Ensure client-side only
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // 1) Load Payment Methods
   async function loadPaymentMethods() {
     if (!auth.currentUser) {
       setLoading(false);
@@ -305,14 +302,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       setPaymentMethods(result.data || []);
     } catch (err) {
       console.error("Error loading payment methods:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to load payment methods"
-      );
+      setError(err instanceof Error ? err.message : "Failed to load payment methods");
     } finally {
       setLoading(false);
     }
   }
 
+  // 2) Load user balance
   async function loadUserBalance() {
     if (!auth.currentUser) return;
     setLoadingBalance(true);
@@ -326,14 +322,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       setBalance(result.balance || 0);
     } catch (err) {
       console.error("Error loading user balance:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to load user balance"
-      );
+      setError(err instanceof Error ? err.message : "Failed to load user balance");
     } finally {
       setLoadingBalance(false);
     }
   }
 
+  // 3) Top up
   async function handleTopUp() {
     if (!auth.currentUser) return;
     const amountNum = parseFloat(topUpAmount);
@@ -347,17 +342,16 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       if (!result.success) {
         throw new Error(result.error);
       }
-      // Payment succeeded, so newBalance is returned from the server
+      // Payment succeeded
       setBalance(result.newBalance || 0);
       setTopUpAmount("");
     } catch (err) {
       console.error("Error topping up balance:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to top up balance"
-      );
+      setError(err instanceof Error ? err.message : "Failed to top up balance");
     }
   }
 
+  // On modal open, load PMs & balance
   useEffect(() => {
     if (isOpen && auth.currentUser && mounted) {
       loadPaymentMethods();
@@ -369,29 +363,30 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   }, [isOpen, mounted]);
 
-  const handleDeletePaymentMethod = async (paymentMethodId: string) => {
+  // 4) Deleting Payment Method
+  const handleDeletePaymentMethod = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
-      const result = await deletePaymentMethod(auth.currentUser.uid, paymentMethodId);
+      const result = await deletePaymentMethod(auth.currentUser.uid, docId);
       if (!result.success) {
         throw new Error(result.error);
       }
       await loadPaymentMethods();
     } catch (err) {
       console.error("Error deleting payment method:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to delete payment method"
-      );
+      setError(err instanceof Error ? err.message : "Failed to delete payment method");
     }
   };
 
-  const handleSetDefault = async (paymentMethodId: string) => {
+  // 5) Setting Default
+  const handleSetDefault = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
-      const result = await setDefaultPaymentMethod(auth.currentUser.uid, paymentMethodId);
+      const result = await setDefaultPaymentMethod(auth.currentUser.uid, docId);
       if (!result.success) {
         throw new Error(result.error);
       }
+      // Reload to see new default
       await loadPaymentMethods();
     } catch (err) {
       console.error("Error setting default:", err);
@@ -399,30 +394,23 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   };
 
-  if (!mounted) {
-    return null;
-  }
+  if (!mounted) return null;
 
   return (
-    <Dialog
+    <Dialog 
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      {/* NOTE: We removed hard-coded w-[95vw], h-[95vh], etc. 
-               Now the parent dialog.tsx (Radix style) controls sizing/positioning. */}
       <DialogContent className="bg-black text-white p-0 relative">
         <DialogHeader className="border-b border-gray-800 p-4">
-          <DialogTitle className="text-white text-lg font-medium">
-            Wallet
-          </DialogTitle>
+          <DialogTitle className="text-white text-lg font-medium">Wallet</DialogTitle>
           <DialogDescription className="text-gray-400">
             Manage payment methods & top up with default card
           </DialogDescription>
         </DialogHeader>
 
-        {/* Main content */}
         <div className="overflow-y-auto p-4 space-y-4">
           {error && (
             <motion.div
@@ -436,7 +424,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </motion.div>
           )}
 
-          {/* Balance card */}
+          {/* Balance */}
           <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
             <h3 className="text-sm text-gray-400">Mass Transit Cash</h3>
             {loadingBalance ? (
@@ -444,7 +432,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                 <div className="animate-spin h-6 w-6 border-2 border-white rounded-full border-t-transparent" />
               </div>
             ) : (
-              <p className="text-xl font-semibold mt-1">${balance.toFixed(2)}</p>
+              <p className="text-xl font-semibold mt-1">
+                ${balance.toFixed(2)}
+              </p>
             )}
 
             <div className="mt-3 flex items-center gap-2">
@@ -498,7 +488,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                         <AnimatePresence>
                           {paymentMethods.map((method) => (
                             <PaymentMethodCard
-                              key={method.id}
+                              key={method.id}        // doc ID
                               method={method}
                               onDelete={handleDeletePaymentMethod}
                               onSetDefault={handleSetDefault}
@@ -536,8 +526,8 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
         {/* Close button */}
         <DialogClose className="absolute right-4 top-4">
-          <Button
-            variant="ghost"
+          <Button 
+            variant="ghost" 
             size="icon"
             className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0"
           >
