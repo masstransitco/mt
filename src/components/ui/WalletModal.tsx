@@ -18,6 +18,9 @@ import {
   getSavedPaymentMethods,
   savePaymentMethod,
   deletePaymentMethod,
+  setDefaultPaymentMethod,    // <-- NEW
+  getUserBalance,             // <-- NEW
+  topUpBalance,               // <-- NEW
 } from "@/lib/stripe";
 import {
   CardElement,
@@ -36,25 +39,27 @@ const cardStyle = {
       fontFamily: "Inter, system-ui, sans-serif",
       fontSmoothing: "antialiased",
       fontSize: "16px",
-      "::placeholder": { 
-        color: "rgba(255, 255, 255, 0.5)" // Light placeholder text
+      "::placeholder": {
+        color: "rgba(255, 255, 255, 0.5)", // Light placeholder text
       },
-      iconColor: "#ffffff" // White icons
+      iconColor: "#ffffff", // White icons
     },
     invalid: {
       color: "#ef4444", // Destructive color
-      iconColor: "#ef4444"
+      iconColor: "#ef4444",
     },
-  }
+  },
 };
 
 interface PaymentMethodCardProps {
   method: SavedPaymentMethod;
   onDelete: (id: string) => Promise<void>;
+  onSetDefault: (id: string) => Promise<void>;  // <-- NEW
 }
 
-function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
+function PaymentMethodCard({ method, onDelete, onSetDefault }: PaymentMethodCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSettingDefault, setIsSettingDefault] = useState(false);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,6 +72,20 @@ function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
       console.error("Failed to delete payment method:", error);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleSetDefault = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSettingDefault || method.isDefault) return;
+
+    setIsSettingDefault(true);
+    try {
+      await onSetDefault(method.id);
+    } catch (error) {
+      console.error("Failed to set default payment method:", error);
+    } finally {
+      setIsSettingDefault(false);
     }
   };
 
@@ -93,22 +112,42 @@ function PaymentMethodCard({ method, onDelete }: PaymentMethodCardProps) {
           <p className="text-sm text-gray-400">
             Expires {method.expMonth}/{method.expYear}
           </p>
+          {method.isDefault && (
+            <p className="text-xs text-green-400 font-medium mt-1">
+              Default Payment Method
+            </p>
+          )}
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={handleDelete}
-        disabled={isDeleting}
-        className="text-gray-400 hover:text-destructive hover:bg-destructive/10"
-      >
-        {isDeleting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Trash2 className="h-4 w-4" />
+      <div className="flex items-center space-x-2">
+        {/* Set default button (only show if not default) */}
+        {!method.isDefault && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSetDefault}
+            disabled={isSettingDefault}
+            className="text-gray-400 hover:text-white"
+          >
+            {isSettingDefault ? "Setting..." : "Set Default"}
+          </Button>
         )}
-        <span className="sr-only">Delete payment method</span>
-      </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="text-gray-400 hover:text-destructive hover:bg-destructive/10"
+        >
+          {isDeleting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+          <span className="sr-only">Delete payment method</span>
+        </Button>
+      </div>
     </motion.div>
   );
 }
@@ -118,10 +157,7 @@ interface AddPaymentMethodFormProps {
   existingMethods: SavedPaymentMethod[]; // for duplicate check
 }
 
-function AddPaymentMethodForm({
-  onSuccess,
-  existingMethods,
-}: AddPaymentMethodFormProps) {
+function AddPaymentMethodForm({ onSuccess, existingMethods }: AddPaymentMethodFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -160,7 +196,7 @@ function AddPaymentMethodForm({
           return;
         }
 
-        // Save if unique
+        // Save if unique (mark newly added card as default by default)
         const result = await savePaymentMethod(auth.currentUser.uid, {
           id: paymentMethod.id,
           brand: paymentMethod.card!.brand,
@@ -234,18 +270,25 @@ interface WalletModalProps {
 }
 
 export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
+  // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const stripePromise = getStripe();
+
+  // For user balance
+  const [balance, setBalance] = useState<number>(0);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState<string>("");
+
+  // To ensure client-side rendering only
   const [mounted, setMounted] = useState(false);
-  
-  // Ensure client-side only rendering for Stripe
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Fetch saved payment methods
   async function loadPaymentMethods() {
     if (!auth.currentUser) {
       setLoading(false);
@@ -270,17 +313,67 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   }
 
+  // Fetch user balance
+  async function loadUserBalance() {
+    if (!auth.currentUser) return;
+    setLoadingBalance(true);
+    setError(null);
+
+    try {
+      const result = await getUserBalance(auth.currentUser.uid);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      setBalance(result.balance || 0);
+    } catch (err) {
+      console.error("Error loading user balance:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load user balance"
+      );
+    } finally {
+      setLoadingBalance(false);
+    }
+  }
+
+  // Handle top-up
+  async function handleTopUp() {
+    if (!auth.currentUser) return;
+    const amountNum = parseFloat(topUpAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setError("Enter a valid top-up amount");
+      return;
+    }
+
+    try {
+      const result = await topUpBalance(auth.currentUser.uid, amountNum);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      // Update local balance
+      setBalance(result.newBalance || 0);
+      setTopUpAmount("");
+    } catch (err) {
+      console.error("Error topping up balance:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to top up balance"
+      );
+    }
+  }
+
+  // On open, load payment methods & balance
   useEffect(() => {
     if (isOpen && auth.currentUser && mounted) {
-      // Only load if modal is open, user is logged in, and component is mounted
       loadPaymentMethods();
+      loadUserBalance();
     } else if (!isOpen) {
       // Reset UI state when modal is closed
       setShowAddCard(false);
       setError(null);
+      setTopUpAmount("");
     }
   }, [isOpen, mounted]);
 
+  // Delete a payment method
   const handleDeletePaymentMethod = async (paymentMethodId: string) => {
     if (!auth.currentUser) return;
     try {
@@ -297,6 +390,22 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   };
 
+  // Set default payment method
+  const handleSetDefault = async (paymentMethodId: string) => {
+    if (!auth.currentUser) return;
+    try {
+      const result = await setDefaultPaymentMethod(auth.currentUser.uid, paymentMethodId);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      // Reload methods to show updated default
+      await loadPaymentMethods();
+    } catch (err) {
+      console.error("Error setting default:", err);
+      setError(err instanceof Error ? err.message : "Failed to set default method");
+    }
+  };
+
   if (!mounted) {
     return null;
   }
@@ -308,11 +417,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         if (!open) onClose();
       }}
     >
-      <DialogContent className={cn(
-        "p-0 gap-0", 
-        "w-[90vw] max-w-md md:max-w-2xl",
-        "overflow-hidden bg-black text-white"
-      )}>
+      <DialogContent
+        className={cn(
+          "p-0 gap-0", 
+          "w-[90vw] max-w-md md:max-w-2xl",
+          "overflow-hidden bg-black text-white"
+        )}
+      >
         <DialogHeader className="px-6 py-4 border-b border-gray-800">
           <DialogTitle className="text-white text-lg font-medium">Wallet</DialogTitle>
           <DialogDescription className="text-gray-400">
@@ -321,6 +432,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
         </DialogHeader>
 
         <div className="px-6 py-4 space-y-4 overflow-y-auto max-h-[60vh]">
+          {/* Display errors */}
           {error && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
@@ -333,6 +445,39 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </motion.div>
           )}
 
+          {/* Mass Transit Cash (Balance) */}
+          <div className="p-4 border border-gray-800 rounded-lg bg-gray-900/50 text-white">
+            <h3 className="text-sm text-gray-400 mb-2">Mass Transit Cash</h3>
+            {loadingBalance ? (
+              <div className="flex justify-center py-2">
+                <div className="animate-spin h-6 w-6 border-2 border-white rounded-full border-t-transparent" />
+              </div>
+            ) : (
+              <p className="text-xl font-semibold">
+                ${balance.toFixed(2)}
+              </p>
+            )}
+
+            {/* Top-up row */}
+            <div className="mt-3 flex space-x-2 items-center">
+              <input
+                type="number"
+                step="0.01"
+                className="border border-gray-700 rounded px-2 py-1 text-black w-24"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                placeholder="Amount"
+              />
+              <Button
+                onClick={handleTopUp}
+                className="bg-white text-black hover:bg-gray-200"
+              >
+                Top Up
+              </Button>
+            </div>
+          </div>
+
+          {/* Payment Methods */}
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin h-8 w-8 border-2 border-white rounded-full border-t-transparent"></div>
@@ -366,6 +511,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                             key={method.id}
                             method={method}
                             onDelete={handleDeletePaymentMethod}
+                            onSetDefault={handleSetDefault} // <-- pass the new callback
                           />
                         ))}
                       </AnimatePresence>
@@ -386,7 +532,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                     )}
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    {paymentMethods.length > 0 ? "Add Another Payment Method" : "Add Payment Method"}
+                    {paymentMethods.length > 0
+                      ? "Add Another Payment Method"
+                      : "Add Payment Method"}
                   </Button>
                 </motion.div>
               )}
