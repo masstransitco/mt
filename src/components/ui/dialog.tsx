@@ -7,9 +7,7 @@ import { cn } from "@/lib/utils";
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
-
-// If you don't need the DialogClose in parent components, remove this line too:
-const DialogClose = DialogPrimitive.Close;
+const DialogClose = DialogPrimitive.Close; // Only export if you need it
 
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
@@ -39,13 +37,13 @@ const DialogContent = React.forwardRef<
       className={cn(
         // Base styling
         "fixed z-50 bg-background p-0 shadow-2xl rounded-2xl",
-        // Centering & sizing
-        "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
-        "w-full max-w-2xl max-h-[90vh] overflow-y-auto",
-        // Radix states for animations
+        // Fullscreen-ish
+        "inset-0 w-[95vw] h-[95vh] overflow-y-auto",
+        // Optional animations:
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        // Slide in/out from center—feel free to remove or adjust if you want a simpler effect
         "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
         "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
         className
@@ -53,7 +51,6 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      {/* Removed the close button here */}
     </DialogPrimitive.Content>
   </DialogPortal>
 ));
@@ -106,7 +103,7 @@ export {
   Dialog,
   DialogPortal,
   DialogOverlay,
-  DialogClose, // Remove if unused
+  DialogClose,
   DialogTrigger,
   DialogContent,
   DialogHeader,
