@@ -201,18 +201,15 @@ function AddPaymentMethodForm({
           return;
         }
 
-        // 3) Save if unique
-        //   NOTE: We pass "stripeId" in the object because
-        //   the server route expects PaymentMethod.id to be the Stripe ID
-        //   if "id" is your doc ID, we do: stripeId: paymentMethod.id
-       const result = await savePaymentMethod(auth.currentUser.uid, {
-  id: paymentMethod.id,  // Changed from stripeId to id
-  brand: paymentMethod.card!.brand,
-  last4: paymentMethod.card!.last4,
-  expMonth: paymentMethod.card!.exp_month,
-  expYear: paymentMethod.card!.exp_year,
-  isDefault: true,
-});
+        // 3) Save if unique - use stripeId to match the interface
+        const result = await savePaymentMethod(auth.currentUser.uid, {
+          stripeId: paymentMethod.id,
+          brand: paymentMethod.card!.brand,
+          last4: paymentMethod.card!.last4,
+          expMonth: paymentMethod.card!.exp_month,
+          expYear: paymentMethod.card!.exp_year,
+          isDefault: true,
+        });
 
         if (!result.success) {
           throw new Error(result.error);
