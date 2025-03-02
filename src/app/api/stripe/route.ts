@@ -1,5 +1,3 @@
-// src/app/api/stripe/route.ts
-
 /**
  * Force this route to run on the Node.js runtime (rather than the Edge runtime),
  * which supports the firebase-admin SDK.
@@ -16,7 +14,7 @@ const { db, auth } = initializeFirebaseAdmin();
 
 // Interfaces
 interface PaymentMethod {
-  id: string;
+  id: string;         // Stripe PaymentMethod ID
   brand: string;
   last4: string;
   expMonth: number;
@@ -81,11 +79,15 @@ export async function POST(request: NextRequest) {
       case 'save-payment-method':
         return await handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
 
-      case 'create-payment-intent':
-        return await handleCreatePaymentIntent({ ...data, userId });
-
       case 'delete-payment-method':
         return await handleDeletePaymentMethod(userId, data.paymentMethodId);
+
+      case 'set-default-payment-method':
+        // data.paymentMethodId is the Firestore doc ID or Stripe ID
+        return await handleSetDefaultPaymentMethod(userId, data.paymentMethodId);
+
+      case 'create-payment-intent':
+        return await handleCreatePaymentIntent({ ...data, userId });
 
       default:
         return errorResponse('Invalid action');
@@ -143,6 +145,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * Save a payment method to Firestore for the user.
+ * Also updates main user doc with defaultPaymentMethodId if it's the first method or isDefault is true.
  */
 async function handleSavePaymentMethod({
   userId,
@@ -158,20 +161,85 @@ async function handleSavePaymentMethod({
   try {
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.get();
-    // Mark this one as default if it's the first
-    const isDefault = snapshot.empty;
+    // If no existing methods, we treat this as the default
+    const isFirst = snapshot.empty;
 
-    const newPaymentMethodRef = paymentMethodsRef.doc();
+    // Create the doc in subcollection
+    const newPaymentMethodRef = paymentMethodsRef.doc(); // doc ID for Firestore
     await newPaymentMethodRef.set({
       ...paymentMethod,
-      isDefault,
+      isDefault: isFirst || paymentMethod.isDefault, 
       createdAt: new Date().toISOString(),
     });
 
-    return successResponse({ paymentMethod: { ...paymentMethod, isDefault } });
+    // If it's the first or the user specifically set isDefault: true
+    if (isFirst || paymentMethod.isDefault) {
+      // We store the Stripe PM ID in main user doc as defaultPaymentMethodId
+      const userDocRef = db.collection('users').doc(userId);
+      await userDocRef.update({ defaultPaymentMethodId: paymentMethod.id });
+    }
+
+    return successResponse({
+      paymentMethod: { ...paymentMethod, isDefault: isFirst || paymentMethod.isDefault },
+    });
   } catch (error) {
     console.error('Error saving payment method:', error);
     return errorResponse('Failed to save payment method', 500);
+  }
+}
+
+/**
+ * Set a payment method as default for the user.
+ * 1) Unset `isDefault` on all other docs
+ * 2) Set `isDefault = true` on the chosen doc
+ * 3) Update main user doc with `defaultPaymentMethodId = paymentMethod.id` (the Stripe ID)
+ */
+async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
+  if (!docId) {
+    return errorResponse('Payment method doc ID is required to set default');
+  }
+
+  try {
+    // 1) fetch all PM docs
+    const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
+    const allSnap = await paymentMethodsRef.get();
+
+    // 2) We'll do a batch
+    const batch = db.batch();
+
+    // We'll store the PaymentMethod's Stripe ID to update user doc
+    let newDefaultStripeId: string | null = null;
+
+    // For each doc, if it matches docId => set isDefault: true, else false
+    allSnap.forEach((doc) => {
+      const data = doc.data() as PaymentMethod;
+      if (doc.id === docId) {
+        // set isDefault = true
+        batch.update(doc.ref, { isDefault: true });
+        newDefaultStripeId = data.id; // The actual Stripe PaymentMethod ID
+      } else {
+        // set isDefault = false
+        if (data.isDefault) {
+          batch.update(doc.ref, { isDefault: false });
+        }
+      }
+    });
+
+    if (!newDefaultStripeId) {
+      // docId not found or doc had no 'id' field
+      return errorResponse('Unable to find payment method doc or missing Stripe ID');
+    }
+
+    // 3) Update main user doc
+    const userDocRef = db.collection('users').doc(userId);
+    batch.update(userDocRef, { defaultPaymentMethodId: newDefaultStripeId });
+
+    await batch.commit();
+
+    return successResponse({ message: 'Default payment method updated.' });
+  } catch (error) {
+    console.error('Error setting default payment method:', error);
+    return errorResponse('Failed to set default payment method', 500);
   }
 }
 
