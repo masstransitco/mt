@@ -297,7 +297,13 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
       const data = doc.data() as PaymentMethod;
       if (doc.id === docId) {
         batch.update(doc.ref, { isDefault: true });
-        newDefaultStripeId = data.id; // The actual Stripe PaymentMethod ID
+        // Fix the type error by extracting the payment method ID safely
+        const pmId = data.id || data.stripeId;
+        if (pmId) {
+          newDefaultStripeId = pmId; // The actual Stripe PaymentMethod ID
+        } else {
+          console.error(`Payment method ${doc.id} is missing both id and stripeId fields`);
+        }
       } else if (data.isDefault) {
         batch.update(doc.ref, { isDefault: false });
       }
