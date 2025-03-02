@@ -110,14 +110,21 @@ export async function POST(req: NextRequest) {
         );
       }
       const userData = userSnap.data() || {};
-      const stripeCustomerId = userData.stripeCustomerId;
+
+      // If no stripeCustomerId, create it now
+      let stripeCustomerId = userData.stripeCustomerId;
       if (!stripeCustomerId) {
-        return NextResponse.json(
-          { success: false, error: "No stripeCustomerId on user. Cannot charge card." },
-          { status: 400 }
-        );
+        const newCustomer = await stripe.customers.create({
+          // Optional: pass in user’s email, name, etc. if you have them
+          metadata: { userId },
+        });
+        stripeCustomerId = newCustomer.id;
+
+        // Store in user doc
+        await userRef.update({ stripeCustomerId });
       }
 
+      // Next, ensure we have a default payment method
       const defaultPaymentMethodId = userData.defaultPaymentMethodId;
       if (!defaultPaymentMethodId) {
         return NextResponse.json(
