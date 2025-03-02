@@ -197,7 +197,7 @@ function AddPaymentMethodForm({ onSuccess, existingMethods }: AddPaymentMethodFo
         // Save if unique
         const result = await savePaymentMethod(auth.currentUser.uid, {
           // We'll store the Stripe PaymentMethod ID in the doc
-          id: paymentMethod.id,
+          stripeId: paymentMethod.id
           brand: paymentMethod.card!.brand,
           last4: paymentMethod.card!.last4,
           expMonth: paymentMethod.card!.exp_month,
