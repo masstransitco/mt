@@ -4,5 +4,5 @@
 import VerificationAdmin from '@/components/admin/VerificationAdmin';
 
 export default function AdminPage() {
-  return <BasicVerificationAdmin />;
+  return <VerificationAdmin />;
 }
