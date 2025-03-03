@@ -87,7 +87,6 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
         if (onSuccess) onSuccess();
         onClose();
       }, 2000);
-      
       return () => clearTimeout(timer);
     }
   }, [success, onSuccess, onClose]);
@@ -95,7 +94,6 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   // Scroll to additional details when they appear
   useEffect(() => {
     if (selectedAddress && detailsRef.current) {
-      // Use a small timeout to allow the animation to start
       setTimeout(() => {
         detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
@@ -146,7 +144,6 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
           setSearchText(prediction.structured_formatting.main_text);
           setPredictions([]);
           setIsDropdownOpen(false);
-
           // Blur the input to hide keyboard on mobile
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
@@ -164,7 +161,6 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   const handleSaveAddress = async () => {
     if (!selectedAddress || !auth.currentUser) return;
 
-    // Additional required field checks
     if (!floor.trim() || !flat.trim()) {
       setError("Floor and Flat/Unit are required fields. Please fill them in.");
       return;
@@ -175,15 +171,14 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
 
     try {
       const userId = auth.currentUser.uid;
-      const timestamp = Date.now(); // same as new Date().getTime()
+      const timestamp = Date.now();
 
-      // Build address object
       const addressData: Address = {
         fullAddress: selectedAddress.text,
         location: selectedAddress.location,
-        block: block.trim() || undefined, // optional
-        floor: floor.trim(),              // required
-        flat: flat.trim(),                // required
+        block: block.trim() || undefined,
+        floor: floor.trim(),
+        flat: flat.trim(),
         timestamp,
         verified: false,
       };
@@ -192,10 +187,8 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists()) {
-        // Update existing doc
         await updateDoc(userDocRef, { "documents.address": addressData });
       } else {
-        // Create new doc
         await setDoc(userDocRef, {
           userId,
           documents: { address: addressData },
@@ -222,12 +215,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   };
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className="p-0 gap-0 bg-black text-white flex flex-col overflow-visible w-full max-w-md md:max-w-2xl"
       >
@@ -237,13 +225,13 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 px-6 py-4 overflow-y-auto" style={{ touchAction: "none" }}>
+        <div className="flex-1 px-6 py-3 overflow-y-auto" style={{ touchAction: "none" }}>
           {/* Success message */}
           {success && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex flex-col items-center justify-center py-8"
+              className="flex flex-col items-center justify-center py-6"
             >
               <CheckCircle className="h-20 w-20 text-green-500 mb-4" />
               <h3 className="text-xl font-medium text-white mb-2">Address Saved</h3>
@@ -253,10 +241,9 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
 
           {/* Main address search & details form */}
           {!success && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-              {/* Street Address search */}
-              <div className="space-y-2">
-                <label className="block text-sm text-gray-400">Street Address</label>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+              {/* Search input (no label) */}
+              <div className="space-y-1">
                 <div className="relative">
                   <div className="relative">
                     <input
@@ -351,20 +338,18 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   ref={detailsRef}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6"
+                  className="space-y-3"
                 >
                   <div className="flex items-center gap-2 text-sm text-gray-300 bg-gray-800/50 p-2 rounded-md">
                     <MapPin className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">{selectedAddress.text}</span>
                   </div>
 
-                  {/* One horizontal row for (Block/Tower - optional), Floor*, Flat* */}
+                  {/* Tower/Block (optional), Floor*, Flat* in one row */}
                   <div className="grid grid-cols-3 gap-2">
-                    {/* Tower/Block - optional */}
+                    {/* Tower/Block - remove (Optional) text */}
                     <div className="flex flex-col">
-                      <label className="text-sm text-gray-400">
-                        Tower / Block <span className="text-gray-500 text-xs">(Optional)</span>
-                      </label>
+                      <label className="text-sm text-gray-400">Tower / Block</label>
                       <input
                         type="text"
                         value={block}
