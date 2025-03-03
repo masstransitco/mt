@@ -375,6 +375,10 @@ export function useThreeOverlay(
         maxInstances
       );
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Disable culling for BLUE/RED:
+  if (color === "blue" || color === "red") {
+    mesh.frustumCulled = false;
+  }
       scene.add(mesh);
       meshRefs[color].current = mesh;
     });
