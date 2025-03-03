@@ -30,7 +30,7 @@ import {
 } from "@stripe/react-stripe-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useBodyScrollLock } from "./useBodyScrollLock"; // <-- Import your scroll lock hook
+import { useBodyScrollLock } from "../../lib/useBodyScrollLock";
 
 // Minimal styling for CardElement
 const cardStyle = {
