@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
 // ---------------------- Interfaces ----------------------
 interface ExtractedData {
@@ -87,7 +87,7 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           op: "fetchUsers",
-          adminPassword: "20230301", // <-- Add password
+          adminPassword: "20230301",
         }),
       });
       const data = await res.json();
@@ -125,7 +125,7 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "viewDocument",
-          adminPassword: "20230301", // <-- Add password
+          adminPassword: "20230301",
           userId: user.userId,
           docType,
         }),
@@ -167,7 +167,7 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "approveDocument",
-          adminPassword: "20230301", // <-- Add password
+          adminPassword: "20230301",
           userId: selectedUser.userId,
           docType: selectedDocument.type,
         }),
@@ -197,7 +197,7 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "rejectDocument",
-          adminPassword: "20230301", // <-- Add password
+          adminPassword: "20230301",
           userId: selectedUser.userId,
           docType: selectedDocument.type,
           reason,
@@ -230,7 +230,7 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "saveJson",
-          adminPassword: "20230301", // <-- Add password
+          adminPassword: "20230301",
           userId: selectedUser.userId,
           docType: selectedDocument.type,
           jsonContent,
@@ -251,8 +251,10 @@ export default function VerificationAdmin() {
   // ---------------------- Render ----------------------
   if (!isAuthenticated) {
     return (
-      <div className="p-4 max-w-md mx-auto mt-10 bg-white rounded shadow">
-        <h1 className="text-2xl font-bold mb-4">Admin Login</h1>
+      <div className="p-4 max-w-md mx-auto mt-10 bg-white dark:bg-gray-800 rounded shadow">
+        <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+          Admin Login
+        </h1>
         <input
           type="password"
           placeholder="Enter password"
@@ -261,7 +263,7 @@ export default function VerificationAdmin() {
             setPasswordInput(e.target.value);
             setPasswordError(false);
           }}
-          className="w-full p-2 border rounded mb-2"
+          className="w-full p-2 border rounded mb-2 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           onKeyDown={(e) => {
             if (e.key === "Enter") handleLogin();
           }}
@@ -270,7 +272,7 @@ export default function VerificationAdmin() {
           <p className="text-red-500 text-sm mb-2">Incorrect password</p>
         )}
         <button
-          className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          className="w-full p-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700"
           onClick={handleLogin}
         >
           Login
@@ -281,13 +283,17 @@ export default function VerificationAdmin() {
 
   // Main Admin UI
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Document Verification Admin</h1>
+    <div className="p-4 bg-gray-50 dark:bg-gray-900 min-h-screen">
+      <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+        Document Verification Admin
+      </h1>
       <div className="mb-4">
         <div className="flex gap-2 mb-4">
           <button
             className={`p-2 rounded ${
-              currentTab === "pending" ? "bg-blue-500 text-white" : "bg-gray-200"
+              currentTab === "pending"
+                ? "bg-blue-500 dark:bg-blue-600 text-white"
+                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             }`}
             onClick={() => setCurrentTab("pending")}
           >
@@ -295,7 +301,9 @@ export default function VerificationAdmin() {
           </button>
           <button
             className={`p-2 rounded ${
-              currentTab === "approved" ? "bg-blue-500 text-white" : "bg-gray-200"
+              currentTab === "approved"
+                ? "bg-blue-500 dark:bg-blue-600 text-white"
+                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             }`}
             onClick={() => setCurrentTab("approved")}
           >
@@ -303,7 +311,9 @@ export default function VerificationAdmin() {
           </button>
           <button
             className={`p-2 rounded ${
-              currentTab === "rejected" ? "bg-blue-500 text-white" : "bg-gray-200"
+              currentTab === "rejected"
+                ? "bg-blue-500 dark:bg-blue-600 text-white"
+                : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             }`}
             onClick={() => setCurrentTab("rejected")}
           >
@@ -312,7 +322,7 @@ export default function VerificationAdmin() {
         </div>
 
         <button
-          className="p-2 bg-gray-200 rounded hover:bg-gray-300 mb-4"
+          className="p-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300 dark:hover:bg-gray-600 mb-4 text-gray-900 dark:text-gray-100"
           onClick={fetchUsers}
         >
           Refresh
@@ -320,16 +330,26 @@ export default function VerificationAdmin() {
       </div>
 
       {loading ? (
-        <p>Loading user data...</p>
+        <p className="text-gray-900 dark:text-gray-100">
+          Loading user data...
+        </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border">
+          <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700">
             <thead>
               <tr>
-                <th className="p-2 border">User</th>
-                <th className="p-2 border">ID Document</th>
-                <th className="p-2 border">Driving License</th>
-                <th className="p-2 border">Actions</th>
+                <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                  User
+                </th>
+                <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                  ID Document
+                </th>
+                <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                  Driving License
+                </th>
+                <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -363,23 +383,25 @@ export default function VerificationAdmin() {
                 })
                 .map((user) => (
                   <tr key={user.userId}>
-                    <td className="p-2 border">
+                    <td className="p-2 border dark:border-gray-700">
                       <div>
-                        <p className="font-bold">{user.displayName || "No Name"}</p>
-                        <p className="text-sm">
+                        <p className="font-bold text-gray-900 dark:text-gray-100">
+                          {user.displayName || "No Name"}
+                        </p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300">
                           {user.email || user.phoneNumber || user.userId}
                         </p>
                       </div>
                     </td>
-                    <td className="p-2 border">
+                    <td className="p-2 border dark:border-gray-700">
                       {user.documents?.["id-document"] ? (
                         <span
                           className={`px-2 py-1 rounded-full text-xs ${
                             user.documents["id-document"].verified
-                              ? "bg-green-100 text-green-800"
+                              ? "bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100"
                               : user.documents["id-document"].rejectionReason
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
+                              ? "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-100"
+                              : "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100"
                           }`}
                         >
                           {user.documents["id-document"].verified
@@ -389,18 +411,20 @@ export default function VerificationAdmin() {
                             : "Pending"}
                         </span>
                       ) : (
-                        "Not Submitted"
+                        <span className="text-gray-900 dark:text-gray-100">
+                          Not Submitted
+                        </span>
                       )}
                     </td>
-                    <td className="p-2 border">
+                    <td className="p-2 border dark:border-gray-700">
                       {user.documents?.["driving-license"] ? (
                         <span
                           className={`px-2 py-1 rounded-full text-xs ${
                             user.documents["driving-license"].verified
-                              ? "bg-green-100 text-green-800"
+                              ? "bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100"
                               : user.documents["driving-license"].rejectionReason
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
+                              ? "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-100"
+                              : "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100"
                           }`}
                         >
                           {user.documents["driving-license"].verified
@@ -410,13 +434,15 @@ export default function VerificationAdmin() {
                             : "Pending"}
                         </span>
                       ) : (
-                        "Not Submitted"
+                        <span className="text-gray-900 dark:text-gray-100">
+                          Not Submitted
+                        </span>
                       )}
                     </td>
-                    <td className="p-2 border">
+                    <td className="p-2 border dark:border-gray-700">
                       {user.documents?.["id-document"] && (
                         <button
-                          className="p-1 bg-blue-500 text-white rounded mr-2"
+                          className="p-1 bg-blue-500 dark:bg-blue-600 text-white rounded mr-2 hover:bg-blue-600 dark:hover:bg-blue-700"
                           onClick={() => viewDocument(user, "id-document")}
                         >
                           View ID
@@ -424,7 +450,7 @@ export default function VerificationAdmin() {
                       )}
                       {user.documents?.["driving-license"] && (
                         <button
-                          className="p-1 bg-blue-500 text-white rounded"
+                          className="p-1 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700"
                           onClick={() => viewDocument(user, "driving-license")}
                         >
                           View License
@@ -441,8 +467,8 @@ export default function VerificationAdmin() {
       {/* Modal for Document / OCR JSON */}
       {selectedDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white p-4 rounded max-w-4xl max-h-[90vh] overflow-auto w-full md:w-auto">
-            <h2 className="text-xl font-bold mb-4">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded max-w-4xl max-h-[90vh] overflow-auto w-full md:w-auto">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
               {selectedDocument.type === "id-document"
                 ? "Identity Document"
                 : "Driving License"}
@@ -452,28 +478,32 @@ export default function VerificationAdmin() {
               {/* Document Image */}
               {selectedDocument.data.url && (
                 <div>
-                  <h3 className="font-bold mb-2">Document Image</h3>
+                  <h3 className="font-bold mb-2 text-gray-900 dark:text-gray-100">
+                    Document Image
+                  </h3>
                   <img
                     src={selectedDocument.data.url}
                     alt="Document"
-                    className="max-w-full border rounded"
+                    className="max-w-full border rounded dark:border-gray-700"
                   />
                 </div>
               )}
 
               {/* User & Document Info */}
               <div>
-                <h3 className="font-bold mb-2">User Information</h3>
-                <p>
+                <h3 className="font-bold mb-2 text-gray-900 dark:text-gray-100">
+                  User Information
+                </h3>
+                <p className="text-gray-900 dark:text-gray-100">
                   <strong>User ID:</strong> {selectedUser?.userId}
                 </p>
                 {selectedUser?.email && (
-                  <p>
+                  <p className="text-gray-900 dark:text-gray-100">
                     <strong>Email:</strong> {selectedUser.email}
                   </p>
                 )}
                 {selectedUser?.phoneNumber && (
-                  <p>
+                  <p className="text-gray-900 dark:text-gray-100">
                     <strong>Phone:</strong> {selectedUser.phoneNumber}
                   </p>
                 )}
@@ -481,9 +511,11 @@ export default function VerificationAdmin() {
                 {/* Extracted Data */}
                 {selectedDocument.data.extractedData && (
                   <div className="mt-4">
-                    <h3 className="font-bold mb-2">Extracted Data</h3>
-                    <div className="p-2 bg-gray-100 rounded">
-                      <pre className="whitespace-pre-wrap text-sm">
+                    <h3 className="font-bold mb-2 text-gray-900 dark:text-gray-100">
+                      Extracted Data
+                    </h3>
+                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                      <pre className="whitespace-pre-wrap text-sm text-gray-900 dark:text-gray-100">
                         {JSON.stringify(selectedDocument.data.extractedData, null, 2)}
                       </pre>
                     </div>
@@ -493,11 +525,11 @@ export default function VerificationAdmin() {
                 {/* OCR JSON Data */}
                 {jsonContent && (
                   <div className="mt-4">
-                    <h3 className="font-bold mb-2 flex items-center justify-between">
+                    <h3 className="font-bold mb-2 flex items-center justify-between text-gray-900 dark:text-gray-100">
                       <span>OCR JSON Data</span>
                       {!isEditingJson && (
                         <button
-                          className="p-1 bg-blue-500 text-white rounded text-xs"
+                          className="p-1 bg-blue-500 dark:bg-blue-600 text-white rounded text-xs hover:bg-blue-600 dark:hover:bg-blue-700"
                           onClick={() => setIsEditingJson(true)}
                         >
                           Edit JSON
@@ -506,19 +538,21 @@ export default function VerificationAdmin() {
                     </h3>
 
                     {!isEditingJson ? (
-                      <div className="p-2 bg-gray-100 rounded max-h-40 overflow-auto">
-                        <pre className="text-xs">{jsonContent}</pre>
+                      <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded max-h-40 overflow-auto">
+                        <pre className="text-xs text-gray-900 dark:text-gray-100">
+                          {jsonContent}
+                        </pre>
                       </div>
                     ) : (
                       <div>
                         <textarea
-                          className="w-full h-40 p-2 border rounded text-xs"
+                          className="w-full h-40 p-2 border rounded text-xs bg-gray-50 dark:bg-gray-600 text-gray-900 dark:text-gray-100"
                           value={jsonContent}
                           onChange={(e) => setJsonContent(e.target.value)}
                         />
                         <div className="mt-2 flex gap-2">
                           <button
-                            className="px-3 py-1 bg-green-500 text-white rounded text-xs"
+                            className="px-3 py-1 bg-green-500 dark:bg-green-600 text-white rounded text-xs hover:bg-green-600 dark:hover:bg-green-700"
                             onClick={async () => {
                               await saveJsonChanges();
                             }}
@@ -526,7 +560,7 @@ export default function VerificationAdmin() {
                             Save JSON Changes
                           </button>
                           <button
-                            className="px-3 py-1 bg-gray-300 text-black rounded text-xs"
+                            className="px-3 py-1 bg-gray-300 dark:bg-gray-500 text-black rounded text-xs hover:bg-gray-400 dark:hover:bg-gray-600"
                             onClick={() => setIsEditingJson(false)}
                           >
                             Cancel
@@ -543,19 +577,19 @@ export default function VerificationAdmin() {
             <div className="mt-4 flex justify-between">
               <div>
                 <button
-                  className="p-2 bg-red-500 text-white rounded mr-2"
+                  className="p-2 bg-red-500 dark:bg-red-600 text-white rounded mr-2 hover:bg-red-600 dark:hover:bg-red-700"
                   onClick={() => rejectDocument("unclear")}
                 >
                   Reject: Unclear
                 </button>
                 <button
-                  className="p-2 bg-red-500 text-white rounded mr-2"
+                  className="p-2 bg-red-500 dark:bg-red-600 text-white rounded mr-2 hover:bg-red-600 dark:hover:bg-red-700"
                   onClick={() => rejectDocument("mismatch")}
                 >
                   Reject: Mismatch
                 </button>
                 <button
-                  className="p-2 bg-red-500 text-white rounded"
+                  className="p-2 bg-red-500 dark:bg-red-600 text-white rounded hover:bg-red-600 dark:hover:bg-red-700"
                   onClick={() => rejectDocument("expired")}
                 >
                   Reject: Expired
@@ -563,7 +597,7 @@ export default function VerificationAdmin() {
               </div>
               <div>
                 <button
-                  className="p-2 bg-gray-300 rounded mr-2"
+                  className="p-2 bg-gray-300 dark:bg-gray-500 text-black rounded mr-2 hover:bg-gray-400 dark:hover:bg-gray-600"
                   onClick={() => {
                     setSelectedDocument(null);
                     setSelectedUser(null);
@@ -574,7 +608,7 @@ export default function VerificationAdmin() {
                   Close
                 </button>
                 <button
-                  className="p-2 bg-green-500 text-white rounded"
+                  className="p-2 bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700"
                   onClick={approveDocument}
                 >
                   Approve
