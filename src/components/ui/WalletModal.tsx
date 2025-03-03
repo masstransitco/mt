@@ -30,8 +30,9 @@ import {
 } from "@stripe/react-stripe-js";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "./useBodyScrollLock"; // <-- Import your scroll lock hook
 
-// Minimal or no padding for CardElement
+// Minimal styling for CardElement
 const cardStyle = {
   style: {
     base: {
@@ -52,12 +53,11 @@ const cardStyle = {
 };
 
 interface PaymentMethodCardProps {
-  method: SavedPaymentMethod;      // Firestore doc data, with .id = doc ID, .stripeId = actual Stripe ID
+  method: SavedPaymentMethod;
   onDelete: (docId: string) => Promise<void>;
   onSetDefault: (docId: string) => Promise<void>;
 }
 
-// Add the missing interface definition
 interface AddPaymentMethodFormProps {
   onSuccess: () => void;
   existingMethods: SavedPaymentMethod[];
@@ -78,7 +78,6 @@ function PaymentMethodCard({
 
     setIsDeleting(true);
     try {
-      // docId is method.id
       await onDelete(method.id);
     } catch (error) {
       console.error("Failed to delete payment method:", error);
@@ -202,7 +201,7 @@ function AddPaymentMethodForm({
           return;
         }
 
-        // 3) Save if unique - use stripeId to match the interface
+        // 3) Save it (with isDefault = true by default)
         const result = await savePaymentMethod(auth.currentUser.uid, {
           stripeId: paymentMethod.id,
           brand: paymentMethod.card!.brand,
@@ -295,6 +294,9 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     setMounted(true);
   }, []);
 
+  // SCROLL LOCK: prevent body scrolling while modal is open
+  useBodyScrollLock(isOpen); // <-- This is the key addition
+
   // 1) Load Payment Methods
   async function loadPaymentMethods() {
     if (!auth.currentUser) {
@@ -307,8 +309,8 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     try {
       const result = await getSavedPaymentMethods(auth.currentUser.uid);
       if (!result.success) {
-        // For "user not found" errors, we just show empty state instead of an error
-        if (result.error?.includes("User does not exist") || 
+        // For "user not found" errors, show empty
+        if (result.error?.includes("User does not exist") ||
             result.error?.includes("User not found")) {
           setPaymentMethods([]);
         } else {
@@ -319,10 +321,11 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       }
     } catch (err) {
       console.error("Error loading payment methods:", err);
-      // Don't show user not found errors
-      if (err instanceof Error && 
-         !err.message.includes("User does not exist") && 
-         !err.message.includes("User not found")) {
+      if (
+        err instanceof Error &&
+        !err.message.includes("User does not exist") &&
+        !err.message.includes("User not found")
+      ) {
         setError(err.message || "Failed to load payment methods");
       }
     } finally {
@@ -339,8 +342,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     try {
       const result = await getUserBalance(auth.currentUser.uid);
       if (!result.success) {
-        // For "user not found" errors, we just set balance to 0 instead of showing error
-        if (result.error?.includes("User does not exist") || 
+        if (result.error?.includes("User does not exist") ||
             result.error?.includes("User not found")) {
           setBalance(0);
         } else {
@@ -351,10 +353,11 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       }
     } catch (err) {
       console.error("Error loading user balance:", err);
-      // Don't show user not found errors
-      if (err instanceof Error && 
-         !err.message.includes("User does not exist") && 
-         !err.message.includes("User not found")) {
+      if (
+        err instanceof Error &&
+        !err.message.includes("User does not exist") &&
+        !err.message.includes("User not found")
+      ) {
         setError(err.message || "Failed to load user balance");
       }
     } finally {
@@ -388,9 +391,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       setTopUpAmount("");
     } catch (err) {
       console.error("Error topping up balance:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to top up balance"
-      );
+      setError(err instanceof Error ? err.message : "Failed to top up balance");
     }
   }
 
@@ -457,10 +458,11 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             Wallet
           </DialogTitle>
           <DialogDescription className="text-gray-400">
-            Manage payment methods & top up with default card
+            Manage payment methods &amp; top up with default card
           </DialogDescription>
         </DialogHeader>
 
+        {/* Our scrollable content container */}
         <div className="overflow-y-auto p-4 space-y-4">
           {error && (
             <motion.div
@@ -492,6 +494,8 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               <input
                 type="number"
                 step="0.01"
+                // Do not autoFocus this input
+                autoComplete="off"
                 className="border border-gray-700 rounded text-black p-2"
                 style={{ width: "5rem" }}
                 value={topUpAmount}
@@ -524,7 +528,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                       onSuccess={() => {
                         setShowAddCard(false);
                         loadPaymentMethods();
-                        // Also reload balance to update UI after adding first card
+                        // Also reload balance after first card
                         loadUserBalance();
                       }}
                     />
@@ -543,7 +547,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                         <AnimatePresence>
                           {paymentMethods.map((method) => (
                             <PaymentMethodCard
-                              key={method.id} // doc ID from Firestore
+                              key={method.id}
                               method={method}
                               onDelete={handleDeletePaymentMethod}
                               onSetDefault={handleSetDefault}
