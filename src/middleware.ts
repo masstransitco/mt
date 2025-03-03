@@ -3,24 +3,36 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  // Get the Firebase auth session from cookie
+  const hostname = request.headers.get('host') || '';
+  
+  // Check if the hostname is the admin subdomain
+  if (hostname.startsWith('admin.')) {
+    // If the request is already for the admin page, pass it through
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+      return NextResponse.next();
+    }
+    
+    // Otherwise, rewrite to the admin page
+    const url = request.nextUrl.clone();
+    url.pathname = `/admin${request.nextUrl.pathname}`;
+    return NextResponse.rewrite(url);
+  }
+  
+  // Authentication checking (your existing logic)
   const session = request.cookies.get('__session')?.value;
-
-  // List of paths that don't require authentication
   const publicPaths = ['/api/auth'];
   
-  // Check if the path is public
   const isPublicPath = publicPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
   );
-
+  
   // Only redirect if trying to access protected path without session
   if (!session && !isPublicPath && !request.nextUrl.pathname.startsWith('/_next')) {
     // Instead of redirecting, we'll let the client-side handle auth
     // The app will show the sign-in modal when needed
     return NextResponse.next();
   }
-
+  
   return NextResponse.next();
 }
 
