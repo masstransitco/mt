@@ -3,11 +3,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import tencentcloud from "tencentcloud-sdk-nodejs";
 import { Storage } from "@google-cloud/storage";
-import { db } from "@/lib/firebase-admin"; // if you're storing in Firestore Admin
+import { db } from "@/lib/firebase-admin";
 
 const OcrClient = tencentcloud.ocr.v20181119.Client;
-const Credential = tencentcloud.common.Credential;
-const { ClientProfile, HttpProfile } = tencentcloud.common.profile;
 
 /** 
  * HKIDCardOCR Response fields 
@@ -45,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     // ------------------------------------------------------------------------
-    // 1) Initialize Tencent Cloud Credential
+    // 1) Read credentials from env
     // ------------------------------------------------------------------------
     const secretId = process.env.TENCENT_SECRET_ID;
     const secretKey = process.env.TENCENT_SECRET_KEY;
@@ -53,26 +51,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       throw new Error('Missing Tencent Cloud API credentials. Check TENCENT_SECRET_ID / TENCENT_SECRET_KEY.');
     }
 
-    const credential = new Credential(secretId, secretKey);
-    const httpProfile = new HttpProfile();
-    httpProfile.endpoint = 'ocr.tencentcloudapi.com';
-
-    const clientProfile = new ClientProfile();
-    clientProfile.httpProfile = httpProfile;
-
-    // 2) Create OCR client
-    const client = new OcrClient(credential, '', clientProfile);
-
-    // 3) Build OCR request using ImageUrl
-    const reqParams = {
-      ReturnHeadImage: false,
-      ImageUrl: imageUrl, // Must be publicly accessible or accessible to Tencent
+    // ------------------------------------------------------------------------
+    // 2) Create an OCR client config with your credentials
+    //    region can be "" for global OCR usage
+    // ------------------------------------------------------------------------
+    const clientConfig = {
+      credential: {
+        secretId,
+        secretKey,
+      },
+      region: "", 
+      profile: {
+        httpProfile: {
+          endpoint: "ocr.tencentcloudapi.com",
+        }
+      }
     };
 
-    // 4) Call the OCR operation
+    // 3) Instantiate the OCR client
+    const client = new OcrClient(clientConfig);
+
+    // 4) Build and call the HKIDCardOCR request with ImageUrl
+    const reqParams = {
+      ReturnHeadImage: false,
+      ImageUrl: imageUrl, // Must be publicly accessible
+    };
     const ocrResponse = await client.HKIDCardOCR(reqParams);
 
+    // ------------------------------------------------------------------------
     // 5) Extract relevant HKID fields
+    // ------------------------------------------------------------------------
     const hkidData: HKIDCardOcrData = {
       CnName: ocrResponse.CnName,
       EnName: ocrResponse.EnName,
@@ -88,48 +96,50 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     };
 
     // ------------------------------------------------------------------------
-    // 6) (Optional) Save JSON in Google Cloud Storage
+    // 6) (Optional) Save JSON to Google Cloud Storage
     // ------------------------------------------------------------------------
-    const jsonContent = JSON.stringify({
-      docType,
-      hkidData,
-      timestamp: new Date().toISOString(),
-    });
-
     const storage = new Storage({
       projectId: process.env.FIREBASE_PROJECT_ID,
       credentials: JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string),
     });
     const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
     if (!bucketName) {
-      throw new Error('FIREBASE_STORAGE_BUCKET env variable not set');
+      throw new Error("FIREBASE_STORAGE_BUCKET env variable not set");
     }
     const bucket = storage.bucket(bucketName);
     const fileName = `ocrResults/${userId}/${docType}-hkidocr.json`;
-    const file = bucket.file(fileName);
-    await file.save(jsonContent, {
-      metadata: { contentType: 'application/json' },
+    const jsonContent = JSON.stringify({
+      docType,
+      hkidData,
+      timestamp: new Date().toISOString(),
+    });
+
+    await bucket.file(fileName).save(jsonContent, {
+      metadata: { contentType: "application/json" },
       public: false,
     });
 
     // ------------------------------------------------------------------------
-    // 7) NEW: Store the recognized OCR data in Firestore under the user
+    // 7) Store recognized OCR data in Firestore (optional)
     // ------------------------------------------------------------------------
-    // We'll do a merge to avoid overwriting other fields. 
-    // This sets documents.<docType>.ocrData and a timestamp.
     await db
       .collection("users")
       .doc(userId)
-      .set({
-        documents: {
-          [docType]: {
-            ocrData: hkidData,
-            updatedAt: Date.now(),
-          }
-        }
-      }, { merge: true });
+      .set(
+        {
+          documents: {
+            [docType]: {
+              ocrData: hkidData,
+              updatedAt: Date.now(),
+            },
+          },
+        },
+        { merge: true }
+      );
 
-    // 8) Return the recognized HKID data
+    // ------------------------------------------------------------------------
+    // 8) Return success to the client
+    // ------------------------------------------------------------------------
     return res.status(200).json({ success: true, hkidData });
     
   } catch (err) {
