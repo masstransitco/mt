@@ -5,19 +5,62 @@ import React, { useState, useEffect } from "react";
 import { getFirestore, collection, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { getStorage, ref, getDownloadURL } from "firebase/storage";
 
+// Define interfaces for the document data
+interface ExtractedData {
+  documentType?: string;
+  hkidNumber?: string;
+  englishName?: string;
+  chineseName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  [key: string]: any;
+}
+
+interface DocumentData {
+  url: string;
+  uploadedAt: number;
+  verified: boolean;
+  verifiedAt?: Timestamp;
+  verifiedBy?: string;
+  rejectionReason?: string;
+  rejectionDetail?: string;
+  rejectedAt?: Timestamp;
+  extractedData?: ExtractedData;
+  ocrConfidence?: number;
+  processedAt?: Timestamp;
+}
+
+interface UserDocuments {
+  "id-document"?: DocumentData;
+  "driving-license"?: DocumentData;
+}
+
+interface UserData {
+  userId: string;
+  email?: string;
+  phoneNumber?: string;
+  displayName?: string;
+  documents?: UserDocuments;
+}
+
+interface SelectedDocumentType {
+  type: string;
+  data: DocumentData;
+}
+
 export default function VerificationAdmin() {
   // State for authentication
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState(false);
   
-  // State for users and documents
-  const [users, setUsers] = useState([]);
+  // State for users and documents - typed properly
+  const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState("pending");
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedDocument, setSelectedDocument] = useState(null);
-  const [jsonContent, setJsonContent] = useState(null);
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentType | null>(null);
+  const [jsonContent, setJsonContent] = useState<string | null>(null);
   
   const db = getFirestore();
   const storage = getStorage();
@@ -37,9 +80,9 @@ export default function VerificationAdmin() {
       const usersRef = collection(db, "users");
       const usersSnapshot = await getDocs(usersRef);
       
-      const userData = [];
+      const userData: UserData[] = [];
       for (const userDoc of usersSnapshot.docs) {
-        const data = userDoc.data();
+        const data = userDoc.data() as UserData;
         data.userId = userDoc.id;
         
         if (data.documents && (
@@ -58,10 +101,10 @@ export default function VerificationAdmin() {
     }
   };
   
-  const viewDocument = async (user, docType) => {
+  const viewDocument = async (user: UserData, docType: string) => {
     if (!user.documents) return;
     
-    let documentData = null;
+    let documentData: DocumentData | undefined;
     if (docType === "id-document" && user.documents["id-document"]) {
       documentData = user.documents["id-document"];
     } else if (docType === "driving-license" && user.documents["driving-license"]) {
@@ -109,19 +152,19 @@ export default function VerificationAdmin() {
       setSelectedDocument(null);
       setSelectedUser(null);
       fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error approving document:", error);
       alert("Error approving document: " + error.message);
     }
   };
   
-  const rejectDocument = async (reason) => {
+  const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
     
     try {
       const userRef = doc(db, "users", selectedUser.userId);
       
-      const reasonDescriptions = {
+      const reasonDescriptions: Record<string, string> = {
         'unclear': 'The uploaded document is blurry, has poor lighting, or key information is not clearly visible.',
         'mismatch': 'The information on the document does not match our records or other submitted documents.',
         'expired': 'The document appears to be expired or no longer valid.'
@@ -138,7 +181,7 @@ export default function VerificationAdmin() {
       setSelectedDocument(null);
       setSelectedUser(null);
       fetchUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error rejecting document:", error);
       alert("Error rejecting document: " + error.message);
     }
@@ -321,9 +364,9 @@ export default function VerificationAdmin() {
               {/* User & Document Info */}
               <div>
                 <h3 className="font-bold mb-2">User Information</h3>
-                <p><strong>User ID:</strong> {selectedUser.userId}</p>
-                {selectedUser.email && <p><strong>Email:</strong> {selectedUser.email}</p>}
-                {selectedUser.phoneNumber && <p><strong>Phone:</strong> {selectedUser.phoneNumber}</p>}
+                <p><strong>User ID:</strong> {selectedUser?.userId}</p>
+                {selectedUser?.email && <p><strong>Email:</strong> {selectedUser.email}</p>}
+                {selectedUser?.phoneNumber && <p><strong>Phone:</strong> {selectedUser.phoneNumber}</p>}
                 
                 {selectedDocument.data.extractedData && (
                   <div className="mt-4">
