@@ -32,6 +32,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "../../lib/useBodyScrollLock";
 
+// Minimal styling for CardElement
 const cardStyle = {
   style: {
     base: {
@@ -155,7 +156,10 @@ interface AddPaymentMethodFormProps {
   existingMethods: SavedPaymentMethod[];
 }
 
-function AddPaymentMethodForm({ onSuccess, existingMethods }: AddPaymentMethodFormProps) {
+function AddPaymentMethodForm({
+  onSuccess,
+  existingMethods,
+}: AddPaymentMethodFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +212,9 @@ function AddPaymentMethodForm({ onSuccess, existingMethods }: AddPaymentMethodFo
       }
     } catch (err) {
       console.error("Error creating payment method:", err);
-      setError(err instanceof Error ? err.message : "Failed to save payment method");
+      setError(
+        err instanceof Error ? err.message : "Failed to save payment method"
+      );
     } finally {
       setLoading(false);
     }
@@ -272,7 +278,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   // For user balance
   const [balance, setBalance] = useState<number>(0);
   const [loadingBalance, setLoadingBalance] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState<string>("");
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -349,35 +354,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   }
 
-  // 3) Top up
-  async function handleTopUp() {
-    if (!auth.currentUser) return;
-    const amountNum = parseFloat(topUpAmount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      setError("Enter a valid top-up amount");
-      return;
-    }
-
-    // Must have at least one payment method
-    if (paymentMethods.length === 0) {
-      setError("Please add a payment method first");
-      setShowAddCard(true);
-      return;
-    }
-
-    try {
-      const result = await topUpBalance(auth.currentUser.uid, amountNum);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      setBalance(result.newBalance || 0);
-      setTopUpAmount("");
-    } catch (err) {
-      console.error("Error topping up balance:", err);
-      setError(err instanceof Error ? err.message : "Failed to top up balance");
-    }
-  }
-
   // On modal open, load PMs & balance
   useEffect(() => {
     if (isOpen && auth.currentUser && mounted) {
@@ -386,11 +362,10 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     } else if (!isOpen) {
       setShowAddCard(false);
       setError(null);
-      setTopUpAmount("");
     }
   }, [isOpen, mounted]);
 
-  // 4) Delete Payment Method
+  // 3) Deleting Payment Method
   const handleDeletePaymentMethod = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
@@ -407,7 +382,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   };
 
-  // 5) Set Default Payment Method
+  // 4) Setting Default Payment Method
   const handleSetDefault = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
@@ -423,6 +398,31 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       );
     }
   };
+
+  // 5) Handle top-up button clicks
+  async function handleTopUp(amount: number) {
+    if (!auth.currentUser) return;
+
+    // Must have at least one payment method
+    if (paymentMethods.length === 0) {
+      setError("Please add a payment method first");
+      setShowAddCard(true);
+      return;
+    }
+
+    try {
+      const result = await topUpBalance(auth.currentUser.uid, amount);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      setBalance(result.newBalance || 0);
+    } catch (err) {
+      console.error("Error topping up balance:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to top up balance"
+      );
+    }
+  }
 
   if (!mounted) return null;
 
@@ -531,27 +531,43 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               <p className="text-xl font-semibold mt-1">${balance.toFixed(2)}</p>
             )}
 
-            {/* Top-up input */}
+            {/* Top-up buttons */}
             <div className="mt-3 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.01"
-                autoComplete="off"
-                className="border border-gray-700 rounded text-black p-2"
-                style={{ width: "5rem" }}
-                value={topUpAmount}
-                onChange={(e) => setTopUpAmount(e.target.value)}
-                placeholder="Amount"
-              />
               <Button
-                onClick={handleTopUp}
                 className="bg-white text-black hover:bg-gray-200"
                 disabled={paymentMethods.length === 0}
                 title={
-                  paymentMethods.length === 0 ? "Add a payment method first" : ""
+                  paymentMethods.length === 0
+                    ? "Add a payment method first"
+                    : ""
                 }
+                onClick={() => handleTopUp(250)}
               >
-                Top Up
+                + HK$250
+              </Button>
+              <Button
+                className="bg-white text-black hover:bg-gray-200"
+                disabled={paymentMethods.length === 0}
+                title={
+                  paymentMethods.length === 0
+                    ? "Add a payment method first"
+                    : ""
+                }
+                onClick={() => handleTopUp(500)}
+              >
+                + HK$500
+              </Button>
+              <Button
+                className="bg-white text-black hover:bg-gray-200"
+                disabled={paymentMethods.length === 0}
+                title={
+                  paymentMethods.length === 0
+                    ? "Add a payment method first"
+                    : ""
+                }
+                onClick={() => handleTopUp(1000)}
+              >
+                + HK$1,000
               </Button>
             </div>
           </div>
@@ -565,8 +581,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0"
           >
             <X className="h-4 w-4" />
-            <span className="sr-only">Close"
-            </span>
+            <span className="sr-only">Close</span>
           </Button>
         </DialogClose>
       </DialogContent>
