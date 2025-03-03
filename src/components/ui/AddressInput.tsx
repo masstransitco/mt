@@ -27,9 +27,9 @@ interface Address {
     lat: number;
     lng: number;
   };
-  block?: string;
-  floor?: string;
-  flat?: string;
+  block?: string; // optional
+  floor?: string; // required
+  flat?: string;  // required
   timestamp: number;
   verified: boolean;
 }
@@ -47,9 +47,9 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   } | null>(null);
 
   // Additional address details
-  const [block, setBlock] = useState("");
-  const [floor, setFloor] = useState("");
-  const [flat, setFlat] = useState("");
+  const [block, setBlock] = useState(""); // optional
+  const [floor, setFloor] = useState(""); // required
+  const [flat, setFlat] = useState("");  // required
 
   // Form state
   const [isLoading, setIsLoading] = useState(false);
@@ -95,7 +95,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   // Scroll to additional details when they appear
   useEffect(() => {
     if (selectedAddress && detailsRef.current) {
-      // Use a small timeout to allow animation to start
+      // Use a small timeout to allow the animation to start
       setTimeout(() => {
         detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 100);
@@ -122,8 +122,8 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
         const response = await autocompleteService.current!.getPlacePredictions(request);
         setPredictions(response.predictions.slice(0, 5));
         setIsDropdownOpen(response.predictions.length > 0);
-      } catch (error) {
-        console.error("Error fetching predictions:", error);
+      } catch (err) {
+        console.error("Error fetching predictions:", err);
         setPredictions([]);
         setIsDropdownOpen(false);
       }
@@ -135,9 +135,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
     async (prediction: google.maps.places.AutocompletePrediction) => {
       if (!geocoder.current) return;
       try {
-        const response = await geocoder.current.geocode({
-          placeId: prediction.place_id,
-        });
+        const response = await geocoder.current.geocode({ placeId: prediction.place_id });
         const result = response.results[0];
         if (result?.geometry?.location) {
           const { lat, lng } = result.geometry.location;
@@ -148,14 +146,14 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
           setSearchText(prediction.structured_formatting.main_text);
           setPredictions([]);
           setIsDropdownOpen(false);
-          
+
           // Blur the input to hide keyboard on mobile
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
           }
         }
-      } catch (error) {
-        console.error("Geocoding error:", error);
+      } catch (err) {
+        console.error("Geocoding error:", err);
         setError("Unable to locate address. Please try again.");
       }
     },
@@ -165,47 +163,46 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
   // Save address to Firebase
   const handleSaveAddress = async () => {
     if (!selectedAddress || !auth.currentUser) return;
+
+    // Additional required field checks
+    if (!floor.trim() || !flat.trim()) {
+      setError("Floor and Flat/Unit are required fields. Please fill them in.");
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const userId = auth.currentUser.uid;
-      const timestamp = new Date().getTime();
-      
+      const timestamp = Date.now(); // same as new Date().getTime()
+
       // Create address object
       const addressData: Address = {
         fullAddress: selectedAddress.text,
         location: selectedAddress.location,
-        block: block.trim() || undefined,
-        floor: floor.trim() || undefined,
-        flat: flat.trim() || undefined,
+        block: block.trim() || undefined, // optional
+        floor: floor.trim(),              // required
+        flat: flat.trim(),                // required
         timestamp,
         verified: false,
       };
-      
-      // Check if user document exists
+
       const userDocRef = doc(db, "users", userId);
       const userDocSnap = await getDoc(userDocRef);
-      
+
       if (userDocSnap.exists()) {
-        // Update existing document
-        await updateDoc(userDocRef, {
-          "documents.address": addressData,
-        });
+        // Update existing doc
+        await updateDoc(userDocRef, { "documents.address": addressData });
       } else {
-        // Create new document
+        // Create new doc
         await setDoc(userDocRef, {
           userId,
-          documents: {
-            address: addressData,
-          },
+          documents: { address: addressData },
         });
       }
-      
-      // Show success state
+
       setSuccess(true);
-      
     } catch (err) {
       console.error("Error saving address:", err);
       setError(`Failed to save address: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -232,9 +229,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
       }}
     >
       <DialogContent
-        // Removed all explicit top/transform positioning styles
-        className="p-0 gap-0 bg-black text-white flex flex-col overflow-visible
-                   w-full max-w-md md:max-w-2xl"
+        className="p-0 gap-0 bg-black text-white flex flex-col overflow-visible w-full max-w-md md:max-w-2xl"
       >
         <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10 flex-shrink-0">
           <DialogTitle className="text-white">
@@ -242,10 +237,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
           </DialogTitle>
         </DialogHeader>
 
-        <div 
-          className="flex-1 px-6 py-4 overflow-y-auto"
-          style={{ touchAction: "none" }} // optional if you want to disable swipe
-        >
+        <div className="flex-1 px-6 py-4 overflow-y-auto" style={{ touchAction: "none" }}>
           {/* Success message */}
           {success && (
             <motion.div
@@ -259,14 +251,10 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
             </motion.div>
           )}
 
-          {/* Address search and form */}
+          {/* Main address search & details form */}
           {!success && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-6"
-            >
-              {/* Address search - (keep it at top, but no absolute positioning) */}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+              {/* Street Address search */}
               <div className="space-y-2">
                 <label className="block text-sm text-gray-400">Street Address</label>
                 <div className="relative">
@@ -285,11 +273,12 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                       }}
                       onBlur={() => {
                         setFocusedField(null);
-                        // Small delay to allow for selection
                         setTimeout(() => setIsDropdownOpen(false), 150);
                       }}
                       placeholder="Search for your address"
-                      className="w-full bg-gray-900 text-white border border-gray-800 rounded-md focus:outline-none focus:border-gray-600 placeholder:text-gray-500 p-2 text-base transition-colors"
+                      className="w-full bg-gray-900 text-white border border-gray-800 rounded-md 
+                                 focus:outline-none focus:border-gray-600 placeholder:text-gray-500 
+                                 p-2 text-base transition-colors"
                     />
                     {searchText && (
                       <button
@@ -299,7 +288,8 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                           setIsDropdownOpen(false);
                           setSelectedAddress(null);
                         }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-800 p-1 rounded-full transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 
+                                   hover:bg-gray-800 p-1 rounded-full transition-colors"
                         type="button"
                       >
                         <X className="w-4 h-4" />
@@ -310,16 +300,13 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                   {/* Predictions dropdown */}
                   {isDropdownOpen && predictions.length > 0 && (
                     <div
-                      className="absolute left-0 mt-1 bg-gray-900 border border-gray-800 rounded-md shadow-2xl overflow-y-auto"
-                      style={{ 
-                        maxHeight: "40vh",
-                        zIndex: 60, 
-                        width: "100%",
-                      }}
+                      className="absolute left-0 mt-1 bg-gray-900 border border-gray-800 
+                                 rounded-md shadow-2xl overflow-y-auto"
+                      style={{ maxHeight: "40vh", zIndex: 60, width: "100%" }}
                     >
                       <div className="flex justify-between items-center p-2 border-b border-gray-800">
                         <span className="text-xs text-gray-400">Select from suggestions</span>
-                        <button 
+                        <button
                           onClick={() => setIsDropdownOpen(false)}
                           className="text-gray-400 hover:text-white p-1 rounded"
                         >
@@ -330,7 +317,8 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                         <button
                           key={prediction.place_id}
                           onClick={() => handleSelect(prediction)}
-                          className="w-full px-4 py-3 text-left text-sm text-white hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
+                          className="w-full px-4 py-3 text-left text-sm text-white 
+                                     hover:bg-gray-800 transition-colors border-b border-gray-800/50 last:border-0"
                           type="button"
                         >
                           <div className="font-medium">
@@ -346,9 +334,10 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                 </div>
                 
                 {predictions.length > 0 && !isDropdownOpen && focusedField === "search" && (
-                  <button 
+                  <button
                     onClick={() => setIsDropdownOpen(true)}
-                    className="flex items-center justify-center w-full text-xs text-gray-400 bg-gray-800/50 rounded-md mt-1 py-1"
+                    className="flex items-center justify-center w-full text-xs text-gray-400 
+                               bg-gray-800/50 rounded-md mt-1 py-1"
                   >
                     <ChevronDown className="w-3 h-3 mr-1" />
                     Show suggestions ({predictions.length})
@@ -368,55 +357,71 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                     <MapPin className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">{selectedAddress.text}</span>
                   </div>
-                  
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="block text-sm text-gray-400">Block / Tower</label>
+
+                  {/* One horizontal row for (Block/Tower - optional), Floor*, Flat* */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Tower/Block - optional */}
+                    <div className="flex flex-col">
+                      <label className="text-sm text-gray-400">
+                        Tower / Block <span className="text-gray-500 text-xs">(Optional)</span>
+                      </label>
                       <input
                         type="text"
                         value={block}
                         onChange={(e) => setBlock(e.target.value)}
                         onFocus={() => setFocusedField("block")}
                         onBlur={() => setFocusedField(null)}
-                        placeholder="e.g. Block A"
-                        className="w-full bg-gray-900 text-white border border-gray-800 rounded-md focus:outline-none focus:border-gray-600 placeholder:text-gray-500 p-2 text-base transition-colors"
+                        placeholder="Block A"
+                        className="p-1 text-sm bg-gray-900 text-white border border-gray-800 
+                                   rounded-md focus:outline-none focus:border-gray-600 
+                                   placeholder:text-gray-500 transition-colors"
                       />
                     </div>
-                    
-                    <div className="space-y-2">
-                      <label className="block text-sm text-gray-400">Floor</label>
+
+                    {/* Floor - required */}
+                    <div className="flex flex-col">
+                      <label className="text-sm text-gray-400">
+                        Floor <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={floor}
                         onChange={(e) => setFloor(e.target.value)}
                         onFocus={() => setFocusedField("floor")}
                         onBlur={() => setFocusedField(null)}
-                        placeholder="e.g. 10"
-                        className="w-full bg-gray-900 text-white border border-gray-800 rounded-md focus:outline-none focus:border-gray-600 placeholder:text-gray-500 p-2 text-base transition-colors"
+                        placeholder="10"
+                        className="p-1 text-sm bg-gray-900 text-white border border-gray-800 
+                                   rounded-md focus:outline-none focus:border-gray-600 
+                                   placeholder:text-gray-500 transition-colors"
                       />
                     </div>
-                    
-                    <div className="space-y-2">
-                      <label className="block text-sm text-gray-400">Flat / Unit</label>
+
+                    {/* Flat - required */}
+                    <div className="flex flex-col">
+                      <label className="text-sm text-gray-400">
+                        Flat / Unit <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={flat}
                         onChange={(e) => setFlat(e.target.value)}
                         onFocus={() => setFocusedField("flat")}
                         onBlur={() => setFocusedField(null)}
-                        placeholder="e.g. 1234"
-                        className="w-full bg-gray-900 text-white border border-gray-800 rounded-md focus:outline-none focus:border-gray-600 placeholder:text-gray-500 p-2 text-base transition-colors"
+                        placeholder="1234"
+                        className="p-1 text-sm bg-gray-900 text-white border border-gray-800 
+                                   rounded-md focus:outline-none focus:border-gray-600 
+                                   placeholder:text-gray-500 transition-colors"
                       />
                     </div>
                   </div>
-                </motion.div>
-              )}
 
-              {/* Error message */}
-              {error && (
-                <div className="p-3 text-sm text-red-400 bg-red-400/10 rounded-md mt-4">
-                  {error}
-                </div>
+                  {/* Error message (for missing floor/flat, etc.) */}
+                  {error && (
+                    <div className="p-2 text-sm text-red-400 bg-red-400/10 rounded-md">
+                      {error}
+                    </div>
+                  )}
+                </motion.div>
               )}
             </motion.div>
           )}
@@ -432,7 +437,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
             >
               Cancel
             </Button>
-            
+
             {selectedAddress ? (
               <div className="flex gap-2">
                 <Button
@@ -442,7 +447,6 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                 >
                   Reset
                 </Button>
-                
                 <Button
                   onClick={handleSaveAddress}
                   disabled={isLoading}
@@ -450,7 +454,9 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                 >
                   {isLoading ? (
                     <span className="flex items-center">
-                      <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2"></span>
+                      <span className="animate-spin h-4 w-4 border-2 border-gray-900 
+                                   rounded-full border-t-transparent mr-2"
+                      />
                       Saving...
                     </span>
                   ) : (
