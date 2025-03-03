@@ -71,6 +71,7 @@ interface DocumentData {
   verifiedBy?: string;
   rejectionReason?: string;
   rejectionDetail?: string;
+  rejectedAt?: Timestamp; // Add this property
   extractedData?: ExtractedData;
   ocrConfidence?: number;
   processedAt?: Timestamp;
