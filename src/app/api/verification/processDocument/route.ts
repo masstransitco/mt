@@ -87,10 +87,13 @@ export async function POST(request: Request) {
     const ocrResponse = await client.HKIDCardOCR(reqParams);
 
     // 5) Convert WarnCardInfos from (number|bigint)[] to number[]
+    // Fixed: Check if WarnCardInfos exists before trying to map it
     const rawWarnCards = ocrResponse.WarnCardInfos;
-    const warnCardsAsNumbers = rawWarnCards?.map((val: number | bigint) =>
-      typeof val === "bigint" ? Number(val) : val
-    );
+    const warnCardsAsNumbers = rawWarnCards 
+      ? rawWarnCards.map((val: number | bigint) => 
+          typeof val === "bigint" ? Number(val) : val
+        )
+      : [];
 
     // 6) Extract relevant HKID fields
     const hkidData: HKIDCardOcrData = {
