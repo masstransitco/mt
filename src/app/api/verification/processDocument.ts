@@ -1,11 +1,13 @@
 // /src/app/api/verification/processDocument.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { OcrClient, ClientProfile, HttpProfile, Credential } from 'tencentcloud-sdk-nodejs/ocr/v20181119';
-import { Storage } from '@google-cloud/storage';
+import tencentcloud from "tencentcloud-sdk-nodejs";
+import { Storage } from "@google-cloud/storage";
+import { db } from "@/lib/firebase-admin"; // if you're storing in Firestore Admin
 
-// 1) IMPORT Firestore Admin from your firebase-admin helper
-import { db } from "@/lib/firebase-admin";
+const OcrClient = tencentcloud.ocr.v20181119.Client;
+const Credential = tencentcloud.common.Credential;
+const { ClientProfile, HttpProfile } = tencentcloud.common.profile;
 
 /** 
  * HKIDCardOCR Response fields 
