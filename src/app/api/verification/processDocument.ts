@@ -21,6 +21,7 @@ interface HKIDCardOcrData {
   CurrentIssueDate?: string;
   Symbol?: string;        
   TelexCode?: string;
+  // We want strictly number[] after conversion:
   WarnCardInfos?: number[];
 }
 
@@ -36,7 +37,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   try {
-    // We expect { userId, docType, imageUrl }
     const { imageUrl, userId, docType } = req.body;
     if (!imageUrl || !userId || !docType) {
       return res.status(400).json({ success: false, error: 'Missing required parameters' });
@@ -53,14 +53,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     // ------------------------------------------------------------------------
     // 2) Create an OCR client config with your credentials
-    //    region can be "" for global OCR usage
     // ------------------------------------------------------------------------
     const clientConfig = {
       credential: {
         secretId,
         secretKey,
       },
-      region: "", 
+      region: "", // typically an empty string for HKID OCR
       profile: {
         httpProfile: {
           endpoint: "ocr.tencentcloudapi.com",
@@ -76,10 +75,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       ReturnHeadImage: false,
       ImageUrl: imageUrl, // Must be publicly accessible
     };
+
     const ocrResponse = await client.HKIDCardOCR(reqParams);
 
     // ------------------------------------------------------------------------
-    // 5) Extract relevant HKID fields
+    // Convert WarnCardInfos from (number|bigint)[] to number[]
+    // ------------------------------------------------------------------------
+    const rawWarnCards = ocrResponse.WarnCardInfos; // Possibly undefined or (number | bigint)[]
+    const warnCardsAsNumbers = rawWarnCards?.map((val) =>
+      typeof val === "bigint" ? Number(val) : val
+    );
+
+    // ------------------------------------------------------------------------
+    // 5) Extract relevant HKID fields, using our converted array
     // ------------------------------------------------------------------------
     const hkidData: HKIDCardOcrData = {
       CnName: ocrResponse.CnName,
@@ -92,7 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       CurrentIssueDate: ocrResponse.CurrentIssueDate,
       Symbol: ocrResponse.Symbol,
       TelexCode: ocrResponse.TelexCode,
-      WarnCardInfos: ocrResponse.WarnCardInfos,
+      WarnCardInfos: warnCardsAsNumbers,
     };
 
     // ------------------------------------------------------------------------
