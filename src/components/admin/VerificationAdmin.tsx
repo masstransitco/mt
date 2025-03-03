@@ -368,17 +368,17 @@ export default function SimpleVerificationAdmin() {
   };
 
   // Render document status badge
-  const renderDocumentStatus = (document?: DocumentData) => {
-    if (!document) return <Badge variant="outline">Not Submitted</Badge>;
-    
-    if (document.verified) {
-      return <Badge className="bg-green-600">Verified</Badge>;
-    } else if (document.rejectionReason) {
-      return <Badge className="bg-red-600">Rejected</Badge>;
-    } else {
-      return <Badge className="bg-amber-600">Pending</Badge>;
-    }
-  };
+const renderDocumentStatus = (document?: DocumentData) => {
+  if (!document) return <Badge className="" variant="outline">Not Submitted</Badge>;
+  
+  if (document.verified) {
+    return <Badge className="bg-green-600">Verified</Badge>;
+  } else if (document.rejectionReason) {
+    return <Badge className="bg-red-600">Rejected</Badge>;
+  } else {
+    return <Badge className="bg-amber-600">Pending</Badge>;
+  }
+};
 
   // Get pending verification count
   const getVerificationCount = () => {
