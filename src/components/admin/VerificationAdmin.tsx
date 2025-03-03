@@ -1,11 +1,11 @@
-// src/components/admin/VerificationAdminBasic.tsx
+// src/components/admin/VerificationAdmin.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { getFirestore, collection, getDocs, doc, updateDoc, Timestamp } from "firebase/firestore";
 import { getStorage, ref, getDownloadURL } from "firebase/storage";
 
-export default function BasicVerificationAdmin() {
+export default function VerificationAdmin() {
   // State for authentication
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
