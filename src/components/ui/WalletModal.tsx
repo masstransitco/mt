@@ -32,7 +32,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "../../lib/useBodyScrollLock";
 
-// Minimal styling for CardElement
 const cardStyle = {
   style: {
     base: {
@@ -58,11 +57,6 @@ interface PaymentMethodCardProps {
   onSetDefault: (docId: string) => Promise<void>;
 }
 
-interface AddPaymentMethodFormProps {
-  onSuccess: () => void;
-  existingMethods: SavedPaymentMethod[];
-}
-
 function PaymentMethodCard({
   method,
   onDelete,
@@ -71,12 +65,11 @@ function PaymentMethodCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingDefault, setIsSettingDefault] = useState(false);
 
-  // Delete card
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDeleting) return;
-
     setIsDeleting(true);
+
     try {
       await onDelete(method.id);
     } catch (error) {
@@ -86,12 +79,11 @@ function PaymentMethodCard({
     }
   };
 
-  // Set as default
   const handleSetDefault = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isSettingDefault || method.isDefault) return;
-
     setIsSettingDefault(true);
+
     try {
       await onSetDefault(method.id);
     } catch (error) {
@@ -139,7 +131,6 @@ function PaymentMethodCard({
             {isSettingDefault ? "Setting..." : "Set Default"}
           </Button>
         )}
-
         <Button
           variant="ghost"
           size="icon"
@@ -159,10 +150,12 @@ function PaymentMethodCard({
   );
 }
 
-function AddPaymentMethodForm({
-  onSuccess,
-  existingMethods,
-}: AddPaymentMethodFormProps) {
+interface AddPaymentMethodFormProps {
+  onSuccess: () => void;
+  existingMethods: SavedPaymentMethod[];
+}
+
+function AddPaymentMethodForm({ onSuccess, existingMethods }: AddPaymentMethodFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +169,6 @@ function AddPaymentMethodForm({
     setError(null);
 
     try {
-      // 1) Create PaymentMethod on Stripe
       const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
         type: "card",
         card: elements.getElement(CardElement)!,
@@ -188,7 +180,6 @@ function AddPaymentMethodForm({
       }
 
       if (paymentMethod) {
-        // 2) Check duplicates
         const alreadyExists = existingMethods.some(
           (m) =>
             m.brand.toLowerCase() === paymentMethod.card?.brand.toLowerCase() &&
@@ -201,7 +192,6 @@ function AddPaymentMethodForm({
           return;
         }
 
-        // 3) Save it (with isDefault = true by default)
         const result = await savePaymentMethod(auth.currentUser.uid, {
           stripeId: paymentMethod.id,
           brand: paymentMethod.card!.brand,
@@ -214,15 +204,11 @@ function AddPaymentMethodForm({
         if (!result.success) {
           throw new Error(result.error);
         }
-
-        // 4) Done
         onSuccess();
       }
     } catch (err) {
       console.error("Error creating payment method:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to save payment method"
-      );
+      setError(err instanceof Error ? err.message : "Failed to save payment method");
     } finally {
       setLoading(false);
     }
@@ -288,14 +274,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState<string>("");
 
-  // Ensure client-side only
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // SCROLL LOCK: prevent body scrolling while modal is open
-  useBodyScrollLock(isOpen); // <-- This is the key addition
+  // Lock body scrolling while open
+  useBodyScrollLock(isOpen);
 
   // 1) Load Payment Methods
   async function loadPaymentMethods() {
@@ -309,7 +294,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     try {
       const result = await getSavedPaymentMethods(auth.currentUser.uid);
       if (!result.success) {
-        // For "user not found" errors, show empty
         if (result.error?.includes("User does not exist") ||
             result.error?.includes("User not found")) {
           setPaymentMethods([]);
@@ -374,7 +358,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       return;
     }
 
-    // Make sure we have at least one payment method
+    // Must have at least one payment method
     if (paymentMethods.length === 0) {
       setError("Please add a payment method first");
       setShowAddCard(true);
@@ -386,7 +370,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       if (!result.success) {
         throw new Error(result.error);
       }
-      // Payment succeeded
       setBalance(result.newBalance || 0);
       setTopUpAmount("");
     } catch (err) {
@@ -401,14 +384,13 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       loadPaymentMethods();
       loadUserBalance();
     } else if (!isOpen) {
-      // Reset states on close
       setShowAddCard(false);
       setError(null);
       setTopUpAmount("");
     }
   }, [isOpen, mounted]);
 
-  // 4) Deleting Payment Method
+  // 4) Delete Payment Method
   const handleDeletePaymentMethod = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
@@ -425,7 +407,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   };
 
-  // 5) Setting Default
+  // 5) Set Default Payment Method
   const handleSetDefault = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
@@ -433,7 +415,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       if (!result.success) {
         throw new Error(result.error);
       }
-      // Reload to see new default
       await loadPaymentMethods();
     } catch (err) {
       console.error("Error setting default:", err);
@@ -446,12 +427,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
   if (!mounted) return null;
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="bg-black text-white p-0 relative">
         <DialogHeader className="border-b border-gray-800 p-4">
           <DialogTitle className="text-white text-lg font-medium">
@@ -462,7 +438,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Our scrollable content container */}
+        {/* scrollable container */}
         <div className="overflow-y-auto p-4 space-y-4">
           {error && (
             <motion.div
@@ -476,44 +452,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             </motion.div>
           )}
 
-          {/* Balance */}
-          <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
-            <h3 className="text-sm text-gray-400">Mass Transit Cash</h3>
-            {loadingBalance ? (
-              <div className="flex justify-center py-2">
-                <div className="animate-spin h-6 w-6 border-2 border-white rounded-full border-t-transparent" />
-              </div>
-            ) : (
-              <p className="text-xl font-semibold mt-1">
-                ${balance.toFixed(2)}
-              </p>
-            )}
-
-            {/* Top-up input */}
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.01"
-                // Do not autoFocus this input
-                autoComplete="off"
-                className="border border-gray-700 rounded text-black p-2"
-                style={{ width: "5rem" }}
-                value={topUpAmount}
-                onChange={(e) => setTopUpAmount(e.target.value)}
-                placeholder="Amount"
-              />
-              <Button
-                onClick={handleTopUp}
-                className="bg-white text-black hover:bg-gray-200"
-                disabled={paymentMethods.length === 0}
-                title={paymentMethods.length === 0 ? "Add a payment method first" : ""}
-              >
-                Top Up
-              </Button>
-            </div>
-          </div>
-
-          {/* Payment Methods */}
+          {/* Payment Methods FIRST */}
           <div className="space-y-4">
             {loading ? (
               <div className="flex justify-center items-center h-24">
@@ -528,7 +467,6 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
                       onSuccess={() => {
                         setShowAddCard(false);
                         loadPaymentMethods();
-                        // Also reload balance after first card
                         loadUserBalance();
                       }}
                     />
@@ -581,6 +519,42 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
               </AnimatePresence>
             )}
           </div>
+
+          {/* Mass Transit Cash at the bottom */}
+          <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
+            <h3 className="text-sm text-gray-400">Mass Transit Cash</h3>
+            {loadingBalance ? (
+              <div className="flex justify-center py-2">
+                <div className="animate-spin h-6 w-6 border-2 border-white rounded-full border-t-transparent" />
+              </div>
+            ) : (
+              <p className="text-xl font-semibold mt-1">${balance.toFixed(2)}</p>
+            )}
+
+            {/* Top-up input */}
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="number"
+                step="0.01"
+                autoComplete="off"
+                className="border border-gray-700 rounded text-black p-2"
+                style={{ width: "5rem" }}
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                placeholder="Amount"
+              />
+              <Button
+                onClick={handleTopUp}
+                className="bg-white text-black hover:bg-gray-200"
+                disabled={paymentMethods.length === 0}
+                title={
+                  paymentMethods.length === 0 ? "Add a payment method first" : ""
+                }
+              >
+                Top Up
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Close button */}
@@ -591,7 +565,8 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
             className="text-gray-400 hover:text-white bg-gray-800 rounded-full h-8 w-8 p-0"
           >
             <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Close"
+            </span>
           </Button>
         </DialogClose>
       </DialogContent>
