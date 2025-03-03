@@ -1,29 +1,22 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  getFirestore, 
-  collection, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  Timestamp 
+import {
+  getFirestore,
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  Timestamp,
 } from "firebase/firestore";
-import { 
-  getStorage, 
-  ref, 
+import {
+  getStorage,
+  ref,
   getDownloadURL,
-  uploadString 
+  uploadString,
 } from "firebase/storage";
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  signOut 
-} from "firebase/auth";
 
-// Define interfaces for the document data
+// ---------------------- Interfaces ----------------------
 interface ExtractedData {
   documentType?: string;
   hkidNumber?: string;
@@ -66,168 +59,140 @@ interface SelectedDocumentType {
   data: DocumentData;
 }
 
+// ---------------------- Component ----------------------
 export default function VerificationAdmin() {
   // Firebase instances
-  const auth = getAuth();
   const db = getFirestore();
   const storage = getStorage();
 
-  // State for authentication
+  // State for simple password-based login
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState(false);
 
-  // State for users and documents
+  // State for users
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // State for tab (pending, approved, rejected)
   const [currentTab, setCurrentTab] = useState("pending");
+
+  // State for selected doc / user
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentType | null>(null);
-  
-  // OCR JSON states
+
+  // OCR JSON editing
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [isEditingJson, setIsEditingJson] = useState(false);
-  
-  // Listen to auth state changes
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.email && user.email.endsWith("@air.city")) {
-        setIsAuthenticated(true);
-        setUserEmail(user.email);
-        fetchUsers();
-      } else if (user) {
-        // User signed in but not allowed – sign them out.
-        alert("Access restricted to @air.city accounts.");
-        signOut(auth);
-        setIsAuthenticated(false);
-      }
-    });
-    return () => unsubscribe();
-  }, [auth]);
-  
-  // Trigger Google sign in
-  const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      if (user.email && user.email.endsWith("@air.city")) {
-        setIsAuthenticated(true);
-        setUserEmail(user.email);
-        fetchUsers();
-      } else {
-        alert("Access restricted to @air.city accounts.");
-        await signOut(auth);
-        setIsAuthenticated(false);
-      }
-    } catch (error) {
-      console.error("Google sign in error:", error);
+
+  // ---------------------- Login Handler ----------------------
+  const handleLogin = () => {
+    if (passwordInput === "20230301") {
+      setIsAuthenticated(true);
+      fetchUsers();
+    } else {
+      setPasswordError(true);
     }
   };
-  
-  // Fetch users from Firestore
+
+  // ---------------------- Fetch Users ----------------------
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const usersRef = collection(db, "users");
-      const usersSnapshot = await getDocs(usersRef);
-      
+      const snapshot = await getDocs(usersRef);
+
       const userData: UserData[] = [];
-      for (const userDoc of usersSnapshot.docs) {
-        const data = userDoc.data() as UserData;
-        data.userId = userDoc.id;
-        // Only include users with at least one document
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as UserData;
+        data.userId = docSnap.id;
+
+        // Only include users who have at least one document
         if (
           data.documents &&
           (data.documents["id-document"] || data.documents["driving-license"])
         ) {
           userData.push(data);
         }
-      }
-      
+      });
+
       setUsers(userData);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      alert("Failed to fetch users. Check console.");
     } finally {
       setLoading(false);
     }
   };
-  
-  // View a specific document, including its OCR JSON
+
+  // ---------------------- View Document + OCR JSON ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
     if (!user.documents) return;
-    
+
     let documentData: DocumentData | undefined;
-    if (docType === "id-document" && user.documents["id-document"]) {
+    if (docType === "id-document") {
       documentData = user.documents["id-document"];
-    } else if (docType === "driving-license" && user.documents["driving-license"]) {
+    } else if (docType === "driving-license") {
       documentData = user.documents["driving-license"];
     }
-    
+
     if (documentData) {
       setSelectedUser(user);
-      setSelectedDocument({
-        type: docType,
-        data: documentData,
-      });
-      
-      // Try to fetch OCR JSON
+      setSelectedDocument({ type: docType, data: documentData });
+
+      // Attempt to fetch associated OCR JSON
       try {
-        const jsonFilePath = `ocrResults/${user.userId}/${docType}.json`;
-        const jsonFileRef = ref(storage, jsonFilePath);
-        const jsonUrl = await getDownloadURL(jsonFileRef);
-        
+        const jsonPath = `ocrResults/${user.userId}/${docType}.json`;
+        const jsonRef = ref(storage, jsonPath);
+
+        const jsonUrl = await getDownloadURL(jsonRef);
         const response = await fetch(jsonUrl);
         const jsonData = await response.json();
-        
+
         setJsonContent(JSON.stringify(jsonData, null, 2));
       } catch (error) {
-        console.log(`No OCR JSON file found for ${user.userId}/${docType}`);
+        console.log(`No OCR JSON found for ${user.userId}/${docType}`);
         setJsonContent(null);
       }
       setIsEditingJson(false);
     }
   };
-  
-  // Approve document
+
+  // ---------------------- Approve Document ----------------------
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
-    
     try {
       const userRef = doc(db, "users", selectedUser.userId);
-      
       await updateDoc(userRef, {
         [`documents.${selectedDocument.type}.verified`]: true,
         [`documents.${selectedDocument.type}.verifiedAt`]: Timestamp.now(),
         [`documents.${selectedDocument.type}.rejectionReason`]: null,
         [`documents.${selectedDocument.type}.rejectionDetail`]: null,
       });
-      
       alert("Document approved successfully!");
-      setSelectedDocument(null);
+      // Reset
       setSelectedUser(null);
+      setSelectedDocument(null);
+      setJsonContent(null);
       fetchUsers();
-    } catch (error: any) {
-      console.error("Error approving document:", error);
-      alert("Error approving document: " + error.message);
+    } catch (err: any) {
+      console.error("Error approving document:", err);
+      alert("Error: " + err.message);
     }
   };
-  
-  // Reject document with a reason
+
+  // ---------------------- Reject Document ----------------------
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
-    
     try {
       const userRef = doc(db, "users", selectedUser.userId);
-      
+
       const reasonDescriptions: Record<string, string> = {
-        unclear:
-          "The uploaded document is blurry, has poor lighting, or key information is not clearly visible.",
-        mismatch:
-          "The information on the document does not match our records or other submitted documents.",
-        expired:
-          "The document appears to be expired or no longer valid.",
+        unclear: "The document is unclear/blurry.",
+        mismatch: "Document info does not match our records.",
+        expired: "Document appears to be expired.",
       };
-      
+
       await updateDoc(userRef, {
         [`documents.${selectedDocument.type}.verified`]: false,
         [`documents.${selectedDocument.type}.rejectionReason`]: reason,
@@ -235,60 +200,78 @@ export default function VerificationAdmin() {
           reasonDescriptions[reason] || "",
         [`documents.${selectedDocument.type}.rejectedAt`]: Timestamp.now(),
       });
-      
+
       alert("Document rejected successfully!");
-      setSelectedDocument(null);
+      // Reset
       setSelectedUser(null);
+      setSelectedDocument(null);
+      setJsonContent(null);
       fetchUsers();
-    } catch (error: any) {
-      console.error("Error rejecting document:", error);
-      alert("Error rejecting document: " + error.message);
+    } catch (err: any) {
+      console.error("Error rejecting document:", err);
+      alert("Error: " + err.message);
     }
   };
 
-  // Save updated JSON back to Firebase Storage
+  // ---------------------- Save Updated OCR JSON ----------------------
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
     try {
-      // Validate JSON syntax
+      // Validate JSON
       JSON.parse(jsonContent);
 
-      const jsonFilePath = `ocrResults/${selectedUser.userId}/${selectedDocument.type}.json`;
-      const jsonFileRef = ref(storage, jsonFilePath);
+      const jsonPath = `ocrResults/${selectedUser.userId}/${selectedDocument.type}.json`;
+      const jsonRef = ref(storage, jsonPath);
 
-      await uploadString(jsonFileRef, jsonContent, "raw", {
+      // Overwrite existing JSON in Storage
+      await uploadString(jsonRef, jsonContent, "raw", {
         contentType: "application/json",
       });
 
       alert("JSON file updated successfully!");
       setIsEditingJson(false);
-    } catch (error) {
-      console.error("Failed to update JSON file:", error);
-      alert("Failed to update JSON. Check the console or your JSON syntax.");
+    } catch (err) {
+      console.error("Failed to update JSON:", err);
+      alert("Error updating JSON. Check console or your JSON syntax.");
     }
   };
-  
-  // If not authenticated, show Google sign-in UI
+
+  // ---------------------- Render ----------------------
+  // If not authed, show password form
   if (!isAuthenticated) {
     return (
       <div className="p-4 max-w-md mx-auto mt-10 bg-white rounded shadow">
         <h1 className="text-2xl font-bold mb-4">Admin Login</h1>
+        <input
+          type="password"
+          placeholder="Enter password"
+          value={passwordInput}
+          onChange={(e) => {
+            setPasswordInput(e.target.value);
+            setPasswordError(false);
+          }}
+          className="w-full p-2 border rounded mb-2"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleLogin();
+          }}
+        />
+        {passwordError && (
+          <p className="text-red-500 text-sm mb-2">Incorrect password</p>
+        )}
         <button
           className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          onClick={handleGoogleSignIn}
+          onClick={handleLogin}
         >
-          Sign in with Google
+          Login
         </button>
       </div>
     );
   }
-  
-  // Render the main verification admin UI
+
+  // Main Admin UI
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Document Verification Admin</h1>
-      <p className="mb-4">Signed in as: {userEmail}</p>
-      
       <div className="mb-4">
         <div className="flex gap-2 mb-4">
           <button
@@ -316,7 +299,7 @@ export default function VerificationAdmin() {
             Rejected
           </button>
         </div>
-        
+
         <button
           className="p-2 bg-gray-200 rounded hover:bg-gray-300 mb-4"
           onClick={fetchUsers}
@@ -324,9 +307,9 @@ export default function VerificationAdmin() {
           Refresh
         </button>
       </div>
-      
+
       {loading ? (
-        <p>Loading...</p>
+        <p>Loading user data...</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full bg-white border">
@@ -372,7 +355,9 @@ export default function VerificationAdmin() {
                     <td className="p-2 border">
                       <div>
                         <p className="font-bold">{user.displayName || "No Name"}</p>
-                        <p className="text-sm">{user.email || user.phoneNumber || user.userId}</p>
+                        <p className="text-sm">
+                          {user.email || user.phoneNumber || user.userId}
+                        </p>
                       </div>
                     </td>
                     <td className="p-2 border">
@@ -441,15 +426,19 @@ export default function VerificationAdmin() {
           </table>
         </div>
       )}
-      
+
+      {/* Modal for Document / OCR JSON */}
       {selectedDocument && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white p-4 rounded max-w-4xl max-h-[90vh] overflow-auto w-full md:w-auto">
             <h2 className="text-xl font-bold mb-4">
-              {selectedDocument.type === "id-document" ? "Identity Document" : "Driving License"}
+              {selectedDocument.type === "id-document"
+                ? "Identity Document"
+                : "Driving License"}
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Document Image */}
               {selectedDocument.data.url && (
                 <div>
                   <h3 className="font-bold mb-2">Document Image</h3>
@@ -460,12 +449,25 @@ export default function VerificationAdmin() {
                   />
                 </div>
               )}
-              
+
+              {/* User & Document Info */}
               <div>
                 <h3 className="font-bold mb-2">User Information</h3>
-                <p><strong>User ID:</strong> {selectedUser?.userId}</p>
-                {selectedUser?.email && <p><strong>Email:</strong> {selectedUser.email}</p>}
-                {selectedUser?.phoneNumber && <p><strong>Phone:</strong> {selectedUser.phoneNumber}</p>}
+                <p>
+                  <strong>User ID:</strong> {selectedUser?.userId}
+                </p>
+                {selectedUser?.email && (
+                  <p>
+                    <strong>Email:</strong> {selectedUser.email}
+                  </p>
+                )}
+                {selectedUser?.phoneNumber && (
+                  <p>
+                    <strong>Phone:</strong> {selectedUser.phoneNumber}
+                  </p>
+                )}
+
+                {/* Extracted Data */}
                 {selectedDocument.data.extractedData && (
                   <div className="mt-4">
                     <h3 className="font-bold mb-2">Extracted Data</h3>
@@ -476,6 +478,8 @@ export default function VerificationAdmin() {
                     </div>
                   </div>
                 )}
+
+                {/* OCR JSON Data */}
                 {jsonContent && (
                   <div className="mt-4">
                     <h3 className="font-bold mb-2 flex items-center justify-between">
@@ -489,6 +493,7 @@ export default function VerificationAdmin() {
                         </button>
                       )}
                     </h3>
+
                     {!isEditingJson ? (
                       <div className="p-2 bg-gray-100 rounded max-h-40 overflow-auto">
                         <pre className="text-xs">{jsonContent}</pre>
@@ -520,7 +525,8 @@ export default function VerificationAdmin() {
                 )}
               </div>
             </div>
-            
+
+            {/* Modal Actions */}
             <div className="mt-4 flex justify-between">
               <div>
                 <button
