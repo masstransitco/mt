@@ -29,10 +29,12 @@ interface LicenseModalProps {
   onClose: () => void;
 }
 
+// Extended DocumentStatus to include rejectionReason.
 interface DocumentStatus {
   url?: string;
   uploadedAt?: number;
   verified?: boolean;
+  rejectionReason?: string;
 }
 
 interface Address {
@@ -122,13 +124,13 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
 
   if (!mounted) return null;
 
+  // Updated render function that checks for rejectionReason first
   const renderDocumentStatus = (
     type: "id-document" | "driving-license",
     document?: DocumentStatus
   ) => {
-    if (!document || !document.url) {
-      return null;
-    }
+    if (!document || !document.url) return null;
+    
     return (
       <div className="mt-3 flex flex-col">
         <button
@@ -138,19 +140,22 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
           <Eye className="w-3.5 h-3.5 mr-1.5" />
           View your {type === "id-document" ? "ID card" : "driving license or permit"}
         </button>
-        <div className="flex items-center">
-          {document.verified ? (
-            <div className="flex items-center text-green-500">
-              <Check className="w-4 h-4 mr-1" />
-              <span className="text-xs">Verified</span>
-            </div>
-          ) : (
-            <div className="flex items-center text-amber-500">
-              <AlertCircle className="w-4 h-4 mr-1" />
-              <span className="text-xs">Pending verification</span>
-            </div>
-          )}
-        </div>
+        {document.rejectionReason ? (
+          <div className="flex items-center text-red-500">
+            <AlertCircle className="w-4 h-4 mr-1" />
+            <span className="text-xs">Rejected: {document.rejectionReason}</span>
+          </div>
+        ) : document.verified ? (
+          <div className="flex items-center text-green-500">
+            <Check className="w-4 h-4 mr-1" />
+            <span className="text-xs">Verified</span>
+          </div>
+        ) : (
+          <div className="flex items-center text-amber-500">
+            <AlertCircle className="w-4 h-4 mr-1" />
+            <span className="text-xs">Pending verification</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -165,11 +170,10 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         }}
       >
         <DialogContent
-          // Removed inline height/width styles to let dialog.tsx handle positioning
           className={cn(
             "p-0 gap-0",
             "bg-black text-white",
-            "overflow-hidden" // you can keep this if you want
+            "overflow-hidden"
           )}
         >
           <DialogHeader className="border-b border-gray-800">
@@ -361,11 +365,10 @@ export default function LicenseModal({ isOpen, onClose }: LicenseModalProps) {
         }}
       >
         <DialogContent
-          // Also remove custom w/h to let the shared dialog handle it
           className={cn(
             "p-0 gap-0",
             "bg-black text-white",
-            "overflow-hidden" // keep if you want scroll control
+            "overflow-hidden"
           )}
         >
           <DialogHeader className="border-b border-gray-800">
