@@ -1,20 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  getFirestore,
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  Timestamp,
-} from "firebase/firestore";
-import {
-  getStorage,
-  ref,
-  getDownloadURL,
-  uploadString,
-} from "firebase/storage";
 
 // ---------------------- Interfaces ----------------------
 interface ExtractedData {
@@ -31,14 +17,14 @@ interface DocumentData {
   url: string;
   uploadedAt: number;
   verified: boolean;
-  verifiedAt?: Timestamp;
+  verifiedAt?: any; // because we get it from server, might not be Timestamp
   verifiedBy?: string;
   rejectionReason?: string;
   rejectionDetail?: string;
-  rejectedAt?: Timestamp;
+  rejectedAt?: any;
   extractedData?: ExtractedData;
   ocrConfidence?: number;
-  processedAt?: Timestamp;
+  processedAt?: any;
 }
 
 interface UserDocuments {
@@ -61,10 +47,6 @@ interface SelectedDocumentType {
 
 // ---------------------- Component ----------------------
 export default function VerificationAdmin() {
-  // Firebase instances
-  const db = getFirestore();
-  const storage = getStorage();
-
   // State for simple password-based login
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -95,28 +77,27 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Fetch Users ----------------------
+  // ---------------------- Fetch Users (From Server) ----------------------
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const usersRef = collection(db, "users");
-      const snapshot = await getDocs(usersRef);
-
-      const userData: UserData[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as UserData;
-        data.userId = docSnap.id;
-
-        // Only include users who have at least one document
-        if (
-          data.documents &&
-          (data.documents["id-document"] || data.documents["driving-license"])
-        ) {
-          userData.push(data);
-        }
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "fetchUsers" }),
       });
-
-      setUsers(userData);
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to fetch users");
+      }
+      // data.users is an array of user docs
+      const allUsers: UserData[] = data.users || [];
+      // Filter out only those who have at least one doc, if you want
+      const filtered = allUsers.filter((u) =>
+        u.documents &&
+        (u.documents["id-document"] || u.documents["driving-license"])
+      );
+      setUsers(filtered);
     } catch (err) {
       console.error("Error fetching users:", err);
       alert("Failed to fetch users. Check console.");
@@ -125,119 +106,145 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- View Document + OCR JSON ----------------------
+  // ---------------------- View Document + OCR JSON (From Server) ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
-    if (!user.documents) return;
+    if (!user) return;
+    setSelectedUser(null);
+    setSelectedDocument(null);
+    setJsonContent(null);
+    setIsEditingJson(false);
 
-    let documentData: DocumentData | undefined;
-    if (docType === "id-document") {
-      documentData = user.documents["id-document"];
-    } else if (docType === "driving-license") {
-      documentData = user.documents["driving-license"];
-    }
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          op: "viewDocument",
+          userId: user.userId,
+          docType
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to view document");
+      }
 
-    if (documentData) {
-      setSelectedUser(user);
-      setSelectedDocument({ type: docType, data: documentData });
+      // data.userData => entire user doc from Firestore
+      const fetchedUser = data.userData as UserData;
+      const docData = fetchedUser.documents?.[docType];
+      if (!docData) {
+        alert("Document data not found on server response.");
+        return;
+      }
 
-      // Attempt to fetch associated OCR JSON
-      try {
-        const jsonPath = `ocrResults/${user.userId}/${docType}.json`;
-        const jsonRef = ref(storage, jsonPath);
+      setSelectedUser(fetchedUser);
+      setSelectedDocument({
+        type: docType,
+        data: docData,
+      });
 
-        const jsonUrl = await getDownloadURL(jsonRef);
-        const response = await fetch(jsonUrl);
-        const jsonData = await response.json();
-
-        setJsonContent(JSON.stringify(jsonData, null, 2));
-      } catch (error) {
-        console.log(`No OCR JSON found for ${user.userId}/${docType}`);
+      // data.ocrJson => OCR JSON from Storage (or null if none)
+      if (data.ocrJson) {
+        setJsonContent(JSON.stringify(data.ocrJson, null, 2));
+      } else {
         setJsonContent(null);
       }
       setIsEditingJson(false);
+    } catch (err) {
+      console.error("View document error:", err);
+      alert(String(err));
     }
   };
 
-  // ---------------------- Approve Document ----------------------
+  // ---------------------- Approve Document (Server) ----------------------
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
     try {
-      const userRef = doc(db, "users", selectedUser.userId);
-      await updateDoc(userRef, {
-        [`documents.${selectedDocument.type}.verified`]: true,
-        [`documents.${selectedDocument.type}.verifiedAt`]: Timestamp.now(),
-        [`documents.${selectedDocument.type}.rejectionReason`]: null,
-        [`documents.${selectedDocument.type}.rejectionDetail`]: null,
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          op: "approveDocument",
+          userId: selectedUser.userId,
+          docType: selectedDocument.type,
+        }),
       });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to approve document");
+      }
       alert("Document approved successfully!");
       // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
       fetchUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error approving document:", err);
-      alert("Error: " + err.message);
+      alert(String(err));
     }
   };
 
-  // ---------------------- Reject Document ----------------------
+  // ---------------------- Reject Document (Server) ----------------------
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
     try {
-      const userRef = doc(db, "users", selectedUser.userId);
-
-      const reasonDescriptions: Record<string, string> = {
-        unclear: "The document is unclear/blurry.",
-        mismatch: "Document info does not match our records.",
-        expired: "Document appears to be expired.",
-      };
-
-      await updateDoc(userRef, {
-        [`documents.${selectedDocument.type}.verified`]: false,
-        [`documents.${selectedDocument.type}.rejectionReason`]: reason,
-        [`documents.${selectedDocument.type}.rejectionDetail`]:
-          reasonDescriptions[reason] || "",
-        [`documents.${selectedDocument.type}.rejectedAt`]: Timestamp.now(),
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          op: "rejectDocument",
+          userId: selectedUser.userId,
+          docType: selectedDocument.type,
+          reason
+        }),
       });
-
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to reject document");
+      }
       alert("Document rejected successfully!");
       // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
       fetchUsers();
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error rejecting document:", err);
-      alert("Error: " + err.message);
+      alert(String(err));
     }
   };
 
-  // ---------------------- Save Updated OCR JSON ----------------------
+  // ---------------------- Save Updated OCR JSON (Server) ----------------------
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
     try {
-      // Validate JSON
+      // Validate JSON syntax
       JSON.parse(jsonContent);
 
-      const jsonPath = `ocrResults/${selectedUser.userId}/${selectedDocument.type}.json`;
-      const jsonRef = ref(storage, jsonPath);
-
-      // Overwrite existing JSON in Storage
-      await uploadString(jsonRef, jsonContent, "raw", {
-        contentType: "application/json",
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          op: "saveJson",
+          userId: selectedUser.userId,
+          docType: selectedDocument.type,
+          jsonContent
+        }),
       });
-
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to save JSON");
+      }
       alert("JSON file updated successfully!");
       setIsEditingJson(false);
     } catch (err) {
-      console.error("Failed to update JSON:", err);
-      alert("Error updating JSON. Check console or your JSON syntax.");
+      console.error("Error updating JSON:", err);
+      alert(String(err));
     }
   };
 
   // ---------------------- Render ----------------------
-  // If not authed, show password form
   if (!isAuthenticated) {
     return (
       <div className="p-4 max-w-md mx-auto mt-10 bg-white rounded shadow">
@@ -508,7 +515,9 @@ export default function VerificationAdmin() {
                         <div className="mt-2 flex gap-2">
                           <button
                             className="px-3 py-1 bg-green-500 text-white rounded text-xs"
-                            onClick={saveJsonChanges}
+                            onClick={async () => {
+                              await saveJsonChanges();
+                            }}
                           >
                             Save JSON Changes
                           </button>
