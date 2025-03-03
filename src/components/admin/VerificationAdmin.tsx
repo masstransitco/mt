@@ -114,6 +114,7 @@ export default function VerificationAdmin() {
   // ---------------------- View Document + OCR JSON (From Server) ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
     if (!user) return;
+    // Reset states
     setSelectedUser(null);
     setSelectedDocument(null);
     setJsonContent(null);
@@ -126,7 +127,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "viewDocument",
           adminPassword: "20230301",
-          userId: user.userId,
+          userId: user.userId.trim(),  // Ensure no trailing spaces
           docType,
         }),
       });
@@ -161,6 +162,12 @@ export default function VerificationAdmin() {
   // ---------------------- Approve Document (Server) ----------------------
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
+    
+    const userId = selectedUser.userId.trim();
+    const docType = selectedDocument.type;
+
+    console.log("Approving doc for user:", userId, "docType:", docType);
+
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -168,8 +175,8 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "approveDocument",
           adminPassword: "20230301",
-          userId: selectedUser.userId,
-          docType: selectedDocument.type,
+          userId,
+          docType,
         }),
       });
       const data = await res.json();
@@ -191,6 +198,12 @@ export default function VerificationAdmin() {
   // ---------------------- Reject Document (Server) ----------------------
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
+    
+    const userId = selectedUser.userId.trim();
+    const docType = selectedDocument.type;
+
+    console.log("Rejecting doc for user:", userId, "docType:", docType, "reason:", reason);
+
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -198,8 +211,8 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "rejectDocument",
           adminPassword: "20230301",
-          userId: selectedUser.userId,
-          docType: selectedDocument.type,
+          userId,
+          docType,
           reason,
         }),
       });
@@ -225,14 +238,17 @@ export default function VerificationAdmin() {
     try {
       JSON.parse(jsonContent); // Validate JSON
 
+      const userId = selectedUser.userId.trim();
+      const docType = selectedDocument.type;
+
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "saveJson",
           adminPassword: "20230301",
-          userId: selectedUser.userId,
-          docType: selectedDocument.type,
+          userId,
+          docType,
           jsonContent,
         }),
       });
@@ -356,6 +372,7 @@ export default function VerificationAdmin() {
               {users
                 .filter((user) => {
                   if (currentTab === "pending") {
+                    // Display docs that are neither verified nor rejected
                     return (
                       (user.documents?.["id-document"] &&
                         !user.documents["id-document"].verified &&
@@ -365,6 +382,7 @@ export default function VerificationAdmin() {
                         !user.documents["driving-license"].rejectionReason)
                     );
                   } else if (currentTab === "approved") {
+                    // Display docs that are verified
                     return (
                       (user.documents?.["id-document"] &&
                         user.documents["id-document"].verified) ||
@@ -372,6 +390,7 @@ export default function VerificationAdmin() {
                         user.documents["driving-license"].verified)
                     );
                   } else if (currentTab === "rejected") {
+                    // Display docs that are rejected
                     return (
                       (user.documents?.["id-document"] &&
                         user.documents["id-document"].rejectionReason) ||
