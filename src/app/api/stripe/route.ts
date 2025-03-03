@@ -1,35 +1,3 @@
-/**
- * Force this route to run on the Node.js runtime (rather than the Edge runtime),
- * which supports the firebase-admin SDK.
- */
-export const runtime = 'nodejs';
-
-import { NextRequest, NextResponse } from 'next/server';
-import { headers } from 'next/headers';
-import Stripe from 'stripe';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
-
-// Initialize Firebase Admin and get Firestore/Auth
-const { db, auth } = initializeFirebaseAdmin();
-
-// Interfaces
-interface PaymentMethod {
-  id?: string;         // The Stripe PaymentMethod ID
-  stripeId?: string;   // Alternative field name for the Stripe PaymentMethod ID
-  brand: string;
-  last4: string;
-  expMonth: number;
-  expYear: number;
-  isDefault?: boolean;
-}
-
-interface CreatePaymentIntentData {
-  amount: number;
-  currency?: string;
-  paymentMethodId: string;
-  userId: string;
-}
-
 // Helper to create user document if it doesn't exist
 async function ensureUserExists(userId: string) {
   const userRef = db.collection("users").doc(userId);
@@ -42,127 +10,11 @@ async function ensureUserExists(userId: string) {
       balance: 0,
       createdAt: new Date().toISOString(),
     });
-    return { exists: false, data: { balance: 0 } };
+    return { exists: false, data: { balance: 0, uid: userId } };
   }
   
-  return { exists: true, data: userSnap.data() };
+  return { exists: true, data: userSnap.data() || {} };
 }
-
-// Auth middleware to verify the user's Firebase ID token
-async function verifyAuth(req: NextRequest) {
-  const headersList = headers();
-  const authHeader = headersList.get('Authorization');
-  
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid authorization token');
-  }
-
-  // Extract the token from the header
-  const token = authHeader.split('Bearer ')[1];
-  // Verify with Firebase Admin
-  const decodedToken = await auth.verifyIdToken(token);
-  return decodedToken.uid;
-}
-
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16',
-});
-
-// Helper for error responses
-const errorResponse = (message: string, status: number = 400) => {
-  return NextResponse.json({ success: false, error: message }, { status });
-};
-
-// Helper for success responses
-const successResponse = (data: any) => {
-  return NextResponse.json({ success: true, ...data });
-};
-
-// POST /api/stripe
-export async function POST(request: NextRequest) {
-  try {
-    // Verify the user's Firebase token
-    const authenticatedUserId = await verifyAuth(request);
-
-    // Expect a JSON body with { action, userId, ...data }
-    const { action, userId, ...data } = await request.json();
-
-    // Check for ownership
-    if (authenticatedUserId !== userId) {
-      return errorResponse('Unauthorized access', 403);
-    }
-
-    // Handle various actions
-    switch (action) {
-      case 'save-payment-method':
-        return await handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
-
-      case 'delete-payment-method':
-        return await handleDeletePaymentMethod(userId, data.paymentMethodId);
-
-      case 'set-default-payment-method':
-        // data.paymentMethodId is the Firestore doc ID
-        return await handleSetDefaultPaymentMethod(userId, data.paymentMethodId);
-
-      case 'create-payment-intent':
-        return await handleCreatePaymentIntent({ ...data, userId });
-
-      default:
-        return errorResponse('Invalid action');
-    }
-  } catch (error) {
-    console.error('POST /api/stripe Error:', error);
-    if (error instanceof Error && error.message.includes('auth')) {
-      return errorResponse(error.message, 401);
-    }
-    return errorResponse(
-      error instanceof Error ? error.message : 'Internal server error',
-      500
-    );
-  }
-}
-
-// GET /api/stripe
-export async function GET(request: NextRequest) {
-  try {
-    // Verify the user's Firebase token
-    const authenticatedUserId = await verifyAuth(request);
-
-    const { searchParams } = new URL(request.url);
-    const action = searchParams.get('action');
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return errorResponse('User ID is required');
-    }
-    if (authenticatedUserId !== userId) {
-      return errorResponse('Unauthorized access', 403);
-    }
-
-    // Handle GET actions
-    switch (action) {
-      case 'get-payment-methods':
-        return await handleGetPaymentMethods(userId);
-
-      default:
-        return errorResponse('Invalid action');
-    }
-  } catch (error) {
-    console.error('GET /api/stripe Error:', error);
-    if (error instanceof Error && error.message.includes('auth')) {
-      return errorResponse(error.message, 401);
-    }
-    return errorResponse(
-      error instanceof Error ? error.message : 'Internal server error',
-      500
-    );
-  }
-}
-
-/** ------------------------------------------------------------------
- * ACTION HANDLERS
- * ------------------------------------------------------------------*/
 
 /**
  * Save a payment method to Firestore for the user.
@@ -184,7 +36,9 @@ async function handleSavePaymentMethod({
 
   try {
     // Get or create user doc
-    const { exists, data: userData } = await ensureUserExists(userId);
+    const { exists, data } = await ensureUserExists(userId);
+    const userData = data || {}; // Ensure userData is always an object
+    
     let stripeCustomerId = userData.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -267,29 +121,6 @@ async function handleSavePaymentMethod({
 }
 
 /**
- * Delete a payment method doc from Firestore for the user.
- */
-async function handleDeletePaymentMethod(userId: string, paymentMethodId: string) {
-  if (!paymentMethodId) {
-    return errorResponse('Payment method ID is required');
-  }
-  try {
-    // Ensure user exists
-    await ensureUserExists(userId);
-    
-    await db
-      .collection(`users/${userId}/paymentMethods`)
-      .doc(paymentMethodId)
-      .delete();
-
-    return successResponse({ message: 'Payment method deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting payment method:', error);
-    return errorResponse('Failed to delete payment method', 500);
-  }
-}
-
-/**
  * Set a payment method as default for the user.
  * 1) Unset `isDefault` on all other docs
  * 2) Set `isDefault = true` on the chosen doc
@@ -303,7 +134,9 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
 
   try {
     // Ensure user exists
-    const { data: userData } = await ensureUserExists(userId);
+    const { data } = await ensureUserExists(userId);
+    const userData = data || {}; // Ensure userData is always an object
+    
     let stripeCustomerId = userData.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -360,28 +193,6 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
 }
 
 /**
- * Get all payment methods from Firestore for the user.
- */
-async function handleGetPaymentMethods(userId: string) {
-  try {
-    // Ensure user exists first
-    await ensureUserExists(userId);
-    
-    const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
-    const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
-    const paymentMethods = snapshot.docs.map((doc) => ({
-      docId: doc.id,
-      ...doc.data(),
-    }));
-
-    return successResponse({ paymentMethods });
-  } catch (error) {
-    console.error('Error getting payment methods:', error);
-    return errorResponse('Failed to get payment methods', 500);
-  }
-}
-
-/**
  * Create a Payment Intent with Stripe.
  */
 async function handleCreatePaymentIntent({
@@ -401,7 +212,9 @@ async function handleCreatePaymentIntent({
 
   try {
     // Ensure user exists
-    const { data: userData } = await ensureUserExists(userId);
+    const { data } = await ensureUserExists(userId);
+    const userData = data || {}; // Ensure userData is always an object
+    
     let stripeCustomerId = userData.stripeCustomerId;
     
     if (!stripeCustomerId) {
