@@ -1,11 +1,44 @@
 // src/app/api/user-balance/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { auth as adminAuth, db, topUpUserBalance } from "@/lib/firebase-admin";
+import { auth as adminAuth, db } from "@/lib/firebase-admin";
 import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2023-10-16",
 });
+
+// Helper to create user document if it doesn't exist
+async function ensureUserExists(userId: string) {
+  const userRef = db.collection("users").doc(userId);
+  const userSnap = await userRef.get();
+  
+  if (!userSnap.exists) {
+    // Create a new user document with default values
+    await userRef.set({
+      uid: userId,
+      balance: 0,
+      createdAt: new Date().toISOString(),
+    });
+    return { exists: false, data: { balance: 0 } };
+  }
+  
+  return { exists: true, data: userSnap.data() };
+}
+
+// Helper to top up user balance
+export async function topUpUserBalance(userId: string, amount: number): Promise<number> {
+  const userRef = db.collection("users").doc(userId);
+  
+  // Get current balance
+  const { exists, data } = await ensureUserExists(userId);
+  const currentBalance = data?.balance || 0;
+  
+  // Add amount to balance
+  const newBalance = currentBalance + amount;
+  await userRef.update({ balance: newBalance });
+  
+  return newBalance;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,16 +74,10 @@ export async function GET(req: NextRequest) {
 
     // handle get-balance
     if (action === "get-balance") {
-      const userRef = db.collection("users").doc(userId);
-      const userSnap = await userRef.get();
-      if (!userSnap.exists) {
-        return NextResponse.json(
-          { success: false, error: "User does not exist" },
-          { status: 404 }
-        );
-      }
-      const userData = userSnap.data() || {};
-      const balance = userData.balance || 0;
+      // Get or create user document
+      const { data } = await ensureUserExists(userId);
+      const balance = data?.balance || 0;
+      
       return NextResponse.json({ success: true, balance }, { status: 200 });
     }
 
@@ -101,27 +128,22 @@ export async function POST(req: NextRequest) {
       }
 
       // 1) Fetch the user doc to get stripeCustomerId and defaultPaymentMethodId
-      const userRef = db.collection("users").doc(userId);
-      const userSnap = await userRef.get();
-      if (!userSnap.exists) {
-        return NextResponse.json(
-          { success: false, error: "User not found" },
-          { status: 404 }
-        );
-      }
-      const userData = userSnap.data() || {};
+      const { exists, data: userData } = await ensureUserExists(userId);
 
       // If no stripeCustomerId, create it now
       let stripeCustomerId = userData.stripeCustomerId;
       if (!stripeCustomerId) {
         const newCustomer = await stripe.customers.create({
-          // Optional: pass in user’s email, name, etc. if you have them
+          // Optional: pass in user's email, name, etc. if you have them
           metadata: { userId },
         });
         stripeCustomerId = newCustomer.id;
 
         // Store in user doc
-        await userRef.update({ stripeCustomerId });
+        await db.collection("users").doc(userId).update({ 
+          stripeCustomerId,
+          updatedAt: new Date().toISOString()
+        });
       }
 
       // Next, ensure we have a default payment method
