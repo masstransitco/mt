@@ -36,17 +36,17 @@ export default function IDCamera({
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const db = getFirestore();
-  
-  // Document-specific labels
-  const documentLabel = documentType === "identity" 
-    ? "Identity Document" 
-    : "Driving License";
 
+  const db = getFirestore();
+
+  // Document-specific labels
+  const documentLabel =
+    documentType === "identity" ? "Identity Document" : "Driving License";
+
+  // Start/Stop camera as the dialog opens/closes
   useEffect(() => {
     if (isOpen && !cameraStream) {
       startCamera();
@@ -56,6 +56,7 @@ export default function IDCamera({
     };
   }, [isOpen]);
 
+  // Auto-close after success message
   useEffect(() => {
     if (uploadSuccess) {
       const timer = setTimeout(() => {
@@ -66,12 +67,13 @@ export default function IDCamera({
     }
   }, [uploadSuccess, onSuccess, onClose]);
 
+  // Start camera with front/back constraints
   const startCamera = useCallback(async () => {
     try {
       setCapturedImage(null);
       setPermissionDenied(false);
       setErrorMessage(null);
-      
+
       const constraints = {
         video: { 
           facingMode: isFrontCamera ? "user" : "environment",
@@ -79,10 +81,10 @@ export default function IDCamera({
           height: { ideal: 720 }
         }
       };
-      
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setCameraStream(stream);
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
@@ -98,7 +100,7 @@ export default function IDCamera({
 
   const stopCamera = useCallback(() => {
     if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream.getTracks().forEach((track) => track.stop());
       setCameraStream(null);
     }
   }, [cameraStream]);
@@ -115,15 +117,16 @@ export default function IDCamera({
       const canvas = canvasRef.current;
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      
-      const ctx = canvas.getContext('2d');
+
+      const ctx = canvas.getContext("2d");
       if (ctx) {
         if (isFrontCamera) {
+          // Flip horizontally for front camera
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
         }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageDataURL = canvas.toDataURL('image/jpeg', 0.8);
+        const imageDataURL = canvas.toDataURL("image/jpeg", 0.8);
         setCapturedImage(imageDataURL);
       }
     }
@@ -136,33 +139,36 @@ export default function IDCamera({
     }
   }, [cameraStream, startCamera]);
 
-  // ***** MAIN CHANGE: after we upload to Firebase, we call our Next.js API with the URL *****
+  // ---------- MAIN LOGIC: Upload to Firebase, then call the OCR API -----------
   const handleUpload = useCallback(async () => {
     if (!capturedImage || !auth.currentUser) return;
     setIsUploading(true);
     setErrorMessage(null);
-    
+
     try {
-      // 1) Upload to Firebase Storage
+      // 1) Convert data URL to Blob
       const response = await fetch(capturedImage);
       const blob = await response.blob();
-      
+
       const userId = auth.currentUser.uid;
       const timestamp = Date.now();
       const docTypeKey = documentType === "identity" ? "id-document" : "driving-license";
       const imageRef = ref(storage, `users/${userId}/${docTypeKey}/${timestamp}.jpg`);
-      
+
       console.log("Attempting to upload to:", `users/${userId}/${docTypeKey}/${timestamp}.jpg`);
       await uploadBytes(imageRef, blob);
       console.log("Storage upload successful");
-      
-      const downloadURL = await getDownloadURL(imageRef);
 
-      // 2) Update Firestore doc with the new image info
-      const userDocRef = doc(db, "users", userId);
-      const userDocSnap = await getDoc(userDocRef);
+      // 2) Get public download URL
+      const downloadURL = await getDownloadURL(imageRef);
+      console.log("Firebase download URL:", downloadURL);
+
+      // 3) Update Firestore doc with new image info
+      const dbRef = doc(db, "users", userId);
+      const userDocSnap = await getDoc(dbRef);
+
       if (userDocSnap.exists()) {
-        await updateDoc(userDocRef, {
+        await updateDoc(dbRef, {
           [`documents.${docTypeKey}`]: {
             url: downloadURL,
             uploadedAt: timestamp,
@@ -170,7 +176,7 @@ export default function IDCamera({
           }
         });
       } else {
-        await setDoc(userDocRef, {
+        await setDoc(dbRef, {
           userId,
           documents: {
             [docTypeKey]: {
@@ -182,42 +188,45 @@ export default function IDCamera({
         });
       }
       console.log("Firestore update successful");
-      
-      // 3) Call our Next.js API to run Tencent HKIDCardOCR using the public image URL
+
+      // 4) If it's the identity doc, call the OCR
       if (documentType === "identity") {
-        // Only do HKIDCardOCR if it's the identity doc. 
-        // For a driving license, you could add a separate route or logic if needed.
+        console.log("Calling OCR API with URL:", downloadURL);
+
         const processRes = await fetch("/api/verification/processDocument", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId,
             docType: docTypeKey,
-            imageUrl: downloadURL, // pass the Firebase URL
+            imageUrl: downloadURL, // pass the same exact URL
           }),
         });
-        
+
         const processData = await processRes.json();
         if (!processRes.ok) {
           throw new Error(processData.error || "OCR request failed");
         }
+
         console.log("OCR success, HKID data:", processData.hkidData);
       }
 
-      // Show success message
+      // Show success
       setUploadSuccess(true);
-      
+
     } catch (err) {
       console.error("Error uploading image or processing OCR:", err);
-      setErrorMessage(`Upload/OCR failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+      setErrorMessage(`Upload/OCR failed: ${
+        err instanceof Error ? err.message : "Unknown error"
+      }`);
     } finally {
       setIsUploading(false);
     }
   }, [capturedImage, documentType, onSuccess]);
 
   return (
-    <Dialog 
-      open={isOpen} 
+    <Dialog
+      open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
           stopCamera();
@@ -225,20 +234,20 @@ export default function IDCamera({
         }
       }}
     >
-      <DialogContent 
+      <DialogContent
         className="p-0 gap-0 w-[90vw] max-w-md md:max-w-2xl overflow-hidden bg-black text-white"
         onClick={(e) => e.stopPropagation()}
       >
         <DialogHeader className="px-6 py-4 bg-black/90 backdrop-blur-sm border-b border-gray-800 z-10">
           <DialogTitle className="text-white">
-            {uploadSuccess 
-              ? "Document Uploaded" 
-              : capturedImage 
-                ? `Confirm ${documentLabel}` 
-                : `Capture ${documentLabel}`}
+            {uploadSuccess
+              ? "Document Uploaded"
+              : capturedImage
+              ? `Confirm ${documentLabel}`
+              : `Capture ${documentLabel}`}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="relative w-full aspect-[3/4] bg-black">
           {/* Success message */}
           {uploadSuccess && (
@@ -252,16 +261,18 @@ export default function IDCamera({
               <p className="text-gray-400">Your document has been saved</p>
             </motion.div>
           )}
-        
-          {/* Permission denied message */}
-          {permissionDenied && (
+
+          {/* Permission denied */}
+          {permissionDenied && !uploadSuccess && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
               <Camera className="h-16 w-16 text-gray-500 mb-4" />
-              <h3 className="text-xl font-medium text-white mb-2">Camera Access Denied</h3>
+              <h3 className="text-xl font-medium text-white mb-2">
+                Camera Access Denied
+              </h3>
               <p className="text-gray-400 mb-4">
                 Please enable camera access in your browser settings to continue.
               </p>
-              <Button 
+              <Button
                 onClick={() => {
                   setPermissionDenied(false);
                   startCamera();
@@ -272,12 +283,12 @@ export default function IDCamera({
               </Button>
             </div>
           )}
-          
+
           {/* Error message */}
-          {errorMessage && (
+          {errorMessage && !uploadSuccess && (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
               <p className="text-red-400 mb-4">{errorMessage}</p>
-              <Button 
+              <Button
                 onClick={() => {
                   setErrorMessage(null);
                   startCamera();
@@ -288,7 +299,7 @@ export default function IDCamera({
               </Button>
             </div>
           )}
-          
+
           {/* Camera preview */}
           {!capturedImage && !permissionDenied && !errorMessage && !uploadSuccess && (
             <>
@@ -297,24 +308,34 @@ export default function IDCamera({
                 autoPlay
                 playsInline
                 muted
-                className={`absolute inset-0 w-full h-full object-cover ${isFrontCamera ? 'scale-x-[-1]' : ''}`}
+                className={`absolute inset-0 w-full h-full object-cover ${
+                  isFrontCamera ? "scale-x-[-1]" : ""
+                }`}
                 onCanPlay={() => {
                   if (videoRef.current) {
-                    videoRef.current.play().catch(err => console.error("Video play error:", err));
+                    videoRef.current
+                      .play()
+                      .catch((err) => console.error("Video play error:", err));
                   }
                 }}
               />
-              
+
               {/* Camera overlay */}
               <div className="absolute inset-0 border-2 border-dashed border-white/30 m-6 rounded-md flex items-center justify-center">
                 <div className="text-white/70 text-center p-4 bg-black/40 rounded-md">
-                  <p>Position your {documentType === "identity" ? "ID" : "license"} within the frame</p>
-                  <p className="text-sm">Ensure good lighting and all details are visible</p>
+                  <p>
+                    Position your{" "}
+                    {documentType === "identity" ? "ID" : "license"} within the
+                    frame
+                  </p>
+                  <p className="text-sm">
+                    Ensure good lighting and all details are visible
+                  </p>
                 </div>
               </div>
             </>
           )}
-          
+
           {/* Captured image preview */}
           {capturedImage && !uploadSuccess && (
             <motion.div
@@ -322,41 +343,42 @@ export default function IDCamera({
               animate={{ opacity: 1 }}
               className="absolute inset-0"
             >
-              <img 
-                src={capturedImage} 
-                alt="Captured document" 
+              <img
+                src={capturedImage}
+                alt="Captured document"
                 className="w-full h-full object-contain"
               />
             </motion.div>
           )}
-          
+
           {/* Hidden canvas */}
           <canvas ref={canvasRef} className="hidden" />
         </div>
-        
+
+        {/* Footer: capture/retake/upload */}
         {!uploadSuccess && (
           <DialogFooter className="p-4 bg-black border-t border-gray-800 flex flex-row justify-between">
             {!capturedImage ? (
               // Camera controls
               <>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   onClick={onClose}
                   className="text-white hover:bg-gray-800"
                 >
                   <X className="h-5 w-5 mr-2" />
                   Cancel
                 </Button>
-                
+
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={switchCamera}
                     className="text-white border-gray-700 hover:bg-gray-800"
                   >
                     <RotateCcw className="h-5 w-5" />
                   </Button>
-                  <Button 
+                  <Button
                     onClick={captureImage}
                     className="bg-white text-black hover:bg-gray-200 min-w-[100px]"
                   >
@@ -367,15 +389,15 @@ export default function IDCamera({
             ) : (
               // Confirmation controls
               <>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   onClick={retakeImage}
                   className="text-white hover:bg-gray-800"
                 >
                   <RotateCcw className="h-5 w-5 mr-2" />
                   Retake
                 </Button>
-                <Button 
+                <Button
                   onClick={handleUpload}
                   disabled={isUploading}
                   className="bg-white text-black hover:bg-gray-200 min-w-[100px]"
