@@ -1,4 +1,4 @@
-// src/app/admin/page.tsx
+//app/admin/page.tsx
 "use client";
 
 import VerificationAdmin from '@/components/admin/VerificationAdmin';
