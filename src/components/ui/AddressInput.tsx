@@ -13,6 +13,7 @@ import { X, MapPin, CheckCircle, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { doc, getFirestore, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 
 interface AddressInputProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ interface Address {
 }
 
 export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInputProps) {
+  useBodyScrollLock(isOpen);
+  
   // Address search state
   const [searchText, setSearchText] = useState("");
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
