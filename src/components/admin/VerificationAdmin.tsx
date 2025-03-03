@@ -28,6 +28,7 @@ interface DocumentData {
 }
 
 interface UserDocuments {
+  [key: string]: DocumentData | undefined;
   "id-document"?: DocumentData;
   "driving-license"?: DocumentData;
 }
