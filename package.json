@@ -54,7 +54,7 @@
     "stripe": "^14.14.0",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
-    "tencentcloud-sdk-nodejs": "^4.0.1041",
+    "tencentcloud-sdk-nodejs-intl-en": "^3.0.1122",
     "tesseract.js": "^6.0.0",
     "three": "^0.160.0",
     "three.meshline": "^1.4.0",
