@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
         const amountInCents = Math.round(amount * 100); // Convert e.g. $10 -> 1000 cents
         paymentIntent = await stripe.paymentIntents.create({
           amount: amountInCents,
-          currency: "usd", // or "hkd", etc.
+          currency: "hkd", // or "hkd", etc.
           customer: stripeCustomerId,
           payment_method: defaultPaymentMethodId,
           off_session: true,
