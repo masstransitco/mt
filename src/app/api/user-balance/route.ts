@@ -19,10 +19,10 @@ async function ensureUserExists(userId: string) {
       balance: 0,
       createdAt: new Date().toISOString(),
     });
-    return { exists: false, data: { balance: 0 } };
+    return { exists: false, data: { balance: 0, uid: userId } };
   }
   
-  return { exists: true, data: userSnap.data() };
+  return { exists: true, data: userSnap.data() || {} };
 }
 
 // Helper to top up user balance - moved to internal function, not exported
@@ -31,7 +31,8 @@ async function topUpUserBalance(userId: string, amount: number): Promise<number>
   
   // Get current balance
   const { exists, data } = await ensureUserExists(userId);
-  const currentBalance = data?.balance || 0;
+  const userData = data || {}; // Ensure userData is always an object
+  const currentBalance = userData.balance || 0;
   
   // Add amount to balance
   const newBalance = currentBalance + amount;
@@ -76,7 +77,8 @@ export async function GET(req: NextRequest) {
     if (action === "get-balance") {
       // Get or create user document
       const { data } = await ensureUserExists(userId);
-      const balance = data?.balance || 0;
+      const userData = data || {}; // Ensure userData is always an object
+      const balance = userData.balance || 0;
       
       return NextResponse.json({ success: true, balance }, { status: 200 });
     }
@@ -128,7 +130,8 @@ export async function POST(req: NextRequest) {
       }
 
       // 1) Fetch the user doc to get stripeCustomerId and defaultPaymentMethodId
-      const { exists, data: userData } = await ensureUserExists(userId);
+      const { exists, data } = await ensureUserExists(userId);
+      const userData = data || {}; // Ensure userData is always an object
 
       // If no stripeCustomerId, create it now
       let stripeCustomerId = userData.stripeCustomerId;
