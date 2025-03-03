@@ -193,36 +193,46 @@ export default function IDCamera({
       if (documentType === "identity") {
         console.log("Calling OCR API with URL:", downloadURL);
 
-        const processRes = await fetch("/api/verification/processDocument", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            docType: docTypeKey,
-            imageUrl: downloadURL, // pass the same exact URL
-          }),
-        });
+        try {
+          const processRes = await fetch("/api/verification/processDocument", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              docType: docTypeKey,
+              imageUrl: downloadURL,
+            }),
+          });
 
-        const processData = await processRes.json();
-        if (!processRes.ok) {
-          throw new Error(processData.error || "OCR request failed");
+          const processData = await processRes.json();
+          
+          if (!processRes.ok) {
+            throw new Error(processData.error || "OCR request failed");
+          }
+
+          console.log("OCR success, HKID data:", processData.hkidData);
+        } catch (ocrError) {
+          console.error("OCR processing error:", ocrError);
+          // Important: we still continue with success flow even if OCR fails
+          // Since the document is already uploaded
+          console.log("Document upload was successful despite OCR failure");
+          // Don't rethrow - we want to show success for the upload itself
         }
-
-        console.log("OCR success, HKID data:", processData.hkidData);
       }
 
-      // Show success
+      // Show success regardless of OCR success/failure
+      // as long as the document was uploaded
       setUploadSuccess(true);
 
     } catch (err) {
-      console.error("Error uploading image or processing OCR:", err);
-      setErrorMessage(`Upload/OCR failed: ${
+      console.error("Error uploading image:", err);
+      setErrorMessage(`Upload failed: ${
         err instanceof Error ? err.message : "Unknown error"
       }`);
     } finally {
       setIsUploading(false);
     }
-  }, [capturedImage, documentType, onSuccess]);
+  }, [capturedImage, documentType]);
 
   return (
     <Dialog
