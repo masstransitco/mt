@@ -25,8 +25,8 @@ async function ensureUserExists(userId: string) {
   return { exists: true, data: userSnap.data() };
 }
 
-// Helper to top up user balance
-export async function topUpUserBalance(userId: string, amount: number): Promise<number> {
+// Helper to top up user balance - moved to internal function, not exported
+async function topUpUserBalance(userId: string, amount: number): Promise<number> {
   const userRef = db.collection("users").doc(userId);
   
   // Get current balance
