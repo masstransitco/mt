@@ -30,6 +30,24 @@ interface CreatePaymentIntentData {
   userId: string;
 }
 
+// Helper to create user document if it doesn't exist
+async function ensureUserExists(userId: string) {
+  const userRef = db.collection("users").doc(userId);
+  const userSnap = await userRef.get();
+  
+  if (!userSnap.exists) {
+    // Create a new user document with default values
+    await userRef.set({
+      uid: userId,
+      balance: 0,
+      createdAt: new Date().toISOString(),
+    });
+    return { exists: false, data: { balance: 0 } };
+  }
+  
+  return { exists: true, data: userSnap.data() };
+}
+
 // Auth middleware to verify the user's Firebase ID token
 async function verifyAuth(req: NextRequest) {
   const headersList = headers();
@@ -165,13 +183,8 @@ async function handleSavePaymentMethod({
   }
 
   try {
-    // Get or create stripeCustomerId
-    const userRef = db.collection('users').doc(userId);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      return errorResponse(`User doc not found for ${userId}`, 404);
-    }
-    const userData = userSnap.data() || {};
+    // Get or create user doc
+    const { exists, data: userData } = await ensureUserExists(userId);
     let stripeCustomerId = userData.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -181,7 +194,10 @@ async function handleSavePaymentMethod({
         // optional: email: userData.email,
       });
       stripeCustomerId = newCustomer.id;
-      await userRef.update({ stripeCustomerId });
+      await db.collection("users").doc(userId).update({ 
+        stripeCustomerId,
+        updatedAt: new Date().toISOString()
+      });
     }
 
     // Get the payment method ID - support both id and stripeId fields
@@ -192,9 +208,17 @@ async function handleSavePaymentMethod({
 
     // Attach this PaymentMethod to the Stripe customer
     // This ensures it can be reused for off-session charges
-    await stripe.paymentMethods.attach(paymentMethodId, {
-      customer: stripeCustomerId,
-    });
+    try {
+      await stripe.paymentMethods.attach(paymentMethodId, {
+        customer: stripeCustomerId,
+      });
+    } catch (err: any) {
+      if (err.code === 'resource_already_exists') {
+        console.log(`Payment method ${paymentMethodId} already attached to customer ${stripeCustomerId}`);
+      } else {
+        throw err;
+      }
+    }
 
     // If it's the user's first card or user set isDefault: true, set as default in Stripe
     // (optional, but recommended)
@@ -223,7 +247,10 @@ async function handleSavePaymentMethod({
     // If it's the first or isDefault, also update the user doc
     // so we store defaultPaymentMethodId = Stripe PM ID
     if (finalIsDefault) {
-      await userRef.update({ defaultPaymentMethodId: paymentMethodId });
+      await db.collection("users").doc(userId).update({ 
+        defaultPaymentMethodId: paymentMethodId,
+        updatedAt: new Date().toISOString()
+      });
     }
 
     return successResponse({
@@ -247,6 +274,9 @@ async function handleDeletePaymentMethod(userId: string, paymentMethodId: string
     return errorResponse('Payment method ID is required');
   }
   try {
+    // Ensure user exists
+    await ensureUserExists(userId);
+    
     await db
       .collection(`users/${userId}/paymentMethods`)
       .doc(paymentMethodId)
@@ -272,12 +302,8 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
   }
 
   try {
-    const userRef = db.collection('users').doc(userId);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      return errorResponse(`User doc not found for ${userId}`, 404);
-    }
-    const userData = userSnap.data() || {};
+    // Ensure user exists
+    const { data: userData } = await ensureUserExists(userId);
     let stripeCustomerId = userData.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -314,7 +340,10 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
     }
 
     // Update user doc's defaultPaymentMethodId
-    batch.update(userRef, { defaultPaymentMethodId: newDefaultStripeId });
+    batch.update(db.collection("users").doc(userId), { 
+      defaultPaymentMethodId: newDefaultStripeId,
+      updatedAt: new Date().toISOString()
+    });
 
     // Optionally, set this as default in Stripe
     await stripe.customers.update(stripeCustomerId, {
@@ -335,6 +364,9 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
  */
 async function handleGetPaymentMethods(userId: string) {
   try {
+    // Ensure user exists first
+    await ensureUserExists(userId);
+    
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
     const paymentMethods = snapshot.docs.map((doc) => ({
@@ -368,27 +400,29 @@ async function handleCreatePaymentIntent({
   }
 
   try {
-    // Search for an existing Stripe Customer for this user
-    const customerSearchResult = await stripe.customers.search({
-      query: `metadata['userId']:'${userId}'`,
-    });
-
-    let customerId: string;
-    if (customerSearchResult.data.length > 0) {
-      customerId = customerSearchResult.data[0].id;
-    } else {
-      // If the user has no Stripe Customer, create one:
-      const customer = await stripe.customers.create({
+    // Ensure user exists
+    const { data: userData } = await ensureUserExists(userId);
+    let stripeCustomerId = userData.stripeCustomerId;
+    
+    if (!stripeCustomerId) {
+      // Create a new Stripe customer
+      const newCustomer = await stripe.customers.create({
         metadata: { userId },
       });
-      customerId = customer.id;
+      stripeCustomerId = newCustomer.id;
+      
+      // Update the user doc
+      await db.collection("users").doc(userId).update({
+        stripeCustomerId,
+        updatedAt: new Date().toISOString()
+      });
     }
 
     // Create PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
-      customer: customerId,
+      customer: stripeCustomerId,
       payment_method: paymentMethodId,
       confirmation_method: 'manual',
       confirm: true,
