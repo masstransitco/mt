@@ -113,8 +113,14 @@ export default function VerificationAdmin() {
 
   // ---------------------- View Document + OCR JSON (From Server) ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
-    if (!user) return;
-    // Reset states
+    // 1) Validate the userId
+    const userId = user?.userId?.trim?.();
+    if (!userId) {
+      console.error("No valid userId found on user:", user);
+      return;
+    }
+
+    // 2) Reset states before fetch
     setSelectedUser(null);
     setSelectedDocument(null);
     setJsonContent(null);
@@ -127,7 +133,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "viewDocument",
           adminPassword: "20230301",
-          userId: user.userId.trim(),  // Ensure no trailing spaces
+          userId,
           docType,
         }),
       });
@@ -162,8 +168,13 @@ export default function VerificationAdmin() {
   // ---------------------- Approve Document (Server) ----------------------
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
-    
-    const userId = selectedUser.userId.trim();
+
+    // Safely handle userId
+    const userId = selectedUser.userId?.trim?.();
+    if (!userId) {
+      console.error("No valid userId for selectedUser:", selectedUser);
+      return;
+    }
     const docType = selectedDocument.type;
 
     console.log("Approving doc for user:", userId, "docType:", docType);
@@ -184,6 +195,7 @@ export default function VerificationAdmin() {
         throw new Error(data.error || "Failed to approve document");
       }
       alert("Document approved successfully!");
+
       // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
@@ -198,8 +210,13 @@ export default function VerificationAdmin() {
   // ---------------------- Reject Document (Server) ----------------------
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
-    
-    const userId = selectedUser.userId.trim();
+
+    // Safely handle userId
+    const userId = selectedUser.userId?.trim?.();
+    if (!userId) {
+      console.error("No valid userId for selectedUser:", selectedUser);
+      return;
+    }
     const docType = selectedDocument.type;
 
     console.log("Rejecting doc for user:", userId, "docType:", docType, "reason:", reason);
@@ -221,6 +238,7 @@ export default function VerificationAdmin() {
         throw new Error(data.error || "Failed to reject document");
       }
       alert("Document rejected successfully!");
+
       // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
@@ -235,12 +253,23 @@ export default function VerificationAdmin() {
   // ---------------------- Save Updated OCR JSON (Server) ----------------------
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
+
+    // Validate the JSON content
     try {
-      JSON.parse(jsonContent); // Validate JSON
+      JSON.parse(jsonContent);
+    } catch (error) {
+      alert("Invalid JSON format. Please fix before saving.");
+      return;
+    }
 
-      const userId = selectedUser.userId.trim();
-      const docType = selectedDocument.type;
+    const userId = selectedUser.userId?.trim?.();
+    if (!userId) {
+      console.error("No valid userId for selectedUser:", selectedUser);
+      return;
+    }
+    const docType = selectedDocument.type;
 
+    try {
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -297,13 +326,15 @@ export default function VerificationAdmin() {
     );
   }
 
-  // Main Admin UI
+  // --------------------- Main Admin UI ---------------------
   return (
     <div className="p-4 bg-gray-50 dark:bg-gray-900 min-h-screen">
       <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
         Document Verification Admin
       </h1>
+
       <div className="mb-4">
+        {/* Tabs */}
         <div className="flex gap-2 mb-4">
           <button
             className={`p-2 rounded ${
@@ -372,7 +403,7 @@ export default function VerificationAdmin() {
               {users
                 .filter((user) => {
                   if (currentTab === "pending") {
-                    // Display docs that are neither verified nor rejected
+                    // Docs that are neither verified nor rejected
                     return (
                       (user.documents?.["id-document"] &&
                         !user.documents["id-document"].verified &&
@@ -382,7 +413,7 @@ export default function VerificationAdmin() {
                         !user.documents["driving-license"].rejectionReason)
                     );
                   } else if (currentTab === "approved") {
-                    // Display docs that are verified
+                    // Docs that are verified
                     return (
                       (user.documents?.["id-document"] &&
                         user.documents["id-document"].verified) ||
@@ -390,7 +421,7 @@ export default function VerificationAdmin() {
                         user.documents["driving-license"].verified)
                     );
                   } else if (currentTab === "rejected") {
-                    // Display docs that are rejected
+                    // Docs that are rejected
                     return (
                       (user.documents?.["id-document"] &&
                         user.documents["id-document"].rejectionReason) ||
@@ -572,9 +603,7 @@ export default function VerificationAdmin() {
                         <div className="mt-2 flex gap-2">
                           <button
                             className="px-3 py-1 bg-green-500 dark:bg-green-600 text-white rounded text-xs hover:bg-green-600 dark:hover:bg-green-700"
-                            onClick={async () => {
-                              await saveJsonChanges();
-                            }}
+                            onClick={saveJsonChanges}
                           >
                             Save JSON Changes
                           </button>
