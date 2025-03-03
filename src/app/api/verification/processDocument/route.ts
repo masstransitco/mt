@@ -84,68 +84,100 @@ export async function POST(request: Request) {
       ImageUrl: imageUrl, // must be publicly accessible
     };
 
-    const ocrResponse = await client.HKIDCardOCR(reqParams);
+    // Wrap OCR API call in a try/catch block for additional safety
+    let ocrResponse;
+    try {
+      ocrResponse = await client.HKIDCardOCR(reqParams);
+      
+      // Validate that we have a proper response
+      if (!ocrResponse || typeof ocrResponse !== 'object') {
+        throw new Error("Invalid response format from OCR API");
+      }
+    } catch (ocrErr) {
+      console.error("OCR API call error:", ocrErr);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: ocrErr instanceof Error ? ocrErr.message : "Failed to process document with OCR API" 
+        } as ApiData,
+        { status: 500 }
+      );
+    }
 
-    // 5) Convert WarnCardInfos from (number|bigint)[] to number[]
-    // Fixed: Check if WarnCardInfos exists before trying to map it
-    const rawWarnCards = ocrResponse.WarnCardInfos;
-    const warnCardsAsNumbers = rawWarnCards 
-      ? rawWarnCards.map((val: number | bigint) => 
-          typeof val === "bigint" ? Number(val) : val
-        )
-      : [];
+    // 5) Convert WarnCardInfos from (number|bigint)[] to number[] with robust validation
+    let warnCardsAsNumbers: number[] = [];
+    try {
+      if (ocrResponse.WarnCardInfos && Array.isArray(ocrResponse.WarnCardInfos)) {
+        warnCardsAsNumbers = ocrResponse.WarnCardInfos.map((val: any) => 
+          typeof val === "bigint" ? Number(val) : Number(val)
+        );
+      }
+    } catch (warnErr) {
+      console.warn("Error processing WarnCardInfos:", warnErr);
+      // Continue processing - this field is not critical
+    }
 
-    // 6) Extract relevant HKID fields
+    // 6) Extract relevant HKID fields with safe access
     const hkidData: HKIDCardOcrData = {
-      CnName: ocrResponse.CnName,
-      EnName: ocrResponse.EnName,
-      IdNum: ocrResponse.IdNum,
-      Birthday: ocrResponse.Birthday,
-      Sex: ocrResponse.Sex,
-      Permanent: ocrResponse.Permanent,
-      FirstIssueDate: ocrResponse.FirstIssueDate,
-      CurrentIssueDate: ocrResponse.CurrentIssueDate,
-      Symbol: ocrResponse.Symbol,
-      TelexCode: ocrResponse.TelexCode,
+      CnName: ocrResponse.CnName || undefined,
+      EnName: ocrResponse.EnName || undefined,
+      IdNum: ocrResponse.IdNum || undefined,
+      Birthday: ocrResponse.Birthday || undefined,
+      Sex: ocrResponse.Sex || undefined,
+      Permanent: typeof ocrResponse.Permanent === 'number' ? ocrResponse.Permanent : undefined,
+      FirstIssueDate: ocrResponse.FirstIssueDate || undefined,
+      CurrentIssueDate: ocrResponse.CurrentIssueDate || undefined,
+      Symbol: ocrResponse.Symbol || undefined,
+      TelexCode: ocrResponse.TelexCode || undefined,
       WarnCardInfos: warnCardsAsNumbers,
     };
 
     // 7) (Optional) Save JSON to Google Cloud Storage
-    const storage = new Storage({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      credentials: JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string),
-    });
-    const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
-    if (!bucketName) {
-      throw new Error("FIREBASE_STORAGE_BUCKET env variable not set");
+    try {
+      const storage = new Storage({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        credentials: JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string),
+      });
+      const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+      if (!bucketName) {
+        throw new Error("FIREBASE_STORAGE_BUCKET env variable not set");
+      }
+      const bucket = storage.bucket(bucketName);
+      const fileName = `ocrResults/${userId}/${docType}-hkidocr.json`;
+      const jsonContent = JSON.stringify({
+        docType,
+        hkidData,
+        timestamp: new Date().toISOString(),
+      });
+      await bucket.file(fileName).save(jsonContent, {
+        metadata: { contentType: "application/json" },
+        public: false,
+      });
+    } catch (storageErr) {
+      console.error("Error saving to Cloud Storage:", storageErr);
+      // Continue processing - storage is not critical for the operation
     }
-    const bucket = storage.bucket(bucketName);
-    const fileName = `ocrResults/${userId}/${docType}-hkidocr.json`;
-    const jsonContent = JSON.stringify({
-      docType,
-      hkidData,
-      timestamp: new Date().toISOString(),
-    });
-    await bucket.file(fileName).save(jsonContent, {
-      metadata: { contentType: "application/json" },
-      public: false,
-    });
 
     // 8) (Optional) Store recognized OCR data in Firestore
-    await db
-      .collection("users")
-      .doc(userId)
-      .set(
-        {
-          documents: {
-            [docType]: {
-              ocrData: hkidData,
-              updatedAt: Date.now(),
+    try {
+      await db
+        .collection("users")
+        .doc(userId)
+        .set(
+          {
+            documents: {
+              [docType]: {
+                ocrData: hkidData,
+                updatedAt: Date.now(),
+              },
             },
           },
-        },
-        { merge: true },
-      );
+          { merge: true },
+        );
+    } catch (firestoreErr) {
+      console.error("Error saving to Firestore:", firestoreErr);
+      // Continue processing - Firestore is important but we can still return OCR data
+    }
 
     // 9) Return success
     const successResponse: ApiData = { success: true, hkidData };
