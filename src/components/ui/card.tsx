@@ -2,7 +2,9 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-export const Card = ({ className, ...props }) => (
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export const Card = ({ className, ...props }: CardProps) => (
   <div
     className={cn(
       "rounded-lg border bg-card text-card-foreground shadow-sm",
@@ -13,7 +15,7 @@ export const Card = ({ className, ...props }) => (
 );
 Card.displayName = "Card";
 
-export const CardHeader = ({ className, ...props }) => (
+export const CardHeader = ({ className, ...props }: CardProps) => (
   <div
     className={cn("flex flex-col space-y-1.5 p-6", className)}
     {...props}
@@ -21,18 +23,15 @@ export const CardHeader = ({ className, ...props }) => (
 );
 CardHeader.displayName = "CardHeader";
 
-export const CardTitle = ({ className, ...props }) => (
+export const CardTitle = ({ className, ...props }: CardProps) => (
   <h3
-    className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
-      className
-    )}
+    className={cn("text-2xl font-semibold leading-none tracking-tight", className)}
     {...props}
   />
 );
 CardTitle.displayName = "CardTitle";
 
-export const CardDescription = ({ className, ...props }) => (
+export const CardDescription = ({ className, ...props }: CardProps) => (
   <p
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
@@ -40,12 +39,15 @@ export const CardDescription = ({ className, ...props }) => (
 );
 CardDescription.displayName = "CardDescription";
 
-export const CardContent = ({ className, ...props }) => (
-  <div className={cn("p-6 pt-0", className)} {...props} />
+export const CardContent = ({ className, ...props }: CardProps) => (
+  <div
+    className={cn("p-6 pt-0", className)}
+    {...props}
+  />
 );
 CardContent.displayName = "CardContent";
 
-export const CardFooter = ({ className, ...props }) => (
+export const CardFooter = ({ className, ...props }: CardProps) => (
   <div
     className={cn("flex items-center p-6 pt-0", className)}
     {...props}
