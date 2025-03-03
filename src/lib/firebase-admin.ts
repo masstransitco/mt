@@ -1,38 +1,41 @@
-// src/lib/firebase-admin.ts
+// File: src/lib/firebase-admin.ts
 import admin from "firebase-admin";
 
 // Only initialize once
 if (!admin.apps.length) {
-  // --- If using Option A (SERVICE_ACCOUNT_KEY as one big JSON string) ---
-  const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
+  // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
+  // (including "private_key", "client_email", etc.)
+  if (process.env.SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
 
-  // Initialize with explicit credentials
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-
-  // --- If you used Option B, do something like ---
-  /*
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    }),
-  });
-  */
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } else {
+    // Option B: Use separate env variables for projectId, privateKey, clientEmail
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    });
+  }
 }
 
-// Export the default references
+// Export primary admin references that the app might need
 export const db = admin.firestore();
 export const auth = admin.auth();
+export const storage = admin.storage(); // Provide direct access to storage
+
+// Optionally export the admin instance itself if needed
+export default admin;
 
 /**
- * Optional wrapper function to "initialize" if needed
- * (often just having the references above is enough).
+ * Optional wrapper function if you want to do further checks, etc.
  */
 export function initializeFirebaseAdmin() {
-  return { db, auth };
+  return { db, auth, storage };
 }
 
 /**
