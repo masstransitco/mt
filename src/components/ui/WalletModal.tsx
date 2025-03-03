@@ -1,3 +1,165 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Loader2, X, CreditCard, Plus, Trash2 } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import {
+  getStripe,
+  SavedPaymentMethod,
+  getSavedPaymentMethods,
+  savePaymentMethod,
+  deletePaymentMethod,
+  setDefaultPaymentMethod,
+  getUserBalance,
+  topUpBalance,
+} from "@/lib/stripe";
+import {
+  CardElement,
+  Elements,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+
+// Minimal or no padding for CardElement
+const cardStyle = {
+  style: {
+    base: {
+      color: "#ffffff",
+      fontFamily: "Inter, system-ui, sans-serif",
+      fontSmoothing: "antialiased",
+      fontSize: "16px",
+      "::placeholder": {
+        color: "rgba(255, 255, 255, 0.5)",
+      },
+      iconColor: "#ffffff",
+    },
+    invalid: {
+      color: "#ef4444",
+      iconColor: "#ef4444",
+    },
+  },
+};
+
+interface PaymentMethodCardProps {
+  method: SavedPaymentMethod;      // Firestore doc data, with .id = doc ID, .stripeId = actual Stripe ID
+  onDelete: (docId: string) => Promise<void>;
+  onSetDefault: (docId: string) => Promise<void>;
+}
+
+// Add the missing interface definition
+interface AddPaymentMethodFormProps {
+  onSuccess: () => void;
+  existingMethods: SavedPaymentMethod[];
+}
+
+function PaymentMethodCard({
+  method,
+  onDelete,
+  onSetDefault,
+}: PaymentMethodCardProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSettingDefault, setIsSettingDefault] = useState(false);
+
+  // Delete card
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      // docId is method.id
+      await onDelete(method.id);
+    } catch (error) {
+      console.error("Failed to delete payment method:", error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Set as default
+  const handleSetDefault = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSettingDefault || method.isDefault) return;
+
+    setIsSettingDefault(true);
+    try {
+      await onSetDefault(method.id);
+    } catch (error) {
+      console.error("Failed to set default payment method:", error);
+    } finally {
+      setIsSettingDefault(false);
+    }
+  };
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      transition={{ type: "tween", duration: 0.2 }}
+      className="flex items-center justify-between border border-gray-800 rounded bg-gray-900/50 text-white p-4"
+    >
+      <div className="flex items-center gap-2">
+        <CreditCard className="w-5 h-5 text-gray-300" />
+        <div>
+          <p className="font-medium uppercase">
+            {method.brand} •••• {method.last4}
+          </p>
+          <p className="text-sm text-gray-400">
+            Expires {method.expMonth}/{method.expYear}
+          </p>
+          {method.isDefault && (
+            <p className="text-xs text-green-400 font-medium mt-1">
+              Default Payment Method
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {!method.isDefault && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSetDefault}
+            disabled={isSettingDefault}
+            className="text-gray-400 hover:text-white"
+          >
+            {isSettingDefault ? "Setting..." : "Set Default"}
+          </Button>
+        )}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="text-gray-400 hover:text-destructive hover:bg-destructive/10"
+        >
+          {isDeleting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+          <span className="sr-only">Delete payment method</span>
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 function AddPaymentMethodForm({
   onSuccess,
   existingMethods,
@@ -107,6 +269,11 @@ function AddPaymentMethodForm({
       </Button>
     </motion.form>
   );
+}
+
+interface WalletModalProps {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
@@ -240,7 +407,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
     }
   }, [isOpen, mounted]);
 
-// 4) Deleting Payment Method
+  // 4) Deleting Payment Method
   const handleDeletePaymentMethod = async (docId: string) => {
     if (!auth.currentUser) return;
     try {
