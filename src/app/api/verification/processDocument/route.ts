@@ -143,7 +143,7 @@ export async function POST(request: Request) {
         throw new Error("FIREBASE_STORAGE_BUCKET env variable not set");
       }
       const bucket = storage.bucket(bucketName);
-      const fileName = `ocrResults/${userId}/${docType}-hkidocr.json`;
+      const fileName = `ocrResults/${userId}/${docType}-tencentocr.json`;
       const jsonContent = JSON.stringify({
         docType,
         hkidData,
