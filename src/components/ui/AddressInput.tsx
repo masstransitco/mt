@@ -177,7 +177,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
       const userId = auth.currentUser.uid;
       const timestamp = Date.now(); // same as new Date().getTime()
 
-      // Create address object
+      // Build address object
       const addressData: Address = {
         fullAddress: selectedAddress.text,
         location: selectedAddress.location,
@@ -372,7 +372,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                         onFocus={() => setFocusedField("block")}
                         onBlur={() => setFocusedField(null)}
                         placeholder="Block A"
-                        className="p-1 text-sm bg-gray-900 text-white border border-gray-800 
+                        className="p-2 text-base bg-gray-900 text-white border border-gray-800 
                                    rounded-md focus:outline-none focus:border-gray-600 
                                    placeholder:text-gray-500 transition-colors"
                       />
@@ -390,7 +390,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                         onFocus={() => setFocusedField("floor")}
                         onBlur={() => setFocusedField(null)}
                         placeholder="10"
-                        className="p-1 text-sm bg-gray-900 text-white border border-gray-800 
+                        className="p-2 text-base bg-gray-900 text-white border border-gray-800 
                                    rounded-md focus:outline-none focus:border-gray-600 
                                    placeholder:text-gray-500 transition-colors"
                       />
@@ -408,7 +408,7 @@ export default function AddressInput({ isOpen, onClose, onSuccess }: AddressInpu
                         onFocus={() => setFocusedField("flat")}
                         onBlur={() => setFocusedField(null)}
                         placeholder="1234"
-                        className="p-1 text-sm bg-gray-900 text-white border border-gray-800 
+                        className="p-2 text-base bg-gray-900 text-white border border-gray-800 
                                    rounded-md focus:outline-none focus:border-gray-600 
                                    placeholder:text-gray-500 transition-colors"
                       />
