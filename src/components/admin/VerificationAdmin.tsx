@@ -17,7 +17,7 @@ interface DocumentData {
   url: string;
   uploadedAt: number;
   verified: boolean;
-  verifiedAt?: any; // because we get it from server, might not be Timestamp
+  verifiedAt?: any;
   verifiedBy?: string;
   rejectionReason?: string;
   rejectionDetail?: string;
@@ -85,18 +85,22 @@ export default function VerificationAdmin() {
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op: "fetchUsers" }),
+        body: JSON.stringify({ 
+          op: "fetchUsers",
+          adminPassword: "20230301", // <-- Add password
+        }),
       });
       const data = await res.json();
       if (!data.success) {
         throw new Error(data.error || "Failed to fetch users");
       }
-      // data.users is an array of user docs
+
       const allUsers: UserData[] = data.users || [];
-      // Filter out only those who have at least one doc, if you want
-      const filtered = allUsers.filter((u) =>
-        u.documents &&
-        (u.documents["id-document"] || u.documents["driving-license"])
+      // Filter if you only want users with at least one doc
+      const filtered = allUsers.filter(
+        (u) =>
+          u.documents &&
+          (u.documents["id-document"] || u.documents["driving-license"])
       );
       setUsers(filtered);
     } catch (err) {
@@ -121,8 +125,9 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "viewDocument",
+          adminPassword: "20230301", // <-- Add password
           userId: user.userId,
-          docType
+          docType,
         }),
       });
       const data = await res.json();
@@ -130,7 +135,6 @@ export default function VerificationAdmin() {
         throw new Error(data.error || "Failed to view document");
       }
 
-      // data.userData => entire user doc from Firestore
       const fetchedUser = data.userData as UserData;
       const docData = fetchedUser.documents?.[docType];
       if (!docData) {
@@ -139,10 +143,7 @@ export default function VerificationAdmin() {
       }
 
       setSelectedUser(fetchedUser);
-      setSelectedDocument({
-        type: docType,
-        data: docData,
-      });
+      setSelectedDocument({ type: docType, data: docData });
 
       // data.ocrJson => OCR JSON from Storage (or null if none)
       if (data.ocrJson) {
@@ -166,6 +167,7 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "approveDocument",
+          adminPassword: "20230301", // <-- Add password
           userId: selectedUser.userId,
           docType: selectedDocument.type,
         }),
@@ -195,9 +197,10 @@ export default function VerificationAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "rejectDocument",
+          adminPassword: "20230301", // <-- Add password
           userId: selectedUser.userId,
           docType: selectedDocument.type,
-          reason
+          reason,
         }),
       });
       const data = await res.json();
@@ -220,17 +223,17 @@ export default function VerificationAdmin() {
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
     try {
-      // Validate JSON syntax
-      JSON.parse(jsonContent);
+      JSON.parse(jsonContent); // Validate JSON
 
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           op: "saveJson",
+          adminPassword: "20230301", // <-- Add password
           userId: selectedUser.userId,
           docType: selectedDocument.type,
-          jsonContent
+          jsonContent,
         }),
       });
       const data = await res.json();
