@@ -1,4 +1,3 @@
-// src/components/admin/VerificationAdmin.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -16,6 +15,13 @@ import {
   getDownloadURL,
   uploadString 
 } from "firebase/storage";
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  signOut 
+} from "firebase/auth";
 
 // Define interfaces for the document data
 interface ExtractedData {
@@ -61,11 +67,15 @@ interface SelectedDocumentType {
 }
 
 export default function VerificationAdmin() {
+  // Firebase instances
+  const auth = getAuth();
+  const db = getFirestore();
+  const storage = getStorage();
+
   // State for authentication
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState(false);
-  
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
   // State for users and documents
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,16 +87,40 @@ export default function VerificationAdmin() {
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [isEditingJson, setIsEditingJson] = useState(false);
   
-  const db = getFirestore();
-  const storage = getStorage();
+  // Listen to auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && user.email && user.email.endsWith("@air.city")) {
+        setIsAuthenticated(true);
+        setUserEmail(user.email);
+        fetchUsers();
+      } else if (user) {
+        // User signed in but not allowed – sign them out.
+        alert("Access restricted to @air.city accounts.");
+        signOut(auth);
+        setIsAuthenticated(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [auth]);
   
-  // Handle simple password-based login
-  const handleLogin = () => {
-    if (passwordInput === "20230301") {
-      setIsAuthenticated(true);
-      fetchUsers();
-    } else {
-      setPasswordError(true);
+  // Trigger Google sign in
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      if (user.email && user.email.endsWith("@air.city")) {
+        setIsAuthenticated(true);
+        setUserEmail(user.email);
+        fetchUsers();
+      } else {
+        alert("Access restricted to @air.city accounts.");
+        await signOut(auth);
+        setIsAuthenticated(false);
+      }
+    } catch (error) {
+      console.error("Google sign in error:", error);
     }
   };
   
@@ -101,8 +135,7 @@ export default function VerificationAdmin() {
       for (const userDoc of usersSnapshot.docs) {
         const data = userDoc.data() as UserData;
         data.userId = userDoc.id;
-        
-        // Only pushing users that have at least one document
+        // Only include users with at least one document
         if (
           data.documents &&
           (data.documents["id-document"] || data.documents["driving-license"])
@@ -151,7 +184,7 @@ export default function VerificationAdmin() {
         console.log(`No OCR JSON file found for ${user.userId}/${docType}`);
         setJsonContent(null);
       }
-      setIsEditingJson(false); // reset editing mode
+      setIsEditingJson(false);
     }
   };
   
@@ -217,13 +250,12 @@ export default function VerificationAdmin() {
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
     try {
-      // Validate it's valid JSON
+      // Validate JSON syntax
       JSON.parse(jsonContent);
 
       const jsonFilePath = `ocrResults/${selectedUser.userId}/${selectedDocument.type}.json`;
       const jsonFileRef = ref(storage, jsonFilePath);
 
-      // Overwrite the .json file in storage
       await uploadString(jsonFileRef, jsonContent, "raw", {
         contentType: "application/json",
       });
@@ -236,46 +268,32 @@ export default function VerificationAdmin() {
     }
   };
   
-  // Render the login form if not authenticated
+  // If not authenticated, show Google sign-in UI
   if (!isAuthenticated) {
     return (
       <div className="p-4 max-w-md mx-auto mt-10 bg-white rounded shadow">
         <h1 className="text-2xl font-bold mb-4">Admin Login</h1>
-        <input
-          type="password"
-          placeholder="Enter password"
-          value={passwordInput}
-          onChange={(e) => setPasswordInput(e.target.value)}
-          className="w-full p-2 border rounded mb-2"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleLogin();
-          }}
-        />
-        {passwordError && (
-          <p className="text-red-500 text-sm mb-2">Incorrect password</p>
-        )}
         <button
           className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          onClick={handleLogin}
+          onClick={handleGoogleSignIn}
         >
-          Login
+          Sign in with Google
         </button>
       </div>
     );
   }
   
-  // Render the main verification admin
+  // Render the main verification admin UI
   return (
     <div className="p-4">
       <h1 className="text-2xl font-bold mb-4">Document Verification Admin</h1>
+      <p className="mb-4">Signed in as: {userEmail}</p>
       
       <div className="mb-4">
         <div className="flex gap-2 mb-4">
           <button
             className={`p-2 rounded ${
-              currentTab === "pending"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-200"
+              currentTab === "pending" ? "bg-blue-500 text-white" : "bg-gray-200"
             }`}
             onClick={() => setCurrentTab("pending")}
           >
@@ -283,9 +301,7 @@ export default function VerificationAdmin() {
           </button>
           <button
             className={`p-2 rounded ${
-              currentTab === "approved"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-200"
+              currentTab === "approved" ? "bg-blue-500 text-white" : "bg-gray-200"
             }`}
             onClick={() => setCurrentTab("approved")}
           >
@@ -293,9 +309,7 @@ export default function VerificationAdmin() {
           </button>
           <button
             className={`p-2 rounded ${
-              currentTab === "rejected"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-200"
+              currentTab === "rejected" ? "bg-blue-500 text-white" : "bg-gray-200"
             }`}
             onClick={() => setCurrentTab("rejected")}
           >
@@ -358,9 +372,7 @@ export default function VerificationAdmin() {
                     <td className="p-2 border">
                       <div>
                         <p className="font-bold">{user.displayName || "No Name"}</p>
-                        <p className="text-sm">
-                          {user.email || user.phoneNumber || user.userId}
-                        </p>
+                        <p className="text-sm">{user.email || user.phoneNumber || user.userId}</p>
                       </div>
                     </td>
                     <td className="p-2 border">
@@ -434,13 +446,10 @@ export default function VerificationAdmin() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white p-4 rounded max-w-4xl max-h-[90vh] overflow-auto w-full md:w-auto">
             <h2 className="text-xl font-bold mb-4">
-              {selectedDocument.type === "id-document"
-                ? "Identity Document"
-                : "Driving License"}
+              {selectedDocument.type === "id-document" ? "Identity Document" : "Driving License"}
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Document Image */}
               {selectedDocument.data.url && (
                 <div>
                   <h3 className="font-bold mb-2">Document Image</h3>
@@ -452,23 +461,11 @@ export default function VerificationAdmin() {
                 </div>
               )}
               
-              {/* User & Document Info */}
               <div>
                 <h3 className="font-bold mb-2">User Information</h3>
-                <p>
-                  <strong>User ID:</strong> {selectedUser?.userId}
-                </p>
-                {selectedUser?.email && (
-                  <p>
-                    <strong>Email:</strong> {selectedUser.email}
-                  </p>
-                )}
-                {selectedUser?.phoneNumber && (
-                  <p>
-                    <strong>Phone:</strong> {selectedUser.phoneNumber}
-                  </p>
-                )}
-                
+                <p><strong>User ID:</strong> {selectedUser?.userId}</p>
+                {selectedUser?.email && <p><strong>Email:</strong> {selectedUser.email}</p>}
+                {selectedUser?.phoneNumber && <p><strong>Phone:</strong> {selectedUser.phoneNumber}</p>}
                 {selectedDocument.data.extractedData && (
                   <div className="mt-4">
                     <h3 className="font-bold mb-2">Extracted Data</h3>
@@ -479,8 +476,6 @@ export default function VerificationAdmin() {
                     </div>
                   </div>
                 )}
-                
-                {/* OCR JSON Data */}
                 {jsonContent && (
                   <div className="mt-4">
                     <h3 className="font-bold mb-2 flex items-center justify-between">
@@ -494,8 +489,6 @@ export default function VerificationAdmin() {
                         </button>
                       )}
                     </h3>
-                    
-                    {/* If not editing, show read-only */}
                     {!isEditingJson ? (
                       <div className="p-2 bg-gray-100 rounded max-h-40 overflow-auto">
                         <pre className="text-xs">{jsonContent}</pre>
@@ -549,7 +542,6 @@ export default function VerificationAdmin() {
                   Reject: Expired
                 </button>
               </div>
-              
               <div>
                 <button
                   className="p-2 bg-gray-300 rounded mr-2"
