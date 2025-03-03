@@ -34,7 +34,8 @@ interface UserDocuments {
 }
 
 interface UserData {
-  userId: string;
+  // Renamed to uid
+  uid: string;
   email?: string;
   phoneNumber?: string;
   displayName?: string;
@@ -96,7 +97,7 @@ export default function VerificationAdmin() {
       }
 
       const allUsers: UserData[] = data.users || [];
-      // Filter if you only want users with at least one doc
+      // Filter if you only want users who have at least one doc
       const filtered = allUsers.filter(
         (u) =>
           u.documents &&
@@ -113,14 +114,14 @@ export default function VerificationAdmin() {
 
   // ---------------------- View Document + OCR JSON (From Server) ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
-    // 1) Validate the userId
-    const userId = user?.userId?.trim?.();
-    if (!userId) {
-      console.error("No valid userId found on user:", user);
+    // 1) Validate uid
+    const uid = user?.uid?.trim?.();
+    if (!uid) {
+      console.error("No valid uid found on user:", user);
       return;
     }
 
-    // 2) Reset states before fetch
+    // Reset states
     setSelectedUser(null);
     setSelectedDocument(null);
     setJsonContent(null);
@@ -133,7 +134,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "viewDocument",
           adminPassword: "20230301",
-          userId,
+          userId: uid, // The admin API expects "userId" param, but we'll pass uid
           docType,
         }),
       });
@@ -142,6 +143,7 @@ export default function VerificationAdmin() {
         throw new Error(data.error || "Failed to view document");
       }
 
+      // We get back data.userData
       const fetchedUser = data.userData as UserData;
       const docData = fetchedUser.documents?.[docType];
       if (!docData) {
@@ -169,15 +171,14 @@ export default function VerificationAdmin() {
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
 
-    // Safely handle userId
-    const userId = selectedUser.userId?.trim?.();
-    if (!userId) {
-      console.error("No valid userId for selectedUser:", selectedUser);
+    const uid = selectedUser.uid?.trim?.();
+    if (!uid) {
+      console.error("No valid uid found for selectedUser:", selectedUser);
       return;
     }
-    const docType = selectedDocument.type;
 
-    console.log("Approving doc for user:", userId, "docType:", docType);
+    const docType = selectedDocument.type;
+    console.log("Approving doc for user:", uid, "docType:", docType);
 
     try {
       const res = await fetch("/api/admin", {
@@ -186,7 +187,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "approveDocument",
           adminPassword: "20230301",
-          userId,
+          userId: uid, // The backend param is "userId"
           docType,
         }),
       });
@@ -194,8 +195,8 @@ export default function VerificationAdmin() {
       if (!data.success) {
         throw new Error(data.error || "Failed to approve document");
       }
-      alert("Document approved successfully!");
 
+      alert("Document approved successfully!");
       // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
@@ -211,15 +212,14 @@ export default function VerificationAdmin() {
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
 
-    // Safely handle userId
-    const userId = selectedUser.userId?.trim?.();
-    if (!userId) {
-      console.error("No valid userId for selectedUser:", selectedUser);
+    const uid = selectedUser.uid?.trim?.();
+    if (!uid) {
+      console.error("No valid uid found for selectedUser:", selectedUser);
       return;
     }
-    const docType = selectedDocument.type;
 
-    console.log("Rejecting doc for user:", userId, "docType:", docType, "reason:", reason);
+    const docType = selectedDocument.type;
+    console.log("Rejecting doc for user:", uid, "docType:", docType, "reason:", reason);
 
     try {
       const res = await fetch("/api/admin", {
@@ -228,7 +228,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "rejectDocument",
           adminPassword: "20230301",
-          userId,
+          userId: uid, // The backend param is "userId"
           docType,
           reason,
         }),
@@ -238,7 +238,6 @@ export default function VerificationAdmin() {
         throw new Error(data.error || "Failed to reject document");
       }
       alert("Document rejected successfully!");
-
       // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
@@ -254,17 +253,16 @@ export default function VerificationAdmin() {
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
 
-    // Validate the JSON content
     try {
-      JSON.parse(jsonContent);
+      JSON.parse(jsonContent); // Validate JSON
     } catch (error) {
       alert("Invalid JSON format. Please fix before saving.");
       return;
     }
 
-    const userId = selectedUser.userId?.trim?.();
-    if (!userId) {
-      console.error("No valid userId for selectedUser:", selectedUser);
+    const uid = selectedUser.uid?.trim?.();
+    if (!uid) {
+      console.error("No valid uid found for selectedUser:", selectedUser);
       return;
     }
     const docType = selectedDocument.type;
@@ -276,7 +274,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "saveJson",
           adminPassword: "20230301",
-          userId,
+          userId: uid, // The backend param is "userId"
           docType,
           jsonContent,
         }),
@@ -285,6 +283,7 @@ export default function VerificationAdmin() {
       if (!data.success) {
         throw new Error(data.error || "Failed to save JSON");
       }
+
       alert("JSON file updated successfully!");
       setIsEditingJson(false);
     } catch (err) {
@@ -326,15 +325,13 @@ export default function VerificationAdmin() {
     );
   }
 
-  // --------------------- Main Admin UI ---------------------
+  // Main Admin UI
   return (
     <div className="p-4 bg-gray-50 dark:bg-gray-900 min-h-screen">
       <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
         Document Verification Admin
       </h1>
-
       <div className="mb-4">
-        {/* Tabs */}
         <div className="flex gap-2 mb-4">
           <button
             className={`p-2 rounded ${
@@ -403,7 +400,7 @@ export default function VerificationAdmin() {
               {users
                 .filter((user) => {
                   if (currentTab === "pending") {
-                    // Docs that are neither verified nor rejected
+                    // Documents that are not yet verified or rejected
                     return (
                       (user.documents?.["id-document"] &&
                         !user.documents["id-document"].verified &&
@@ -413,7 +410,7 @@ export default function VerificationAdmin() {
                         !user.documents["driving-license"].rejectionReason)
                     );
                   } else if (currentTab === "approved") {
-                    // Docs that are verified
+                    // Documents that are verified
                     return (
                       (user.documents?.["id-document"] &&
                         user.documents["id-document"].verified) ||
@@ -421,7 +418,7 @@ export default function VerificationAdmin() {
                         user.documents["driving-license"].verified)
                     );
                   } else if (currentTab === "rejected") {
-                    // Docs that are rejected
+                    // Documents that are rejected
                     return (
                       (user.documents?.["id-document"] &&
                         user.documents["id-document"].rejectionReason) ||
@@ -432,14 +429,14 @@ export default function VerificationAdmin() {
                   return true;
                 })
                 .map((user) => (
-                  <tr key={user.userId}>
+                  <tr key={user.uid}>
                     <td className="p-2 border dark:border-gray-700">
                       <div>
                         <p className="font-bold text-gray-900 dark:text-gray-100">
                           {user.displayName || "No Name"}
                         </p>
                         <p className="text-sm text-gray-700 dark:text-gray-300">
-                          {user.email || user.phoneNumber || user.userId}
+                          {user.email || user.phoneNumber || user.uid}
                         </p>
                       </div>
                     </td>
@@ -545,7 +542,7 @@ export default function VerificationAdmin() {
                   User Information
                 </h3>
                 <p className="text-gray-900 dark:text-gray-100">
-                  <strong>User ID:</strong> {selectedUser?.userId}
+                  <strong>UID:</strong> {selectedUser?.uid}
                 </p>
                 {selectedUser?.email && (
                   <p className="text-gray-900 dark:text-gray-100">
