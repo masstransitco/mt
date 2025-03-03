@@ -1,18 +1,24 @@
 // File: src/app/api/admin/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/lib/firebaseAdmin"; // <-- Where you initialize Firebase Admin
+import admin from "@/lib/firebase-admin"; // Make sure your file name & path match
 
 // The Admin SDK can override Firestore rules:
 const db = admin.firestore();
 const storage = admin.storage();
 
 export async function POST(request: NextRequest) {
-  // We'll parse the JSON body to see the operation
-  const body = await request.json();
-  const { op } = body; // e.g. "fetchUsers", "viewDocument", "approve", "reject", "saveJson"
-
   try {
+    // Parse incoming JSON
+    const body = await request.json();
+    const { op, adminPassword } = body; // e.g. "fetchUsers", "viewDocument", etc.
+
+    // 1) Simple static password check
+    if (adminPassword !== "20230301") {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    // 2) Switch on the requested operation
     switch (op) {
       case "fetchUsers":
         return await handleFetchUsers();
@@ -33,34 +39,35 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ---------------- HANDLERS ----------------
+
 async function handleFetchUsers() {
   const snapshot = await db.collection("users").get();
   const userData = snapshot.docs.map((doc) => ({
     userId: doc.id,
-    ...doc.data()
+    ...doc.data(),
   }));
 
-  // If you only want documents with "id-document" or "driving-license", you could filter here 
+  // If you only want documents with "id-document" or "driving-license", filter here
   return NextResponse.json({ success: true, users: userData });
 }
 
 async function handleViewDocument(userId: string, docType: string) {
-  // 1) read user doc from Firestore
+  // 1) Read user doc from Firestore
   const userDoc = await db.collection("users").doc(userId).get();
   if (!userDoc.exists) {
     return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
   }
 
   const userData = userDoc.data();
-  // 2) read the JSON from Storage if needed
-  // Example: "ocrResults/{userId}/{docType}.json"
+  // 2) Read the JSON from Cloud Storage if it exists
   try {
     const fileRef = storage.bucket().file(`ocrResults/${userId}/${docType}.json`);
     const [contents] = await fileRef.download();
     const json = JSON.parse(contents.toString());
     return NextResponse.json({ success: true, userData, ocrJson: json });
   } catch (err) {
-    // If no JSON file, we can still return the user data
+    // If no JSON file, still return user data
     return NextResponse.json({ success: true, userData, ocrJson: null });
   }
 }
@@ -70,7 +77,7 @@ async function handleApproveDocument(userId: string, docType: string) {
     [`documents.${docType}.verified`]: true,
     [`documents.${docType}.verifiedAt`]: admin.firestore.Timestamp.now(),
     [`documents.${docType}.rejectionReason`]: null,
-    [`documents.${docType}.rejectionDetail`]: null
+    [`documents.${docType}.rejectionDetail`]: null,
   });
   return NextResponse.json({ success: true });
 }
@@ -79,14 +86,14 @@ async function handleRejectDocument(userId: string, docType: string, reason: str
   const reasonDescriptions: Record<string, string> = {
     unclear: "The uploaded document is unclear or blurry.",
     mismatch: "Document info doesn't match our records.",
-    expired: "The document appears to be expired."
+    expired: "The document appears to be expired.",
   };
 
   await db.collection("users").doc(userId).update({
     [`documents.${docType}.verified`]: false,
     [`documents.${docType}.rejectionReason`]: reason,
     [`documents.${docType}.rejectionDetail`]: reasonDescriptions[reason] || "",
-    [`documents.${docType}.rejectedAt`]: admin.firestore.Timestamp.now()
+    [`documents.${docType}.rejectedAt`]: admin.firestore.Timestamp.now(),
   });
   return NextResponse.json({ success: true });
 }
