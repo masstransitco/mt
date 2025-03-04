@@ -2,44 +2,17 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { CreditCard, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/lib/firebase";
-import {
-  savePaymentMethod,
-  SavedPaymentMethod,
-} from "@/lib/stripe";
-
-/* ------------------------------------------------------------------
-   Minimal styling object for Stripe’s <CardElement />
-   ------------------------------------------------------------------ */
-const cardStyle = {
-  style: {
-    base: {
-      color: "#ffffff",
-      fontFamily: "Inter, system-ui, sans-serif",
-      fontSmoothing: "antialiased",
-      fontSize: "16px",
-      "::placeholder": {
-        color: "rgba(255, 255, 255, 0.5)",
-      },
-      iconColor: "#ffffff",
-    },
-    invalid: {
-      color: "#ef4444",
-      iconColor: "#ef4444",
-    },
-  },
-};
+import { SavedPaymentMethod } from "@/lib/stripe";
 
 /* ------------------------------------------------------------------
    PAYMENT METHOD CARD
    Displays a single saved method + "delete" and "set default" buttons.
    We expect the parent to pass in:
    - method: the SavedPaymentMethod
-   - onDelete: a function that handles deletion
-   - onSetDefault: a function that sets this card as default
+   - onDelete: (docId: string) => Promise<void>
+   - onSetDefault: (docId: string) => Promise<void>
    ------------------------------------------------------------------ */
 interface PaymentMethodCardProps {
   method: SavedPaymentMethod;
@@ -139,128 +112,54 @@ export function PaymentMethodCard({
 }
 
 /* ------------------------------------------------------------------
-   ADD PAYMENT METHOD FORM
-   Renders a CardElement + submit button. When done, calls onSuccess().
-   The parent (e.g., a wrapper inside StationDetail or a Modal) is
-   responsible for refetching the user’s payment methods if needed.
+   PAYMENT METHODS PANEL
+   Shows the user’s existing payment methods.
+   Clicking "Add Payment Method" calls onOpenWalletModal() so the user
+   can add a card in the dedicated WalletModal.
    ------------------------------------------------------------------ */
-interface AddPaymentMethodFormProps {
-  onSuccess: () => void;
+interface PaymentMethodsPanelProps {
   existingMethods: SavedPaymentMethod[];
+  onDeleteMethod: (docId: string) => Promise<void>;
+  onSetDefaultMethod: (docId: string) => Promise<void>;
+  onOpenWalletModal: () => void; // Called to open the WalletModal
 }
 
-export function AddPaymentMethodForm({
-  onSuccess,
+export function PaymentMethodsPanel({
   existingMethods,
-}: AddPaymentMethodFormProps) {
-  const stripe = useStripe();
-  const elements = useElements();
-
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements || !auth.currentUser) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Create a new PaymentMethod from the user's card input
-      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
-        type: "card",
-        card: elements.getElement(CardElement)!,
-      });
-
-      if (stripeError) {
-        setError(stripeError.message || "An error occurred creating the card.");
-        return;
-      }
-
-      if (paymentMethod) {
-        // Check for duplicates
-        const alreadyExists = existingMethods.some(
-          (m) =>
-            m.brand.toLowerCase() === paymentMethod.card?.brand.toLowerCase() &&
-            m.last4 === paymentMethod.card?.last4 &&
-            m.expMonth === paymentMethod.card?.exp_month &&
-            m.expYear === paymentMethod.card?.exp_year
-        );
-        if (alreadyExists) {
-          setError("This card is already on file. Please use a different card.");
-          return;
-        }
-
-        // Save to your backend/Firestore
-        const result = await savePaymentMethod(auth.currentUser.uid, {
-          stripeId: paymentMethod.id,
-          brand: paymentMethod.card!.brand,
-          last4: paymentMethod.card!.last4,
-          expMonth: paymentMethod.card!.exp_month,
-          expYear: paymentMethod.card!.exp_year,
-          isDefault: true, // default new card to isDefault if you like
-        });
-
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-
-        // If everything went well:
-        onSuccess();
-      }
-    } catch (err) {
-      console.error("Error creating payment method:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to save payment method, please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  onDeleteMethod,
+  onSetDefaultMethod,
+  onOpenWalletModal,
+}: PaymentMethodsPanelProps) {
   return (
-    <motion.form
-      layout
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
-      transition={{ type: "tween", duration: 0.2 }}
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-4"
-    >
-      <div className="border border-gray-800 rounded bg-gray-900/50 text-white p-4">
-        <CardElement options={cardStyle} />
-      </div>
-
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.3 }}
-          className="text-sm text-red-400 bg-red-400/10 rounded p-3"
-        >
-          {error}
-        </motion.div>
+    <div className="space-y-4">
+      {/* 1) Existing Payment Methods */}
+      {existingMethods.length > 0 ? (
+        <div className="space-y-3">
+          {existingMethods.map((method) => (
+            <PaymentMethodCard
+              key={method.id}
+              method={method}
+              onDelete={onDeleteMethod}
+              onSetDefault={onSetDefaultMethod}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-center text-gray-400 py-4">
+          No payment methods saved yet
+        </p>
       )}
 
+      {/* 2) Clicking this calls onOpenWalletModal() to open the modal */}
       <Button
-        type="submit"
-        disabled={!stripe || loading}
-        className="bg-white text-black hover:bg-gray-200"
+        variant="outline"
+        className="w-full justify-center"
+        onClick={onOpenWalletModal}
       >
-        {loading ? (
-          <span className="flex items-center">
-            <span className="animate-spin h-4 w-4 border-2 border-gray-900 rounded-full border-t-transparent mr-2" />
-            Processing...
-          </span>
-        ) : (
-          "Add Payment Method"
-        )}
+        {existingMethods.length > 0
+          ? "Add Another Payment Method"
+          : "Add Payment Method"}
       </Button>
-    </motion.form>
+    </div>
   );
 }
