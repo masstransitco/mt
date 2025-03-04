@@ -36,7 +36,7 @@ const MapCard = dynamic(() => import("./MapCard"), {
       <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
     </div>
   ),
-  ssr: false, 
+  ssr: false,
 });
 
 interface StationDetailProps {
@@ -71,7 +71,7 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // If user is at step 4 and signed in, we can show their existing cards
+  // If user is at step 4 and signed in, show their existing cards
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
 
@@ -89,7 +89,7 @@ function StationDetailComponent({
     }
   }, [isSignedIn, step, showPaymentUI]);
 
-  // If user just signed in at Step 4, automatically show "Payment UI"
+  // If user signs in at Step 4, automatically show "Payment UI"
   useEffect(() => {
     if (step === 4 && isSignedIn) {
       setShowPaymentUI(true);
@@ -293,10 +293,13 @@ function StationDetailComponent({
                 <PaymentMethodCard
                   key={m.id}
                   method={m}
-                  // If you'd like to enable deletion or setDefault inline,
-                  // define your own async logic or pass from parent:
-                  onDelete={async () => toast("Delete not implemented")}
-                  onSetDefault={async () => toast("Set default not implemented")}
+                  // Return Promise<void> so TS doesn't complain about type mismatch
+                  onDelete={async () => {
+                    toast("Delete not implemented");
+                  }}
+                  onSetDefault={async () => {
+                    toast("Set default not implemented");
+                  }}
                 />
               ))}
             </div>
