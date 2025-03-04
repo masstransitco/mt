@@ -144,7 +144,7 @@ export interface SheetProps {
   count?: number;
   countLabel?: string;
   onDismiss?: () => void;
-  onClearSelection?: () => void; // New prop for clearing selection when X button is clicked
+  onClearSelection?: () => void; // New prop for X button
 }
 
 /* ------------------------------------------------------------------
@@ -164,68 +164,25 @@ export default function Sheet({
   const [isAtTop, setIsAtTop] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const isClosing = useRef(false);
-  const headerHeight = useRef(0);
-  const minimizedPosition = useRef(0);
-  const childOnDismissRef = useRef<(() => void) | null>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const isClosing = useRef(false);
+  const minimizedPosition = useRef(0);
 
-  // Calculate the header height and minimized position once mounted
+  // Measure header height for minimized state
   useEffect(() => {
     if (headerRef.current) {
-      headerHeight.current = headerRef.current.offsetHeight;
-      minimizedPosition.current = window.innerHeight - headerHeight.current - 20; // 20px padding from bottom
+      const headerHeight = headerRef.current.offsetHeight + 10; // 10px buffer
+      minimizedPosition.current = window.innerHeight - headerHeight;
     }
-  }, [isOpen]);
-
-  // Helper function to find any StationDetail child components and get their onDismiss handler
-  useEffect(() => {
-    if (!contentRef.current) return;
-
-    // Reset our ref
-    childOnDismissRef.current = null;
-
-    // Function to traverse the React component tree and find StationDetail components
-    const findStationDetailComponent = (element: any): (() => void) | null => {
-      if (!element) return null;
-
-      // Check if this is a StationDetail component (verify by checking its props)
-      if (
-        element.type?.name === 'StationDetailComponent' || 
-        element.type?.displayName === 'memo(StationDetailComponent)'
-      ) {
-        // If it has a handleSafeDismiss method, save it
-        return element.props?.onDismiss || null;
-      }
-
-      // If this element has children, check them
-      if (element.props?.children) {
-        if (Array.isArray(element.props.children)) {
-          for (const child of element.props.children) {
-            const result = findStationDetailComponent(child);
-            if (result) return result;
-          }
-        } else {
-          return findStationDetailComponent(element.props.children);
-        }
-      }
-
-      return null;
-    };
-
-    // Try to find the component
-    if (children) {
-      childOnDismissRef.current = findStationDetailComponent(children);
-    }
-  }, [children, isOpen]);
+  }, [isOpen, title, subtitle, count]);
 
   // Lock body scroll when sheet is open
   useEffect(() => {
     if (isOpen) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
-      isClosing.current = false; // Reset closing state when sheet opens
-      setIsMinimized(false); // Reset minimized state when sheet opens
+      isClosing.current = false;
+      setIsMinimized(false); // Reset minimized state when opened
       return () => {
         document.body.style.overflow = originalOverflow;
       };
@@ -254,14 +211,14 @@ export default function Sheet({
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
-    } else if (isMinimized) {
+    } else if (isMinimized && minimizedPosition.current > 0) {
       y.set(minimizedPosition.current);
     } else {
       y.set(0);
     }
-  }, [isOpen, y, isMinimized]);
+  }, [isOpen, isMinimized, y]);
 
-  // Handle X button (clear selection)
+  // Handle X button click (clear selection)
   const handleClear = useCallback(() => {
     if (isClosing.current) return;
     isClosing.current = true;
@@ -269,52 +226,40 @@ export default function Sheet({
     if (onClearSelection) {
       onClearSelection();
     }
-
-    // Small delay to allow state to stabilize
+    
     setTimeout(() => {
       if (onDismiss) {
         onDismiss();
       }
-    }, 100);
+    }, 50);
   }, [onClearSelection, onDismiss]);
 
-  // Handle backdrop click (minimize sheet instead of dismissing)
+  // Handle backdrop click to minimize sheet
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    // Only handle if clicking directly on the backdrop
     if (e.target === e.currentTarget) {
-      if (isMinimized) {
-        // If already minimized, expand
-        setIsMinimized(false);
-        y.set(0);
-      } else {
-        // If expanded, minimize
-        setIsMinimized(true);
-        if (minimizedPosition.current > 0) {
-          y.set(minimizedPosition.current);
-        }
+      setIsMinimized(true);
+      if (minimizedPosition.current > 0) {
+        y.set(minimizedPosition.current);
       }
     }
-  }, [isMinimized, y]);
+  }, [y]);
 
   // Handle drag end
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       const dragDistance = info.offset.y;
-      const velocityThreshold = 300; // pixels per second
-      const distanceThreshold = window.innerHeight * 0.2; // 20% of screen height
-
+      
       // If dragged up significantly, expand the sheet
-      if (dragDistance < -distanceThreshold) {
+      if (dragDistance < -20 && isMinimized) {
         setIsMinimized(false);
         y.set(0);
         return;
       }
-
+      
       // If dragged down significantly, minimize or close
-      if (dragDistance > distanceThreshold) {
+      if (dragDistance > 100) {
         if (isMinimized) {
-          // If already minimized and dragged down, close
-          isClosing.current = true;
+          // If already minimized and dragged down further, close
           if (onDismiss) {
             onDismiss();
           }
@@ -327,16 +272,11 @@ export default function Sheet({
         }
         return;
       }
-
-      // If not dragged far enough, snap to nearest position (minimized or expanded)
-      const currentY = y.get();
-      const halfwayPoint = minimizedPosition.current / 2;
-
-      if (currentY > halfwayPoint) {
-        setIsMinimized(true);
+      
+      // If not dragged far enough, snap to nearest position
+      if (isMinimized) {
         y.set(minimizedPosition.current);
       } else {
-        setIsMinimized(false);
         y.set(0);
       }
     },
@@ -347,16 +287,13 @@ export default function Sheet({
     dragControls.start(e);
   };
 
+  // Toggle minimized state on header click
   const handleHeaderClick = useCallback(() => {
-    // Toggle between minimized and expanded states
-    if (isMinimized) {
-      setIsMinimized(false);
-      y.set(0);
+    setIsMinimized(!isMinimized);
+    if (!isMinimized && minimizedPosition.current > 0) {
+      y.set(minimizedPosition.current);
     } else {
-      setIsMinimized(true);
-      if (minimizedPosition.current > 0) {
-        y.set(minimizedPosition.current);
-      }
+      y.set(0);
     }
   }, [isMinimized, y]);
 
@@ -413,15 +350,11 @@ export default function Sheet({
             initial={{ y: "100%" }}
             animate={{ y: isMinimized ? minimizedPosition.current : 0 }}
             exit={{ y: "100%" }}
-            transition={{ 
-              type: "spring", 
-              damping: 25, 
-              stiffness: 300 
-            }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
             drag="y"
             dragControls={dragControls}
             dragListener={false}
-            dragConstraints={{ top: 0, bottom: window.innerHeight }}
+            dragConstraints={{ top: 0 }}
             onDragEnd={handleDragEnd}
           >
             <div
@@ -433,12 +366,17 @@ export default function Sheet({
               {SheetHeader}
               <motion.div
                 ref={contentRef}
-                initial={{ opacity: 1 }}
-                animate={{ opacity: isMinimized ? 0 : 1 }}
-                transition={{ duration: 0.2 }}
-                className={`px-4 pt-3 pb-8 overflow-y-auto transition-all duration-200 ease-in-out ${
-                  isMinimized ? "max-h-0" : "max-h-[80vh]"
-                }`}
+                animate={{ 
+                  maxHeight: isMinimized ? "0px" : "80vh",
+                  opacity: isMinimized ? 0 : 1,
+                  overflow: isMinimized ? "hidden" : "auto"
+                }}
+                transition={{ duration: 0.3 }}
+                className="px-4 pt-3 pb-8 overflow-y-auto"
+                style={{ 
+                  display: "block",
+                  visibility: isMinimized ? "hidden" : "visible"
+                }}
               >
                 {children}
               </motion.div>
