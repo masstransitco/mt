@@ -23,15 +23,16 @@ import { SteerWheel } from "@/components/ui/icons/SteerWheel";
 import { Parking } from "@/components/ui/icons/Parking";
 
 // Payment & Firebase
-import { PaymentMethodCard, SavedPaymentMethod } from "@/components/ui/PaymentComponents";
-import { getSavedPaymentMethods } from "@/lib/stripe";
+import { PaymentMethodCard } from "@/components/ui/PaymentComponents";
+// Import `SavedPaymentMethod` from lib/stripe, rather than PaymentComponents
+import { getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
 /** Dynamically import the MapCard */
 const MapCard = dynamic(() => import("./MapCard"), {
   loading: () => (
     <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
-      <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+      <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
     </div>
   ),
   ssr: false,
@@ -69,7 +70,7 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // State for Payment UI (step 4)
+  // Manage Payment UI (step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
 
@@ -87,7 +88,7 @@ function StationDetailComponent({
     }
   }, [isSignedIn, step, showPaymentUI]);
 
-  // If user signs in at Step 4, automatically show "Payment UI"
+  // If user signs in at Step 4, automatically show Payment UI
   useEffect(() => {
     if (step === 4 && isSignedIn) {
       setShowPaymentUI(true);
@@ -97,7 +98,7 @@ function StationDetailComponent({
   // Debug logging
   useEffect(() => {
     console.log("[StationDetail] step=", step);
-    if (stations && stations.length > 0) {
+    if (stations?.length) {
       console.log("[StationDetail] stations array length=", stations.length);
     }
   }, [step, stations]);
@@ -125,6 +126,7 @@ function StationDetailComponent({
     };
   }, [dispatchRoute?.duration]);
 
+  // No station selected
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -152,24 +154,21 @@ function StationDetailComponent({
     step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "";
 
   // Convert route duration to minutes if present
-  const driveTimeMin = route ? Math.round(route.duration / 60).toString() : null;
+  const driveTimeMin =
+    route && departureId && arrivalId
+      ? Math.round(route.duration / 60).toString()
+      : null;
 
   const handleConfirm = () => {
-    if (isDepartureFlow) {
-      if (step === 2) {
-        dispatch(advanceBookingStep(3));
-        toast.success(
-          "Departure station confirmed! Now select your arrival station."
-        );
-        onConfirmDeparture?.();
-      }
-    } else {
-      if (step === 4) {
-        if (!isSignedIn) {
-          onOpenSignIn();
-        } else {
-          setShowPaymentUI(true);
-        }
+    if (isDepartureFlow && step === 2) {
+      dispatch(advanceBookingStep(3));
+      toast.success("Departure station confirmed! Now select your arrival station.");
+      onConfirmDeparture?.();
+    } else if (!isDepartureFlow && step === 4) {
+      if (!isSignedIn) {
+        onOpenSignIn();
+      } else {
+        setShowPaymentUI(true);
       }
     }
   };
@@ -197,7 +196,7 @@ function StationDetailComponent({
 
       {/* Station stats card */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-        {/* (Removed the "Available spots" block) */}
+        {/* Removed "Available Spots" and "Route Distance" entirely */}
 
         {/* Wait time if any */}
         {activeStation.properties.waitTime && (
@@ -212,7 +211,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* Step 2 => "Distance from You" if we have activeStation.distance */}
+        {/* Step 2 => "Distance from You" (Footprints icon) */}
         {step === 2 && activeStation.distance !== undefined && (
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-gray-300">
@@ -225,7 +224,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* Step 4 => "Drive Time" if route duration is known */}
+        {/* Step 4 => "Drive Time" (SteerWheel icon) */}
         {step === 4 && driveTimeMin && (
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-gray-300">
