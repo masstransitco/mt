@@ -7,6 +7,30 @@ import { Button } from "@/components/ui/button";
 import { SavedPaymentMethod } from "@/lib/stripe";
 
 /* ------------------------------------------------------------------
+   PAYMENT METHOD SKELETON
+   A simple loading skeleton to show while payment methods are fetching
+   ------------------------------------------------------------------ */
+export function PaymentMethodSkeleton() {
+  return (
+    <div className="border border-gray-800 rounded bg-gray-900/50 p-4 animate-pulse">
+      {/* Card icon placeholder */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-5 h-5 bg-gray-700 rounded" />
+        <div className="flex flex-col space-y-2">
+          <div className="h-3 w-24 bg-gray-700 rounded" />
+          <div className="h-3 w-16 bg-gray-700 rounded" />
+        </div>
+      </div>
+      {/* Buttons placeholder */}
+      <div className="flex gap-2">
+        <div className="h-7 w-16 bg-gray-700 rounded" />
+        <div className="h-7 w-10 bg-gray-700 rounded" />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------
    PAYMENT METHOD CARD
    Displays a single saved method + "delete" and "set default" buttons.
    We expect the parent to pass in:
@@ -113,18 +137,20 @@ export function PaymentMethodCard({
 
 /* ------------------------------------------------------------------
    PAYMENT METHODS PANEL
-   Shows the user’s existing payment methods.
+   Shows the user’s existing payment methods, or skeletons if loading.
    Clicking "Add Payment Method" calls onOpenWalletModal() so the user
    can add a card in the dedicated WalletModal.
    ------------------------------------------------------------------ */
 interface PaymentMethodsPanelProps {
+  isLoading: boolean; // <-- new prop to indicate data is still loading
   existingMethods: SavedPaymentMethod[];
   onDeleteMethod: (docId: string) => Promise<void>;
   onSetDefaultMethod: (docId: string) => Promise<void>;
-  onOpenWalletModal: () => void; // Called to open the WalletModal
+  onOpenWalletModal: () => void;
 }
 
 export function PaymentMethodsPanel({
+  isLoading,
   existingMethods,
   onDeleteMethod,
   onSetDefaultMethod,
@@ -132,8 +158,13 @@ export function PaymentMethodsPanel({
 }: PaymentMethodsPanelProps) {
   return (
     <div className="space-y-4">
-      {/* 1) Existing Payment Methods */}
-      {existingMethods.length > 0 ? (
+      {/* If still loading, show skeleton(s) */}
+      {isLoading ? (
+        <>
+          <PaymentMethodSkeleton />
+          <PaymentMethodSkeleton />
+        </>
+      ) : existingMethods.length > 0 ? (
         <div className="space-y-3">
           {existingMethods.map((method) => (
             <PaymentMethodCard
@@ -145,12 +176,13 @@ export function PaymentMethodsPanel({
           ))}
         </div>
       ) : (
+        // If not loading AND no methods, show "No payment methods" message
         <p className="text-center text-gray-400 py-4">
           No payment methods saved yet
         </p>
       )}
 
-      {/* 2) Clicking this calls onOpenWalletModal() to open the modal */}
+      {/* "Add Payment Method" button (always visible) */}
       <Button
         variant="outline"
         className="w-full justify-center"
