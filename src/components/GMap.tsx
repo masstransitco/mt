@@ -582,30 +582,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   key={detailKey}
   isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
   onDismiss={() => {
-    // This will now only be called after onClearSelection finishes
     requestAnimationFrame(() => {
       closeCurrentSheet();
       if (overlayRef.current?.requestRedraw) {
         overlayRef.current.requestRedraw();
       }
     });
-  }}
-  onClearSelection={() => {
-    // In step 4, ensure we properly clean up payment state before clearing the station
-    if (bookingStep === 4) {
-      // Clear arrival station - must happen before UI is removed
-      dispatch(clearArrivalStation());
-      dispatch(advanceBookingStep(3)); 
-      dispatch(clearRoute());
-    } else if (bookingStep <= 2) {
-      dispatch(clearDepartureStation());
-      dispatch(advanceBookingStep(1));
-      dispatch(clearDispatchRoute());
-    }
-    // Let the system know we've properly handled the state changes
-    toast.success(bookingStep <= 2 
-      ? "Departure station cleared. (Back to selecting departure.)" 
-      : "Arrival station cleared. (Back to selecting arrival.)");
   }}
   title={getSheetTitle()}
   subtitle={getSheetSubtitle()}
@@ -618,14 +600,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       onOpenSignIn={handleOpenSignIn}
       onOpenWalletModal={() => setIsSplatModalOpen(true)}
       onDismiss={closeCurrentSheet}
-      onClearStation={() => {
-        // This function will be called from within StationDetail
-        if (bookingStep <= 2) {
-          handleClearDepartureInSelector();
-        } else {
-          handleClearArrivalInSelector();
-        }
-      }}
     />
   )}
 </Sheet>
