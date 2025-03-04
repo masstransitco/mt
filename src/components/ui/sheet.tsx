@@ -455,17 +455,16 @@ export default function Sheet({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-          {/* Backdrop - only blocks interaction when NOT minimized */}
-          <motion.div
-            className={cn(
-              "absolute inset-0 bg-black transition-opacity duration-200",
-              isMinimized ? "pointer-events-none opacity-30" : "pointer-events-auto opacity-60"
-            )}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: isMinimized ? 0.3 : 0.6 }}
-            exit={{ opacity: 0 }}
-            onClick={handleBackdropClick}
-          />
+          {/* Backdrop - completely invisible when minimized, visible when expanded */}
+          {!isMinimized && (
+            <motion.div
+              className="absolute inset-0 bg-black pointer-events-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={handleBackdropClick}
+            />
+          )}
 
           {/* Draggable sheet */}
           <motion.div
