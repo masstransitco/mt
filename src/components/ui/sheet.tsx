@@ -161,12 +161,14 @@ export default function Sheet({
 }: SheetProps) {
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isClosing = useRef(false);
 
   // Lock body scroll when sheet is open
   useEffect(() => {
     if (isOpen) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
+      isClosing.current = false; // Reset closing state when sheet opens
       return () => {
         document.body.style.overflow = originalOverflow;
       };
@@ -198,14 +200,35 @@ export default function Sheet({
     }
   }, [isOpen, y]);
 
+  // Handle dismiss with debouncing to prevent multiple calls
+  const handleDismiss = useCallback(() => {
+    if (isClosing.current) return;
+    
+    isClosing.current = true;
+    
+    // Small delay to allow state to stabilize
+    setTimeout(() => {
+      if (onDismiss) {
+        onDismiss();
+      }
+    }, 50);
+  }, [onDismiss]);
+
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number } }) => {
       if (info.offset.y > 100) {
-        onDismiss?.();
+        handleDismiss();
       }
     },
-    [onDismiss]
+    [handleDismiss]
   );
+
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    // Only dismiss if clicking directly on the backdrop element
+    if (e.target === e.currentTarget) {
+      handleDismiss();
+    }
+  }, [handleDismiss]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     dragControls.start(e);
@@ -230,7 +253,7 @@ export default function Sheet({
         {onDismiss && (
           <button
             className="absolute right-3 top-3 p-1.5 rounded-full hover:bg-gray-700/50 transition-colors"
-            onClick={onDismiss}
+            onClick={handleDismiss} // Using debounced dismiss handler
           >
             <X className="w-5 h-5 text-gray-300" />
             <span className="sr-only">Close</span>
@@ -253,7 +276,7 @@ export default function Sheet({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onDismiss}
+            onClick={handleBackdropClick} // Using safer backdrop click handler
           />
           {/* Draggable sheet */}
           <motion.div
