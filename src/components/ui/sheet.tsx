@@ -11,7 +11,10 @@ import {
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Animation constants for PulsatingStrip
+/* ------------------------------------------------------------------
+   ANIMATION CONSTANTS & HELPER
+   PulsatingStrip repeatedly scales and changes color/opacity.
+   ------------------------------------------------------------------ */
 type AnimationColor = string;
 type Scale = number;
 
@@ -49,7 +52,9 @@ function lerp(start: number, end: number, progress: number) {
   return start + (end - start) * progress;
 }
 
-// PulsatingStrip component
+/* ------------------------------------------------------------------
+   PULSATING STRIP
+   ------------------------------------------------------------------ */
 function PulsatingStrip({ className }: { className?: string }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
@@ -119,7 +124,6 @@ function PulsatingStrip({ className }: { className?: string }) {
           borderRadius: "1px",
           backgroundColor: ANIMATION_PARAMS.colors.primary,
           willChange: "transform, opacity, boxShadow",
-          transition: "transform 0.05s ease-out",
           transformOrigin: "center",
         }}
       />
@@ -127,19 +131,24 @@ function PulsatingStrip({ className }: { className?: string }) {
   );
 }
 
-// SheetProps interface (updated subtitle to ReactNode)
+/* ------------------------------------------------------------------
+   SHEET PROPS
+   - title, subtitle, etc.
+   ------------------------------------------------------------------ */
 export interface SheetProps {
   isOpen: boolean;
   children: ReactNode;
   className?: string;
   title?: string;
-  subtitle?: ReactNode; // Changed from string to ReactNode
+  subtitle?: ReactNode; // You can pass React elements or strings
   count?: number;
   countLabel?: string;
   onDismiss?: () => void;
 }
 
-// Sheet component with manual drag handle
+/* ------------------------------------------------------------------
+   SHEET COMPONENT (DRAGGABLE BOTTOM-SHEET)
+   ------------------------------------------------------------------ */
 export default function Sheet({
   isOpen,
   children,
@@ -150,7 +159,6 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // State hooks
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -165,7 +173,7 @@ export default function Sheet({
     }
   }, [isOpen]);
 
-  // Set up scroll listener for the sheet content
+  // Keep track if user scrolled the sheet
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
       setIsAtTop(contentRef.current.scrollTop <= 0);
@@ -179,7 +187,7 @@ export default function Sheet({
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Framer Motion hooks for drag and animation
+  // Framer Motion: handle drag
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
   const dragControls = useDragControls();
@@ -203,7 +211,7 @@ export default function Sheet({
     dragControls.start(e);
   };
 
-  // Sheet header content
+  // Sheet Header content: no mention of "Trip Details" now
   const SheetHeader = (
     <div
       onPointerDown={handlePointerDown}
