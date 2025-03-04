@@ -71,16 +71,39 @@ function StationDetailComponent({
   // Payment UI (shown at step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  
+  // Track component mount state to prevent state updates after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   // Load payment methods if signed in & at step 4
   useEffect(() => {
     if (isSignedIn && step === 4 && showPaymentUI) {
       const user = auth.currentUser;
       if (!user) return;
+      
+      setPaymentMethodsLoading(true);
+      
       (async () => {
-        const res = await getSavedPaymentMethods(user.uid);
-        if (res.success && res.data) {
-          setPaymentMethods(res.data);
+        try {
+          const res = await getSavedPaymentMethods(user.uid);
+          // Only update state if component is still mounted
+          if (isMounted.current) {
+            if (res.success && res.data) {
+              setPaymentMethods(res.data);
+            }
+            setPaymentMethodsLoading(false);
+          }
+        } catch (error) {
+          console.error("Error loading payment methods:", error);
+          if (isMounted.current) {
+            setPaymentMethodsLoading(false);
+          }
         }
       })();
     }
@@ -88,7 +111,7 @@ function StationDetailComponent({
 
   // Auto-show Payment UI if user signs in at Step 4
   useEffect(() => {
-    if (step === 4 && isSignedIn) {
+    if (step === 4 && isSignedIn && isMounted.current) {
       setShowPaymentUI(true);
     }
   }, [step, isSignedIn]);
@@ -244,7 +267,11 @@ function StationDetailComponent({
       {/* Step 4: Payment UI inline if signed in and showPaymentUI */}
       {step === 4 && isSignedIn && showPaymentUI && (
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-          {paymentMethods.length > 0 ? (
+          {paymentMethodsLoading ? (
+            <div className="flex justify-center items-center py-4">
+              <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+            </div>
+          ) : paymentMethods.length > 0 ? (
             <div className="space-y-3 mb-4">
               {paymentMethods.map((m) => (
                 <PaymentMethodCard
@@ -278,7 +305,7 @@ function StationDetailComponent({
       <div className="pt-3">
         <button
           onClick={handleConfirm}
-          disabled={!(step === 2 || step === 4)}
+          disabled={!(step === 2 || step === 4) || paymentMethodsLoading}
           className={cn(
             "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
             "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50",
