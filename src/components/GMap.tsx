@@ -579,16 +579,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
          <Sheet
   key={detailKey}
   isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-  onDismiss={closeCurrentSheet}
+  onDismiss={() => {
+    // Ensure Redux state is stable before component unmounts
+    requestAnimationFrame(() => {
+      closeCurrentSheet();
+      // Force redraw of map overlay to prevent stale visuals
+      if (overlayRef.current?.requestRedraw) {
+        overlayRef.current.requestRedraw();
+      }
+    });
+  }}
   title={getSheetTitle()}
   subtitle={getSheetSubtitle()}
   onClearSelection={() => {
-    // When X button is clicked, clear the appropriate station based on current step
-    if (bookingStep <= 2) {
-      handleClearDepartureInSelector();
-    } else {
-      handleClearArrivalInSelector();
-    }
+    // Clear appropriate station and defer UI updates to avoid race conditions
+    requestAnimationFrame(() => {
+      if (bookingStep <= 2) {
+        handleClearDepartureInSelector();
+      } else {
+        handleClearArrivalInSelector();
+      }
+    });
   }}
 >
   {stationToShow && (
@@ -597,14 +608,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
       stations={searchLocation ? sortedStations : stations}
       activeStation={stationToShow}
       onOpenSignIn={handleOpenSignIn}
-      onOpenWalletModal={() => setIsSplatModalOpen(true)} // Or your wallet modal function
+      onOpenWalletModal={() => setIsSplatModalOpen(true)}
+      onDismiss={() => {
+        requestAnimationFrame(() => {
+          closeCurrentSheet();
+        });
+      }}
       onClearStation={() => {
-        // This prop won't be used in current implementation since we're using onClearSelection from Sheet
-        if (bookingStep <= 2) {
-          handleClearDepartureInSelector();
-        } else {
-          handleClearArrivalInSelector();
-        }
+        requestAnimationFrame(() => {
+          if (bookingStep <= 2) {
+            handleClearDepartureInSelector();
+          } else {
+            handleClearArrivalInSelector();
+          }
+        });
       }}
     />
   )}
