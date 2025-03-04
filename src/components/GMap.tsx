@@ -576,20 +576,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </Sheet>
 
           {/* Station Detail Sheet */}
-        <Sheet
+       <Sheet
   key={detailKey}
   isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-  // 1) No station clearing in onDismiss
   onDismiss={() => {
     requestAnimationFrame(() => {
       closeCurrentSheet(); // just close the sheet, no step reversion
-      // e.g. re-draw your map overlay if needed:
       if (overlayRef.current?.requestRedraw) {
         overlayRef.current.requestRedraw();
       }
     });
   }}
-  // 2) Only clear station if user hits "X"
   onClearSelection={() => {
     requestAnimationFrame(() => {
       if (bookingStep <= 2) {
@@ -609,8 +606,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       activeStation={stationToShow}
       onOpenSignIn={handleOpenSignIn}
       onOpenWalletModal={() => setIsSplatModalOpen(true)}
-      // "onDismiss" can simply close the sheet,
-      // or you can omit it if you rely only on the sheet's own close logic.
       onDismiss={() => {
         requestAnimationFrame(() => {
           closeCurrentSheet();
