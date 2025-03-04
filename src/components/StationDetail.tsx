@@ -122,7 +122,7 @@ function StationDetailComponent({
   const departureStation = useMemo(() => {
     if (!stations || !departureId) return null;
     return stations.find(
-      (st) => st.properties.stationId === departureId
+      (st) => st.properties.ObjectId === departureId
     ) ?? null;
   }, [stations, departureId]);
 
