@@ -110,7 +110,9 @@ function PulsatingStrip({ className }: { className?: string }) {
     startTimeRef.current = undefined;
     animationRef.current = requestAnimationFrame(animate);
     return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
     };
   }, [animate]);
 
@@ -165,26 +167,72 @@ export default function Sheet({
   const [isMinimized, setIsMinimized] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const isClosing = useRef(false);
   const minimizedPosition = useRef(0);
+  const windowHeight = useRef(0);
+  const isTransitioning = useRef(false);
 
-  // Measure header height for minimized state
+  // Track window dimensions for proper positioning
   useEffect(() => {
-    if (headerRef.current) {
-      const headerHeight = headerRef.current.offsetHeight + 16; // Add some buffer
+    const updateDimensions = () => {
+      windowHeight.current = window.innerHeight;
+      if (headerRef.current) {
+        const headerHeight = headerRef.current.offsetHeight + 4; // Add a small buffer
+        minimizedPosition.current = windowHeight.current - headerHeight;
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    
+    return () => {
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, []);
+
+  // Ensure header height calculation happens after render
+  useEffect(() => {
+    if (isOpen && headerRef.current) {
+      const headerHeight = headerRef.current.offsetHeight + 4;
       minimizedPosition.current = window.innerHeight - headerHeight;
     }
   }, [isOpen, title, subtitle, count]);
 
-  // Lock body scroll when sheet is open and not minimized
+  // Handle body scroll lock with better cleanup
   useEffect(() => {
+    let originalOverflow = '';
+    let originalPosition = '';
+    let originalHeight = '';
+    let originalTop = '';
+    
     if (isOpen && !isMinimized) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
+      originalOverflow = document.body.style.overflow;
+      originalPosition = document.body.style.position;
+      originalHeight = document.body.style.height;
+      originalTop = document.body.style.top;
+      
+      const scrollY = window.scrollY;
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.height = '100%';
+      document.body.style.width = '100%';
     }
+    
+    return () => {
+      if (originalOverflow || originalPosition || originalHeight || originalTop) {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.position = originalPosition;
+        document.body.style.height = originalHeight;
+        
+        if (originalTop) {
+          const scrollY = parseInt(originalTop.replace('-', '').replace('px', ''));
+          document.body.style.top = originalTop;
+          window.scrollTo(0, scrollY);
+        }
+      }
+    };
   }, [isOpen, isMinimized]);
 
   // Reset states when opening
@@ -195,7 +243,7 @@ export default function Sheet({
     }
   }, [isOpen]);
 
-  // Keep track if user scrolled the sheet
+  // Track content scroll
   const handleScroll = useCallback(() => {
     if (contentRef.current) {
       setIsAtTop(contentRef.current.scrollTop <= 0);
@@ -205,15 +253,19 @@ export default function Sheet({
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
+    
     el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => el.removeEventListener("scroll", handleScroll);
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+    };
   }, [handleScroll]);
 
-  // Framer Motion: handle drag
+  // Motion control for dragging
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
   const dragControls = useDragControls();
 
+  // Position update effect
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
@@ -224,8 +276,10 @@ export default function Sheet({
     }
   }, [isOpen, isMinimized, y]);
 
-  // Handle X button click (clear selection)
-  const handleClear = useCallback(() => {
+  // Handle clear selection button (X)
+  const handleClear = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event from bubbling to header click
+    
     if (isClosing.current) return;
     isClosing.current = true;
 
@@ -233,6 +287,7 @@ export default function Sheet({
       onClearSelection();
     }
     
+    // Small delay to ensure state updates before dismissal
     setTimeout(() => {
       if (onDismiss) {
         onDismiss();
@@ -242,65 +297,97 @@ export default function Sheet({
 
   // Handle backdrop click to minimize sheet
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    // Only trigger if clicking directly on the backdrop
     if (e.target === e.currentTarget) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (isTransitioning.current) return;
+      isTransitioning.current = true;
+      
       setIsMinimized(true);
       if (minimizedPosition.current > 0) {
         y.set(minimizedPosition.current);
       }
+      
+      // Reset transitioning state after animation completes
+      setTimeout(() => {
+        isTransitioning.current = false;
+      }, 300);
     }
   }, [y]);
 
-  // Handle drag end
+  // Handle drag end with better thresholds
   const handleDragEnd = useCallback(
-    (_: PointerEvent, info: { offset: { y: number } }) => {
-      const dragDistance = info.offset.y;
+    (_: PointerEvent, info: { offset: { y: number }, velocity: { y: number } }) => {
+      if (isTransitioning.current) return;
+      isTransitioning.current = true;
       
-      // If dragged up significantly, expand the sheet
-      if (dragDistance < -20 && isMinimized) {
+      const dragDistance = info.offset.y;
+      const dragVelocity = info.velocity.y;
+      
+      // Use velocity for more natural interactions
+      const isQuickDrag = Math.abs(dragVelocity) > 500;
+      
+      // If dragged up quickly or significantly, expand sheet
+      if ((dragDistance < -20 || (dragVelocity < -300)) && isMinimized) {
         setIsMinimized(false);
         y.set(0);
-        return;
-      }
-      
-      // If dragged down significantly, minimize or close
-      if (dragDistance > 100) {
-        if (isMinimized) {
-          // If already minimized and dragged down further, close
-          if (onDismiss) {
-            onDismiss();
-          }
-        } else {
-          // If expanded and dragged down, minimize
-          setIsMinimized(true);
-          if (minimizedPosition.current > 0) {
-            y.set(minimizedPosition.current);
-          }
+      } 
+      // If dragged down quickly or significantly when minimized, close sheet
+      else if ((dragDistance > 100 || (dragVelocity > 300 && dragDistance > 30)) && isMinimized) {
+        if (onDismiss) {
+          onDismiss();
         }
-        return;
+      }
+      // If dragged down quickly or significantly when expanded, minimize sheet
+      else if ((dragDistance > 100 || (dragVelocity > 300 && dragDistance > 30)) && !isMinimized) {
+        setIsMinimized(true);
+        if (minimizedPosition.current > 0) {
+          y.set(minimizedPosition.current);
+        }
+      }
+      // If not dragged far or fast enough, snap to nearest position
+      else {
+        if (isMinimized) {
+          y.set(minimizedPosition.current);
+        } else {
+          y.set(0);
+        }
       }
       
-      // If not dragged far enough, snap to nearest position
-      if (isMinimized) {
-        y.set(minimizedPosition.current);
-      } else {
-        y.set(0);
-      }
+      // Reset transitioning state after animation completes
+      setTimeout(() => {
+        isTransitioning.current = false;
+      }, 300);
     },
     [isMinimized, y, onDismiss]
   );
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  // Start drag operation
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
     dragControls.start(e);
-  };
+  }, [dragControls]);
 
   // Toggle minimized state on header click
-  const handleHeaderClick = useCallback(() => {
+  const handleHeaderClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (isTransitioning.current) return;
+    isTransitioning.current = true;
+    
     setIsMinimized(!isMinimized);
     if (!isMinimized && minimizedPosition.current > 0) {
       y.set(minimizedPosition.current);
     } else {
       y.set(0);
     }
+    
+    // Reset transitioning state after animation completes
+    setTimeout(() => {
+      isTransitioning.current = false;
+    }, 300);
   }, [isMinimized, y]);
 
   // Sheet Header content
@@ -309,7 +396,7 @@ export default function Sheet({
       ref={headerRef}
       onPointerDown={handlePointerDown}
       onClick={handleHeaderClick}
-      className="cursor-grab active:cursor-grabbing px-4 pt-4 relative"
+      className="cursor-grab active:cursor-grabbing px-4 pt-4 pb-2 relative"
     >
       <div className="flex items-center justify-between">
         <div className="text-left">
@@ -343,12 +430,16 @@ export default function Sheet({
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
           {/* Backdrop - only blocks interaction when NOT minimized */}
           <motion.div
-            className={`absolute inset-0 bg-black/60 ${isMinimized ? 'pointer-events-none' : 'pointer-events-auto'}`}
+            className={cn(
+              "absolute inset-0 bg-black transition-opacity duration-200", 
+              isMinimized ? "pointer-events-none opacity-30" : "pointer-events-auto opacity-60"
+            )}
             initial={{ opacity: 0 }}
             animate={{ opacity: isMinimized ? 0.3 : 0.6 }}
             exit={{ opacity: 0 }}
             onClick={handleBackdropClick}
           />
+          
           {/* Draggable sheet */}
           <motion.div
             className="pointer-events-auto mt-auto w-full"
@@ -356,31 +447,43 @@ export default function Sheet({
             initial={{ y: "100%" }}
             animate={{ y: isMinimized ? minimizedPosition.current : 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            transition={{ 
+              type: "spring", 
+              damping: 30, 
+              stiffness: 300, 
+              restDelta: 0.5 
+            }}
             drag="y"
             dragControls={dragControls}
             dragListener={false}
             dragConstraints={{ top: 0 }}
+            dragElastic={0.1} // Reduced elasticity for more precise dragging
+            dragTransition={{ bounceStiffness: 300, bounceDamping: 30 }}
             onDragEnd={handleDragEnd}
           >
             <div
+              ref={sheetRef}
               className={cn(
                 "relative bg-black text-white rounded-t-lg shadow-2xl border-t border-gray-800",
                 className
               )}
             >
               {SheetHeader}
+              
+              {/* Content area */}
               <motion.div
                 ref={contentRef}
+                initial={false}
                 animate={{ 
-                  maxHeight: isMinimized ? "0px" : "80vh",
-                  opacity: isMinimized ? 0 : 1
+                  height: isMinimized ? 0 : "auto",
+                  opacity: isMinimized ? 0 : 1,
+                  overflow: isMinimized ? "hidden" : "auto"
                 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.2 }}
                 className="px-4 pt-3 pb-8 overflow-y-auto"
                 style={{ 
-                  display: isMinimized ? "none" : "block",
-                  visibility: isMinimized ? "hidden" : "visible"
+                  maxHeight: "80vh",
+                  pointerEvents: isMinimized ? "none" : "auto"
                 }}
               >
                 {children}
