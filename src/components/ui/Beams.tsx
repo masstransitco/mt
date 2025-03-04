@@ -1,13 +1,12 @@
 "use client"
 
-import type React from "react"
-import { useEffect, useRef } from "react"
+import React, { useEffect, useRef, ReactNode } from "react"
 import { motion } from "motion/react"
 import { cn } from "@/lib/utils"
 
 interface AnimatedGradientBackgroundProps {
   className?: string
-  children?: React.ReactNode
+  children?: ReactNode
   intensity?: "subtle" | "medium" | "strong"
 }
 
@@ -44,6 +43,7 @@ function createBeam(width: number, height: number): Beam {
 
 export default function Beams({
   className,
+  children,
   intensity = "strong",
 }: AnimatedGradientBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -175,12 +175,12 @@ export default function Beams({
   return (
     <div
       className={cn(
-        // Dark gradient matches the CardGame background
         "relative min-h-screen w-full overflow-hidden",
         "bg-gradient-to-b from-neutral-900 to-neutral-800",
         className
       )}
     >
+      {/* The beams animation */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0"
@@ -199,9 +199,9 @@ export default function Beams({
         style={{ backdropFilter: "blur(50px)" }}
       />
 
-      {/* Z-layer container remains, but text is removed */}
-      <div className="relative z-10 flex h-screen w-full items-center justify-center">
-        {/* (Empty for now—remove or place other children here if you wish) */}
+      {/* Children are placed on top of the beams */}
+      <div className="relative z-10">
+        {children}
       </div>
     </div>
   )
