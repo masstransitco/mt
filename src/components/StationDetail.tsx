@@ -24,7 +24,6 @@ import { Parking } from "@/components/ui/icons/Parking";
 
 // Payment & Firebase
 import { PaymentMethodCard } from "@/components/ui/PaymentComponents";
-// Import `SavedPaymentMethod` from lib/stripe, rather than PaymentComponents
 import { getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
@@ -39,17 +38,11 @@ const MapCard = dynamic(() => import("./MapCard"), {
 });
 
 interface StationDetailProps {
-  /** The currently selected/active station. If null, show placeholder. */
   activeStation: StationFeature | null;
   stations?: StationFeature[];
 
-  /** Called when the user confirms departure at step 2. */
   onConfirmDeparture?: () => void;
-
-  /** Called to open SignInModal if user not signed in. */
   onOpenSignIn: () => void;
-
-  /** Called to open the WalletModal for adding/managing cards. */
   onOpenWalletModal?: () => void;
 }
 
@@ -70,7 +63,7 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // Manage Payment UI (step 4)
+  // Payment UI (shown at step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
 
@@ -88,14 +81,13 @@ function StationDetailComponent({
     }
   }, [isSignedIn, step, showPaymentUI]);
 
-  // If user signs in at Step 4, automatically show Payment UI
+  // Auto-show Payment UI if user signs in at Step 4
   useEffect(() => {
     if (step === 4 && isSignedIn) {
       setShowPaymentUI(true);
     }
   }, [step, isSignedIn]);
 
-  // Debug logging
   useEffect(() => {
     console.log("[StationDetail] step=", step);
     if (stations?.length) {
@@ -104,7 +96,7 @@ function StationDetailComponent({
   }, [step, stations]);
 
   /**
-   * Example for an arrival time if needed
+   * Estimated arrival time to the departure station (step 2 -> station).
    */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
@@ -126,7 +118,17 @@ function StationDetailComponent({
     };
   }, [dispatchRoute?.duration]);
 
-  // No station selected
+  // Grab the departure station name from step 2
+  const departureStation = useMemo(() => {
+    if (!stations || !departureId) return null;
+    return stations.find(
+      (st) => st.properties.stationId === departureId
+    ) ?? null;
+  }, [stations, departureId]);
+
+  const departureStationName = departureStation?.properties?.Place ?? "";
+
+  // If no station selected for the current step
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -149,7 +151,7 @@ function StationDetailComponent({
     );
   }
 
-  // Step-based dynamic text for parking row
+  // Step-based parking label
   const parkingValue =
     step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "";
 
@@ -186,6 +188,24 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
+      {/* STEP 4: REPLACE "Trip Details" WITH FARE + SUBTITLE */}
+      {step === 4 && (
+        <div className="space-y-1">
+          {/* 1) Starting fare */}
+          <p className="text-xs text-gray-400">Starting fare</p>
+          <p className="text-sm font-semibold text-white">
+            HKD $50.00 - $1/min hereafter
+          </p>
+
+          {/* 2) Subtitle: "From <departureStationName> at <estimatedPickupTime.start>" */}
+          {departureStationName && estimatedPickupTime?.start && (
+            <p className="text-xs text-gray-300">
+              From {departureStationName} at {estimatedPickupTime.start}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* MapCard */}
       <MapCard
         coordinates={stationCoordinates}
@@ -196,8 +216,6 @@ function StationDetailComponent({
 
       {/* Station stats card */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-        {/* Removed "Available Spots" and "Route Distance" entirely */}
-
         {/* Wait time if any */}
         {activeStation.properties.waitTime && (
           <div className="flex justify-between items-center text-sm">
@@ -235,7 +253,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* Parking row (always shown, dynamic text) */}
+        {/* Parking row */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
             <Parking className="w-4 h-4 text-blue-400" />
