@@ -25,9 +25,8 @@ import { CarParkIcon } from "@/components/ui/icons/CarParkIcon";
 import { Parking } from "@/components/ui/icons/Parking";
 
 // Payment & Firebase
-import { AddPaymentMethodForm, PaymentMethodCard } from "@/components/ui/PaymentComponents";
+import { PaymentMethodCard } from "@/components/ui/PaymentComponents";
 import { getStripe, getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
-import { Elements } from "@stripe/react-stripe-js";
 import { auth } from "@/lib/firebase";
 
 /** Dynamically import the MapCard (always visible now) */
@@ -48,11 +47,11 @@ interface StationDetailProps {
   /** Called when the user confirms departure at step 2. */
   onConfirmDeparture?: () => void;
 
-  /**
-   * Called to open SignInModal if the user is not signed in.
-   * Alternatively, you could use local state for SignInModal if you prefer.
-   */
+  /** Called to open SignInModal if user not signed in. */
   onOpenSignIn: () => void;
+
+  /** Called to open the WalletModal for adding/managing cards. */
+  onOpenWalletModal?: () => void;
 }
 
 function StationDetailComponent({
@@ -60,6 +59,7 @@ function StationDetailComponent({
   stations,
   onConfirmDeparture,
   onOpenSignIn,
+  onOpenWalletModal,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -71,21 +71,15 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // Local state for showing the inline Payment UI
+  // If user is at step 4 and signed in, we can show their existing cards
   const [showPaymentUI, setShowPaymentUI] = useState(false);
-
-  // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
-  const [stripeLoaded, setStripeLoaded] = useState(false);
-  const stripePromise = getStripe();
 
-  // Load payment methods if signed in + showPaymentUI
+  // Load payment methods if signed in & at step 4
   useEffect(() => {
     if (isSignedIn && step === 4 && showPaymentUI) {
+      if (!auth.currentUser) return;
       (async () => {
-        // Ensure we have a currentUser
-        if (!auth.currentUser) return;
-
         const res = await getSavedPaymentMethods(auth.currentUser.uid);
         if (res.success && res.data) {
           setPaymentMethods(res.data);
@@ -94,11 +88,10 @@ function StationDetailComponent({
     }
   }, [isSignedIn, step, showPaymentUI]);
 
-  // If user just signed in at Step 4, automatically show Payment UI
+  // If user just signed in at Step 4, automatically show "Payment UI"
   useEffect(() => {
     if (step === 4 && isSignedIn) {
       setShowPaymentUI(true);
-      setStripeLoaded(true);
     }
   }, [step, isSignedIn]);
 
@@ -175,7 +168,7 @@ function StationDetailComponent({
    * Handle confirmation flow:
    * - Step 2 => confirm departure => step 3
    * - Step 4 => if user not signed in => open sign in,
-   *             else show Payment UI inline
+   *             else show Payment UI
    */
   const handleConfirm = () => {
     if (isDepartureFlow) {
@@ -190,16 +183,9 @@ function StationDetailComponent({
           onOpenSignIn();
         } else {
           setShowPaymentUI(true);
-          setStripeLoaded(true);
         }
       }
     }
-  };
-
-  // Called after user successfully adds a card
-  const handlePaymentSetupDone = () => {
-    toast.success("Payment method added! Proceeding to payment...");
-    dispatch(advanceBookingStep(5));
   };
 
   // Coordinates for the always-visible map
@@ -298,19 +284,35 @@ function StationDetailComponent({
       {/* Step 4: Payment UI inline if signed in and showPaymentUI */}
       {step === 4 && isSignedIn && showPaymentUI && (
         <div className="bg-gray-900/60 p-4 rounded border border-gray-700">
-          <h3 className="text-lg font-semibold mb-2 text-white">Add or Select a Payment Method</h3>
+          <h3 className="text-lg font-semibold mb-2 text-white">Your Payment Methods</h3>
 
-          {stripeLoaded && (
-            <Elements stripe={stripePromise}>
-              <AddPaymentMethodForm
-                existingMethods={paymentMethods}
-                onSuccess={() => {
-                  // Re-fetch user’s payment methods if needed
-                  // setPaymentMethods(...)
-                  handlePaymentSetupDone();
-                }}
-              />
-            </Elements>
+          {paymentMethods.length > 0 ? (
+            <div className="space-y-3 mb-4">
+              {paymentMethods.map((m) => (
+                <PaymentMethodCard
+                  key={m.id}
+                  method={m}
+                  // If you'd like to enable deletion or setDefault inline,
+                  // define your own async logic or pass from parent:
+                  onDelete={async () => toast("Delete not implemented")}
+                  onSetDefault={async () => toast("Set default not implemented")}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 mb-4">
+              No payment methods yet
+            </p>
+          )}
+
+          {/* Button to open the full WalletModal for adding or managing cards */}
+          {onOpenWalletModal && (
+            <button
+              onClick={onOpenWalletModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+            >
+              Manage Payment Methods
+            </button>
           )}
         </div>
       )}
