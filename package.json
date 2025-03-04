@@ -52,6 +52,7 @@
     "react-window-infinite-loader": "^1.0.10",
     "request": "^2.88.2",
     "react-spring-bottom-sheet": "^3.4.1",
+    "sonner": "^2.0.1",
     "stripe": "^14.14.0",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7",
