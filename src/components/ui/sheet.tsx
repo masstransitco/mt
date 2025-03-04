@@ -162,6 +162,48 @@ export default function Sheet({
   const [isAtTop, setIsAtTop] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
   const isClosing = useRef(false);
+  const childOnDismissRef = useRef<(() => void) | null>(null);
+
+  // Helper function to find any StationDetail child components and get their onDismiss handler
+  useEffect(() => {
+    if (!contentRef.current) return;
+
+    // Reset our ref
+    childOnDismissRef.current = null;
+
+    // Function to traverse the React component tree and find StationDetail components
+    const findStationDetailComponent = (element: any) => {
+      if (!element) return null;
+
+      // Check if this is a StationDetail component (verify by checking its props)
+      if (
+        element.type?.name === 'StationDetailComponent' || 
+        element.type?.displayName === 'memo(StationDetailComponent)'
+      ) {
+        // If it has a handleSafeDismiss method, save it
+        return element.props?.onDismiss || null;
+      }
+
+      // If this element has children, check them
+      if (element.props?.children) {
+        if (Array.isArray(element.props.children)) {
+          for (const child of element.props.children) {
+            const result = findStationDetailComponent(child);
+            if (result) return result;
+          }
+        } else {
+          return findStationDetailComponent(element.props.children);
+        }
+      }
+
+      return null;
+    };
+
+    // Try to find the component
+    if (children) {
+      childOnDismissRef.current = findStationDetailComponent(children);
+    }
+  }, [children, isOpen]);
 
   // Lock body scroll when sheet is open
   useEffect(() => {
@@ -205,13 +247,22 @@ export default function Sheet({
     if (isClosing.current) return;
     
     isClosing.current = true;
+
+    // First check for child onDismiss handlers (StationDetail)
+    if (childOnDismissRef.current) {
+      try {
+        childOnDismissRef.current();
+      } catch (e) {
+        console.error("Error calling child dismiss:", e);
+      }
+    }
     
     // Small delay to allow state to stabilize
     setTimeout(() => {
       if (onDismiss) {
         onDismiss();
       }
-    }, 50);
+    }, 100); // Increased delay to ensure child components have time to process
   }, [onDismiss]);
 
   const handleDragEnd = useCallback(
