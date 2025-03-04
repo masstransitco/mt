@@ -143,7 +143,7 @@ export default function MtcLanding() {
           >
             <Button
   variant="ghost"
-  className="rounded-[1.15rem] px-8 py-6 text-lg font-semibold backdrop-blur-md 
+  className="rounded-full px-6 py-4 text-lg font-semibold backdrop-blur-md 
              bg-black/80 hover:bg-black/90
              text-white transition-all duration-300 
              group-hover:-translate-y-0.5 border border-white/10
