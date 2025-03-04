@@ -576,14 +576,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </Sheet>
 
           {/* Station Detail Sheet */}
-          <Sheet
+         <Sheet
   key={detailKey}
   isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
   onDismiss={closeCurrentSheet}
   title={getSheetTitle()}
   subtitle={getSheetSubtitle()}
   onClearSelection={() => {
-    // Clear the appropriate station based on current step
+    // When X button is clicked, clear the appropriate station based on current step
     if (bookingStep <= 2) {
       handleClearDepartureInSelector();
     } else {
@@ -597,8 +597,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       stations={searchLocation ? sortedStations : stations}
       activeStation={stationToShow}
       onOpenSignIn={handleOpenSignIn}
+      onOpenWalletModal={() => setIsSplatModalOpen(true)} // Or your wallet modal function
       onClearStation={() => {
-        // This will be called when StationDetail itself needs to clear the station
+        // This prop won't be used in current implementation since we're using onClearSelection from Sheet
         if (bookingStep <= 2) {
           handleClearDepartureInSelector();
         } else {
@@ -608,7 +609,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     />
   )}
 </Sheet>
-
           {/* GaussianSplatModal */}
           <Suspense fallback={<div>Loading modal...</div>}>
             {isSplatModalOpen && (
