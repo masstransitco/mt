@@ -284,8 +284,8 @@ function StationDetailComponent({
 
       {/* Step 4: Payment UI inline if signed in and showPaymentUI */}
       {step === 4 && isSignedIn && showPaymentUI && (
-        <div className="bg-gray-900/60 p-4 rounded border border-gray-700">
-          <h3 className="text-lg font-semibold mb-2 text-white">Your Payment Methods</h3>
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
+          {/* Titles removed per request */}
 
           {paymentMethods.length > 0 ? (
             <div className="space-y-3 mb-4">
@@ -309,13 +309,14 @@ function StationDetailComponent({
             </p>
           )}
 
-          {/* Button to open the full WalletModal for adding or managing cards */}
+          {/* No "Manage Payment Methods" text */}
           {onOpenWalletModal && (
             <button
               onClick={onOpenWalletModal}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
             >
-              Manage Payment Methods
+              {/* Could be a plain icon, or no text at all, etc. */}
+              <span>Add or Manage</span>
             </button>
           )}
         </div>
