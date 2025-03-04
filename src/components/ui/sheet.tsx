@@ -190,7 +190,7 @@ export default function Sheet({
     };
   }, []);
 
-  // Recalc position each time we open
+  // Recalc position each time we open or when dimensions change
   useEffect(() => {
     if (isOpen && headerRef.current) {
       const headerHeight = headerRef.current.offsetHeight + 4;
@@ -259,7 +259,7 @@ export default function Sheet({
   }, [isOpen, isMinimized, y]);
 
   /* -------------------------------------------------------------
-     X BUTTON => close the sheet & clear selection
+     X BUTTON => ONLY action that should close the sheet & clear selection
   ------------------------------------------------------------- */
   const handleClear = useCallback(
     (e: React.MouseEvent) => {
@@ -284,7 +284,7 @@ export default function Sheet({
   );
 
   /* -------------------------------------------------------------
-     BACKDROP CLICK => minimize if open. If minimized => do nothing
+     BACKDROP CLICK => ONLY minimize if expanded. NEVER close.
   ------------------------------------------------------------- */
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -300,7 +300,8 @@ export default function Sheet({
           setIsMinimized(true);
           y.set(minimizedPosition.current);
         }
-        // If already minimized => do nothing
+        // NEVER close the sheet, ONLY minimize
+
         setTimeout(() => {
           isTransitioning.current = false;
         }, 300);
@@ -317,7 +318,7 @@ export default function Sheet({
   }, [y]);
 
   /* -------------------------------------------------------------
-     DRAG END => expand or minimize only, never close
+     DRAG END => expand or minimize only, NEVER close
   ------------------------------------------------------------- */
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number }; velocity: { y: number } }) => {
@@ -328,31 +329,38 @@ export default function Sheet({
       const dragVelocity = info.velocity.y;
       const currentPos = y.get();
       
-      // If header is near or above top of viewport, it's fully expanded
-      const isCurrentlyFullyExpanded = currentPos < 50; 
-      
-      // If header is near the minimized position, it's minimized
-      const isCurrentlyMinimized = Math.abs(currentPos - minimizedPosition.current) < 50;
-
       // Determine drag direction relative to starting position
       const draggedUpward = currentPos < dragStartY.current;
       const draggedDownward = currentPos > dragStartY.current;
 
-      // CASE 1: Expanded state, dragging down with sufficient speed/distance
-      if (isCurrentlyFullyExpanded && draggedDownward && (dragDistance > 100 || dragVelocity > 300)) {
-        // Minimize the sheet
-        setIsMinimized(true);
-        y.set(minimizedPosition.current);
+      // CASE 1: Starting from expanded state
+      if (dragStartY.current < 50) {
+        // If dragged down with sufficient force 
+        if (draggedDownward && (dragDistance > 100 || dragVelocity > 300)) {
+          // Minimize but NEVER close
+          setIsMinimized(true);
+          y.set(minimizedPosition.current);
+        } else {
+          // Return to expanded state
+          setIsMinimized(false);
+          y.set(0);
+        }
       } 
-      // CASE 2: Minimized state, dragging up with sufficient speed/distance 
-      else if (isCurrentlyMinimized && draggedUpward && (dragDistance < -20 || dragVelocity < -300)) {
-        // Expand the sheet
-        setIsMinimized(false);
-        y.set(0);
+      // CASE 2: Starting from minimized state
+      else if (Math.abs(dragStartY.current - minimizedPosition.current) < 50) {
+        // If dragged up with sufficient force
+        if (draggedUpward && (dragDistance < -20 || dragVelocity < -300)) {
+          // Expand
+          setIsMinimized(false);
+          y.set(0);
+        } else {
+          // Return to minimized state
+          setIsMinimized(true);
+          y.set(minimizedPosition.current);
+        }
       }
-      // CASE 3: In transition, determine which state is closer
+      // CASE 3: In transition between states - use threshold
       else {
-        // Threshold is halfway between expanded and minimized
         const halfwayPoint = minimizedPosition.current / 2;
         
         if (currentPos < halfwayPoint) {
@@ -374,7 +382,7 @@ export default function Sheet({
   );
 
   /* -------------------------------------------------------------
-     HEADER CLICK => toggle minimized or expanded
+     HEADER CLICK => toggle between minimized/expanded ONLY, NEVER close
   ------------------------------------------------------------- */
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -399,6 +407,7 @@ export default function Sheet({
       if (isTransitioning.current) return;
       isTransitioning.current = true;
 
+      // Only toggle between minimized and expanded
       setIsMinimized(!isMinimized);
       if (!isMinimized && minimizedPosition.current > 0) {
         y.set(minimizedPosition.current);
