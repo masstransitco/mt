@@ -51,7 +51,7 @@ const createCards = () => {
   return cards.sort(() => Math.random() - 0.5)
 }
 
-export default function MemoryGame() {
+export default function CardGame() {
   const [cards, setCards] = useState<MemoryCard[]>(createCards())
   const [flippedIndexes, setFlippedIndexes] = useState<number[]>([])
   const [matches, setMatches] = useState(0)
