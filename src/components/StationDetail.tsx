@@ -4,8 +4,7 @@ import React, { memo, useEffect, useState, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Clock, Route } from "lucide-react";
-
+import { Clock, Route, Footprints } from "lucide-react"; // <-- import Footprints here
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
@@ -79,7 +78,7 @@ function StationDetailComponent({
   useEffect(() => {
     if (isSignedIn && step === 4 && showPaymentUI) {
       const user = auth.currentUser;
-      if (!user) return; // Guard for TypeScript null-check
+      if (!user) return;
       (async () => {
         const res = await getSavedPaymentMethods(user.uid);
         if (res.success && res.data) {
@@ -103,9 +102,6 @@ function StationDetailComponent({
     }
   }, [step, stations]);
 
-  /**
-   * If needed, an estimated pickup time window (not displayed in this version).
-   */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
     const now = new Date();
@@ -126,7 +122,6 @@ function StationDetailComponent({
     };
   }, [dispatchRoute?.duration]);
 
-  // If no station is selected yet
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -149,7 +144,6 @@ function StationDetailComponent({
     );
   }
 
-  // If we have route info for departureId->arrivalId
   let routeDistanceKm: string | null = null;
   let routeDurationMin: string | null = null;
   if (route && departureId && arrivalId) {
@@ -157,7 +151,6 @@ function StationDetailComponent({
     routeDurationMin = Math.round(route.duration / 60).toString();
   }
 
-  // For step 2: "Touchless Exit", for step 4: "Touchless Entry". Otherwise blank.
   let parkingValue = "";
   if (step === 2) {
     parkingValue = "Touchless Exit";
@@ -165,17 +158,13 @@ function StationDetailComponent({
     parkingValue = "Touchless Entry";
   }
 
-  /**
-   * Handle confirmation flow:
-   * - Step 2 => confirm departure => step 3
-   * - Step 4 => if user not signed in => open sign in,
-   *             else show Payment UI
-   */
   const handleConfirm = () => {
     if (isDepartureFlow) {
       if (step === 2) {
         dispatch(advanceBookingStep(3));
-        toast.success("Departure station confirmed! Now select your arrival station.");
+        toast.success(
+          "Departure station confirmed! Now select your arrival station."
+        );
         onConfirmDeparture?.();
       }
     } else {
@@ -189,7 +178,6 @@ function StationDetailComponent({
     }
   };
 
-  // Coordinates for the always-visible map
   const stationCoordinates: [number, number] = [
     activeStation.geometry.coordinates[0],
     activeStation.geometry.coordinates[1],
@@ -213,17 +201,7 @@ function StationDetailComponent({
 
       {/* Station stats card */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-        {/* Available spots */}
-        <div className="flex justify-between items-center text-sm">
-          <div className="flex items-center gap-2 text-gray-300">
-            <CarParkIcon className="w-4 h-4 text-blue-400" />
-            <span>Available Spots</span>
-          </div>
-          <span className="font-medium text-white">
-            {activeStation.properties.availableSpots}/{activeStation.properties.totalSpots}
-          </span>
-        </div>
-
+        {/* (1) Removed the "Available spots" block entirely. */}
         {/* Wait time if any */}
         {activeStation.properties.waitTime && (
           <div className="flex justify-between items-center text-sm">
@@ -260,7 +238,12 @@ function StationDetailComponent({
           activeStation.distance !== undefined && (
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2 text-gray-300">
-                <SteerWheel className="w-4 h-4 text-blue-400" />
+                {/* (2) Use Footprints icon if step === 2, else SteerWheel */}
+                {step === 2 ? (
+                  <Footprints className="w-4 h-4 text-blue-400" />
+                ) : (
+                  <SteerWheel className="w-4 h-4 text-blue-400" />
+                )}
                 <span>Distance from You</span>
               </div>
               <span className="font-medium text-white">
@@ -270,30 +253,25 @@ function StationDetailComponent({
           )
         )}
 
-        {/* Parking row => replaced old icon with your new Parking icon + dynamic text */}
+        {/* Parking row */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
             <Parking className="w-4 h-4 text-blue-400" />
             <span>Parking</span>
           </div>
-          <span className="font-medium text-white">
-            {parkingValue}
-          </span>
+          <span className="font-medium text-white">{parkingValue}</span>
         </div>
       </div>
 
       {/* Step 4: Payment UI inline if signed in and showPaymentUI */}
       {step === 4 && isSignedIn && showPaymentUI && (
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-          {/* Titles removed per request */}
-
           {paymentMethods.length > 0 ? (
             <div className="space-y-3 mb-4">
               {paymentMethods.map((m) => (
                 <PaymentMethodCard
                   key={m.id}
                   method={m}
-                  // Return Promise<void> so TS doesn't complain about type mismatch
                   onDelete={async () => {
                     toast("Delete not implemented");
                   }}
@@ -304,18 +282,14 @@ function StationDetailComponent({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 mb-4">
-              No payment methods yet
-            </p>
+            <p className="text-sm text-gray-400 mb-4">No payment methods yet</p>
           )}
 
-          {/* No "Manage Payment Methods" text */}
           {onOpenWalletModal && (
             <button
               onClick={onOpenWalletModal}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
             >
-              {/* Could be a plain icon, or no text at all, etc. */}
               <span>Add or Manage</span>
             </button>
           )}
