@@ -45,8 +45,8 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onOpenWalletModal?: () => void;
-  onDismiss?: () => void; // For handling basic dismiss
-  onClearStation?: () => void; // For handling close button click (clearing station)
+  onDismiss?: () => void;
+  onClearStation?: () => void;
 }
 
 function StationDetailComponent({
@@ -68,49 +68,9 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // Track unmounting state
-  const unmountingRef = useRef(false);
-
   // Payment UI (shown at step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
-
-  // Clear station selection based on current step
-  const handleClearStation = useCallback(() => {
-    if (unmountingRef.current) return;
-    unmountingRef.current = true;
-
-    try {
-      if (isDepartureFlow) {
-        // In step 2, clear departure station
-        dispatch(clearDepartureStation());
-      } else {
-        // In step 4, clear arrival station
-        dispatch(clearArrivalStation());
-      }
-    } catch (error) {
-      console.error("Error during station cleanup:", error);
-    }
-
-    // Allow time for state to update before calling parent's handlers
-    setTimeout(() => {
-      if (onClearStation) {
-        onClearStation();
-      }
-      if (onDismiss) {
-        onDismiss();
-      }
-    }, 50);
-  }, [dispatch, isDepartureFlow, onClearStation, onDismiss]);
-
-  // Initialize component correctly and handle cleanup
-  useEffect(() => {
-    unmountingRef.current = false;
-    
-    return () => {
-      unmountingRef.current = true;
-    };
-  }, []);
 
   // Load payment methods if signed in & at step 4
   useEffect(() => {
@@ -140,6 +100,19 @@ function StationDetailComponent({
       console.log("[StationDetail] stations array length=", stations.length);
     }
   }, [step, stations]);
+
+  // Handle clear station action (called when X button is clicked)
+  const handleClearStation = useCallback(() => {
+    if (isDepartureFlow) {
+      dispatch(clearDepartureStation());
+    } else {
+      dispatch(clearArrivalStation());
+    }
+    
+    if (onClearStation) {
+      onClearStation();
+    }
+  }, [dispatch, isDepartureFlow, onClearStation]);
 
   /**
    * Estimated arrival time to the departure station (step 2 -> station).
