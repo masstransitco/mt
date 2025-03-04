@@ -12,6 +12,7 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
+  clearDepartureStation,
   clearArrivalStation,
 } from "@/store/bookingSlice";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
@@ -44,7 +45,8 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onOpenWalletModal?: () => void;
-  onDismiss?: () => void; // Added onDismiss prop
+  onDismiss?: () => void; // For handling basic dismiss
+  onClearStation?: () => void; // For handling close button click (clearing station)
 }
 
 function StationDetailComponent({
@@ -54,6 +56,7 @@ function StationDetailComponent({
   onOpenSignIn,
   onOpenWalletModal,
   onDismiss,
+  onClearStation,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -65,57 +68,49 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // Track if component is being unmounted
+  // Track unmounting state
   const unmountingRef = useRef(false);
-  const isDismissingRef = useRef(false);
 
   // Payment UI (shown at step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
 
-  // Handle clean dismissal to prevent app becoming unresponsive
-  const handleSafeDismiss = useCallback(() => {
-    if (unmountingRef.current || isDismissingRef.current) return;
-    isDismissingRef.current = true;
+  // Clear station selection based on current step
+  const handleClearStation = useCallback(() => {
+    if (unmountingRef.current) return;
+    unmountingRef.current = true;
 
     try {
-      // If we're in step 4, clear arrival station first
-      if (step === 4 && arrivalId) {
+      if (isDepartureFlow) {
+        // In step 2, clear departure station
+        dispatch(clearDepartureStation());
+      } else {
+        // In step 4, clear arrival station
         dispatch(clearArrivalStation());
       }
     } catch (error) {
       console.error("Error during station cleanup:", error);
     }
 
-    // Allow time for state to update before calling parent's onDismiss
+    // Allow time for state to update before calling parent's handlers
     setTimeout(() => {
+      if (onClearStation) {
+        onClearStation();
+      }
       if (onDismiss) {
         onDismiss();
       }
-      // Reset after dismissal is complete
-      setTimeout(() => {
-        isDismissingRef.current = false;
-      }, 100);
     }, 50);
-  }, [dispatch, step, arrivalId, onDismiss]);
+  }, [dispatch, isDepartureFlow, onClearStation, onDismiss]);
 
   // Initialize component correctly and handle cleanup
   useEffect(() => {
     unmountingRef.current = false;
-    isDismissingRef.current = false;
     
     return () => {
       unmountingRef.current = true;
-      // If we're unmounting during step 4, ensure the arrival station is cleared
-      if (step === 4 && arrivalId) {
-        try {
-          dispatch(clearArrivalStation());
-        } catch (e) {
-          console.error("Error during unmount cleanup:", e);
-        }
-      }
     };
-  }, [dispatch, step, arrivalId]);
+  }, []);
 
   // Load payment methods if signed in & at step 4
   useEffect(() => {
