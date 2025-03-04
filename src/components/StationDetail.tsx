@@ -67,6 +67,7 @@ function StationDetailComponent({
 
   // Track if component is being unmounted
   const unmountingRef = useRef(false);
+  const isDismissingRef = useRef(false);
 
   // Payment UI (shown at step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
@@ -74,12 +75,16 @@ function StationDetailComponent({
 
   // Handle clean dismissal to prevent app becoming unresponsive
   const handleSafeDismiss = useCallback(() => {
-    if (unmountingRef.current) return;
-    unmountingRef.current = true;
+    if (unmountingRef.current || isDismissingRef.current) return;
+    isDismissingRef.current = true;
 
-    // If we're in step 4, clear arrival station first
-    if (step === 4 && arrivalId) {
-      dispatch(clearArrivalStation());
+    try {
+      // If we're in step 4, clear arrival station first
+      if (step === 4 && arrivalId) {
+        dispatch(clearArrivalStation());
+      }
+    } catch (error) {
+      console.error("Error during station cleanup:", error);
     }
 
     // Allow time for state to update before calling parent's onDismiss
@@ -87,16 +92,30 @@ function StationDetailComponent({
       if (onDismiss) {
         onDismiss();
       }
+      // Reset after dismissal is complete
+      setTimeout(() => {
+        isDismissingRef.current = false;
+      }, 100);
     }, 50);
   }, [dispatch, step, arrivalId, onDismiss]);
 
-  // Reset unmounting flag when component mounts or updates
+  // Initialize component correctly and handle cleanup
   useEffect(() => {
     unmountingRef.current = false;
+    isDismissingRef.current = false;
+    
     return () => {
       unmountingRef.current = true;
+      // If we're unmounting during step 4, ensure the arrival station is cleared
+      if (step === 4 && arrivalId) {
+        try {
+          dispatch(clearArrivalStation());
+        } catch (e) {
+          console.error("Error during unmount cleanup:", e);
+        }
+      }
     };
-  }, []);
+  }, [dispatch, step, arrivalId]);
 
   // Load payment methods if signed in & at step 4
   useEffect(() => {
@@ -119,6 +138,7 @@ function StationDetailComponent({
     }
   }, [step, isSignedIn]);
 
+  // For debugging
   useEffect(() => {
     console.log("[StationDetail] step=", step);
     if (stations?.length) {
