@@ -142,21 +142,26 @@ export default function MtcLanding() {
                         overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
           >
             <Button
-              variant="ghost"
-              className="rounded-[1.15rem] px-8 py-6 text-lg font-semibold backdrop-blur-md 
-                            bg-black/80 hover:bg-black/90
-                            text-white transition-all duration-300 
-                            group-hover:-translate-y-0.5 border border-white/10
-                            hover:shadow-md hover:shadow-[#276EF1]/20"
-            >
-              <span className="opacity-90 group-hover:opacity-100 transition-opacity">Start Driving</span>
-              <span
-                className="ml-3 opacity-70 group-hover:opacity-100 group-hover:translate-x-1.5 
-                                transition-all duration-300 text-[#276EF1]"
-              >
-                →
-              </span>
-            </Button>
+  variant="ghost"
+  className="rounded-[1.15rem] px-8 py-6 text-lg font-semibold backdrop-blur-md 
+             bg-black/80 hover:bg-black/90
+             text-white transition-all duration-300 
+             group-hover:-translate-y-0.5 border border-white/10
+             hover:shadow-md hover:shadow-[#276EF1]/20"
+  onClick={() => {
+    window.location.href = "https://www.masstransitcar.com"
+  }}
+>
+  <span className="opacity-90 group-hover:opacity-100 transition-opacity">
+    Start Driving
+  </span>
+  <span
+    className="ml-3 opacity-70 group-hover:opacity-100 group-hover:translate-x-1.5 
+               transition-all duration-300 text-[#276EF1]"
+  >
+    →
+  </span>
+</Button>
           </motion.div>
         </motion.div>
       </div>
