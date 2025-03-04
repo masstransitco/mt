@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { motion, SVGMotionProps } from "framer-motion"
+import { motion, Variants, SVGMotionProps } from "framer-motion"
 import { Button } from "@/components/ui/button"
 
 // ----------------------------
@@ -10,6 +10,45 @@ import { Button } from "@/components/ui/button"
 type LogoSvgProps = SVGMotionProps<SVGSVGElement> & {
   isExiting?: boolean
   onLogoExitComplete?: () => void
+}
+
+// Step 1. Define the container and path variants
+const svgContainerVariants: Variants = {
+  // Draw in (for 'IDLE' phase)
+  enter: {
+    transition: {
+      // We can stagger children so each path animates in sequence
+      staggerChildren: 0.3,
+    },
+  },
+  // Reverse out (for 'LOGO_EXIT' phase)
+  exit: {
+    transition: {
+      staggerChildren: 0.3,
+      staggerDirection: -1, // reverse the child order
+    },
+  },
+}
+
+const pathVariants: Variants = {
+  // Each path animates from length=0 -> 1 + fill transparent -> visible
+  enter: {
+    pathLength: 1,
+    fill: "rgba(255,255,255,0.7)",
+    transition: {
+      pathLength: { duration: 2, ease: "easeInOut" },
+      fill: { duration: 1, delay: 1.5 },
+    },
+  },
+  // Reverse from length=1 -> 0 + fill -> transparent
+  exit: {
+    pathLength: 0,
+    fill: "rgba(255,255,255,0)",
+    transition: {
+      pathLength: { duration: 2, ease: "easeInOut" },
+      fill: { duration: 1, delay: 1.0 },
+    },
+  },
 }
 
 const AnimatedLogoSvg: React.FC<LogoSvgProps> = ({
@@ -21,12 +60,14 @@ const AnimatedLogoSvg: React.FC<LogoSvgProps> = ({
     <motion.svg
       xmlns="http://www.w3.org/2000/svg"
       xmlSpace="preserve"
-      id="Layer_1"
       viewBox="0 0 2100 950"
-      // The container <svg> has no special variants; we just track each path below.
-      // We'll use onAnimationComplete at the container level to detect
-      // when both paths are done animating in reverse.
+      // The parent <svg> has the container variants
+      variants={svgContainerVariants}
+      // Toggle between "enter" and "exit" in the parent
+      initial="enter"
+      animate={isExiting ? "exit" : "enter"}
       onAnimationComplete={() => {
+        // When the parent "exit" finishes, call the callback
         if (isExiting && onLogoExitComplete) {
           onLogoExitComplete()
         }
@@ -35,43 +76,19 @@ const AnimatedLogoSvg: React.FC<LogoSvgProps> = ({
     >
       {/* First path */}
       <motion.path
+        variants={pathVariants}
         d="M1221.62 684.48V108.15c0-4.69-3.8-8.49-8.49-8.49H1109.7c-4.69 0-8.49 3.8-8.49 8.49v116.13c0 35.81-29.02 64.83-64.83 64.83H792.12c-.97 0-1.93-.17-2.85-.5-23.3-8.32-49.3-12.73-77.51-12.73-79.91 0-143.64 31.44-185.78 88.91-3.58 4.89-10.95 4.59-14.11-.57-33.84-55.37-94.35-88.34-171.81-88.34-62.91 0-115.68 21.15-155.29 60.44-5.35 5.3-14.45 1.5-14.45-6.04v-25.02c0-4.69-3.8-8.49-8.49-8.49H58.49c-4.69 0-8.49 3.8-8.49 8.49v522.9c0 4.69 3.8 8.49 8.49 8.49h103.34c4.69 0 8.49-3.8 8.49-8.49V518.67c0-76.27 52.64-126.76 129.98-126.76 74.13 0 121.39 49.41 121.39 124.61v311.64c0 4.69 3.8 8.49 8.49 8.49h103.34c4.69 0 8.49-3.8 8.49-8.49V518.67c0-76.27 52.64-126.76 129.99-126.76 74.13 0 121.39 49.41 121.39 124.61v311.64c0 4.69 3.8 8.49 8.49 8.49h103.34c4.69 0 8.49-3.8 8.49-8.49V481.07c0-30.34-4.86-58.14-13.99-82.84-2.06-5.58 2.04-11.5 7.98-11.48l185.04.8a8.48 8.48 0 0 1 8.45 8.49v335.72c0 56.03 55.08 101.74 111.09 102.82 89.54 1.72 176.62 3.21 203.35-.51 4.2-.59 7.33-4.16 7.33-8.41v-81.63c0-4.69-3.8-8.49-8.49-8.49h-141.81c-28.18 0-51.04-22.86-51.04-51.06z"
         fill="currentColor"
         stroke="currentColor"
         strokeWidth="8"
-        // Initial forward animation (logo drawing in)
-        initial={{ pathLength: 0, fill: "rgba(255,255,255,0)" }}
-        animate={
-          isExiting
-            ? { pathLength: 0, fill: "rgba(255,255,255,0)" } // Reverse out
-            : { pathLength: 1, fill: "rgba(255,255,255,0.7)" } // Forward in
-        }
-        transition={{
-          pathLength: { duration: 2, ease: "easeInOut" },
-          fill: { duration: 1, delay: isExiting ? 1.0 : 1.5 },
-        }}
       />
       {/* Second path */}
       <motion.path
+        variants={pathVariants}
         d="M1934.77 633.74c-23.43 66.53-87.65 109.51-163.59 109.51-49.34 0-94.79-18.38-127.97-51.76-33.27-33.47-51.59-79.41-51.59-129.37 0-49.96 18.32-95.91 51.59-129.37 33.18-33.38 78.63-51.76 127.97-51.76 75.94 0 140.16 42.98 163.59 109.51 1.2 3.4 4.4 5.67 8.01 5.67h98.73c5.43 0 9.47-5.03 8.29-10.33-6.79-30.55-18.76-59.28-35.56-85.41-16.52-25.67-37.34-48.24-61.87-67.08-24.69-18.96-52.55-33.7-82.81-43.79-31.14-10.39-64.23-15.65-98.36-15.65-33.28 0-65.5 5.04-95.68 14.73-.83.27-1.7.41-2.57.41h-416.57c-4.69 0-8.49 3.8-8.49 8.49v82.84c0 4.69 3.8 8.49 8.49 8.49h261.67c6.75 0 10.81 7.5 7.11 13.12-30.5 46.37-46.87 101.56-46.87 160.14 0 79.19 29.91 152.19 84.22 205.57 54.23 53.3 128.36 82.65 208.69 82.65 34.13 0 67.23-5.27 98.36-15.65 30.27-10.1 58.12-24.83 82.81-43.79 24.54-18.85 45.36-41.42 61.87-67.08 16.81-26.12 28.77-54.85 35.56-85.4 1.18-5.3-2.86-10.33-8.28-10.33h-98.73c-3.61-.03-6.82 2.25-8.02 5.64z"
         fill="currentColor"
         stroke="currentColor"
         strokeWidth="8"
-        // Initial forward animation
-        initial={{ pathLength: 0, fill: "rgba(255,255,255,0)" }}
-        animate={
-          isExiting
-            ? { pathLength: 0, fill: "rgba(255,255,255,0)" } // Reverse out
-            : { pathLength: 1, fill: "rgba(255,255,255,0.7)" } // Forward in
-        }
-        transition={{
-          pathLength: {
-            duration: 2,
-            delay: 0.5,
-            ease: "easeInOut",
-          },
-          fill: { duration: 1, delay: isExiting ? 1.5 : 2 },
-        }}
       />
     </motion.svg>
   )
@@ -131,8 +148,8 @@ function FloatingPaths({ position }: { position: number }) {
 // ----------------------------
 export default function MtcLanding() {
   // We'll track phases of the exit sequence via a small state machine:
-  // 1) "IDLE"        => normal
-  // 2) "LOGO_EXIT"   => logo disappears
+  // 1) "IDLE" => normal
+  // 2) "LOGO_EXIT" => logo disappears
   // 3) "BUTTON_SHIFT" => button slides up
   const [phase, setPhase] = useState<"IDLE" | "LOGO_EXIT" | "BUTTON_SHIFT">(
     "IDLE"
@@ -181,10 +198,7 @@ export default function MtcLanding() {
             {/* Glow effect behind the logo */}
             <div className="absolute inset-0 blur-2xl bg-[#276EF1]/10 rounded-full transform scale-110 opacity-70"></div>
 
-            {/* The animated logo.
-                'isExiting' triggers the reversed path animation.
-                'onLogoExitComplete' runs after the reversed animation finishes.
-             */}
+            {/* The animated logo. */}
             <div className="relative">
               <AnimatedLogoSvg
                 className="w-full h-auto text-white/80"
@@ -202,10 +216,6 @@ export default function MtcLanding() {
                 ? { y: -100, transition: { duration: 0.8, ease: "easeInOut" } }
                 : { y: 0 }
             }
-            onUpdate={(latest) => {
-              // 'latest' is an object with numeric values. If we want a callback only
-              // when final motion completes, we use onAnimationComplete below:
-            }}
             onAnimationComplete={() => {
               if (phase === "BUTTON_SHIFT") {
                 handleButtonShiftComplete()
