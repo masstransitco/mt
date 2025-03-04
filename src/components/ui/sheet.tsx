@@ -144,7 +144,7 @@ export interface SheetProps {
   count?: number;
   countLabel?: string;
   onDismiss?: () => void;
-  onClearSelection?: () => void; // New prop for X button
+  onClearSelection?: () => void; // For X button to clear station
 }
 
 /* ------------------------------------------------------------------
@@ -171,21 +171,27 @@ export default function Sheet({
   // Measure header height for minimized state
   useEffect(() => {
     if (headerRef.current) {
-      const headerHeight = headerRef.current.offsetHeight + 10; // 10px buffer
+      const headerHeight = headerRef.current.offsetHeight + 16; // Add some buffer
       minimizedPosition.current = window.innerHeight - headerHeight;
     }
   }, [isOpen, title, subtitle, count]);
 
-  // Lock body scroll when sheet is open
+  // Lock body scroll when sheet is open and not minimized
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !isMinimized) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
-      isClosing.current = false;
-      setIsMinimized(false); // Reset minimized state when opened
       return () => {
         document.body.style.overflow = originalOverflow;
       };
+    }
+  }, [isOpen, isMinimized]);
+
+  // Reset states when opening
+  useEffect(() => {
+    if (isOpen) {
+      isClosing.current = false;
+      setIsMinimized(false);
     }
   }, [isOpen]);
 
@@ -335,11 +341,11 @@ export default function Sheet({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-          {/* Backdrop */}
+          {/* Backdrop - only blocks interaction when NOT minimized */}
           <motion.div
-            className="absolute inset-0 bg-black/60 pointer-events-auto"
+            className={`absolute inset-0 bg-black/60 ${isMinimized ? 'pointer-events-none' : 'pointer-events-auto'}`}
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: isMinimized ? 0.3 : 0.6 }}
             exit={{ opacity: 0 }}
             onClick={handleBackdropClick}
           />
@@ -368,13 +374,12 @@ export default function Sheet({
                 ref={contentRef}
                 animate={{ 
                   maxHeight: isMinimized ? "0px" : "80vh",
-                  opacity: isMinimized ? 0 : 1,
-                  overflow: isMinimized ? "hidden" : "auto"
+                  opacity: isMinimized ? 0 : 1
                 }}
                 transition={{ duration: 0.3 }}
                 className="px-4 pt-3 pb-8 overflow-y-auto"
                 style={{ 
-                  display: "block",
+                  display: isMinimized ? "none" : "block",
                   visibility: isMinimized ? "hidden" : "visible"
                 }}
               >
