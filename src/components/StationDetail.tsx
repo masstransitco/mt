@@ -24,10 +24,11 @@ import { SteerWheel } from "@/components/ui/icons/SteerWheel";
 import { CarParkIcon } from "@/components/ui/icons/CarParkIcon";
 import { Parking } from "@/components/ui/icons/Parking";
 
-// If you have factorized PaymentComponents:
+// Payment & Firebase
 import { AddPaymentMethodForm, PaymentMethodCard } from "@/components/ui/PaymentComponents";
 import { getStripe, getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
 import { Elements } from "@stripe/react-stripe-js";
+import { auth } from "@/lib/firebase";
 
 /** Dynamically import the MapCard (always visible now) */
 const MapCard = dynamic(() => import("./MapCard"), {
@@ -49,8 +50,7 @@ interface StationDetailProps {
 
   /**
    * Called to open SignInModal if the user is not signed in.
-   * Alternatively, you could use local state for SignInModal
-   * if you prefer.
+   * Alternatively, you could use local state for SignInModal if you prefer.
    */
   onOpenSignIn: () => void;
 }
@@ -74,7 +74,7 @@ function StationDetailComponent({
   // Local state for showing the inline Payment UI
   const [showPaymentUI, setShowPaymentUI] = useState(false);
 
-  // Payment methods for inline Payment UI (if needed)
+  // Payment methods
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [stripeLoaded, setStripeLoaded] = useState(false);
   const stripePromise = getStripe();
@@ -83,7 +83,10 @@ function StationDetailComponent({
   useEffect(() => {
     if (isSignedIn && step === 4 && showPaymentUI) {
       (async () => {
-        const res = await getSavedPaymentMethods(/* auth.currentUser.uid, etc. */);
+        // Ensure we have a currentUser
+        if (!auth.currentUser) return;
+
+        const res = await getSavedPaymentMethods(auth.currentUser.uid);
         if (res.success && res.data) {
           setPaymentMethods(res.data);
         }
@@ -129,7 +132,7 @@ function StationDetailComponent({
     };
   }, [dispatchRoute?.duration]);
 
-  // Placeholder when no station is selected
+  // If no station is selected yet
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -169,10 +172,10 @@ function StationDetailComponent({
   }
 
   /**
-   * Handle confirmation flow
-   * Step 2 => confirm departure => step 3
-   * Step 4 => if user not signed in => open sign in,
-   *           else show Payment UI inline
+   * Handle confirmation flow:
+   * - Step 2 => confirm departure => step 3
+   * - Step 4 => if user not signed in => open sign in,
+   *             else show Payment UI inline
    */
   const handleConfirm = () => {
     if (isDepartureFlow) {
@@ -193,8 +196,7 @@ function StationDetailComponent({
     }
   };
 
-  // For demonstration, you might want to handle the user continuing
-  // after adding a card, e.g., dispatch(advanceBookingStep(5)) or so.
+  // Called after user successfully adds a card
   const handlePaymentSetupDone = () => {
     toast.success("Payment method added! Proceeding to payment...");
     dispatch(advanceBookingStep(5));
@@ -298,18 +300,13 @@ function StationDetailComponent({
         <div className="bg-gray-900/60 p-4 rounded border border-gray-700">
           <h3 className="text-lg font-semibold mb-2 text-white">Add or Select a Payment Method</h3>
 
-          {/* Display existing methods, then AddPaymentMethodForm */}
-          {/* For brevity, we only show the Add Payment flow. 
-              You can also show PaymentMethodCard if you want the user
-              to select or remove methods. */}
           {stripeLoaded && (
             <Elements stripe={stripePromise}>
               <AddPaymentMethodForm
                 existingMethods={paymentMethods}
                 onSuccess={() => {
-                  // e.g. re-fetch the user’s payment methods
-                  // setPaymentMethods(...) 
-                  // Then proceed to next step
+                  // Re-fetch user’s payment methods if needed
+                  // setPaymentMethods(...)
                   handlePaymentSetupDone();
                 }}
               />
