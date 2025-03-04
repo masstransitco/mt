@@ -4,7 +4,7 @@ import React, { memo, useEffect, useState, useMemo } from "react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Clock, Route, Footprints } from "lucide-react"; // <-- import Footprints here
+import { Clock, Footprints } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
@@ -20,12 +20,11 @@ import { selectIsSignedIn } from "@/store/userSlice";
 
 // Custom icons
 import { SteerWheel } from "@/components/ui/icons/SteerWheel";
-import { CarParkIcon } from "@/components/ui/icons/CarParkIcon";
 import { Parking } from "@/components/ui/icons/Parking";
 
 // Payment & Firebase
-import { PaymentMethodCard } from "@/components/ui/PaymentComponents";
-import { getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
+import { PaymentMethodCard, SavedPaymentMethod } from "@/components/ui/PaymentComponents";
+import { getSavedPaymentMethods } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
 /** Dynamically import the MapCard */
@@ -70,7 +69,7 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
-  // If user is at step 4 and signed in, show their existing cards
+  // State for Payment UI (step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
 
@@ -95,6 +94,7 @@ function StationDetailComponent({
     }
   }, [step, isSignedIn]);
 
+  // Debug logging
   useEffect(() => {
     console.log("[StationDetail] step=", step);
     if (stations && stations.length > 0) {
@@ -102,6 +102,9 @@ function StationDetailComponent({
     }
   }, [step, stations]);
 
+  /**
+   * Example for an arrival time if needed
+   */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
     const now = new Date();
@@ -144,19 +147,12 @@ function StationDetailComponent({
     );
   }
 
-  let routeDistanceKm: string | null = null;
-  let routeDurationMin: string | null = null;
-  if (route && departureId && arrivalId) {
-    routeDistanceKm = (route.distance / 1000).toFixed(1);
-    routeDurationMin = Math.round(route.duration / 60).toString();
-  }
+  // Step-based dynamic text for parking row
+  const parkingValue =
+    step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "";
 
-  let parkingValue = "";
-  if (step === 2) {
-    parkingValue = "Touchless Exit";
-  } else if (step === 4) {
-    parkingValue = "Touchless Entry";
-  }
+  // Convert route duration to minutes if present
+  const driveTimeMin = route ? Math.round(route.duration / 60).toString() : null;
 
   const handleConfirm = () => {
     if (isDepartureFlow) {
@@ -201,7 +197,8 @@ function StationDetailComponent({
 
       {/* Station stats card */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-        {/* (1) Removed the "Available spots" block entirely. */}
+        {/* (Removed the "Available spots" block) */}
+
         {/* Wait time if any */}
         {activeStation.properties.waitTime && (
           <div className="flex justify-between items-center text-sm">
@@ -215,45 +212,31 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* If there's a route from departure to arrival, show it */}
-        {routeDistanceKm && routeDurationMin ? (
-          <>
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2 text-gray-300">
-                <Route className="w-4 h-4 text-blue-400" />
-                <span>Route Distance</span>
-              </div>
-              <span className="font-medium text-white">{routeDistanceKm} km</span>
+        {/* Step 2 => "Distance from You" if we have activeStation.distance */}
+        {step === 2 && activeStation.distance !== undefined && (
+          <div className="flex justify-between items-center text-sm">
+            <div className="flex items-center gap-2 text-gray-300">
+              <Footprints className="w-4 h-4 text-blue-400" />
+              <span>Distance from You</span>
             </div>
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2 text-gray-300">
-                <SteerWheel className="w-4 h-4 text-blue-400" />
-                <span>Drive Time</span>
-              </div>
-              <span className="font-medium text-white">{routeDurationMin} min</span>
-            </div>
-          </>
-        ) : (
-          // Fallback: station.distance if present
-          activeStation.distance !== undefined && (
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2 text-gray-300">
-                {/* (2) Use Footprints icon if step === 2, else SteerWheel */}
-                {step === 2 ? (
-                  <Footprints className="w-4 h-4 text-blue-400" />
-                ) : (
-                  <SteerWheel className="w-4 h-4 text-blue-400" />
-                )}
-                <span>Distance from You</span>
-              </div>
-              <span className="font-medium text-white">
-                {activeStation.distance.toFixed(1)} km
-              </span>
-            </div>
-          )
+            <span className="font-medium text-white">
+              {activeStation.distance.toFixed(1)} km
+            </span>
+          </div>
         )}
 
-        {/* Parking row */}
+        {/* Step 4 => "Drive Time" if route duration is known */}
+        {step === 4 && driveTimeMin && (
+          <div className="flex justify-between items-center text-sm">
+            <div className="flex items-center gap-2 text-gray-300">
+              <SteerWheel className="w-4 h-4 text-blue-400" />
+              <span>Drive Time</span>
+            </div>
+            <span className="font-medium text-white">{driveTimeMin} min</span>
+          </div>
+        )}
+
+        {/* Parking row (always shown, dynamic text) */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
             <Parking className="w-4 h-4 text-blue-400" />
