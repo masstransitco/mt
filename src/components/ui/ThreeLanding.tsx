@@ -12,7 +12,7 @@ const isMobile = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 }
 
-const BoxWithEdges = ({ position }) => {
+const BoxWithEdges = ({ position }: { position: [number, number, number] }) => {
   return (
     <group position={position}>
       <mesh>
