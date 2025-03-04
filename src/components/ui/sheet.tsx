@@ -172,7 +172,7 @@ export default function Sheet({
     childOnDismissRef.current = null;
 
     // Function to traverse the React component tree and find StationDetail components
-    const findStationDetailComponent = (element: any) => {
+    const findStationDetailComponent = (element: any): (() => void) | null => {
       if (!element) return null;
 
       // Check if this is a StationDetail component (verify by checking its props)
