@@ -1,10 +1,10 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, SVGMotionProps } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import type React from "react"
 
-type LogoSvgProps = React.SVGProps<SVGSVGElement>
+type LogoSvgProps = SVGMotionProps<SVGSVGElement>
 
 const AnimatedLogoSvg: React.FC<LogoSvgProps> = (props) => {
   return (
@@ -163,4 +163,3 @@ export default function MtcLanding() {
     </div>
   )
 }
-
