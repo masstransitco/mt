@@ -12,8 +12,6 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-  clearDepartureStation,
-  clearArrivalStation,
 } from "@/store/bookingSlice";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
@@ -45,8 +43,7 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onOpenWalletModal?: () => void;
-  onDismiss?: () => void;
-  onClearStation?: () => void;
+  onDismiss?: () => void; // optional if parent wants to close the sheet externally
 }
 
 function StationDetailComponent({
@@ -56,7 +53,6 @@ function StationDetailComponent({
   onOpenSignIn,
   onOpenWalletModal,
   onDismiss,
-  onClearStation,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -73,7 +69,7 @@ function StationDetailComponent({
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   
-  // Track component mount state to prevent state updates after unmount
+  // Track component mount state
   const isMounted = useRef(true);
   useEffect(() => {
     return () => {
@@ -86,13 +82,11 @@ function StationDetailComponent({
     if (isSignedIn && step === 4 && showPaymentUI) {
       const user = auth.currentUser;
       if (!user) return;
-      
       setPaymentMethodsLoading(true);
-      
+
       (async () => {
         try {
           const res = await getSavedPaymentMethods(user.uid);
-          // Only update state if component is still mounted
           if (isMounted.current) {
             if (res.success && res.data) {
               setPaymentMethods(res.data);
@@ -116,38 +110,7 @@ function StationDetailComponent({
     }
   }, [step, isSignedIn]);
 
-  /**
-   * Estimated arrival time to the departure station (step 2 -> station).
-   */
-  const estimatedPickupTime = useMemo(() => {
-    if (!dispatchRoute?.duration) return null;
-    const now = new Date();
-    const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-    const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-
-    const formatTime = (date: Date) => {
-      let hours = date.getHours();
-      const minutes = date.getMinutes();
-      const ampm = hours >= 12 ? "pm" : "am";
-      hours = hours % 12 || 12;
-      const minutesStr = minutes < 10 ? "0" + minutes : minutes;
-      return `${hours}:${minutesStr}${ampm}`;
-    };
-    return {
-      start: formatTime(arrivalTime),
-      end: formatTime(arrivalTimeEnd),
-    };
-  }, [dispatchRoute?.duration]);
-
-  // Grab the departure station name from step 2
-  const departureStation = useMemo(() => {
-    if (!stations || !departureId) return null;
-    return stations.find((st) => st.properties.ObjectId === departureId) ?? null;
-  }, [stations, departureId]);
-
-  const departureStationName = departureStation?.properties?.Place ?? "";
-
-  // If no station selected for the current step
+  // If no active station for current step
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -231,7 +194,7 @@ function StationDetailComponent({
         )}
 
         {/* Step 2 => "Distance from You" (Footprints icon) */}
-        {step === 2 && activeStation.distance !== undefined && (
+        {step === 2 && typeof activeStation.distance === "number" && (
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-gray-300">
               <Footprints className="w-4 h-4 text-blue-400" />
@@ -277,12 +240,8 @@ function StationDetailComponent({
                 <PaymentMethodCard
                   key={m.id}
                   method={m}
-                  onDelete={async () => {
-                    toast("Delete not implemented");
-                  }}
-                  onSetDefault={async () => {
-                    toast("Set default not implemented");
-                  }}
+                  onDelete={() => toast("Delete not implemented")}
+                  onSetDefault={() => toast("Set default not implemented")}
                 />
               ))}
             </div>
