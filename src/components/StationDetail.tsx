@@ -121,9 +121,7 @@ function StationDetailComponent({
   // Grab the departure station name from step 2
   const departureStation = useMemo(() => {
     if (!stations || !departureId) return null;
-    return stations.find(
-      (st) => st.properties.ObjectId === departureId
-    ) ?? null;
+    return stations.find((st) => st.properties.ObjectId === departureId) ?? null;
   }, [stations, departureId]);
 
   const departureStationName = departureStation?.properties?.Place ?? "";
@@ -188,23 +186,11 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/* STEP 4: REPLACE "Trip Details" WITH FARE + SUBTITLE */}
-      {step === 4 && (
-        <div className="space-y-1">
-          {/* 1) Starting fare */}
-          <p className="text-xs text-gray-400">Starting fare</p>
-          <p className="text-sm font-semibold text-white">
-            HKD $50.00 - $1/min hereafter
-          </p>
-
-          {/* 2) Subtitle: "From <departureStationName> at <estimatedPickupTime.start>" */}
-          {departureStationName && estimatedPickupTime?.start && (
-            <p className="text-xs text-gray-300">
-              From {departureStationName} at {estimatedPickupTime.start}
-            </p>
-          )}
-        </div>
-      )}
+      {/* 
+        REMOVED the block that rendered the "Starting fare" and 
+        "From [departureStation] at [time]" above the map. 
+        We'll now show that info in the Sheet's header for step 4.
+      */}
 
       {/* MapCard */}
       <MapCard
