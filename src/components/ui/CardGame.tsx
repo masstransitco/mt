@@ -6,18 +6,21 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
 
-// 1) Import your custom icon components directly:
-import MapFlag from "@/components/ui/icons/MapFlag"
-import AddCard from "@/components/ui/icons/AddCard"
-import ArrowRight from "@/components/ui/icons/ArrowRight"
-import CarParkIcon from "@/components/ui/icons/CarParkIcon"
-import CheckCircle from "@/components/ui/icons/CheckCircle"
-import QrCodeIcon from "@/components/ui/icons/QrCodeIcon"
+// Import your logo component
+import { LogoSvg } from "@/components/ui/logo/LogoSvg"
 
-// 2) Create a type for your icon components:
+// Named imports for icon files (avoiding default-export errors)
+import { MapFlag } from "@/components/ui/icons/MapFlag"
+import { AddCard } from "@/components/ui/icons/AddCard"
+import { ArrowRight } from "@/components/ui/icons/ArrowRight"
+import { CarParkIcon } from "@/components/ui/icons/CarParkIcon"
+import { CheckCircle } from "@/components/ui/icons/CheckCircle"
+import { QrCodeIcon } from "@/components/ui/icons/QrCodeIcon"
+
+// 1) Create a type for your icon components:
 type IconComponent = React.FC<React.SVGProps<SVGSVGElement>>
 
-// 3) Define the MemoryCard type:
+// 2) Define the MemoryCard type:
 type MemoryCard = {
   id: number
   Icon: IconComponent
@@ -25,16 +28,16 @@ type MemoryCard = {
   color: string
 }
 
-// 4) Create your deck of cards:
+// 3) Create your deck of cards:
 const createCards = () => {
-  // List each icon and a color. You can customize or expand this as needed.
+  // List each icon and a color. Customize or expand as needed.
   const iconConfigs = [
-    { Icon: MapFlag, color: "text-rose-400" },
-    { Icon: AddCard, color: "text-amber-400" },
-    { Icon: ArrowRight, color: "text-yellow-400" },
-    { Icon: CarParkIcon, color: "text-purple-400" },
-    { Icon: CheckCircle, color: "text-sky-400" },
-    { Icon: QrCodeIcon, color: "text-emerald-400" },
+    { Icon: MapFlag, color: "text-sky-500" },
+    { Icon: AddCard, color: "text-sky-500" },
+    { Icon: ArrowRight, color: "text-sky-500" },
+    { Icon: CarParkIcon, color: "text-sky-500" },
+    { Icon: CheckCircle, color: "text-sky-500" },
+    { Icon: QrCodeIcon, color: "text-sky-500" },
   ]
 
   // Duplicate each icon for a pair and shuffle them
@@ -48,18 +51,15 @@ const createCards = () => {
   return cards.sort(() => Math.random() - 0.5)
 }
 
-export default function CardGame() {
+export default function MemoryGame() {
   const [cards, setCards] = useState<MemoryCard[]>(createCards())
   const [flippedIndexes, setFlippedIndexes] = useState<number[]>([])
   const [matches, setMatches] = useState(0)
   const [isChecking, setIsChecking] = useState(false)
 
   const handleCardClick = (clickedIndex: number) => {
-    // Prevent clicking if we’re already checking, or if the card is matched
     if (isChecking || cards[clickedIndex].isMatched) return
-    // Prevent clicking if the card is already flipped
     if (flippedIndexes.includes(clickedIndex)) return
-    // Prevent clicking if two cards are already flipped
     if (flippedIndexes.length === 2) return
 
     const newFlipped = [...flippedIndexes, clickedIndex]
@@ -72,9 +72,8 @@ export default function CardGame() {
       const firstCard = cards[firstIndex]
       const secondCard = cards[secondIndex]
 
-      // Check if the icon references match
       if (firstCard.Icon === secondCard.Icon) {
-        // Found a match
+        // Match
         setTimeout(() => {
           setCards((prevCards) =>
             prevCards.map((card, idx) =>
@@ -90,7 +89,7 @@ export default function CardGame() {
           // Check for game completion
           if (matches === (cards.length / 2) - 1) {
             toast("🎉 Congratulations! You've found all the matches! 🎈", {
-              className: "bg-purple-900 text-purple-100 border-purple-700",
+              className: "bg-neutral-800 text-sky-100 border-sky-500",
             })
           }
         }, 500)
@@ -112,17 +111,29 @@ export default function CardGame() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-8 bg-gradient-to-br from-purple-950 via-indigo-950 to-slate-950">
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-300 via-pink-300 to-indigo-300 text-transparent bg-clip-text">
-          Memory Match Game
+    <div
+      className="flex flex-col items-center justify-center min-h-screen p-4
+                 bg-gradient-to-b from-neutral-900 to-neutral-800 text-neutral-50
+                 font-sans"
+      style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
+    >
+      {/* Top bar with logo */}
+      <div className="absolute top-4 left-4 flex items-center space-x-2">
+        <LogoSvg className="w-8 h-8 text-sky-500" />
+      </div>
+
+      {/* Title & match info */}
+      <div className="text-center space-y-2 mb-4 mt-12">
+        <h1 className="text-3xl font-bold tracking-tight">
+          Mass Transit Cards
         </h1>
-        <p className="text-indigo-200">
+        <p className="text-sm text-neutral-300">
           Matches found: {matches} of {cards.length / 2}
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 md:gap-6 p-6 rounded-xl bg-indigo-950/50 backdrop-blur-sm">
+      {/* Cards grid */}
+      <div className="grid grid-cols-3 gap-3 p-4 rounded-lg bg-neutral-800/40 backdrop-blur-sm">
         {cards.map((card, index) => (
           <motion.div
             key={card.id}
@@ -134,16 +145,18 @@ export default function CardGame() {
             className="perspective-1000"
           >
             <Card
-              className={`relative w-24 h-24 md:w-32 md:h-32 cursor-pointer transform-style-3d transition-all duration-300 ${
-                card.isMatched
-                  ? "bg-indigo-900/50 border-indigo-400/50"
-                  : flippedIndexes.includes(index)
-                  ? "bg-indigo-800/50 border-indigo-500/50"
-                  : "bg-indigo-950 border-indigo-800 hover:border-indigo-600 hover:bg-indigo-900/80"
-              }`}
+              className={`relative w-20 h-20 cursor-pointer transform-style-3d 
+                          transition-all duration-300 flex items-center justify-center
+                          ${
+                            card.isMatched
+                              ? "bg-neutral-700 border-neutral-500"
+                              : flippedIndexes.includes(index)
+                              ? "bg-neutral-700 border-sky-500"
+                              : "bg-neutral-900 border-neutral-600 hover:border-sky-500"
+                          }`}
               onClick={() => handleCardClick(index)}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-indigo-500/5 to-white/5" />
+              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-neutral-500/5 to-white/5" />
               <AnimatePresence>
                 {(card.isMatched || flippedIndexes.includes(index)) && (
                   <motion.div
@@ -153,11 +166,12 @@ export default function CardGame() {
                     className="absolute inset-0 flex items-center justify-center backface-hidden"
                   >
                     <card.Icon
-                      className={`w-12 h-12 ${
-                        card.isMatched
-                          ? `${card.color} filter drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]`
-                          : card.color
-                      }`}
+                      className={`w-10 h-10
+                        ${
+                          card.isMatched
+                            ? `${card.color} filter drop-shadow-[0_0_8px_rgba(0,191,255,0.5)]`
+                            : card.color
+                        }`}
                     />
                   </motion.div>
                 )}
@@ -167,11 +181,13 @@ export default function CardGame() {
         ))}
       </div>
 
+      {/* Reset button */}
       <Button
         onClick={resetGame}
         variant="outline"
-        size="lg"
-        className="bg-indigo-950 border-indigo-700 hover:bg-indigo-900 hover:border-indigo-500 text-indigo-200 hover:text-indigo-100"
+        size="sm"
+        className="mt-6 bg-neutral-900 border-neutral-700 text-sky-400
+                   hover:bg-neutral-800 hover:border-sky-500 hover:text-sky-200"
       >
         Start New Game
       </Button>
