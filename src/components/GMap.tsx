@@ -8,10 +8,7 @@ import React, {
   memo,
   Suspense,
 } from "react";
-import {
-  GoogleMap,
-  useJsApiLoader,
-} from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import * as THREE from "three";
 import dynamic from "next/dynamic";
@@ -61,6 +58,9 @@ import { LoadingSpinner } from "./LoadingSpinner";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
 
+// Import your SignInModal
+import SignInModal from "@/components/ui/SignInModal";
+
 // Map / 3D constants & hooks
 import {
   LIBRARIES,
@@ -72,6 +72,7 @@ import {
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
+// Lazy-load GaussianSplatModal
 const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
   suspense: true,
 });
@@ -85,7 +86,9 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
-  // --- Local States ---
+  // --------------------------
+  // Local States
+  // --------------------------
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
@@ -98,7 +101,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [detailKey, setDetailKey] = useState(0);
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
-  // --- Redux States ---
+  // 1) Track sign-in modal open state
+  const [signInModalOpen, setSignInModalOpen] = useState(false);
+
+  // --------------------------
+  // Redux States
+  // --------------------------
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
@@ -125,7 +133,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Pass cars into our 3D overlay
+  // 3D overlay for stations & cars
   const {
     overlayRef,
     stationIndexMapsRef,
@@ -137,10 +145,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     stations,
     departureStationId,
     arrivalStationId,
-    cars // <-- now passed here
+    cars
   );
 
-  // Keep booking step in a ref to prevent stale closures
+  // Keep booking step in a ref to avoid stale closures
   const bookingStepRef = useRef(bookingStep);
   useEffect(() => {
     bookingStepRef.current = bookingStep;
@@ -168,6 +176,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       } else {
         toast(`Station clicked, but no action—already at step ${bookingStepRef.current}`);
       }
+
       setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
       setOpenSheet("detail");
@@ -192,9 +201,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     // Setup a single click listener
     const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
       const overlayAny = overlayRef.current as any;
-      // If there's no .raycast method or no camera/scene yet, skip
       if (!overlayAny?.raycast || !overlayAny?.camera) return;
-
       const domEvent = ev.domEvent;
       if (!domEvent || !(domEvent instanceof MouseEvent)) return;
 
@@ -237,7 +244,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
           if (stationId !== undefined) {
             const stationClicked = stations.find((s) => s.id === stationId);
             if (stationClicked) {
-              // This calls our normal station selection logic
               handleStationSelection(stationClicked);
               ev.stop(); // Prevent map from ignoring
             }
@@ -389,7 +395,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   };
 
   // --------------------------
-  // Sheet Helpers
+  // Helpers to open/close sheets
   // --------------------------
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
@@ -441,51 +447,45 @@ export default function GMap({ googleApiKey }: GMapProps) {
       }
     );
   };
-  // --------------------------
-  // Derived State
-  // --------------------------
+
+  // Derived error state
   const hasError = stationsError || carsError || loadError;
+
+  // Identify which station to show in "detail" view
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
   const stationToShow = hasStationSelected
     ? stations.find((s) => s.id === hasStationSelected)
     : null;
-  // --------------------------
-  // Helper functions for Sheet title and subtitle
-  // --------------------------
-  
-  // Format time helper function
+
+  // Format time (for the sheet title)
   const formatTime = (date: Date) => {
     let hours = date.getHours();
     const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+    const ampm = hours >= 12 ? "pm" : "am";
+    hours = hours % 12 || 12;
+    const minutesStr = minutes < 10 ? "0" + minutes : minutes;
     return `${hours}:${minutesStr}${ampm}`;
   };
-  
-  // Get sheet title based on current step and dispatch route
+
+  // Compute sheet title based on step
   const getSheetTitle = useCallback(() => {
     if (!stationToShow) return "";
-    
     if (bookingStep <= 2) {
+      // If there's a dispatchRoute w/ duration
       if (dispatchRoute?.duration) {
         const now = new Date();
         const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
         const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-        
         return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
       }
       return "Pick-up station";
     }
-    
     return "Trip details";
   }, [bookingStep, dispatchRoute, stationToShow]);
 
-  // Get sheet subtitle based on current step
+  // Compute sheet subtitle based on step
   const getSheetSubtitle = useCallback(() => {
     if (!stationToShow) return "";
-    
     if (bookingStep <= 2) {
       return "Your car will be delivered here";
     } else if (bookingStep === 4) {
@@ -499,11 +499,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [bookingStep, stationToShow]);
 
+  // 2) StationDetail needs to open sign-in if user not signed in
+  const handleOpenSignIn = () => {
+    setSignInModalOpen(true);
+  };
 
-
-  // --------------------------
-  // Render
-  // --------------------------
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {hasError && (
@@ -536,9 +536,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
               }}
             >
               {/* 
-                NOTE: We've removed <CarMarkers> here 
-                because the cars are now rendered as 3D spheres 
-                in the useThreeOverlay hook. 
+                Cars are now rendered in 3D overlay (Three.js),
+                so no <CarMarkers> needed here
               */}
             </GoogleMap>
           </div>
@@ -574,7 +573,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 />
               ))}
             </div>
-            </Sheet>
+          </Sheet>
 
           {/* Station Detail Sheet */}
           <Sheet
@@ -589,6 +588,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 key={detailKey}
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={stationToShow}
+                onOpenSignIn={handleOpenSignIn}  // 3) Pass callback to StationDetail
               />
             )}
           </Sheet>
@@ -604,6 +604,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </Suspense>
         </>
       )}
+
+      {/* 4) The SignInModal rendered at GMap level */}
+      <SignInModal
+        isOpen={signInModalOpen}
+        onClose={() => setSignInModalOpen(false)}
+      />
     </div>
   );
 }
