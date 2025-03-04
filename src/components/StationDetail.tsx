@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useEffect, useState, useMemo } from "react";
+import React, { memo, useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -12,6 +12,7 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
+  clearArrivalStation,
 } from "@/store/bookingSlice";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
@@ -40,10 +41,10 @@ const MapCard = dynamic(() => import("./MapCard"), {
 interface StationDetailProps {
   activeStation: StationFeature | null;
   stations?: StationFeature[];
-
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onOpenWalletModal?: () => void;
+  onDismiss?: () => void; // Added onDismiss prop
 }
 
 function StationDetailComponent({
@@ -52,6 +53,7 @@ function StationDetailComponent({
   onConfirmDeparture,
   onOpenSignIn,
   onOpenWalletModal,
+  onDismiss,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -63,9 +65,38 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
 
+  // Track if component is being unmounted
+  const unmountingRef = useRef(false);
+
   // Payment UI (shown at step 4)
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
+
+  // Handle clean dismissal to prevent app becoming unresponsive
+  const handleSafeDismiss = useCallback(() => {
+    if (unmountingRef.current) return;
+    unmountingRef.current = true;
+
+    // If we're in step 4, clear arrival station first
+    if (step === 4 && arrivalId) {
+      dispatch(clearArrivalStation());
+    }
+
+    // Allow time for state to update before calling parent's onDismiss
+    setTimeout(() => {
+      if (onDismiss) {
+        onDismiss();
+      }
+    }, 50);
+  }, [dispatch, step, arrivalId, onDismiss]);
+
+  // Reset unmounting flag when component mounts or updates
+  useEffect(() => {
+    unmountingRef.current = false;
+    return () => {
+      unmountingRef.current = true;
+    };
+  }, []);
 
   // Load payment methods if signed in & at step 4
   useEffect(() => {
@@ -186,12 +217,6 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/* 
-        REMOVED the block that rendered the "Starting fare" and 
-        "From [departureStation] at [time]" above the map. 
-        We'll now show that info in the Sheet's header for step 4.
-      */}
-
       {/* MapCard */}
       <MapCard
         coordinates={stationCoordinates}
