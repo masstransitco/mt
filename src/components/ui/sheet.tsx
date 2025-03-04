@@ -170,6 +170,7 @@ export default function Sheet({
   const minimizedPosition = useRef(0);
   const windowHeight = useRef(0);
   const isTransitioning = useRef(false);
+  const dragStartY = useRef(0); // Track drag start position
 
   // Track window dimensions for proper positioning
   useEffect(() => {
@@ -276,6 +277,7 @@ export default function Sheet({
         if (onDismiss) {
           onDismiss();
         }
+        isClosing.current = false;
       }, 50);
     },
     [onClearSelection, onDismiss]
@@ -308,6 +310,13 @@ export default function Sheet({
   );
 
   /* -------------------------------------------------------------
+     DRAG START => save initial position
+  ------------------------------------------------------------- */
+  const handleDragStart = useCallback((_: PointerEvent, info: any) => {
+    dragStartY.current = y.get();
+  }, [y]);
+
+  /* -------------------------------------------------------------
      DRAG END => expand or minimize only, never close
   ------------------------------------------------------------- */
   const handleDragEnd = useCallback(
@@ -317,26 +326,43 @@ export default function Sheet({
 
       const dragDistance = info.offset.y;
       const dragVelocity = info.velocity.y;
+      const currentPos = y.get();
+      
+      // If header is near or above top of viewport, it's fully expanded
+      const isCurrentlyFullyExpanded = currentPos < 50; 
+      
+      // If header is near the minimized position, it's minimized
+      const isCurrentlyMinimized = Math.abs(currentPos - minimizedPosition.current) < 50;
 
-      if (isMinimized) {
-        // If minimized and user drags up a decent amount => expand
-        if (dragDistance < -20 || dragVelocity < -300) {
+      // Determine drag direction relative to starting position
+      const draggedUpward = currentPos < dragStartY.current;
+      const draggedDownward = currentPos > dragStartY.current;
+
+      // CASE 1: Expanded state, dragging down with sufficient speed/distance
+      if (isCurrentlyFullyExpanded && draggedDownward && (dragDistance > 100 || dragVelocity > 300)) {
+        // Minimize the sheet
+        setIsMinimized(true);
+        y.set(minimizedPosition.current);
+      } 
+      // CASE 2: Minimized state, dragging up with sufficient speed/distance 
+      else if (isCurrentlyMinimized && draggedUpward && (dragDistance < -20 || dragVelocity < -300)) {
+        // Expand the sheet
+        setIsMinimized(false);
+        y.set(0);
+      }
+      // CASE 3: In transition, determine which state is closer
+      else {
+        // Threshold is halfway between expanded and minimized
+        const halfwayPoint = minimizedPosition.current / 2;
+        
+        if (currentPos < halfwayPoint) {
+          // Closer to expanded
           setIsMinimized(false);
           y.set(0);
         } else {
-          // remain minimized
-          y.set(minimizedPosition.current);
-        }
-      } else {
-        // If expanded and user drags down => minimize
-        if (dragDistance > 100 || dragVelocity > 300) {
+          // Closer to minimized
           setIsMinimized(true);
-          if (minimizedPosition.current > 0) {
-            y.set(minimizedPosition.current);
-          }
-        } else {
-          // remain expanded
-          y.set(0);
+          y.set(minimizedPosition.current);
         }
       }
 
@@ -344,7 +370,7 @@ export default function Sheet({
         isTransitioning.current = false;
       }, 300);
     },
-    [isMinimized, y]
+    [y]
   );
 
   /* -------------------------------------------------------------
@@ -360,6 +386,15 @@ export default function Sheet({
 
   const handleHeaderClick = useCallback(
     (e: React.MouseEvent) => {
+      // Don't handle the click if we're in the middle of a drag
+      if (e.target !== e.currentTarget && (e.target as HTMLElement).tagName !== 'H2') {
+        // If clicking on a button or interactive element in the header, don't toggle
+        const element = e.target as HTMLElement;
+        if (element.closest('button') || element.closest('a')) {
+          return;
+        }
+      }
+      
       e.preventDefault();
       if (isTransitioning.current) return;
       isTransitioning.current = true;
@@ -451,6 +486,7 @@ export default function Sheet({
             dragConstraints={{ top: 0, bottom: minimizedPosition.current }}
             dragElastic={0.1}
             dragTransition={{ bounceStiffness: 300, bounceDamping: 30 }}
+            onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
             <div
