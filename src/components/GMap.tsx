@@ -99,9 +99,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
+
+  // We still keep the GaussianSplatModal logic if needed
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
 
-  // 1) Track sign-in modal open state
+  // Sign-in modal
   const [signInModalOpen, setSignInModalOpen] = useState(false);
 
   // --------------------------
@@ -198,7 +200,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   useEffect(() => {
     if (!actualMap || !overlayRef.current) return;
 
-    // Setup a single click listener
     const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
       const overlayAny = overlayRef.current as any;
       if (!overlayAny?.raycast || !overlayAny?.camera) return;
@@ -230,7 +231,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
         const intersect = intersections[0];
         const meshHit = intersect.object as THREE.InstancedMesh;
         const instanceId = intersect.instanceId;
-
         if (instanceId != null) {
           let stationId: number | undefined;
           if (meshHit === greyInstancedMeshRef.current) {
@@ -245,7 +245,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             const stationClicked = stations.find((s) => s.id === stationId);
             if (stationClicked) {
               handleStationSelection(stationClicked);
-              ev.stop(); // Prevent map from ignoring
+              ev.stop();
             }
           }
         }
@@ -325,7 +325,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [departureStationId, stations, dispatch]);
 
   // --------------------------
-  // Sort stations
+  // Sorting logic
   // --------------------------
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
@@ -407,8 +407,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // This is only called when the X button is clicked to actually close the sheet
-  // Our new Sheet component will only call onDismiss when the X button is clicked
   const closeCurrentSheet = () => {
     if (openSheet === "detail") {
       setOpenSheet("none");
@@ -459,7 +457,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     ? stations.find((s) => s.id === hasStationSelected)
     : null;
 
-  // Format time (for the sheet title)
+  // Format time
   const formatTime = (date: Date) => {
     let hours = date.getHours();
     const minutes = date.getMinutes();
@@ -469,11 +467,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return `${hours}:${minutesStr}${ampm}`;
   };
 
-  // Compute sheet title based on step
+  // Sheet Title
   const getSheetTitle = useCallback(() => {
     if (!stationToShow) return "";
     if (bookingStep <= 2) {
-      // If there's a dispatchRoute w/ duration
       if (dispatchRoute?.duration) {
         const now = new Date();
         const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
@@ -485,7 +482,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return "Trip details";
   }, [bookingStep, dispatchRoute, stationToShow]);
 
-  // Compute sheet subtitle based on step
+  // Sheet Subtitle
   const getSheetSubtitle = useCallback(() => {
     if (!stationToShow) return "";
     if (bookingStep <= 2) {
@@ -496,12 +493,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
           Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
         </span>
       );
-    } else {
-      return "Return the car at your arrival station";
     }
+    return "Return the car at your arrival station";
   }, [bookingStep, stationToShow]);
 
-  // 2) StationDetail needs to open sign-in if user not signed in
+  // Open sign-in when user tries to confirm trip but isn't signed in
   const handleOpenSignIn = () => {
     setSignInModalOpen(true);
   };
@@ -526,7 +522,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       {!hasError && !overlayVisible && (
         <>
-          {/* The GoogleMap container */}
+          {/* GoogleMap container */}
           <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -537,10 +533,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 setActualMap(map);
               }}
             >
-              {/* 
-                Cars are now rendered in 3D overlay (Three.js),
-                so no <CarMarkers> needed here
-              */}
+              {/* Car markers are in 3D overlay */}
             </GoogleMap>
           </div>
 
@@ -579,31 +572,31 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Station Detail Sheet */}
           <Sheet
-  key={detailKey}
-  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-  onDismiss={() => {
-    requestAnimationFrame(() => {
-      closeCurrentSheet();
-      if (overlayRef.current?.requestRedraw) {
-        overlayRef.current.requestRedraw();
-      }
-    });
-  }}
-  title={getSheetTitle()}
-  subtitle={getSheetSubtitle()}
->
-  {stationToShow && (
-    <StationDetail
-      key={detailKey}
-      stations={searchLocation ? sortedStations : stations}
-      activeStation={stationToShow}
-      onOpenSignIn={handleOpenSignIn}
-      onOpenWalletModal={() => setIsSplatModalOpen(true)}
-      onDismiss={closeCurrentSheet}
-    />
-  )}
-</Sheet>
-          {/* GaussianSplatModal */}
+            key={detailKey}
+            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+            onDismiss={() => {
+              requestAnimationFrame(() => {
+                closeCurrentSheet();
+                if (overlayRef.current?.requestRedraw) {
+                  overlayRef.current.requestRedraw();
+                }
+              });
+            }}
+            title={getSheetTitle()}
+            subtitle={getSheetSubtitle()}
+          >
+            {stationToShow && (
+              <StationDetail
+                key={detailKey}
+                stations={searchLocation ? sortedStations : stations}
+                activeStation={stationToShow}
+                onOpenSignIn={handleOpenSignIn}
+                onDismiss={closeCurrentSheet}
+              />
+            )}
+          </Sheet>
+
+          {/* GaussianSplatModal (still here if needed) */}
           <Suspense fallback={<div>Loading modal...</div>}>
             {isSplatModalOpen && (
               <GaussianSplatModal
@@ -615,7 +608,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </>
       )}
 
-      {/* 4) The SignInModal rendered at GMap level */}
+      {/* SignInModal */}
       <SignInModal
         isOpen={signInModalOpen}
         onClose={() => setSignInModalOpen(false)}
