@@ -135,7 +135,6 @@ function PulsatingStrip({ className }: { className?: string }) {
 
 /* ------------------------------------------------------------------
    SHEET PROPS
-   - title, subtitle, etc.
    ------------------------------------------------------------------ */
 export interface SheetProps {
   isOpen: boolean;
@@ -163,7 +162,6 @@ export default function Sheet({
   onDismiss,
   onClearSelection,
 }: SheetProps) {
-  const [isAtTop, setIsAtTop] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -178,7 +176,7 @@ export default function Sheet({
     const updateDimensions = () => {
       windowHeight.current = window.innerHeight;
       if (headerRef.current) {
-        const headerHeight = headerRef.current.offsetHeight + 4; // small buffer
+        const headerHeight = headerRef.current.offsetHeight + 4; // add small buffer
         minimizedPosition.current = windowHeight.current - headerHeight;
       }
     };
@@ -191,7 +189,7 @@ export default function Sheet({
     };
   }, []);
 
-  // Ensure header height calculation happens after render
+  // Recalc position each time we open
   useEffect(() => {
     if (isOpen && headerRef.current) {
       const headerHeight = headerRef.current.offsetHeight + 4;
@@ -199,7 +197,7 @@ export default function Sheet({
     }
   }, [isOpen, title, subtitle, count]);
 
-  // Only lock scroll if fully open (not minimized)
+  // Lock scroll only when fully open (not minimized)
   useEffect(() => {
     let originalOverflow = "";
     let originalPosition = "";
@@ -235,7 +233,7 @@ export default function Sheet({
     };
   }, [isOpen, isMinimized]);
 
-  // Reset states when opening
+  // Reset the sheet state each time it opens
   useEffect(() => {
     if (isOpen) {
       isClosing.current = false;
@@ -243,29 +241,12 @@ export default function Sheet({
     }
   }, [isOpen]);
 
-  // Track content scroll
-  const handleScroll = useCallback(() => {
-    if (contentRef.current) {
-      setIsAtTop(contentRef.current.scrollTop <= 0);
-    }
-  }, []);
-
-  useEffect(() => {
-    const el = contentRef.current;
-    if (!el) return;
-
-    el.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", handleScroll);
-    };
-  }, [handleScroll]);
-
-  // Motion control for dragging
+  // Framer Motion controls
   const y = useMotionValue(0);
   const sheetOpacity = useTransform(y, [0, 300], [1, 0.6], { clamp: false });
   const dragControls = useDragControls();
 
-  // Recompute when minimized
+  // If user toggles minimized state => update y
   useEffect(() => {
     if (!isOpen) {
       y.set(0);
@@ -276,18 +257,21 @@ export default function Sheet({
     }
   }, [isOpen, isMinimized, y]);
 
-  // Handle clear selection (X button)
+  /* -------------------------------------------------------------
+     X BUTTON => close the sheet & clear selection
+  ------------------------------------------------------------- */
   const handleClear = useCallback(
     (e: React.MouseEvent) => {
-      e.stopPropagation(); // Prevent event from bubbling to header click
+      e.stopPropagation();
       if (isClosing.current) return;
       isClosing.current = true;
 
+      // Clears station & triggers any parent logic
       if (onClearSelection) {
         onClearSelection();
       }
 
-      // small delay to ensure state updates
+      // Also calls onDismiss if you want the sheet removed from DOM
       setTimeout(() => {
         if (onDismiss) {
           onDismiss();
@@ -297,7 +281,9 @@ export default function Sheet({
     [onClearSelection, onDismiss]
   );
 
-  // Backdrop click => minimize
+  /* -------------------------------------------------------------
+     BACKDROP CLICK => minimize if open. If minimized => do nothing
+  ------------------------------------------------------------- */
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) {
@@ -307,21 +293,23 @@ export default function Sheet({
         if (isTransitioning.current) return;
         isTransitioning.current = true;
 
-        setIsMinimized(true);
-        if (minimizedPosition.current > 0) {
+        // If not minimized => minimize
+        if (!isMinimized && minimizedPosition.current > 0) {
+          setIsMinimized(true);
           y.set(minimizedPosition.current);
         }
-
-        // Reset transitioning state after animation
+        // If already minimized => do nothing
         setTimeout(() => {
           isTransitioning.current = false;
         }, 300);
       }
     },
-    [y]
+    [isMinimized, y]
   );
 
-  // Drag end => decide whether to minimize, close, or expand
+  /* -------------------------------------------------------------
+     DRAG END => expand or minimize only, never close
+  ------------------------------------------------------------- */
   const handleDragEnd = useCallback(
     (_: PointerEvent, info: { offset: { y: number }; velocity: { y: number } }) => {
       if (isTransitioning.current) return;
@@ -330,40 +318,38 @@ export default function Sheet({
       const dragDistance = info.offset.y;
       const dragVelocity = info.velocity.y;
 
-      // If sheet is minimized but user drags up quickly or far, re-expand
-      if ((dragDistance < -20 || dragVelocity < -300) && isMinimized) {
-        setIsMinimized(false);
-        y.set(0);
-      }
-      // If minimized & user drags down => close
-      else if (dragDistance > 100 && isMinimized) {
-        // Close
-        if (onDismiss) onDismiss();
-      }
-      // If expanded & user drags down => minimize
-      else if (dragDistance > 100 && !isMinimized) {
-        setIsMinimized(true);
-        if (minimizedPosition.current > 0) {
+      if (isMinimized) {
+        // If minimized and user drags up a decent amount => expand
+        if (dragDistance < -20 || dragVelocity < -300) {
+          setIsMinimized(false);
+          y.set(0);
+        } else {
+          // remain minimized
           y.set(minimizedPosition.current);
         }
       } else {
-        // Snap back to nearest
-        if (isMinimized) {
-          y.set(minimizedPosition.current);
+        // If expanded and user drags down => minimize
+        if (dragDistance > 100 || dragVelocity > 300) {
+          setIsMinimized(true);
+          if (minimizedPosition.current > 0) {
+            y.set(minimizedPosition.current);
+          }
         } else {
+          // remain expanded
           y.set(0);
         }
       }
 
-      // Reset transitioning after short delay
       setTimeout(() => {
         isTransitioning.current = false;
       }, 300);
     },
-    [isMinimized, onDismiss, y]
+    [isMinimized, y]
   );
 
-  // Initiate drag on pointer-down in header
+  /* -------------------------------------------------------------
+     HEADER CLICK => toggle minimized or expanded
+  ------------------------------------------------------------- */
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
@@ -372,7 +358,6 @@ export default function Sheet({
     [dragControls]
   );
 
-  // Header click => toggle minimized
   const handleHeaderClick = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -411,7 +396,6 @@ export default function Sheet({
             </p>
           )}
         </div>
-
         {onClearSelection && (
           <button
             className="absolute right-3 top-3 p-1.5 rounded-full hover:bg-gray-700/50 transition-colors"
@@ -464,9 +448,8 @@ export default function Sheet({
             drag="y"
             dragControls={dragControls}
             dragListener={false}
-            // NEW: specify top & bottom constraints
             dragConstraints={{ top: 0, bottom: minimizedPosition.current }}
-            dragElastic={0.1} 
+            dragElastic={0.1}
             dragTransition={{ bounceStiffness: 300, bounceDamping: 30 }}
             onDragEnd={handleDragEnd}
           >
