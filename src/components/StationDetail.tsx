@@ -42,16 +42,18 @@ interface StationDetailProps {
   stations?: StationFeature[];
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
-  onOpenWalletModal?: () => void;
-  onDismiss?: () => void; // optional if parent wants to close the sheet externally
+  onDismiss?: () => void;
 }
 
+/**
+ * StationDetail: Displays station details, pay methods, and confirm button.
+ * No "Add or Manage" button or station clearing. Only a "Confirm" flow.
+ */
 function StationDetailComponent({
   activeStation,
   stations,
   onConfirmDeparture,
   onOpenSignIn,
-  onOpenWalletModal,
   onDismiss,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
@@ -68,8 +70,8 @@ function StationDetailComponent({
   const [showPaymentUI, setShowPaymentUI] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
-  
-  // Track component mount state
+
+  // Track component mount to avoid setState after unmount
   const isMounted = useRef(true);
   useEffect(() => {
     return () => {
@@ -82,19 +84,18 @@ function StationDetailComponent({
     if (isSignedIn && step === 4 && showPaymentUI) {
       const user = auth.currentUser;
       if (!user) return;
-      setPaymentMethodsLoading(true);
 
+      setPaymentMethodsLoading(true);
       (async () => {
         try {
           const res = await getSavedPaymentMethods(user.uid);
-          if (isMounted.current) {
-            if (res.success && res.data) {
-              setPaymentMethods(res.data);
-            }
-            setPaymentMethodsLoading(false);
+          if (!isMounted.current) return;
+          if (res.success && res.data) {
+            setPaymentMethods(res.data);
           }
         } catch (error) {
           console.error("Error loading payment methods:", error);
+        } finally {
           if (isMounted.current) {
             setPaymentMethodsLoading(false);
           }
@@ -110,7 +111,7 @@ function StationDetailComponent({
     }
   }, [step, isSignedIn]);
 
-  // If no active station for current step
+  // If no station selected for this step
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -143,6 +144,7 @@ function StationDetailComponent({
       ? Math.round(route.duration / 60).toString()
       : null;
 
+  // Confirm button logic
   const handleConfirm = () => {
     if (isDepartureFlow && step === 2) {
       dispatch(advanceBookingStep(3));
@@ -157,6 +159,7 @@ function StationDetailComponent({
     }
   };
 
+  // MapCard coords
   const stationCoordinates: [number, number] = [
     activeStation.geometry.coordinates[0],
     activeStation.geometry.coordinates[1],
@@ -178,7 +181,7 @@ function StationDetailComponent({
         className="mt-2 mb-2"
       />
 
-      {/* Station stats card */}
+      {/* Station Stats */}
       <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
         {/* Wait time if any */}
         {activeStation.properties.waitTime && (
@@ -193,7 +196,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* Step 2 => "Distance from You" (Footprints icon) */}
+        {/* Step 2 => "Distance from You" */}
         {step === 2 && typeof activeStation.distance === "number" && (
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-gray-300">
@@ -206,7 +209,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* Step 4 => "Drive Time" (SteerWheel icon) */}
+        {/* Step 4 => "Drive Time" */}
         {step === 4 && driveTimeMin && (
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-gray-300">
@@ -217,7 +220,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* Parking row */}
+        {/* Parking */}
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
             <Parking className="w-4 h-4 text-blue-400" />
@@ -227,15 +230,15 @@ function StationDetailComponent({
         </div>
       </div>
 
-      {/* Step 4: Payment UI inline if signed in and showPaymentUI */}
+      {/* Payment UI (step 4, if user is signed in) */}
       {step === 4 && isSignedIn && showPaymentUI && (
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg px-4 py-4 space-y-3 border border-gray-700">
           {paymentMethodsLoading ? (
             <div className="flex justify-center items-center py-4">
               <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
             </div>
           ) : paymentMethods.length > 0 ? (
-            <div className="space-y-3 mb-4">
+            <div className="space-y-3">
               {paymentMethods.map((m) => (
                 <PaymentMethodCard
                   key={m.id}
@@ -246,16 +249,7 @@ function StationDetailComponent({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 mb-4">No payment methods yet</p>
-          )}
-
-          {onOpenWalletModal && (
-            <button
-              onClick={onOpenWalletModal}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-            >
-              <span>Add or Manage</span>
-            </button>
+            <p className="text-sm text-gray-400">No payment methods yet</p>
           )}
         </div>
       )}
