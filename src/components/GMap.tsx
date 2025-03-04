@@ -407,6 +407,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
+  // This is only called when the X button is clicked to actually close the sheet
+  // Our new Sheet component will only call onDismiss when the X button is clicked
   const closeCurrentSheet = () => {
     if (openSheet === "detail") {
       setOpenSheet("none");
@@ -576,53 +578,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </Sheet>
 
           {/* Station Detail Sheet */}
-       <Sheet
-  key={detailKey}
-  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-  onDismiss={() => {
-    requestAnimationFrame(() => {
-      closeCurrentSheet(); // just close the sheet, no step reversion
-      if (overlayRef.current?.requestRedraw) {
-        overlayRef.current.requestRedraw();
-      }
-    });
-  }}
-  onClearSelection={() => {
-    requestAnimationFrame(() => {
-      if (bookingStep <= 2) {
-        handleClearDepartureInSelector();
-      } else {
-        handleClearArrivalInSelector();
-      }
-    });
-  }}
-  title={getSheetTitle()}
-  subtitle={getSheetSubtitle()}
->
-  {stationToShow && (
-    <StationDetail
-      key={detailKey}
-      stations={searchLocation ? sortedStations : stations}
-      activeStation={stationToShow}
-      onOpenSignIn={handleOpenSignIn}
-      onOpenWalletModal={() => setIsSplatModalOpen(true)}
-      onDismiss={() => {
-        requestAnimationFrame(() => {
-          closeCurrentSheet();
-        });
-      }}
-      onClearStation={() => {
-        requestAnimationFrame(() => {
-          if (bookingStep <= 2) {
-            handleClearDepartureInSelector();
-          } else {
-            handleClearArrivalInSelector();
-          }
-        });
-      }}
-    />
-  )}
-</Sheet>
+          <Sheet
+            key={detailKey}
+            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+            onDismiss={() => {
+              // With our updated Sheet, this is only called from the X button
+              requestAnimationFrame(() => {
+                closeCurrentSheet();
+                if (overlayRef.current?.requestRedraw) {
+                  overlayRef.current.requestRedraw();
+                }
+              });
+            }}
+            onClearSelection={() => {
+              // This is the X button handler
+              requestAnimationFrame(() => {
+                if (bookingStep <= 2) {
+                  handleClearDepartureInSelector();
+                } else {
+                  handleClearArrivalInSelector();
+                }
+              });
+            }}
+            title={getSheetTitle()}
+            subtitle={getSheetSubtitle()}
+          >
+            {stationToShow && (
+              <StationDetail
+                key={detailKey}
+                stations={searchLocation ? sortedStations : stations}
+                activeStation={stationToShow}
+                onOpenSignIn={handleOpenSignIn}
+                onOpenWalletModal={() => setIsSplatModalOpen(true)}
+                onDismiss={() => {
+                  // This is only called when the sheet actually needs to close
+                  requestAnimationFrame(() => {
+                    closeCurrentSheet();
+                  });
+                }}
+                onClearStation={() => {
+                  // This is only triggered when we want to clear the station
+                  requestAnimationFrame(() => {
+                    if (bookingStep <= 2) {
+                      handleClearDepartureInSelector();
+                    } else {
+                      handleClearArrivalInSelector();
+                    }
+                  });
+                }}
+              />
+            )}
+          </Sheet>
           {/* GaussianSplatModal */}
           <Suspense fallback={<div>Loading modal...</div>}>
             {isSplatModalOpen && (
