@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { toast } from "sonner"
+import Link from "next/link"          // Import Next.js Link for navigation
 
 // Import your logo component
 import { LogoSvg } from "@/components/ui/logo/LogoSvg"
@@ -30,7 +31,6 @@ type MemoryCard = {
 
 // 3) Create your deck of cards:
 const createCards = () => {
-  // List each icon and a color. Customize or expand as needed.
   const iconConfigs = [
     { Icon: MapFlag, color: "text-sky-500" },
     { Icon: AddCard, color: "text-sky-500" },
@@ -40,7 +40,6 @@ const createCards = () => {
     { Icon: QrCodeIcon, color: "text-sky-500" },
   ]
 
-  // Duplicate each icon for a pair and shuffle them
   const cards: MemoryCard[] = []
   iconConfigs.forEach(({ Icon, color }, index) => {
     cards.push(
@@ -55,9 +54,31 @@ export default function CardGame() {
   const [cards, setCards] = useState<MemoryCard[]>(createCards())
   const [flippedIndexes, setFlippedIndexes] = useState<number[]>([])
   const [matches, setMatches] = useState(0)
+
+  // Timer state and helper flags
+  const [timer, setTimer] = useState(0)
+  const [gameStarted, setGameStarted] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
 
+  const totalPairs = cards.length / 2
+
+  // Increment timer if game has started and not all matches are found
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+    if (gameStarted && matches < totalPairs) {
+      interval = setInterval(() => setTimer((prev) => prev + 1), 1000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [gameStarted, matches, totalPairs])
+
   const handleCardClick = (clickedIndex: number) => {
+    // If the game has not started yet, start the timer on the very first flip
+    if (!gameStarted) {
+      setGameStarted(true)
+    }
+
     if (isChecking || cards[clickedIndex].isMatched) return
     if (flippedIndexes.includes(clickedIndex)) return
     if (flippedIndexes.length === 2) return
@@ -87,7 +108,9 @@ export default function CardGame() {
           setIsChecking(false)
 
           // Check for game completion
-          if (matches === (cards.length / 2) - 1) {
+          if (matches + 1 === totalPairs) {
+            // Stop the timer
+            setGameStarted(false)
             toast("🎉 Congratulations! You've found all the matches! 🎈", {
               className: "bg-neutral-800 text-sky-100 border-sky-500",
             })
@@ -108,27 +131,32 @@ export default function CardGame() {
     setFlippedIndexes([])
     setMatches(0)
     setIsChecking(false)
+    // Reset timer and game state
+    setTimer(0)
+    setGameStarted(false)
   }
 
   return (
     <div
       className="flex flex-col items-center justify-center min-h-screen p-4
                  bg-gradient-to-b from-neutral-900 to-neutral-800 text-neutral-50
-                 font-sans"
-      style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}
+                 font-sans overflow-hidden touch-none"
+      style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
     >
-      {/* Top bar with logo */}
+      {/* Top bar with clickable logo */}
       <div className="absolute top-4 left-4 flex items-center space-x-2">
-        <LogoSvg className="w-8 h-8 text-sky-500" />
+        <Link href="https://www.masstransitcar.com/landing">
+          <LogoSvg className="w-8 h-8 text-sky-500 cursor-pointer" />
+        </Link>
       </div>
 
       {/* Title & match info */}
-      <div className="text-center space-y-2 mb-4 mt-12">
+      <div className="text-center space-y-2 mb-4 mt-0">
         <h1 className="text-3xl font-bold tracking-tight">
           Mass Transit Cards
         </h1>
         <p className="text-sm text-neutral-300">
-          Matches found: {matches} of {cards.length / 2}
+          Matches found: {matches} of {totalPairs} &mdash; Time: {timer}s
         </p>
       </div>
 
@@ -139,7 +167,8 @@ export default function CardGame() {
             key={card.id}
             initial={{ rotateY: 0 }}
             animate={{
-              rotateY: card.isMatched || flippedIndexes.includes(index) ? 180 : 0,
+              rotateY:
+                card.isMatched || flippedIndexes.includes(index) ? 180 : 0,
             }}
             transition={{ duration: 0.3 }}
             className="perspective-1000"
