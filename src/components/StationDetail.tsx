@@ -46,8 +46,8 @@ interface StationDetailProps {
 }
 
 /**
- * StationDetail: Displays station details, pay methods, and confirm button.
- * No "Add or Manage" button or station clearing. Only a "Confirm" flow.
+ * StationDetail: Displays station details, payment methods (if step 4),
+ * and a confirm button to proceed booking or show payment UI.
  */
 function StationDetailComponent({
   activeStation,
@@ -243,8 +243,13 @@ function StationDetailComponent({
                 <PaymentMethodCard
                   key={m.id}
                   method={m}
-                  onDelete={() => toast("Delete not implemented")}
-                  onSetDefault={() => toast("Set default not implemented")}
+                  // Make these async to match the required Promise<void> signature
+                  onDelete={async () => {
+                    toast("Delete not implemented");
+                  }}
+                  onSetDefault={async () => {
+                    toast("Set default not implemented");
+                  }}
                 />
               ))}
             </div>
