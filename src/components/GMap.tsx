@@ -577,21 +577,37 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* Station Detail Sheet */}
           <Sheet
-            key={detailKey}
-            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-            onDismiss={closeCurrentSheet}
-            title={getSheetTitle()}
-            subtitle={getSheetSubtitle()}
-          >
-            {stationToShow && (
-              <StationDetail
-                key={detailKey}
-                stations={searchLocation ? sortedStations : stations}
-                activeStation={stationToShow}
-                onOpenSignIn={handleOpenSignIn}  // 3) Pass callback to StationDetail
-              />
-            )}
-          </Sheet>
+  key={detailKey}
+  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+  onDismiss={closeCurrentSheet}
+  title={getSheetTitle()}
+  subtitle={getSheetSubtitle()}
+  onClearSelection={() => {
+    // Clear the appropriate station based on current step
+    if (bookingStep <= 2) {
+      handleClearDepartureInSelector();
+    } else {
+      handleClearArrivalInSelector();
+    }
+  }}
+>
+  {stationToShow && (
+    <StationDetail
+      key={detailKey}
+      stations={searchLocation ? sortedStations : stations}
+      activeStation={stationToShow}
+      onOpenSignIn={handleOpenSignIn}
+      onClearStation={() => {
+        // This will be called when StationDetail itself needs to clear the station
+        if (bookingStep <= 2) {
+          handleClearDepartureInSelector();
+        } else {
+          handleClearArrivalInSelector();
+        }
+      }}
+    />
+  )}
+</Sheet>
 
           {/* GaussianSplatModal */}
           <Suspense fallback={<div>Loading modal...</div>}>
