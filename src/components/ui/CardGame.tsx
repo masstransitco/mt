@@ -141,12 +141,10 @@ export default function CardGame() {
 
   return (
     <Beams intensity="strong">
-      {/* Main game container */}
       <div
         className="relative flex flex-col items-center justify-center
                    min-h-screen p-4 text-neutral-50 font-sans
                    overflow-hidden touch-none"
-        style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
       >
         {/* Top bar with clickable logo */}
         <div className="absolute top-4 left-4 flex items-center space-x-2">
@@ -173,7 +171,9 @@ export default function CardGame() {
               initial={{ rotateY: 0 }}
               animate={{
                 rotateY:
-                  card.isMatched || flippedIndexes.includes(index) ? 180 : 0,
+                  card.isMatched || flippedIndexes.includes(index)
+                    ? 180
+                    : 0,
               }}
               transition={{ duration: 0.3 }}
               className="perspective-1000"
