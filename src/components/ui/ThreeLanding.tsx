@@ -35,11 +35,16 @@ const BoxWithEdges = ({ position }: { position: [number, number, number] }) => {
   )
 }
 
-const BoxLetter = ({ letter, position }) => {
-  const group = useRef()
+interface BoxLetterProps {
+  letter: string
+  position: [number, number, number]
+}
 
-  const getLetterShape = (letter) => {
-    const shapes = {
+const BoxLetter = ({ letter, position }: BoxLetterProps) => {
+  const group = useRef<THREE.Group>(null)
+
+  const getLetterShape = (letter: string): number[][] => {
+    const shapes: { [key: string]: number[][] } = {
       N: [
         [1, 0, 0, 0, 1],
         [1, 1, 0, 0, 1],
@@ -83,7 +88,7 @@ const BoxLetter = ({ letter, position }) => {
         [1, 1, 1],
       ],
     }
-    return shapes[letter] || shapes["N"] // Default to 'N' if letter is not found
+    return shapes[letter] || shapes["N"]
   }
 
   const letterShape = getLetterShape(letter)
@@ -94,7 +99,8 @@ const BoxLetter = ({ letter, position }) => {
         row.map((cell, j) => {
           if (cell) {
             let xOffset =
-              j * 0.5 - (letter === "T" ? 1 : letter === "E" ? 0.5 : letter === "X" || letter === "N" ? 1 : 0.75)
+              j * 0.5 -
+              (letter === "T" ? 1 : letter === "E" ? 0.5 : letter === "X" || letter === "N" ? 1 : 0.75)
 
             if (letter === "N") {
               if (j === 0) {
@@ -134,7 +140,7 @@ const BoxLetter = ({ letter, position }) => {
 }
 
 const Scene = () => {
-  const orbitControlsRef = useRef()
+  const orbitControlsRef = useRef<any>(null)
   const [isMobileDevice, setIsMobileDevice] = useState(false)
 
   useEffect(() => {
@@ -183,4 +189,3 @@ export default function ThreeLanding() {
     </div>
   )
 }
-
