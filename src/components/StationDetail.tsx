@@ -1,12 +1,10 @@
 "use client";
 
 import React, { memo, useEffect, useState, useMemo } from "react";
-// Remove Navigation, CarFront, Parking from lucide-react imports
-// and replace with your custom SVG icon imports:
-import { Clock, Route } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
+import { Clock, Route } from "lucide-react";
 
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
@@ -19,11 +17,17 @@ import {
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
+import { selectIsSignedIn } from "@/store/userSlice";
 
 // Import your custom icons:
 import { SteerWheel } from "@/components/ui/icons/SteerWheel";
 import { CarParkIcon } from "@/components/ui/icons/CarParkIcon";
 import { Parking } from "@/components/ui/icons/Parking";
+
+// If you have factorized PaymentComponents:
+import { AddPaymentMethodForm, PaymentMethodCard } from "@/components/ui/PaymentComponents";
+import { getStripe, getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
+import { Elements } from "@stripe/react-stripe-js";
 
 /** Dynamically import the MapCard (always visible now) */
 const MapCard = dynamic(() => import("./MapCard"), {
@@ -36,19 +40,26 @@ const MapCard = dynamic(() => import("./MapCard"), {
 });
 
 interface StationDetailProps {
-  /**
-   * The currently selected / active station.
-   * If null, we show a placeholder.
-   */
+  /** The currently selected/active station. If null, show placeholder. */
   activeStation: StationFeature | null;
   stations?: StationFeature[];
+
+  /** Called when the user confirms departure at step 2. */
   onConfirmDeparture?: () => void;
+
+  /**
+   * Called to open SignInModal if the user is not signed in.
+   * Alternatively, you could use local state for SignInModal
+   * if you prefer.
+   */
+  onOpenSignIn: () => void;
 }
 
 function StationDetailComponent({
   activeStation,
   stations,
   onConfirmDeparture,
+  onOpenSignIn,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -57,7 +68,36 @@ function StationDetailComponent({
   const arrivalId = useAppSelector(selectArrivalStationId);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
+  const isSignedIn = useAppSelector(selectIsSignedIn);
   const isDepartureFlow = step <= 2;
+
+  // Local state for showing the inline Payment UI
+  const [showPaymentUI, setShowPaymentUI] = useState(false);
+
+  // Payment methods for inline Payment UI (if needed)
+  const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
+  const [stripeLoaded, setStripeLoaded] = useState(false);
+  const stripePromise = getStripe();
+
+  // Load payment methods if signed in + showPaymentUI
+  useEffect(() => {
+    if (isSignedIn && step === 4 && showPaymentUI) {
+      (async () => {
+        const res = await getSavedPaymentMethods(/* auth.currentUser.uid, etc. */);
+        if (res.success && res.data) {
+          setPaymentMethods(res.data);
+        }
+      })();
+    }
+  }, [isSignedIn, step, showPaymentUI]);
+
+  // If user just signed in at Step 4, automatically show Payment UI
+  useEffect(() => {
+    if (step === 4 && isSignedIn) {
+      setShowPaymentUI(true);
+      setStripeLoaded(true);
+    }
+  }, [step, isSignedIn]);
 
   useEffect(() => {
     console.log("[StationDetail] step=", step);
@@ -66,9 +106,8 @@ function StationDetailComponent({
     }
   }, [step, stations]);
 
-  /** 
-   * If needed, an estimated pickup time window
-   * (not displayed in this version).
+  /**
+   * If needed, an estimated pickup time window (not displayed in this version).
    */
   const estimatedPickupTime = useMemo(() => {
     if (!dispatchRoute?.duration) return null;
@@ -90,8 +129,8 @@ function StationDetailComponent({
     };
   }, [dispatchRoute?.duration]);
 
+  // Placeholder when no station is selected
   if (!activeStation) {
-    // Placeholder when no station is selected
     return (
       <div className="p-6 space-y-4">
         <div className="text-sm text-gray-300">
@@ -129,7 +168,12 @@ function StationDetailComponent({
     parkingValue = "Touchless Entry";
   }
 
-  /** Handle confirmation flow */
+  /**
+   * Handle confirmation flow
+   * Step 2 => confirm departure => step 3
+   * Step 4 => if user not signed in => open sign in,
+   *           else show Payment UI inline
+   */
   const handleConfirm = () => {
     if (isDepartureFlow) {
       if (step === 2) {
@@ -139,10 +183,21 @@ function StationDetailComponent({
       }
     } else {
       if (step === 4) {
-        dispatch(advanceBookingStep(5));
-        toast.success("Arrival station confirmed! Proceeding to payment...");
+        if (!isSignedIn) {
+          onOpenSignIn();
+        } else {
+          setShowPaymentUI(true);
+          setStripeLoaded(true);
+        }
       }
     }
+  };
+
+  // For demonstration, you might want to handle the user continuing
+  // after adding a card, e.g., dispatch(advanceBookingStep(5)) or so.
+  const handlePaymentSetupDone = () => {
+    toast.success("Payment method added! Proceeding to payment...");
+    dispatch(advanceBookingStep(5));
   };
 
   // Coordinates for the always-visible map
@@ -159,7 +214,7 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/* MapCard rendered by default */}
+      {/* MapCard */}
       <MapCard
         coordinates={stationCoordinates}
         name={activeStation.properties.Place}
@@ -193,7 +248,7 @@ function StationDetailComponent({
           </div>
         )}
 
-        {/* If there's a route from departure to arrival, show it. Otherwise fallback. */}
+        {/* If there's a route from departure to arrival, show it */}
         {routeDistanceKm && routeDurationMin ? (
           <>
             <div className="flex justify-between items-center text-sm">
@@ -212,7 +267,7 @@ function StationDetailComponent({
             </div>
           </>
         ) : (
-          // If the station has a 'distance' property, show that
+          // Fallback: station.distance if present
           activeStation.distance !== undefined && (
             <div className="flex justify-between items-center text-sm">
               <div className="flex items-center gap-2 text-gray-300">
@@ -237,6 +292,31 @@ function StationDetailComponent({
           </span>
         </div>
       </div>
+
+      {/* Step 4: Payment UI inline if signed in and showPaymentUI */}
+      {step === 4 && isSignedIn && showPaymentUI && (
+        <div className="bg-gray-900/60 p-4 rounded border border-gray-700">
+          <h3 className="text-lg font-semibold mb-2 text-white">Add or Select a Payment Method</h3>
+
+          {/* Display existing methods, then AddPaymentMethodForm */}
+          {/* For brevity, we only show the Add Payment flow. 
+              You can also show PaymentMethodCard if you want the user
+              to select or remove methods. */}
+          {stripeLoaded && (
+            <Elements stripe={stripePromise}>
+              <AddPaymentMethodForm
+                existingMethods={paymentMethods}
+                onSuccess={() => {
+                  // e.g. re-fetch the user’s payment methods
+                  // setPaymentMethods(...) 
+                  // Then proceed to next step
+                  handlePaymentSetupDone();
+                }}
+              />
+            </Elements>
+          )}
+        </div>
+      )}
 
       {/* Confirm button */}
       <div className="pt-3">
