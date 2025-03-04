@@ -19,24 +19,24 @@ import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
 import { selectIsSignedIn } from "@/store/userSlice";
 
-// Import your custom icons:
+// Custom icons
 import { SteerWheel } from "@/components/ui/icons/SteerWheel";
 import { CarParkIcon } from "@/components/ui/icons/CarParkIcon";
 import { Parking } from "@/components/ui/icons/Parking";
 
 // Payment & Firebase
 import { PaymentMethodCard } from "@/components/ui/PaymentComponents";
-import { getStripe, getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
+import { getSavedPaymentMethods, SavedPaymentMethod } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
-/** Dynamically import the MapCard (always visible now) */
+/** Dynamically import the MapCard */
 const MapCard = dynamic(() => import("./MapCard"), {
   loading: () => (
     <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
       <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
     </div>
   ),
-  ssr: false, // Disable server-side rendering for this component
+  ssr: false, 
 });
 
 interface StationDetailProps {
@@ -78,9 +78,10 @@ function StationDetailComponent({
   // Load payment methods if signed in & at step 4
   useEffect(() => {
     if (isSignedIn && step === 4 && showPaymentUI) {
-      if (!auth.currentUser) return;
+      const user = auth.currentUser;
+      if (!user) return; // Guard for TypeScript null-check
       (async () => {
-        const res = await getSavedPaymentMethods(auth.currentUser.uid);
+        const res = await getSavedPaymentMethods(user.uid);
         if (res.success && res.data) {
           setPaymentMethods(res.data);
         }
