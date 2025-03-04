@@ -110,7 +110,8 @@ export default function MtcLanding() {
           className="max-w-4xl mx-auto"
         >
           <motion.div
-            className="mb-8 mx-auto w-full max-w-[250px] relative"
+            className="mb-8 mx-auto w-full max-w-[175px] relative"
+            //             ^^^ reduced from 250px to 175px
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{
@@ -142,26 +143,26 @@ export default function MtcLanding() {
                         overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300"
           >
             <Button
-  variant="ghost"
-  className="rounded-full px-6 py-4 text-lg font-semibold backdrop-blur-md 
-             bg-black/80 hover:bg-black/90
-             text-white transition-all duration-300 
-             group-hover:-translate-y-0.5 border border-white/10
-             hover:shadow-md hover:shadow-[#276EF1]/20"
-  onClick={() => {
-    window.location.href = "https://www.masstransitcar.com"
-  }}
->
-  <span className="opacity-90 group-hover:opacity-100 transition-opacity">
-    Start Driving
-  </span>
-  <span
-    className="ml-3 opacity-70 group-hover:opacity-100 group-hover:translate-x-1.5 
-               transition-all duration-300 text-[#276EF1]"
-  >
-    →
-  </span>
-</Button>
+              variant="ghost"
+              className="rounded-full px-6 py-4 text-lg font-semibold backdrop-blur-md
+                         bg-gray-800/70 hover:bg-gray-800/80  /* changed from black to transparent dark gray */
+                         text-white transition-all duration-300 
+                         group-hover:-translate-y-0.5 border border-white/10
+                         hover:shadow-md hover:shadow-[#276EF1]/20"
+              onClick={() => {
+                window.location.href = "https://www.masstransitcar.com"
+              }}
+            >
+              <span className="opacity-90 group-hover:opacity-100 transition-opacity">
+                Start Driving
+              </span>
+              <span
+                className="ml-3 opacity-70 group-hover:opacity-100 group-hover:translate-x-1.5 
+                           transition-all duration-300 text-[#276EF1]"
+              >
+                →
+              </span>
+            </Button>
           </motion.div>
         </motion.div>
       </div>
