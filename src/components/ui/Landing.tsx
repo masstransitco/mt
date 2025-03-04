@@ -63,10 +63,10 @@ const AnimatedLogoSvg: React.FC<LogoSvgProps> = ({
       viewBox="0 0 2100 950"
       // Container-level variants
       variants={svgContainerVariants}
-      // Start in the "hidden" state, then go to "enter" unless isExiting is true
+      // Start in "hidden" then animate in, or exit if isExiting is true
       initial="hidden"
       animate={isExiting ? "exit" : "enter"}
-      // When the "exit" animation completes, signal the callback
+      // Trigger callback when the exit animation finishes
       onAnimationComplete={() => {
         if (isExiting && onLogoExitComplete) {
           onLogoExitComplete()
@@ -148,9 +148,9 @@ function FloatingPaths({ position }: { position: number }) {
 // ----------------------------
 export default function MtcLanding() {
   // We'll track phases of the exit sequence via a small state machine:
-  // 1) "IDLE" => normal
+  // 1) "IDLE" => normal (logo is visible)
   // 2) "LOGO_EXIT" => logo disappears
-  // 3) "BUTTON_SHIFT" => button slides up
+  // 3) "BUTTON_SHIFT" => button slides up + redirect
   const [phase, setPhase] = useState<"IDLE" | "LOGO_EXIT" | "BUTTON_SHIFT">(
     "IDLE"
   )
@@ -183,34 +183,36 @@ export default function MtcLanding() {
           transition={{ duration: 1 }}
           className="max-w-4xl mx-auto"
         >
-          {/* LOGO SECTION */}
-          <motion.div
-            className="mb-8 mx-auto w-full max-w-[175px] relative"
-            // Slight scale pop in
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            transition={{
-              duration: 1.5,
-              type: "spring",
-              stiffness: 100,
-            }}
-          >
-            {/* Glow effect behind the logo */}
-            <div className="absolute inset-0 blur-2xl bg-[#276EF1]/10 rounded-full transform scale-110 opacity-70"></div>
+          {/* LOGO SECTION (conditionally rendered) */}
+          {phase !== "BUTTON_SHIFT" && (
+            <motion.div
+              className="mb-8 mx-auto w-full max-w-[175px] relative"
+              // Slight scale pop in
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              transition={{
+                duration: 1.5,
+                type: "spring",
+                stiffness: 100,
+              }}
+            >
+              {/* Glow effect behind the logo */}
+              <div className="absolute inset-0 blur-2xl bg-[#276EF1]/10 rounded-full transform scale-110 opacity-70"></div>
 
-            {/* The animated logo */}
-            <div className="relative">
-              <AnimatedLogoSvg
-                className="w-full h-auto text-white/80"
-                isExiting={phase === "LOGO_EXIT"}
-                onLogoExitComplete={handleLogoExitComplete}
-              />
-            </div>
-          </motion.div>
+              {/* The animated logo */}
+              <div className="relative">
+                <AnimatedLogoSvg
+                  className="w-full h-auto text-white/80"
+                  isExiting={phase === "LOGO_EXIT"}
+                  onLogoExitComplete={handleLogoExitComplete}
+                />
+              </div>
+            </motion.div>
+          )}
 
           {/* BUTTON SECTION */}
           <motion.div
-            // We'll animate the button up after the logo vanishes
+            // We'll animate the button up after the logo fully disappears
             animate={
               phase === "BUTTON_SHIFT"
                 ? { y: -100, transition: { duration: 0.8, ease: "easeInOut" } }
@@ -235,7 +237,6 @@ export default function MtcLanding() {
                          group-hover:-translate-y-0.5 border border-white/10
                          hover:shadow-md hover:shadow-[#276EF1]/20"
               onClick={() => {
-                // Reverse the logo animation (if we haven't started already)
                 if (phase === "IDLE") {
                   setPhase("LOGO_EXIT")
                 }
