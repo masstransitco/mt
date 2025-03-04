@@ -93,27 +93,6 @@ function StationDetailComponent({
     }
   }, [step, isSignedIn]);
 
-  // For debugging
-  useEffect(() => {
-    console.log("[StationDetail] step=", step);
-    if (stations?.length) {
-      console.log("[StationDetail] stations array length=", stations.length);
-    }
-  }, [step, stations]);
-
-  // Handle clear station action (called when X button is clicked)
-  const handleClearStation = useCallback(() => {
-    if (isDepartureFlow) {
-      dispatch(clearDepartureStation());
-    } else {
-      dispatch(clearArrivalStation());
-    }
-    
-    if (onClearStation) {
-      onClearStation();
-    }
-  }, [dispatch, isDepartureFlow, onClearStation]);
-
   /**
    * Estimated arrival time to the departure station (step 2 -> station).
    */
