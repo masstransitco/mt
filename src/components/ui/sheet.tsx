@@ -266,18 +266,24 @@ export default function Sheet({
       e.stopPropagation();
       if (isClosing.current) return;
       isClosing.current = true;
-
-      // Clears station & triggers any parent logic
+      
+      // Set a flag to prevent possible state updates after unmounting
+      const cleanup = () => {
+        isClosing.current = false;
+      };
+      
+      // Ensure proper execution order with small delay
+      // First trigger onClearSelection to update app state
       if (onClearSelection) {
         onClearSelection();
       }
-
-      // Also calls onDismiss if you want the sheet removed from DOM
+      
+      // Wait a moment before triggering sheet close
       setTimeout(() => {
         if (onDismiss) {
           onDismiss();
         }
-        isClosing.current = false;
+        cleanup();
       }, 50);
     },
     [onClearSelection, onDismiss]
