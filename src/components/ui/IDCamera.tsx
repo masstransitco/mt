@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Camera, X, RotateCcw, Check, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -36,9 +35,12 @@ export default function IDCamera({
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [imageBrightness, setImageBrightness] = useState<'low' | 'good' | 'high' | null>(null);
+  const [isStable, setIsStable] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stabilityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const db = getFirestore();
 
@@ -53,6 +55,9 @@ export default function IDCamera({
     }
     return () => {
       stopCamera();
+      if (stabilityTimeoutRef.current) {
+        clearTimeout(stabilityTimeoutRef.current);
+      }
     };
   }, [isOpen]);
 
@@ -73,12 +78,20 @@ export default function IDCamera({
       setCapturedImage(null);
       setPermissionDenied(false);
       setErrorMessage(null);
+      setImageBrightness(null);
+      setIsStable(false);
 
       const constraints = {
         video: { 
           facingMode: isFrontCamera ? "user" : "environment",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 1920 }, // Increased resolution for better OCR
+          height: { ideal: 1080 },
+          // Request high-quality video if available
+          advanced: [
+            { frameRate: { min: 20 } },
+            { exposureMode: "auto" },
+            { focusMode: "continuous" }
+          ]
         }
       };
 
@@ -87,6 +100,21 @@ export default function IDCamera({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        
+        // Start monitoring frame brightness after camera is set up
+        if (videoRef.current) {
+          // Set a timer to analyze brightness every 1s
+          const intervalId = setInterval(() => {
+            if (videoRef.current && canvasRef.current) {
+              analyzeFrameBrightness();
+            }
+          }, 1000);
+          
+          // Clean up on unmount
+          return () => {
+            clearInterval(intervalId);
+          };
+        }
       }
     } catch (err) {
       console.error("Error accessing camera:", err);
@@ -111,6 +139,67 @@ export default function IDCamera({
     setTimeout(() => startCamera(), 0);
   }, [isFrontCamera, stopCamera, startCamera]);
 
+  // Analyze the brightness of the current frame
+  const analyzeFrameBrightness = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Sample pixels from the center area (where ID likely is)
+    const centerX = Math.floor(canvas.width / 2);
+    const centerY = Math.floor(canvas.height / 2);
+    const sampleSize = Math.min(200, Math.floor(canvas.width / 4));
+    
+    const imageData = ctx.getImageData(
+      centerX - sampleSize/2, 
+      centerY - sampleSize/2, 
+      sampleSize, 
+      sampleSize
+    );
+    
+    // Calculate average brightness
+    let totalBrightness = 0;
+    const data = imageData.data;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      // Convert RGB to brightness (0-255)
+      const brightness = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+      totalBrightness += brightness;
+    }
+    
+    const avgBrightness = totalBrightness / (data.length / 4);
+    
+    // Categorize brightness
+    if (avgBrightness < 70) {
+      setImageBrightness('low');
+    } else if (avgBrightness > 200) {
+      setImageBrightness('high');
+    } else {
+      setImageBrightness('good');
+      
+      // If brightness is good, set a timer to consider the camera stable
+      // This helps ensure we capture when conditions are optimal
+      if (!isStable) {
+        if (stabilityTimeoutRef.current) {
+          clearTimeout(stabilityTimeoutRef.current);
+        }
+        
+        stabilityTimeoutRef.current = setTimeout(() => {
+          setIsStable(true);
+        }, 1000); // Wait 1s of good lighting to consider stable
+      }
+    }
+  }, [isStable]);
+
+  // Enhanced image capture with improved quality
   const captureImage = useCallback(() => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
@@ -125,8 +214,40 @@ export default function IDCamera({
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
         }
+        
+        // Draw the video frame to canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageDataURL = canvas.toDataURL("image/jpeg", 0.8);
+        
+        // Apply basic image enhancement for better OCR
+        try {
+          // Get the image data
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          
+          // Simple contrast enhancement
+          const contrastFactor = 1.2; // Increase contrast by 20%
+          const brightnessFactor = 5; // Slight brightness boost
+          
+          for (let i = 0; i < data.length; i += 4) {
+            // Apply contrast and brightness adjustment to RGB channels
+            for (let j = 0; j < 3; j++) {
+              // Contrast formula: newValue = (oldValue - 128) * contrastFactor + 128 + brightnessFactor
+              data[i + j] = Math.max(0, Math.min(255, 
+                (data[i + j] - 128) * contrastFactor + 128 + brightnessFactor
+              ));
+            }
+            // Alpha channel stays the same
+          }
+          
+          // Put the modified image data back
+          ctx.putImageData(imageData, 0, 0);
+        } catch (err) {
+          console.error("Error enhancing image:", err);
+          // Continue with the original image if enhancement fails
+        }
+        
+        // High quality JPEG (0.92 gives good balance of quality and file size)
+        const imageDataURL = canvas.toDataURL("image/jpeg", 0.92);
         setCapturedImage(imageDataURL);
       }
     }
@@ -234,6 +355,35 @@ export default function IDCamera({
     }
   }, [capturedImage, documentType]);
 
+  // Get brightness indicator component
+  const getBrightnessIndicator = () => {
+    if (!imageBrightness) return null;
+    
+    let message = "";
+    let color = "";
+    
+    switch (imageBrightness) {
+      case 'low':
+        message = "Too dark - move to a brighter area";
+        color = "text-yellow-500";
+        break;
+      case 'high':
+        message = "Too bright - reduce glare";
+        color = "text-yellow-500";
+        break;
+      case 'good':
+        message = "Good lighting";
+        color = "text-green-500";
+        break;
+    }
+    
+    return (
+      <div className={`absolute top-2 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full bg-black/70 ${color} text-xs font-medium`}>
+        {message}
+      </div>
+    );
+  };
+
   return (
     <Dialog
       open={isOpen}
@@ -330,18 +480,42 @@ export default function IDCamera({
                 }}
               />
 
-              {/* Camera overlay */}
-              <div className="absolute inset-0 border-2 border-dashed border-white/30 m-6 rounded-md flex items-center justify-center">
-                <div className="text-white/70 text-center p-4 bg-black/40 rounded-md">
-                  <p>
-                    Position your{" "}
-                    {documentType === "identity" ? "ID" : "license"} within the
-                    frame
-                  </p>
-                  <p className="text-sm">
-                    Ensure good lighting and all details are visible
-                  </p>
+              {/* Brightness indicator */}
+              {getBrightnessIndicator()}
+
+              {/* Enhanced camera overlay with corner markers and better guidance */}
+              <div className="absolute inset-0 pointer-events-none">
+                {/* ID card frame with corner markers */}
+                <div className="absolute inset-0 m-6 flex items-center justify-center">
+                  {/* Border outline */}
+                  <div className={`absolute inset-0 border-2 border-dashed ${isStable ? 'border-green-400/60' : 'border-white/30'} rounded-md`}></div>
+                  
+                  {/* Corner markers */}
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-white/60"></div>
+                  <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-white/60"></div>
+                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-white/60"></div>
+                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-white/60"></div>
+                  
+                  {/* Enhanced guidance text */}
+                  <div className="text-white/70 text-center p-4 bg-black/40 rounded-md max-w-[80%]">
+                    <p className="font-medium mb-1">
+                      Position your {documentType === "identity" ? "ID card" : "license"} within the frame
+                    </p>
+                    <ul className="text-xs text-left list-disc pl-4 space-y-1">
+                      <li>Ensure all text is clearly visible</li>
+                      <li>Avoid glare and shadows</li>
+                      <li>Hold steady for best results</li>
+                      <li>Make sure the entire card is visible</li>
+                    </ul>
+                  </div>
                 </div>
+
+                {/* Stability indicator */}
+                {isStable && (
+                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full bg-green-500/80 text-white text-xs font-medium">
+                    Ready to capture
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -390,7 +564,7 @@ export default function IDCamera({
                   </Button>
                   <Button
                     onClick={captureImage}
-                    className="bg-white text-black hover:bg-gray-200 min-w-[100px]"
+                    className={`bg-white text-black hover:bg-gray-200 min-w-[100px] ${isStable ? 'bg-green-500 hover:bg-green-600 text-white' : ''}`}
                   >
                     Capture
                   </Button>
