@@ -27,6 +27,9 @@ interface UserState {
   // Auth fields
   authUser: AuthUser | null; 
   isSignedIn: boolean;
+
+  // NEW: To track which PM is the default (or null if none)
+  defaultPaymentMethodId: string | null;
 }
 
 const initialState: UserState = {
@@ -38,6 +41,9 @@ const initialState: UserState = {
   // Auth
   authUser: null,
   isSignedIn: false,
+
+  // NEW
+  defaultPaymentMethodId: null,
 };
 
 export const userSlice = createSlice({
@@ -75,6 +81,12 @@ export const userSlice = createSlice({
     signOutUser: (state) => {
       state.authUser = null;
       state.isSignedIn = false;
+      state.defaultPaymentMethodId = null; // Also clear out
+    },
+
+    // NEW: set or clear the default payment method ID
+    setDefaultPaymentMethodId: (state, action: PayloadAction<string | null>) => {
+      state.defaultPaymentMethodId = action.payload;
     },
   },
 });
@@ -88,6 +100,7 @@ export const {
   resetUserSelections,
   setAuthUser,
   signOutUser,
+  setDefaultPaymentMethodId, // NEW
 } = userSlice.actions;
 
 // Selectors
@@ -97,5 +110,9 @@ export const selectSearchLocation = (state: RootState) => state.user.searchLocat
 export const selectViewState = (state: RootState) => state.user.viewState;
 export const selectAuthUser = (state: RootState) => state.user.authUser;
 export const selectIsSignedIn = (state: RootState) => state.user.isSignedIn;
+
+// NEW: convenience selector for "does user have a default PM?"
+export const selectHasDefaultPaymentMethod = (state: RootState) =>
+  !!state.user.defaultPaymentMethodId;
 
 export default userSlice.reducer;
