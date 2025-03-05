@@ -3,6 +3,10 @@
 import React, { useState } from "react";
 import { LogoSvg } from "../ui/logo/LogoSvg";
 
+// [Redux additions]: import your dispatch and any needed actions
+import { useAppDispatch } from "@/store/store";
+import { setUserVerification /* or other actions */ } from "@/store/verificationSlice";
+
 interface ExtractedData {
   documentType?: string;
   hkidNumber?: string;
@@ -68,6 +72,9 @@ export default function VerificationAdmin() {
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [isEditingJson, setIsEditingJson] = useState(false);
 
+  // [Redux additions]: get the dispatch function
+  const dispatch = useAppDispatch();
+
   // ---------------------- Login ----------------------
   const handleLogin = () => {
     if (passwordInput === "20230301") {
@@ -109,6 +116,13 @@ export default function VerificationAdmin() {
       );
 
       setUsers(filtered);
+
+      // [Redux additions]: Also push each user's doc data to the verificationSlice
+      filtered.forEach((user) => {
+        // Convert a "UserData" object to your slice-friendly shape
+        const verificationData = convertUserToVerificationData(user);
+        dispatch(setUserVerification({ uid: user.uid!, data: verificationData }));
+      });
     } catch (err) {
       console.error("Error fetching users:", err);
       alert("Failed to fetch users. Check console.");
@@ -116,6 +130,38 @@ export default function VerificationAdmin() {
       setLoading(false);
     }
   };
+
+  // [Redux additions]: Simple helper to convert your Firestore doc structure
+  // to the shape used by your verificationSlice
+  function convertUserToVerificationData(user: UserData) {
+    const docs = user.documents || {};
+    // Suppose your verificationSlice has shape:
+    // { idDocument: { status, url, rejectionReason? }, drivingLicense: {...}, ... }
+    // We'll interpret the `verified` and `rejectionReason` to set "approved" / "rejected" etc. 
+    return {
+      idDocument: docs["id-document"]
+        ? {
+            ...docs["id-document"],
+            status: docs["id-document"].verified
+              ? "approved"
+              : docs["id-document"].rejectionReason
+              ? "rejected"
+              : "pending",
+          }
+        : { status: "notUploaded" },
+      drivingLicense: docs["driving-license"]
+        ? {
+            ...docs["driving-license"],
+            status: docs["driving-license"].verified
+              ? "approved"
+              : docs["driving-license"].rejectionReason
+              ? "rejected"
+              : "pending",
+          }
+        : { status: "notUploaded" },
+      // Possibly address or other fields if needed
+    };
+  }
 
   // ---------------------- View Document ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
@@ -198,6 +244,12 @@ export default function VerificationAdmin() {
       }
 
       alert("Document approved successfully!");
+
+      // [Redux additions]: If you want to reflect this in the slice
+      // you could dispatch another action here, e.g. "approveDoc".
+      // For example:
+      // dispatch(approveDoc({ uid, docType: selectedDocument.type }));
+
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
@@ -236,6 +288,10 @@ export default function VerificationAdmin() {
       }
 
       alert("Document rejected successfully!");
+
+      // [Redux additions]: Reflect in Redux if you want
+      // dispatch(rejectDoc({ uid, docType: selectedDocument.type, reason }));
+
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
