@@ -4,6 +4,7 @@ import "@/styles/globals.css";
 import { Inter } from "next/font/google";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
+import { doc, onSnapshot, getFirestore } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 
 import { auth } from "@/lib/firebase";
@@ -12,7 +13,7 @@ import Spinner from "@/components/ui/spinner";
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
 import { useAppDispatch } from "@/store/store";
-import { setAuthUser, signOutUser } from "@/store/userSlice";
+import { setAuthUser, signOutUser, setDefaultPaymentMethodId } from "@/store/userSlice";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -48,9 +49,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: User | null) => {
+    const db = getFirestore(); // initialize Firestore (client side)
+    
+    // 1) Listen for Firebase Auth changes
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser: User | null) => {
       setLoading(false);
+
       if (firebaseUser) {
+        // 2) We have a user => setAuthUser in Redux
         dispatch(
           setAuthUser({
             uid: firebaseUser.uid,
@@ -59,12 +65,40 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             displayName: firebaseUser.displayName ?? undefined,
           })
         );
+
+        // 3) Real-time Firestore subscription to user doc
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        const unsubscribeDoc = onSnapshot(userDocRef, (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as any;
+            // If user doc has 'defaultPaymentMethodId', store it in Redux
+            if (data.defaultPaymentMethodId) {
+              dispatch(setDefaultPaymentMethodId(data.defaultPaymentMethodId));
+            } else {
+              dispatch(setDefaultPaymentMethodId(null));
+            }
+          } else {
+            // doc does not exist => no default PM
+            dispatch(setDefaultPaymentMethodId(null));
+          }
+        });
+
+        // Cleanup doc subscription
+        return () => {
+          unsubscribeDoc();
+        };
       } else {
+        // No user => signOutUser in Redux
         dispatch(signOutUser());
+        // Also no default PM
+        dispatch(setDefaultPaymentMethodId(null));
       }
     });
 
-    return () => unsubscribe();
+    // Cleanup auth subscription
+    return () => {
+      unsubscribeAuth();
+    };
   }, [dispatch, router]);
 
   if (loading) {
@@ -86,9 +120,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
 /**
  * The actual Next.js RootLayout component.
- *
- * Note: We do NOT call useAppDispatch() here, because ReduxProvider
- * only wraps <LayoutInner> (children), not this outer function.
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
