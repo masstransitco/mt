@@ -34,8 +34,8 @@ interface UserDocuments {
 }
 
 interface UserData {
-  // Renamed to uid
-  uid: string;
+  uid?: string;        // Support both uid
+  userId?: string;     // and userId formats
   email?: string;
   phoneNumber?: string;
   displayName?: string;
@@ -97,12 +97,21 @@ export default function VerificationAdmin() {
       }
 
       const allUsers: UserData[] = data.users || [];
+      
+      // Normalize user objects to handle both uid and userId properties
+      const normalizedUsers = allUsers.map(user => ({
+        ...user,
+        uid: user.uid || user.userId // Use uid if it exists, otherwise use userId
+      }));
+      
       // Filter if you only want users who have at least one doc
-      const filtered = allUsers.filter(
+      const filtered = normalizedUsers.filter(
         (u) =>
           u.documents &&
           (u.documents["id-document"] || u.documents["driving-license"])
       );
+      
+      console.log("Normalized users:", filtered); // Debug to verify uid property exists
       setUsers(filtered);
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -115,7 +124,7 @@ export default function VerificationAdmin() {
   // ---------------------- View Document + OCR JSON (From Server) ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
     // 1) Validate uid
-    const uid = user?.uid?.trim?.();
+    const uid = user?.uid || user?.userId;
     if (!uid) {
       console.error("No valid uid found on user:", user);
       return;
@@ -145,6 +154,9 @@ export default function VerificationAdmin() {
 
       // We get back data.userData
       const fetchedUser = data.userData as UserData;
+      // Ensure the normalized user always has a uid property
+      fetchedUser.uid = fetchedUser.uid || fetchedUser.userId;
+      
       const docData = fetchedUser.documents?.[docType];
       if (!docData) {
         alert("Document data not found on server response.");
@@ -171,7 +183,7 @@ export default function VerificationAdmin() {
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
 
-    const uid = selectedUser.uid?.trim?.();
+    const uid = selectedUser.uid || selectedUser.userId;
     if (!uid) {
       console.error("No valid uid found for selectedUser:", selectedUser);
       return;
@@ -212,7 +224,7 @@ export default function VerificationAdmin() {
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
 
-    const uid = selectedUser.uid?.trim?.();
+    const uid = selectedUser.uid || selectedUser.userId;
     if (!uid) {
       console.error("No valid uid found for selectedUser:", selectedUser);
       return;
@@ -260,7 +272,7 @@ export default function VerificationAdmin() {
       return;
     }
 
-    const uid = selectedUser.uid?.trim?.();
+    const uid = selectedUser.uid || selectedUser.userId;
     if (!uid) {
       console.error("No valid uid found for selectedUser:", selectedUser);
       return;
@@ -429,14 +441,14 @@ export default function VerificationAdmin() {
                   return true;
                 })
                 .map((user) => (
-                  <tr key={user.uid}>
+                  <tr key={user.uid || user.userId}>
                     <td className="p-2 border dark:border-gray-700">
                       <div>
                         <p className="font-bold text-gray-900 dark:text-gray-100">
                           {user.displayName || "No Name"}
                         </p>
                         <p className="text-sm text-gray-700 dark:text-gray-300">
-                          {user.email || user.phoneNumber || user.uid}
+                          {user.email || user.phoneNumber || user.uid || user.userId}
                         </p>
                       </div>
                     </td>
@@ -542,7 +554,7 @@ export default function VerificationAdmin() {
                   User Information
                 </h3>
                 <p className="text-gray-900 dark:text-gray-100">
-                  <strong>UID:</strong> {selectedUser?.uid}
+                  <strong>UID:</strong> {selectedUser?.uid || selectedUser?.userId}
                 </p>
                 {selectedUser?.email && (
                   <p className="text-gray-900 dark:text-gray-100">
