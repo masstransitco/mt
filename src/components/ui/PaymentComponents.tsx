@@ -6,6 +6,10 @@ import { CreditCard, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SavedPaymentMethod } from "@/lib/stripe";
 
+// Redux
+import { useAppDispatch } from "@/store/store";
+import { setDefaultPaymentMethodId } from "@/store/userSlice";
+
 /* ------------------------------------------------------------------
    PAYMENT METHOD SKELETON
    A simple loading skeleton to show while payment methods are fetching
@@ -69,6 +73,7 @@ export function PaymentMethodCard({
     e.stopPropagation();
     if (isSettingDefault || method.isDefault) return;
     setIsSettingDefault(true);
+
     try {
       await onSetDefault(method.id);
     } catch (error) {
@@ -156,6 +161,11 @@ export function PaymentMethodsPanel({
   onSetDefaultMethod,
   onOpenWalletModal,
 }: PaymentMethodsPanelProps) {
+  // If you need to dispatch 'setDefaultPaymentMethodId' directly here,
+  // you can do so. Usually, you do it in 'onSetDefaultMethod' after your
+  // server confirms success.
+  const dispatch = useAppDispatch();
+
   return (
     <div className="space-y-4">
       {/* If still loading, show skeleton(s) */}
@@ -171,7 +181,12 @@ export function PaymentMethodsPanel({
               key={method.id}
               method={method}
               onDelete={onDeleteMethod}
-              onSetDefault={onSetDefaultMethod}
+              onSetDefault={async (docId) => {
+                // Call the parent's method to handle remote setDefault
+                await onSetDefaultMethod(docId);
+                // Then update in Redux
+                dispatch(setDefaultPaymentMethodId(docId));
+              }}
             />
           ))}
         </div>
