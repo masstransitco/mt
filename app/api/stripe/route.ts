@@ -108,6 +108,13 @@ export async function POST(request: NextRequest) {
       case 'create-payment-intent':
         return await handleCreatePaymentIntent({ ...data, userId });
 
+      /**
+       * NEW ACTION: Directly charge the user for a given amount
+       * (e.g., $50 or $N for final usage).
+       */
+      case 'charge-user-for-trip':
+        return await handleChargeUserForTrip(userId, data.amount);
+
       default:
         return errorResponse('Invalid action');
     }
@@ -237,7 +244,7 @@ async function handleSavePaymentMethod({
     }
 
     // Now create the doc in Firestore
-    const newPaymentMethodRef = paymentMethodsRef.doc(); // doc ID for Firestore
+    const newPaymentMethodRef = paymentMethodsRef.doc(paymentMethodId);
     await newPaymentMethodRef.set({
       ...paymentMethod,
       // Ensure we always store the id field in Firestore
@@ -283,6 +290,10 @@ async function handleDeletePaymentMethod(userId: string, paymentMethodId: string
       .collection(`users/${userId}/paymentMethods`)
       .doc(paymentMethodId)
       .delete();
+
+    // OPTIONAL: If this was the default, you might also want to
+    // unset defaultPaymentMethodId in user doc, or choose a new default
+    // but for simplicity, we'll leave that up to the client.
 
     return successResponse({ message: 'Payment method deleted successfully' });
   } catch (error) {
@@ -386,7 +397,7 @@ async function handleGetPaymentMethods(userId: string) {
 }
 
 /**
- * Create a Payment Intent with Stripe.
+ * Create a Payment Intent with Stripe (manual confirmation flow).
  */
 async function handleCreatePaymentIntent({
   amount,
@@ -406,7 +417,7 @@ async function handleCreatePaymentIntent({
   try {
     // Ensure user exists
     const { data } = await ensureUserExists(userId);
-    const userData = data || {}; // Ensure userData is always an object
+    const userData = data || {};
     
     let stripeCustomerId = userData.stripeCustomerId;
     
@@ -424,7 +435,7 @@ async function handleCreatePaymentIntent({
       });
     }
 
-    // Create PaymentIntent
+    // Create PaymentIntent (manual confirmation)
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
@@ -439,6 +450,7 @@ async function handleCreatePaymentIntent({
     return successResponse({
       clientSecret: paymentIntent.client_secret,
       paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status,
     });
   } catch (error) {
     if (error instanceof Stripe.errors.StripeError) {
@@ -447,5 +459,72 @@ async function handleCreatePaymentIntent({
     }
     console.error('Payment intent creation error:', error);
     return errorResponse('Failed to create payment intent', 500);
+  }
+}
+
+/**
+ * NEW HELPER:
+ * Directly charge the user's default PaymentMethod (or provided PM) for an amount.
+ *  - If user doesn't have a defaultPaymentMethodId or we can't find it, throw an error.
+ *  - We create a PaymentIntent with `confirm: true` so it finalizes immediately (auto-confirm).
+ *  - If 3D Secure is needed, it may require_action. You can handle or fail. (Simplified approach)
+ */
+async function handleChargeUserForTrip(
+  userId: string,
+  amount: number | undefined
+) {
+  if (!amount || amount <= 0) {
+    return errorResponse('A valid amount is required to charge the user.', 400);
+  }
+
+  // Attempt to load user doc & see if they have defaultPaymentMethodId
+  const { data } = await ensureUserExists(userId);
+  const userData = data || {};
+
+  const stripeCustomerId = userData.stripeCustomerId;
+  const defaultPmId = userData.defaultPaymentMethodId; // the Stripe PaymentMethod ID
+
+  if (!stripeCustomerId || !defaultPmId) {
+    return errorResponse(
+      'User has no Stripe customer or default payment method. Cannot charge user.',
+      400
+    );
+  }
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'hkd', // or any desired currency
+      customer: stripeCustomerId,
+      payment_method: defaultPmId,
+      off_session: true, // for off-session usage
+      confirm: true,     // automatically confirm
+      // If the payment requires 3D Secure, this may raise an error or return "requires_action"
+      // For a production scenario, you might handle that differently.
+      metadata: { userId },
+    });
+
+    // Check if it succeeded or requires action
+    if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_payment_method') {
+      // The payment requires 3D Secure or a new payment method
+      return errorResponse(
+        'Payment requires additional user action (3D Secure). Please handle next actions.',
+        402
+      );
+    }
+
+    // Otherwise, success
+    return successResponse({
+      message: `Successfully charged HK$${amount / 100} to user's default payment method.`,
+      paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status,
+    });
+  } catch (error: any) {
+    if (error instanceof Stripe.errors.StripeError) {
+      // Return a 402 for Stripe card/validation errors
+      return errorResponse(error.message, 402);
+    }
+    console.error('Error charging user for trip:', error);
+    return errorResponse('Failed to charge user for trip', 500);
   }
 }
