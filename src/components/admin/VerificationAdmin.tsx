@@ -3,10 +3,11 @@
 import React, { useState } from "react";
 import { LogoSvg } from "../ui/logo/LogoSvg";
 
-// [Redux additions]: import your dispatch and any needed actions
+// Redux imports
 import { useAppDispatch } from "@/store/store";
-import { setUserVerification /* or other actions */ } from "@/store/verificationSlice";
+import { setUserVerification } from "@/store/verificationSlice";
 
+// Firestore doc shape
 interface ExtractedData {
   documentType?: string;
   hkidNumber?: string;
@@ -51,6 +52,35 @@ interface SelectedDocumentType {
   data: DocumentData;
 }
 
+// ------------------------------------
+// 1) These should match your verificationSlice
+// ------------------------------------
+type DocStatus = "notUploaded" | "pending" | "approved" | "rejected";
+
+interface DocumentStatus {
+  status: DocStatus;
+  url?: string;
+  verified?: boolean;
+  verifiedAt?: any;
+  verifiedBy?: string;
+  rejectionReason?: string;
+  rejectionDetail?: string;
+  rejectedAt?: any;
+  extractedData?: any;
+  ocrConfidence?: number;
+  processedAt?: any;
+  uploadedAt?: number;
+}
+
+interface VerificationData {
+  idDocument?: DocumentStatus;
+  drivingLicense?: DocumentStatus;
+  // Possibly address, etc.
+}
+
+// ------------------------------------
+// VerificationAdmin Component
+// ------------------------------------
 export default function VerificationAdmin() {
   // Simple password-based login
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -72,7 +102,7 @@ export default function VerificationAdmin() {
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [isEditingJson, setIsEditingJson] = useState(false);
 
-  // [Redux additions]: get the dispatch function
+  // Redux dispatch
   const dispatch = useAppDispatch();
 
   // ---------------------- Login ----------------------
@@ -117,9 +147,8 @@ export default function VerificationAdmin() {
 
       setUsers(filtered);
 
-      // [Redux additions]: Also push each user's doc data to the verificationSlice
+      // Also push each user's doc data to the verificationSlice
       filtered.forEach((user) => {
-        // Convert a "UserData" object to your slice-friendly shape
         const verificationData = convertUserToVerificationData(user);
         dispatch(setUserVerification({ uid: user.uid!, data: verificationData }));
       });
@@ -131,35 +160,35 @@ export default function VerificationAdmin() {
     }
   };
 
-  // [Redux additions]: Simple helper to convert your Firestore doc structure
-  // to the shape used by your verificationSlice
-  function convertUserToVerificationData(user: UserData) {
+  // ---------------------- Convert Firestore -> VerificationData ----------------------
+  function convertUserToVerificationData(user: UserData): VerificationData {
     const docs = user.documents || {};
-    // Suppose your verificationSlice has shape:
-    // { idDocument: { status, url, rejectionReason? }, drivingLicense: {...}, ... }
-    // We'll interpret the `verified` and `rejectionReason` to set "approved" / "rejected" etc. 
+
     return {
-      idDocument: docs["id-document"]
-        ? {
-            ...docs["id-document"],
-            status: docs["id-document"].verified
-              ? "approved"
-              : docs["id-document"].rejectionReason
-              ? "rejected"
-              : "pending",
-          }
-        : { status: "notUploaded" },
-      drivingLicense: docs["driving-license"]
-        ? {
-            ...docs["driving-license"],
-            status: docs["driving-license"].verified
-              ? "approved"
-              : docs["driving-license"].rejectionReason
-              ? "rejected"
-              : "pending",
-          }
-        : { status: "notUploaded" },
-      // Possibly address or other fields if needed
+      idDocument: toDocStatus(docs["id-document"]),
+      drivingLicense: toDocStatus(docs["driving-license"]),
+    };
+  }
+
+  // Helper that maps a Firestore doc to your slice's typed DocumentStatus
+  function toDocStatus(doc?: DocumentData): DocumentStatus {
+    if (!doc) {
+      return { status: "notUploaded" };
+    }
+
+    // Determine final status from doc.verified, doc.rejectionReason, etc.
+    let derivedStatus: DocStatus = "pending";
+    if (doc.verified) {
+      derivedStatus = "approved";
+    } else if (doc.rejectionReason) {
+      derivedStatus = "rejected";
+    }
+
+    return {
+      // Spread any extra fields
+      ...doc,
+      // Overwrite with typed literal
+      status: derivedStatus,
     };
   }
 
@@ -245,15 +274,10 @@ export default function VerificationAdmin() {
 
       alert("Document approved successfully!");
 
-      // [Redux additions]: If you want to reflect this in the slice
-      // you could dispatch another action here, e.g. "approveDoc".
-      // For example:
-      // dispatch(approveDoc({ uid, docType: selectedDocument.type }));
-
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
-      fetchUsers();
+      fetchUsers(); // Re-fetch to refresh local + Redux state
     } catch (err) {
       console.error("Error approving document:", err);
       alert(String(err));
@@ -289,13 +313,10 @@ export default function VerificationAdmin() {
 
       alert("Document rejected successfully!");
 
-      // [Redux additions]: Reflect in Redux if you want
-      // dispatch(rejectDoc({ uid, docType: selectedDocument.type, reason }));
-
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
-      fetchUsers();
+      fetchUsers(); // Re-fetch to refresh local + Redux state
     } catch (err) {
       console.error("Error rejecting document:", err);
       alert(String(err));
@@ -345,9 +366,11 @@ export default function VerificationAdmin() {
     }
   };
 
+  // ----------------------------------------------------------------
+  // Render
+  // ----------------------------------------------------------------
   return (
     <>
-      {/* Our UI */}
       {!isAuthenticated ? (
         <div className="bg-gray-900 min-h-screen text-gray-200 flex justify-center items-center p-4">
           <div className="bg-gray-800 rounded shadow p-6 max-w-md w-full">
@@ -363,7 +386,7 @@ export default function VerificationAdmin() {
                 setPasswordError(false);
               }}
               className="w-full p-2 border border-gray-600 rounded mb-2 bg-gray-700 text-gray-200
-                         focus:outline-none focus:ring-2 focus:ring-[#1375F6] transition-colors"
+                focus:outline-none focus:ring-2 focus:ring-[#1375F6] transition-colors"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleLogin();
               }}
@@ -373,7 +396,7 @@ export default function VerificationAdmin() {
             )}
             <button
               className="w-full p-2 rounded text-white bg-[#1375F6] hover:bg-[#136BE0]
-                         transition-colors"
+                transition-colors"
               onClick={handleLogin}
             >
               Login
@@ -421,7 +444,7 @@ export default function VerificationAdmin() {
 
               <button
                 className="p-2 bg-gray-700 hover:bg-gray-600 rounded mb-4
-                           transition-colors"
+                  transition-colors"
                 onClick={fetchUsers}
               >
                 Refresh
@@ -533,7 +556,7 @@ export default function VerificationAdmin() {
                             {user.documents?.["id-document"] && (
                               <button
                                 className="p-1 bg-[#1375F6] text-white rounded mr-2
-                                           hover:bg-[#136BE0] transition-colors text-xs"
+                                  hover:bg-[#136BE0] transition-colors text-xs"
                                 onClick={() => viewDocument(user, "id-document")}
                               >
                                 View ID
@@ -542,7 +565,7 @@ export default function VerificationAdmin() {
                             {user.documents?.["driving-license"] && (
                               <button
                                 className="p-1 bg-[#1375F6] text-white rounded
-                                           hover:bg-[#136BE0] transition-colors text-xs"
+                                  hover:bg-[#136BE0] transition-colors text-xs"
                                 onClick={() => viewDocument(user, "driving-license")}
                               >
                                 View License
@@ -618,7 +641,7 @@ export default function VerificationAdmin() {
                           {!isEditingJson && (
                             <button
                               className="p-1 bg-[#1375F6] text-white rounded text-xs
-                                         hover:bg-[#136BE0] transition-colors"
+                                hover:bg-[#136BE0] transition-colors"
                               onClick={() => setIsEditingJson(true)}
                             >
                               Edit JSON
@@ -634,21 +657,21 @@ export default function VerificationAdmin() {
                           <div>
                             <textarea
                               className="w-full h-40 p-2 border border-gray-600 rounded text-xs bg-gray-700
-                                         focus:outline-none focus:ring-2 focus:ring-[#1375F6]"
+                                focus:outline-none focus:ring-2 focus:ring-[#1375F6]"
                               value={jsonContent}
                               onChange={(e) => setJsonContent(e.target.value)}
                             />
                             <div className="mt-2 flex gap-2">
                               <button
                                 className="px-3 py-1 bg-green-600 text-green-100 rounded text-xs
-                                           hover:bg-green-500 transition-colors"
+                                  hover:bg-green-500 transition-colors"
                                 onClick={saveJsonChanges}
                               >
                                 Save JSON Changes
                               </button>
                               <button
                                 className="px-3 py-1 bg-gray-600 text-gray-100 rounded text-xs
-                                           hover:bg-gray-500 transition-colors"
+                                  hover:bg-gray-500 transition-colors"
                                 onClick={() => setIsEditingJson(false)}
                               >
                                 Cancel
@@ -665,21 +688,21 @@ export default function VerificationAdmin() {
                   <div className="space-x-2">
                     <button
                       className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                                 transition-colors text-sm"
+                        transition-colors text-sm"
                       onClick={() => rejectDocument("unclear")}
                     >
                       Reject: Unclear
                     </button>
                     <button
                       className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                                 transition-colors text-sm"
+                        transition-colors text-sm"
                       onClick={() => rejectDocument("mismatch")}
                     >
                       Reject: Mismatch
                     </button>
                     <button
                       className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                                 transition-colors text-sm"
+                        transition-colors text-sm"
                       onClick={() => rejectDocument("expired")}
                     >
                       Reject: Expired
@@ -688,7 +711,7 @@ export default function VerificationAdmin() {
                   <div className="space-x-2">
                     <button
                       className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500
-                                 transition-colors text-sm"
+                        transition-colors text-sm"
                       onClick={() => {
                         setSelectedDocument(null);
                         setSelectedUser(null);
@@ -700,7 +723,7 @@ export default function VerificationAdmin() {
                     </button>
                     <button
                       className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500
-                                 transition-colors text-sm"
+                        transition-colors text-sm"
                       onClick={approveDocument}
                     >
                       Approve
@@ -713,7 +736,6 @@ export default function VerificationAdmin() {
         </div>
       )}
 
-      {/* Inline Tailwind (global) */}
       <style jsx global>{`
         @tailwind base;
         @tailwind components;
