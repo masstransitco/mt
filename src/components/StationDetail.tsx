@@ -75,7 +75,6 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod);
 
-  // Because steps 1-2 are for departure, 3-4 for arrival
   const isDepartureFlow = step <= 2;
 
   // Payment UI (shown at step 4 if user lacks default PM)
@@ -100,13 +99,16 @@ function StationDetailComponent({
       setPaymentMethodsLoading(true);
       (async () => {
         try {
+          console.log("[StationDetail] Loading payment methods for user:", user.uid);
           const res = await getSavedPaymentMethods(user.uid);
+          console.log("[StationDetail] getSavedPaymentMethods =>", res);
+
           if (!isMounted.current) return;
           if (res.success && res.data) {
             setPaymentMethods(res.data);
           }
         } catch (error) {
-          console.error("Error loading payment methods:", error);
+          console.error("[StationDetail] Error loading payment methods:", error);
         } finally {
           if (isMounted.current) {
             setPaymentMethodsLoading(false);
@@ -119,6 +121,7 @@ function StationDetailComponent({
   // Auto-show Payment UI if user signs in at Step 4 and doesn't have default PM
   useEffect(() => {
     if (step === 4 && isSignedIn && !hasDefaultPaymentMethod) {
+      console.log("[StationDetail] Auto showing payment UI, user has no default PM.");
       setShowPaymentUI(true);
     }
   }, [step, isSignedIn, hasDefaultPaymentMethod]);
@@ -158,6 +161,9 @@ function StationDetailComponent({
 
   // Pressing Confirm in the UI
   const handleConfirm = async () => {
+    console.log("[StationDetail] handleConfirm clicked. step=", step);
+    console.log("[StationDetail] isSignedIn=", isSignedIn, "hasDefaultPaymentMethod=", hasDefaultPaymentMethod);
+
     // Step 2 => move to step 3 (choose arrival)
     if (isDepartureFlow && step === 2) {
       dispatch(advanceBookingStep(3));
@@ -169,26 +175,29 @@ function StationDetailComponent({
     // Step 4 => confirm arrival, do $50 transaction if conditions allow
     if (!isDepartureFlow && step === 4) {
       if (!isSignedIn) {
+        console.log("[StationDetail] Not signed in => opening sign-in modal");
         onOpenSignIn();
         return;
       }
       if (!hasDefaultPaymentMethod) {
-        // Show Payment UI to add a card or set default
+        console.log("[StationDetail] No default PM => show Payment UI");
         setShowPaymentUI(true);
         return;
       }
       // If user is signed in & has default PM => do the $50 transaction
       try {
-        // This function is hypothetical – adapt it to your real code
-        // E.g., call /api/stripe route, etc.
+        console.log("[StationDetail] Attempting to charge user HK$50 => 5000 cents");
         const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
+        console.log("[StationDetail] chargeUserForTrip =>", result);
+
         if (!result?.success) {
+          console.log("[StationDetail] chargeUserForTrip => Not successful");
           throw new Error(result?.error || "Charge failed");
         }
         toast.success("Trip booked successfully! Starting fare of $50 charged.");
         dispatch(advanceBookingStep(5));
       } catch (error) {
-        console.error(error);
+        console.error("[StationDetail] Error charging initial fare =>", error);
         toast.error("Failed to charge initial fare. Try again or add a new card.");
       }
     }
@@ -202,8 +211,7 @@ function StationDetailComponent({
 
   return (
     <>
-      {/* If step === 5, render the TripSheet as a persistent bottom sheet
-          or an overlay. We'll do a simple example with an absolutely positioned div. */}
+      {/* If step === 5, render the TripSheet as a persistent bottom sheet */}
       {step === 5 && <TripSheet />}
 
       <motion.div
@@ -283,7 +291,6 @@ function StationDetailComponent({
                   <PaymentMethodCard
                     key={m.id}
                     method={m}
-                    // Make these async to match the required Promise<void> signature
                     onDelete={async () => {
                       toast("Delete not implemented");
                     }}
