@@ -181,7 +181,7 @@ function StationDetailComponent({
       try {
         // This function is hypothetical – adapt it to your real code
         // E.g., call /api/stripe route, etc.
-        const result = await chargeUserForTrip(auth.currentUser!.uid, 50);
+        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
         if (!result?.success) {
           throw new Error(result?.error || "Charge failed");
         }
