@@ -289,378 +289,380 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Render ----------------------
-  if (!isAuthenticated) {
-    return (
-      <div className="bg-gray-900 min-h-screen text-gray-200 flex justify-center items-center p-4">
-        <div className="bg-gray-800 rounded shadow p-6 max-w-md w-full">
-          <div className="flex justify-center mb-6">
-            {/* Custom Logo */}
-            <LogoSvg className="w-32 h-auto" />
-          </div>
-          <input
-            type="password"
-            placeholder="Enter password"
-            value={passwordInput}
-            onChange={(e) => {
-              setPasswordInput(e.target.value);
-              setPasswordError(false);
-            }}
-            className="w-full p-2 border border-gray-600 rounded mb-2 bg-gray-700 text-gray-200
-                       focus:outline-none focus:ring-2 focus:ring-[#1375F6] transition-colors"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleLogin();
-            }}
-          />
-          {passwordError && (
-            <p className="text-red-400 text-sm mb-2">Incorrect password</p>
-          )}
-          <button
-            className="w-full p-2 rounded text-white bg-[#1375F6] hover:bg-[#136BE0]
-                       transition-colors"
-            onClick={handleLogin}
-          >
-            Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-gray-900 min-h-screen text-gray-200">
-      <div className="max-w-screen-xl mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-4">Document Verification Admin</h1>
-
-        <div className="mb-4">
-          <div className="flex gap-2 mb-4">
+    <>
+      {/* Our UI */}
+      {!isAuthenticated ? (
+        <div className="bg-gray-900 min-h-screen text-gray-200 flex justify-center items-center p-4">
+          <div className="bg-gray-800 rounded shadow p-6 max-w-md w-full">
+            <div className="flex justify-center mb-6">
+              <LogoSvg className="w-32 h-auto" />
+            </div>
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={passwordInput}
+              onChange={(e) => {
+                setPasswordInput(e.target.value);
+                setPasswordError(false);
+              }}
+              className="w-full p-2 border border-gray-600 rounded mb-2 bg-gray-700 text-gray-200
+                         focus:outline-none focus:ring-2 focus:ring-[#1375F6] transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleLogin();
+              }}
+            />
+            {passwordError && (
+              <p className="text-red-400 text-sm mb-2">Incorrect password</p>
+            )}
             <button
-              className={`p-2 rounded transition-colors ${
-                currentTab === "pending"
-                  ? "bg-[#1375F6] text-white"
-                  : "bg-gray-700 hover:bg-gray-600"
-              }`}
-              onClick={() => setCurrentTab("pending")}
+              className="w-full p-2 rounded text-white bg-[#1375F6] hover:bg-[#136BE0]
+                         transition-colors"
+              onClick={handleLogin}
             >
-              Pending
-            </button>
-            <button
-              className={`p-2 rounded transition-colors ${
-                currentTab === "approved"
-                  ? "bg-[#1375F6] text-white"
-                  : "bg-gray-700 hover:bg-gray-600"
-              }`}
-              onClick={() => setCurrentTab("approved")}
-            >
-              Approved
-            </button>
-            <button
-              className={`p-2 rounded transition-colors ${
-                currentTab === "rejected"
-                  ? "bg-[#1375F6] text-white"
-                  : "bg-gray-700 hover:bg-gray-600"
-              }`}
-              onClick={() => setCurrentTab("rejected")}
-            >
-              Rejected
+              Login
             </button>
           </div>
-
-          <button
-            className="p-2 bg-gray-700 hover:bg-gray-600 rounded mb-4
-                       transition-colors"
-            onClick={fetchUsers}
-          >
-            Refresh
-          </button>
         </div>
+      ) : (
+        <div className="bg-gray-900 min-h-screen text-gray-200">
+          <div className="max-w-screen-xl mx-auto p-4">
+            <h1 className="text-2xl font-bold mb-4">Document Verification Admin</h1>
 
-        {loading ? (
-          <p className="text-gray-300">Loading user data...</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-gray-800 border border-gray-700 text-sm">
-              <thead className="bg-gray-700">
-                <tr>
-                  <th className="p-2 border border-gray-700">User</th>
-                  <th className="p-2 border border-gray-700">ID Document</th>
-                  <th className="p-2 border border-gray-700">Driving License</th>
-                  <th className="p-2 border border-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users
-                  .filter((user) => {
-                    if (currentTab === "pending") {
-                      // Docs that are neither verified nor rejected
-                      return (
-                        (user.documents?.["id-document"] &&
-                          !user.documents["id-document"].verified &&
-                          !user.documents["id-document"].rejectionReason) ||
-                        (user.documents?.["driving-license"] &&
-                          !user.documents["driving-license"].verified &&
-                          !user.documents["driving-license"].rejectionReason)
-                      );
-                    } else if (currentTab === "approved") {
-                      return (
-                        (user.documents?.["id-document"] &&
-                          user.documents["id-document"].verified) ||
-                        (user.documents?.["driving-license"] &&
-                          user.documents["driving-license"].verified)
-                      );
-                    } else if (currentTab === "rejected") {
-                      return (
-                        (user.documents?.["id-document"] &&
-                          user.documents["id-document"].rejectionReason) ||
-                        (user.documents?.["driving-license"] &&
-                          user.documents["driving-license"].rejectionReason)
-                      );
-                    }
-                    return true;
-                  })
-                  .map((user) => (
-                    <tr
-                      key={user.uid || user.userId}
-                      className="hover:bg-gray-700 transition-colors"
-                    >
-                      <td className="p-2 border border-gray-700">
-                        <p className="font-semibold">
-                          {user.displayName || "No Name"}
-                        </p>
-                        <p className="text-xs text-gray-300">
-                          {user.email ||
-                            user.phoneNumber ||
-                            user.uid ||
-                            user.userId}
-                        </p>
-                      </td>
-                      <td className="p-2 border border-gray-700">
-                        {user.documents?.["id-document"] ? (
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs inline-block ${
-                              user.documents["id-document"].verified
-                                ? "bg-green-600 text-green-100"
-                                : user.documents["id-document"].rejectionReason
-                                ? "bg-red-600 text-red-100"
-                                : "bg-orange-600 text-orange-100"
-                            }`}
-                          >
-                            {user.documents["id-document"].verified
-                              ? "Verified"
-                              : user.documents["id-document"].rejectionReason
-                              ? "Rejected"
-                              : "Pending"}
-                          </span>
-                        ) : (
-                          <span>Not Submitted</span>
-                        )}
-                      </td>
-                      <td className="p-2 border border-gray-700">
-                        {user.documents?.["driving-license"] ? (
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs inline-block ${
-                              user.documents["driving-license"].verified
-                                ? "bg-green-600 text-green-100"
-                                : user.documents["driving-license"].rejectionReason
-                                ? "bg-red-600 text-red-100"
-                                : "bg-orange-600 text-orange-100"
-                            }`}
-                          >
-                            {user.documents["driving-license"].verified
-                              ? "Verified"
-                              : user.documents["driving-license"].rejectionReason
-                              ? "Rejected"
-                              : "Pending"}
-                          </span>
-                        ) : (
-                          <span>Not Submitted</span>
-                        )}
-                      </td>
-                      <td className="p-2 border border-gray-700">
-                        {user.documents?.["id-document"] && (
-                          <button
-                            className="p-1 bg-[#1375F6] text-white rounded mr-2
-                                       hover:bg-[#136BE0] transition-colors text-xs"
-                            onClick={() => viewDocument(user, "id-document")}
-                          >
-                            View ID
-                          </button>
-                        )}
-                        {user.documents?.["driving-license"] && (
-                          <button
-                            className="p-1 bg-[#1375F6] text-white rounded
-                                       hover:bg-[#136BE0] transition-colors text-xs"
-                            onClick={() => viewDocument(user, "driving-license")}
-                          >
-                            View License
-                          </button>
-                        )}
-                      </td>
+            <div className="mb-4">
+              <div className="flex gap-2 mb-4">
+                <button
+                  className={`p-2 rounded transition-colors ${
+                    currentTab === "pending"
+                      ? "bg-[#1375F6] text-white"
+                      : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+                  onClick={() => setCurrentTab("pending")}
+                >
+                  Pending
+                </button>
+                <button
+                  className={`p-2 rounded transition-colors ${
+                    currentTab === "approved"
+                      ? "bg-[#1375F6] text-white"
+                      : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+                  onClick={() => setCurrentTab("approved")}
+                >
+                  Approved
+                </button>
+                <button
+                  className={`p-2 rounded transition-colors ${
+                    currentTab === "rejected"
+                      ? "bg-[#1375F6] text-white"
+                      : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+                  onClick={() => setCurrentTab("rejected")}
+                >
+                  Rejected
+                </button>
+              </div>
+
+              <button
+                className="p-2 bg-gray-700 hover:bg-gray-600 rounded mb-4
+                           transition-colors"
+                onClick={fetchUsers}
+              >
+                Refresh
+              </button>
+            </div>
+
+            {loading ? (
+              <p className="text-gray-300">Loading user data...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-gray-800 border border-gray-700 text-sm">
+                  <thead className="bg-gray-700">
+                    <tr>
+                      <th className="p-2 border border-gray-700">User</th>
+                      <th className="p-2 border border-gray-700">ID Document</th>
+                      <th className="p-2 border border-gray-700">Driving License</th>
+                      <th className="p-2 border border-gray-700">Actions</th>
                     </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {selectedDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 p-4 rounded shadow-lg max-w-4xl w-full md:w-auto max-h-[90vh] overflow-auto">
-            <h2 className="text-xl font-bold mb-4">
-              {selectedDocument.type === "id-document"
-                ? "Identity Document"
-                : "Driving License"}
-            </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {selectedDocument.data.url && (
-                <div>
-                  <h3 className="font-bold mb-2">Document Image</h3>
-                  <img
-                    src={selectedDocument.data.url}
-                    alt="Document"
-                    className="max-w-full border border-gray-700 rounded"
-                  />
-                </div>
-              )}
-
-              <div>
-                <h3 className="font-bold mb-2">User Information</h3>
-                <p>
-                  <strong>UID:</strong> {selectedUser?.uid || selectedUser?.userId}
-                </p>
-                {selectedUser?.email && (
-                  <p>
-                    <strong>Email:</strong> {selectedUser.email}
-                  </p>
-                )}
-                {selectedUser?.phoneNumber && (
-                  <p>
-                    <strong>Phone:</strong> {selectedUser.phoneNumber}
-                  </p>
-                )}
-
-                {selectedDocument.data.extractedData && (
-                  <div className="mt-4">
-                    <h3 className="font-bold mb-2">Extracted Data</h3>
-                    <div className="p-2 bg-gray-700 rounded">
-                      <pre className="whitespace-pre-wrap text-xs">
-                        {JSON.stringify(selectedDocument.data.extractedData, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-
-                {jsonContent && (
-                  <div className="mt-4">
-                    <h3 className="font-bold mb-2 flex items-center justify-between">
-                      <span>OCR JSON Data</span>
-                      {!isEditingJson && (
-                        <button
-                          className="p-1 bg-[#1375F6] text-white rounded text-xs
-                                     hover:bg-[#136BE0] transition-colors"
-                          onClick={() => setIsEditingJson(true)}
+                  </thead>
+                  <tbody>
+                    {users
+                      .filter((user) => {
+                        if (currentTab === "pending") {
+                          // Docs not verified nor rejected
+                          return (
+                            (user.documents?.["id-document"] &&
+                              !user.documents["id-document"].verified &&
+                              !user.documents["id-document"].rejectionReason) ||
+                            (user.documents?.["driving-license"] &&
+                              !user.documents["driving-license"].verified &&
+                              !user.documents["driving-license"].rejectionReason)
+                          );
+                        } else if (currentTab === "approved") {
+                          return (
+                            (user.documents?.["id-document"] &&
+                              user.documents["id-document"].verified) ||
+                            (user.documents?.["driving-license"] &&
+                              user.documents["driving-license"].verified)
+                          );
+                        } else if (currentTab === "rejected") {
+                          return (
+                            (user.documents?.["id-document"] &&
+                              user.documents["id-document"].rejectionReason) ||
+                            (user.documents?.["driving-license"] &&
+                              user.documents["driving-license"].rejectionReason)
+                          );
+                        }
+                        return true;
+                      })
+                      .map((user) => (
+                        <tr
+                          key={user.uid || user.userId}
+                          className="hover:bg-gray-700 transition-colors"
                         >
-                          Edit JSON
-                        </button>
-                      )}
-                    </h3>
+                          <td className="p-2 border border-gray-700">
+                            <p className="font-semibold">
+                              {user.displayName || "No Name"}
+                            </p>
+                            <p className="text-xs text-gray-300">
+                              {user.email ||
+                                user.phoneNumber ||
+                                user.uid ||
+                                user.userId}
+                            </p>
+                          </td>
+                          <td className="p-2 border border-gray-700">
+                            {user.documents?.["id-document"] ? (
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs inline-block ${
+                                  user.documents["id-document"].verified
+                                    ? "bg-green-600 text-green-100"
+                                    : user.documents["id-document"].rejectionReason
+                                    ? "bg-red-600 text-red-100"
+                                    : "bg-orange-600 text-orange-100"
+                                }`}
+                              >
+                                {user.documents["id-document"].verified
+                                  ? "Verified"
+                                  : user.documents["id-document"].rejectionReason
+                                  ? "Rejected"
+                                  : "Pending"}
+                              </span>
+                            ) : (
+                              <span>Not Submitted</span>
+                            )}
+                          </td>
+                          <td className="p-2 border border-gray-700">
+                            {user.documents?.["driving-license"] ? (
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs inline-block ${
+                                  user.documents["driving-license"].verified
+                                    ? "bg-green-600 text-green-100"
+                                    : user.documents["driving-license"].rejectionReason
+                                    ? "bg-red-600 text-red-100"
+                                    : "bg-orange-600 text-orange-100"
+                                }`}
+                              >
+                                {user.documents["driving-license"].verified
+                                  ? "Verified"
+                                  : user.documents["driving-license"].rejectionReason
+                                  ? "Rejected"
+                                  : "Pending"}
+                              </span>
+                            ) : (
+                              <span>Not Submitted</span>
+                            )}
+                          </td>
+                          <td className="p-2 border border-gray-700">
+                            {user.documents?.["id-document"] && (
+                              <button
+                                className="p-1 bg-[#1375F6] text-white rounded mr-2
+                                           hover:bg-[#136BE0] transition-colors text-xs"
+                                onClick={() => viewDocument(user, "id-document")}
+                              >
+                                View ID
+                              </button>
+                            )}
+                            {user.documents?.["driving-license"] && (
+                              <button
+                                className="p-1 bg-[#1375F6] text-white rounded
+                                           hover:bg-[#136BE0] transition-colors text-xs"
+                                onClick={() => viewDocument(user, "driving-license")}
+                              >
+                                View License
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
-                    {!isEditingJson ? (
-                      <div className="p-2 bg-gray-700 rounded max-h-40 overflow-auto">
-                        <pre className="text-xs">{jsonContent}</pre>
-                      </div>
-                    ) : (
-                      <div>
-                        <textarea
-                          className="w-full h-40 p-2 border border-gray-600 rounded text-xs bg-gray-700
-                                     focus:outline-none focus:ring-2 focus:ring-[#1375F6]"
-                          value={jsonContent}
-                          onChange={(e) => setJsonContent(e.target.value)}
-                        />
-                        <div className="mt-2 flex gap-2">
-                          <button
-                            className="px-3 py-1 bg-green-600 text-green-100 rounded text-xs
-                                       hover:bg-green-500 transition-colors"
-                            onClick={saveJsonChanges}
-                          >
-                            Save JSON Changes
-                          </button>
-                          <button
-                            className="px-3 py-1 bg-gray-600 text-gray-100 rounded text-xs
-                                       hover:bg-gray-500 transition-colors"
-                            onClick={() => setIsEditingJson(false)}
-                          >
-                            Cancel
-                          </button>
+          {/* Modal for Document / OCR JSON */}
+          {selectedDocument && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+              <div className="bg-gray-800 p-4 rounded shadow-lg max-w-4xl w-full md:w-auto max-h-[90vh] overflow-auto">
+                <h2 className="text-xl font-bold mb-4">
+                  {selectedDocument.type === "id-document"
+                    ? "Identity Document"
+                    : "Driving License"}
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedDocument.data.url && (
+                    <div>
+                      <h3 className="font-bold mb-2">Document Image</h3>
+                      <img
+                        src={selectedDocument.data.url}
+                        alt="Document"
+                        className="max-w-full border border-gray-700 rounded"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="font-bold mb-2">User Information</h3>
+                    <p>
+                      <strong>UID:</strong>{" "}
+                      {selectedUser?.uid || selectedUser?.userId}
+                    </p>
+                    {selectedUser?.email && (
+                      <p>
+                        <strong>Email:</strong> {selectedUser.email}
+                      </p>
+                    )}
+                    {selectedUser?.phoneNumber && (
+                      <p>
+                        <strong>Phone:</strong> {selectedUser.phoneNumber}
+                      </p>
+                    )}
+
+                    {selectedDocument.data.extractedData && (
+                      <div className="mt-4">
+                        <h3 className="font-bold mb-2">Extracted Data</h3>
+                        <div className="p-2 bg-gray-700 rounded">
+                          <pre className="whitespace-pre-wrap text-xs">
+                            {JSON.stringify(
+                              selectedDocument.data.extractedData,
+                              null,
+                              2
+                            )}
+                          </pre>
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
-            </div>
 
-            <div className="mt-4 flex justify-between">
-              <div className="space-x-2">
-                <button
-                  className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                             transition-colors text-sm"
-                  onClick={() => rejectDocument("unclear")}
-                >
-                  Reject: Unclear
-                </button>
-                <button
-                  className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                             transition-colors text-sm"
-                  onClick={() => rejectDocument("mismatch")}
-                >
-                  Reject: Mismatch
-                </button>
-                <button
-                  className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                             transition-colors text-sm"
-                  onClick={() => rejectDocument("expired")}
-                >
-                  Reject: Expired
-                </button>
-              </div>
-              <div className="space-x-2">
-                <button
-                  className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500
-                             transition-colors text-sm"
-                  onClick={() => {
-                    setSelectedDocument(null);
-                    setSelectedUser(null);
-                    setJsonContent(null);
-                    setIsEditingJson(false);
-                  }}
-                >
-                  Close
-                </button>
-                <button
-                  className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500
-                             transition-colors text-sm"
-                  onClick={approveDocument}
-                >
-                  Approve
-                </button>
+                    {jsonContent && (
+                      <div className="mt-4">
+                        <h3 className="font-bold mb-2 flex items-center justify-between">
+                          <span>OCR JSON Data</span>
+                          {!isEditingJson && (
+                            <button
+                              className="p-1 bg-[#1375F6] text-white rounded text-xs
+                                         hover:bg-[#136BE0] transition-colors"
+                              onClick={() => setIsEditingJson(true)}
+                            >
+                              Edit JSON
+                            </button>
+                          )}
+                        </h3>
+
+                        {!isEditingJson ? (
+                          <div className="p-2 bg-gray-700 rounded max-h-40 overflow-auto">
+                            <pre className="text-xs">{jsonContent}</pre>
+                          </div>
+                        ) : (
+                          <div>
+                            <textarea
+                              className="w-full h-40 p-2 border border-gray-600 rounded text-xs bg-gray-700
+                                         focus:outline-none focus:ring-2 focus:ring-[#1375F6]"
+                              value={jsonContent}
+                              onChange={(e) => setJsonContent(e.target.value)}
+                            />
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                className="px-3 py-1 bg-green-600 text-green-100 rounded text-xs
+                                           hover:bg-green-500 transition-colors"
+                                onClick={saveJsonChanges}
+                              >
+                                Save JSON Changes
+                              </button>
+                              <button
+                                className="px-3 py-1 bg-gray-600 text-gray-100 rounded text-xs
+                                           hover:bg-gray-500 transition-colors"
+                                onClick={() => setIsEditingJson(false)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex justify-between">
+                  <div className="space-x-2">
+                    <button
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
+                                 transition-colors text-sm"
+                      onClick={() => rejectDocument("unclear")}
+                    >
+                      Reject: Unclear
+                    </button>
+                    <button
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
+                                 transition-colors text-sm"
+                      onClick={() => rejectDocument("mismatch")}
+                    >
+                      Reject: Mismatch
+                    </button>
+                    <button
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
+                                 transition-colors text-sm"
+                      onClick={() => rejectDocument("expired")}
+                    >
+                      Reject: Expired
+                    </button>
+                  </div>
+                  <div className="space-x-2">
+                    <button
+                      className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500
+                                 transition-colors text-sm"
+                      onClick={() => {
+                        setSelectedDocument(null);
+                        setSelectedUser(null);
+                        setJsonContent(null);
+                        setIsEditingJson(false);
+                      }}
+                    >
+                      Close
+                    </button>
+                    <button
+                      className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500
+                                 transition-colors text-sm"
+                      onClick={approveDocument}
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
-    </div>
+
+      {/* Inline Tailwind (global) */}
+      <style jsx global>{`
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+      `}</style>
+    </>
   );
 }
-
-/* 
-   Next: Embed Tailwind so we don't rely on a global import.
-   (This is uncommon, but here's how you can do it inline for a single component)
-*/
-<style jsx global>{`
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-`}</style>
