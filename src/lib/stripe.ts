@@ -17,8 +17,8 @@ export function getStripe() {
 /**
  * A Firestore-based PaymentMethod doc:
  *   - `id`: the **Firestore doc ID** used for delete, set-default, etc.
- *   - `stripeId`: the actual Stripe PaymentMethod ID.
- *   - brand, last4, etc. for card details.
+ *   - `stripeId`: the actual Stripe PaymentMethod ID in Stripe
+ *   - brand, last4, expMonth, expYear
  */
 export interface SavedPaymentMethod {
   id: string;          // Firestore doc ID
@@ -36,7 +36,7 @@ export interface SavedPaymentMethod {
  * Firestore doc ID `id` is generated on the server.
  */
 export interface PaymentMethodInput {
-  stripeId: string;    // The newly created Stripe PaymentMethod ID
+  stripeId: string;   // The newly created Stripe PaymentMethod ID
   brand: string;
   last4: string;
   expMonth: number;
@@ -232,4 +232,42 @@ export async function topUpBalance(userId: string, amount: number) {
     return { success: false, error: data.error || "Failed to top up" };
   }
   return { success: true, newBalance: data.newBalance as number };
+}
+
+/**
+ * NEW HELPER: chargeUserForTrip
+ * Makes a request to /api/stripe with action="charge-user-for-trip",
+ * passing the amount in cents (e.g. 5000 for HK$50).
+ * 
+ * The server calls Stripe's PaymentIntent API with `off_session: true`
+ * and the user's default payment method, returning success or error.
+ */
+export async function chargeUserForTrip(userId: string, amountInCents: number) {
+  if (!auth.currentUser) {
+    return { success: false, error: "No user is logged in" };
+  }
+  if (amountInCents <= 0) {
+    return { success: false, error: "Charge amount must be > 0" };
+  }
+
+  const token = await auth.currentUser.getIdToken(true);
+  const res = await fetch("/api/stripe", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      action: "charge-user-for-trip",
+      userId,
+      amount: amountInCents,
+    }),
+  });
+
+  const data = await res.json();
+  if (!data.success) {
+    return { success: false, error: data.error || "Failed to charge user" };
+  }
+  // e.g. data might contain paymentIntentId, status, etc.
+  return { success: true, ...data };
 }
