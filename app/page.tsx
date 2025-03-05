@@ -3,7 +3,6 @@ import React, { useState, useCallback } from "react";
 import Head from "next/head";
 import { Menu as MenuIcon } from "lucide-react";
 import dynamic from "next/dynamic";
-import BookingDialog from "@/components/booking/BookingDialog";
 import SideSheet from "@/components/ui/SideSheet";
 import { QrCodeIcon } from "@/components/ui/icons/QrCodeIcon";
 // New import for the inline SVG
@@ -127,8 +126,6 @@ export default function Page() {
           />
         </div>
         
-        {/* Booking Dialog */}
-        <BookingDialog />
         
         {/* Side Sheet Menu - Pass modal control functions to AppMenu */}
         <SideSheet isOpen={isMenuOpen} onClose={handleMenuClose} size="full">
