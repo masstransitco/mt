@@ -46,8 +46,6 @@ export interface PaymentMethodInput {
 
 /**
  * Fetches saved payment methods from `/api/stripe?action=get-payment-methods`.
- * The server returns docId + other fields. We map docId -> `id`, 
- * and the existing `id` -> `stripeId`.
  */
 export async function getSavedPaymentMethods(userId: string) {
   if (!auth.currentUser) {
@@ -87,8 +85,6 @@ export async function getSavedPaymentMethods(userId: string) {
 
 /**
  * Saves a newly created card in Firestore. 
- * We pass PaymentMethodInput (which has `stripeId`, brand, last4, etc.) 
- * The server will attach it to a Stripe customer & create a new Firestore doc with a doc ID.
  */
 export async function savePaymentMethod(
   userId: string,
@@ -99,7 +95,8 @@ export async function savePaymentMethod(
   }
   const token = await auth.currentUser.getIdToken(true);
 
-  // The server expects an action "save-payment-method", plus userId, plus the card fields
+  console.log("[savePaymentMethod] Request body =>", { userId, paymentMethod });
+
   const res = await fetch("/api/stripe", {
     method: "POST",
     headers: {
@@ -109,26 +106,29 @@ export async function savePaymentMethod(
     body: JSON.stringify({
       action: "save-payment-method",
       userId,
-      paymentMethod, // The server will store this + generate doc ID
+      paymentMethod,
     }),
   });
 
   const data = await res.json();
+  console.log("[savePaymentMethod] Server response =>", data);
+
   if (!data.success) {
     return { success: false, error: data.error || "Failed to save method" };
   }
-  // The server's response may not contain docId or might contain partial data
   return { success: true, paymentMethod: data.paymentMethod };
 }
 
 /**
- * Deletes a PaymentMethod doc in Firestore by doc ID (the `id` property in our SavedPaymentMethod).
+ * Deletes a PaymentMethod doc in Firestore by doc ID.
  */
 export async function deletePaymentMethod(userId: string, docId: string) {
   if (!auth.currentUser) {
     return { success: false, error: "No user is logged in" };
   }
   const token = await auth.currentUser.getIdToken(true);
+
+  console.log("[deletePaymentMethod] Request body =>", { userId, docId });
 
   const res = await fetch("/api/stripe", {
     method: "POST",
@@ -139,26 +139,29 @@ export async function deletePaymentMethod(userId: string, docId: string) {
     body: JSON.stringify({
       action: "delete-payment-method",
       userId,
-      paymentMethodId: docId, // docId to find & delete
+      paymentMethodId: docId,
     }),
   });
 
   const data = await res.json();
+  console.log("[deletePaymentMethod] Server response =>", data);
+
   if (!data.success) {
     return { success: false, error: data.error || "Failed to delete method" };
   }
   return { success: true };
 }
 
-/** 
- * If your server had an "update-payment-method" or "set-default-payment-method",
- * you can similarly pass docId in the request body. 
+/**
+ * Set a payment method as default for the user (doc ID).
  */
 export async function setDefaultPaymentMethod(userId: string, docId: string) {
   if (!auth.currentUser) {
     return { success: false, error: "No user is logged in" };
   }
   const token = await auth.currentUser.getIdToken(true);
+
+  console.log("[setDefaultPaymentMethod] Request body =>", { userId, docId });
 
   const res = await fetch("/api/stripe", {
     method: "POST",
@@ -174,6 +177,8 @@ export async function setDefaultPaymentMethod(userId: string, docId: string) {
   });
 
   const data = await res.json();
+  console.log("[setDefaultPaymentMethod] Server response =>", data);
+
   if (!data.success) {
     return { success: false, error: data.error || "Failed to set default" };
   }
@@ -181,7 +186,7 @@ export async function setDefaultPaymentMethod(userId: string, docId: string) {
 }
 
 /**
- * Retrieve user balance from, e.g., /api/user-balance?action=get-balance
+ * Retrieve user balance (example call to /api/user-balance).
  */
 export async function getUserBalance(userId: string) {
   if (!auth.currentUser) {
@@ -189,11 +194,15 @@ export async function getUserBalance(userId: string) {
   }
   const token = await auth.currentUser.getIdToken(true);
 
+  console.log("[getUserBalance] fetching =>", { userId });
+
   const res = await fetch(`/api/user-balance?action=get-balance&userId=${userId}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await res.json();
+
+  console.log("[getUserBalance] Server response =>", data);
 
   if (!data.success) {
     return { success: false, error: data.error || "Failed to fetch user balance" };
@@ -203,7 +212,6 @@ export async function getUserBalance(userId: string) {
 
 /**
  * Perform a top-up by calling /api/user-balance with action="top-up".
- * For a real flow, you'd have Stripe PaymentIntent creation server-side.
  */
 export async function topUpBalance(userId: string, amount: number) {
   if (!auth.currentUser) {
@@ -214,6 +222,9 @@ export async function topUpBalance(userId: string, amount: number) {
   }
 
   const token = await auth.currentUser.getIdToken(true);
+
+  console.log("[topUpBalance] Request body =>", { userId, amount });
+
   const res = await fetch("/api/user-balance", {
     method: "POST",
     headers: {
@@ -228,6 +239,8 @@ export async function topUpBalance(userId: string, amount: number) {
   });
 
   const data = await res.json();
+  console.log("[topUpBalance] Server response =>", data);
+
   if (!data.success) {
     return { success: false, error: data.error || "Failed to top up" };
   }
@@ -235,12 +248,7 @@ export async function topUpBalance(userId: string, amount: number) {
 }
 
 /**
- * NEW HELPER: chargeUserForTrip
- * Makes a request to /api/stripe with action="charge-user-for-trip",
- * passing the amount in cents (e.g. 5000 for HK$50).
- * 
- * The server calls Stripe's PaymentIntent API with `off_session: true`
- * and the user's default payment method, returning success or error.
+ * chargeUserForTrip - direct charge off-session to user's default PM
  */
 export async function chargeUserForTrip(userId: string, amountInCents: number) {
   if (!auth.currentUser) {
@@ -249,6 +257,11 @@ export async function chargeUserForTrip(userId: string, amountInCents: number) {
   if (amountInCents <= 0) {
     return { success: false, error: "Charge amount must be > 0" };
   }
+
+  console.log("[chargeUserForTrip] Request =>", {
+    userId,
+    amountInCents,
+  });
 
   const token = await auth.currentUser.getIdToken(true);
   const res = await fetch("/api/stripe", {
@@ -265,9 +278,10 @@ export async function chargeUserForTrip(userId: string, amountInCents: number) {
   });
 
   const data = await res.json();
+  console.log("[chargeUserForTrip] Response =>", data);
+
   if (!data.success) {
     return { success: false, error: data.error || "Failed to charge user" };
   }
-  // e.g. data might contain paymentIntentId, status, etc.
   return { success: true, ...data };
 }
