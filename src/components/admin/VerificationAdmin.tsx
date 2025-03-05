@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { LogoSvg } from "src/components/ui/logo/LogoSvg"; // <-- Import your LogoSvg
+import { LogoSvg } from "../ui/logo/LogoSvg";
 
 // ---------------------- Interfaces ----------------------
 interface ExtractedData {
