@@ -20,23 +20,29 @@ export default function TripSheet() {
   // Timer states
   const [tripActive, setTripActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const intervalRef = useRef<NodeJS.Timer | null>(null);
+  // 1) Use number | null for intervalRef:
+  const intervalRef = useRef<number | null>(null);
 
   // Start trip => unlock => begin counting
   const handleUnlock = () => {
     setTripActive(true);
     setElapsedSeconds(0);
-    if (intervalRef.current) clearInterval(intervalRef.current);
 
-    // increment every second
-    intervalRef.current = setInterval(() => {
+    // 2) If intervalRef already running, clear it
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+    }
+
+    // 3) increment every second
+    intervalRef.current = window.setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
   };
 
   // End trip => charge the final usage
   const handleEndTrip = async () => {
-    if (intervalRef.current) {
+    // 4) Clear interval if it exists
+    if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
@@ -44,7 +50,7 @@ export default function TripSheet() {
 
     // Convert elapsedSeconds to minutes, rounding up
     const minutesUsed = Math.ceil(elapsedSeconds / 60);
-    const additionalFare = minutesUsed; // e.g. $1 per minute
+    const additionalFare = minutesUsed * 100; // $1 per minute, in cents
 
     if (!auth.currentUser) {
       console.error("Cannot charge user; no currentUser");
@@ -52,6 +58,7 @@ export default function TripSheet() {
     }
 
     try {
+      // e.g. HK$1 per minute => pass in cents
       const result = await chargeUserForTrip(auth.currentUser.uid, additionalFare);
       if (!result?.success) {
         throw new Error(result?.error || "Failed final trip charge.");
@@ -68,7 +75,9 @@ export default function TripSheet() {
   // Clear interval on unmount
   useEffect(() => {
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, []);
 
