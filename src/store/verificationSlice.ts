@@ -3,11 +3,19 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 
-// 1) Define your document states
+// 1) Define your document states, ensuring you include all fields you might spread
 export type DocumentStatus = {
-  url?: string;
   status: "notUploaded" | "pending" | "approved" | "rejected";
+  url?: string;
+  verified?: boolean;
+  verifiedAt?: any;
+  verifiedBy?: string;
   rejectionReason?: string;
+  rejectionDetail?: string;
+  rejectedAt?: any;
+  extractedData?: any;
+  ocrConfidence?: number;
+  processedAt?: any;
   uploadedAt?: number;
 };
 
@@ -51,28 +59,28 @@ export const fetchVerificationData = createAsyncThunk<
     const userData = snapshot.data();
     const documents = userData?.documents || {};
 
-    // Convert Firestore's structure to your VerificationData shape
+    // Helper to convert a single doc into our DocumentStatus shape
+    function toDocStatus(doc: any): DocumentStatus {
+      if (!doc) {
+        return { status: "notUploaded" };
+      }
+      // Derive final status from `verified` and `rejectionReason`
+      const derivedStatus = doc.verified
+        ? "approved"
+        : doc.rejectionReason
+        ? "rejected"
+        : "pending";
+
+      return {
+        ...doc,
+        status: derivedStatus,
+      };
+    }
+
+    // Convert Firestore structure to VerificationData
     const data: VerificationData = {
-      idDocument: documents["id-document"]
-        ? {
-            ...documents["id-document"],
-            status: documents["id-document"].verified
-              ? "approved"
-              : documents["id-document"].rejectionReason
-              ? "rejected"
-              : "pending",
-          }
-        : { status: "notUploaded" },
-      drivingLicense: documents["driving-license"]
-        ? {
-            ...documents["driving-license"],
-            status: documents["driving-license"].verified
-              ? "approved"
-              : documents["driving-license"].rejectionReason
-              ? "rejected"
-              : "pending",
-          }
-        : { status: "notUploaded" },
+      idDocument: toDocStatus(documents["id-document"]),
+      drivingLicense: toDocStatus(documents["driving-license"]),
       address: documents.address
         ? {
             ...documents.address,
