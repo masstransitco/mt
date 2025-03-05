@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import { LogoSvg } from "../ui/logo/LogoSvg";
 
-// ---------------------- Interfaces ----------------------
 interface ExtractedData {
   documentType?: string;
   hkidNumber?: string;
@@ -35,8 +34,8 @@ interface UserDocuments {
 }
 
 interface UserData {
-  uid?: string;        // Support both uid
-  userId?: string;     // and userId formats
+  uid?: string;
+  userId?: string;
   email?: string;
   phoneNumber?: string;
   displayName?: string;
@@ -48,21 +47,20 @@ interface SelectedDocumentType {
   data: DocumentData;
 }
 
-// ---------------------- Component ----------------------
 export default function VerificationAdmin() {
-  // State for simple password-based login
+  // Simple password-based login
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState(false);
 
-  // State for users
+  // Users
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // State for tab (pending, approved, rejected)
+  // Tab: pending, approved, rejected
   const [currentTab, setCurrentTab] = useState("pending");
 
-  // State for selected doc / user
+  // Selected doc/user
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentType | null>(null);
 
@@ -70,7 +68,7 @@ export default function VerificationAdmin() {
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [isEditingJson, setIsEditingJson] = useState(false);
 
-  // ---------------------- Login Handler ----------------------
+  // ---------------------- Login ----------------------
   const handleLogin = () => {
     if (passwordInput === "20230301") {
       setIsAuthenticated(true);
@@ -80,14 +78,14 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Fetch Users (From Server) ----------------------
+  // ---------------------- Fetch Users ----------------------
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           op: "fetchUsers",
           adminPassword: "20230301",
         }),
@@ -98,21 +96,18 @@ export default function VerificationAdmin() {
       }
 
       const allUsers: UserData[] = data.users || [];
-      
-      // Normalize user objects to handle both uid and userId properties
-      const normalizedUsers = allUsers.map(user => ({
+
+      // Normalize user objects to handle both uid and userId
+      const normalizedUsers = allUsers.map((user) => ({
         ...user,
-        uid: user.uid || user.userId // Use uid if it exists, otherwise use userId
+        uid: user.uid || user.userId,
       }));
-      
-      // Filter if you only want users who have at least one doc
+
+      // Filter to only users who have at least one doc
       const filtered = normalizedUsers.filter(
-        (u) =>
-          u.documents &&
-          (u.documents["id-document"] || u.documents["driving-license"])
+        (u) => u.documents && (u.documents["id-document"] || u.documents["driving-license"])
       );
-      
-      console.log("Normalized users:", filtered); // Debug to verify uid property
+
       setUsers(filtered);
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -122,9 +117,8 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- View Document + OCR JSON (From Server) ----------------------
+  // ---------------------- View Document ----------------------
   const viewDocument = async (user: UserData, docType: string) => {
-    // 1) Validate uid
     const uid = user?.uid || user?.userId;
     if (!uid) {
       console.error("No valid uid found on user:", user);
@@ -144,7 +138,7 @@ export default function VerificationAdmin() {
         body: JSON.stringify({
           op: "viewDocument",
           adminPassword: "20230301",
-          userId: uid, // The admin API expects "userId" param
+          userId: uid,
           docType,
         }),
       });
@@ -153,11 +147,9 @@ export default function VerificationAdmin() {
         throw new Error(data.error || "Failed to view document");
       }
 
-      // We get back data.userData
       const fetchedUser = data.userData as UserData;
-      // Ensure the normalized user always has a uid property
       fetchedUser.uid = fetchedUser.uid || fetchedUser.userId;
-      
+
       const docData = fetchedUser.documents?.[docType];
       if (!docData) {
         alert("Document data not found on server response.");
@@ -167,7 +159,6 @@ export default function VerificationAdmin() {
       setSelectedUser(fetchedUser);
       setSelectedDocument({ type: docType, data: docData });
 
-      // data.ocrJson => OCR JSON from Storage (or null if none)
       if (data.ocrJson) {
         setJsonContent(JSON.stringify(data.ocrJson, null, 2));
       } else {
@@ -180,7 +171,7 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Approve Document (Server) ----------------------
+  // ---------------------- Approve Document ----------------------
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocument) return;
 
@@ -190,9 +181,6 @@ export default function VerificationAdmin() {
       return;
     }
 
-    const docType = selectedDocument.type;
-    console.log("Approving doc for user:", uid, "docType:", docType);
-
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -201,7 +189,7 @@ export default function VerificationAdmin() {
           op: "approveDocument",
           adminPassword: "20230301",
           userId: uid,
-          docType,
+          docType: selectedDocument.type,
         }),
       });
       const data = await res.json();
@@ -210,7 +198,6 @@ export default function VerificationAdmin() {
       }
 
       alert("Document approved successfully!");
-      // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
@@ -221,7 +208,7 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Reject Document (Server) ----------------------
+  // ---------------------- Reject Document ----------------------
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocument) return;
 
@@ -231,9 +218,6 @@ export default function VerificationAdmin() {
       return;
     }
 
-    const docType = selectedDocument.type;
-    console.log("Rejecting doc for user:", uid, "docType:", docType, "reason:", reason);
-
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -242,7 +226,7 @@ export default function VerificationAdmin() {
           op: "rejectDocument",
           adminPassword: "20230301",
           userId: uid,
-          docType,
+          docType: selectedDocument.type,
           reason,
         }),
       });
@@ -250,8 +234,8 @@ export default function VerificationAdmin() {
       if (!data.success) {
         throw new Error(data.error || "Failed to reject document");
       }
+
       alert("Document rejected successfully!");
-      // Reset
       setSelectedUser(null);
       setSelectedDocument(null);
       setJsonContent(null);
@@ -262,12 +246,13 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Save Updated OCR JSON (Server) ----------------------
+  // ---------------------- Save OCR JSON ----------------------
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocument || !jsonContent) return;
 
+    // Validate JSON
     try {
-      JSON.parse(jsonContent); // Validate JSON
+      JSON.parse(jsonContent);
     } catch (error) {
       alert("Invalid JSON format. Please fix before saving.");
       return;
@@ -278,7 +263,6 @@ export default function VerificationAdmin() {
       console.error("No valid uid found for selectedUser:", selectedUser);
       return;
     }
-    const docType = selectedDocument.type;
 
     try {
       const res = await fetch("/api/admin", {
@@ -288,7 +272,7 @@ export default function VerificationAdmin() {
           op: "saveJson",
           adminPassword: "20230301",
           userId: uid,
-          docType,
+          docType: selectedDocument.type,
           jsonContent,
         }),
       });
@@ -308,54 +292,53 @@ export default function VerificationAdmin() {
   // ---------------------- Render ----------------------
   if (!isAuthenticated) {
     return (
-      <div className="p-4 max-w-md mx-auto mt-10 bg-[#F5F5F7] dark:bg-[#1c1c1e] rounded shadow">
-        <div className="flex justify-center mb-6">
-          {/* Replace "Admin Login" text with your LogoSvg */}
-          <LogoSvg className="w-40 h-auto" />
+      <div className="bg-gray-900 min-h-screen text-gray-200 flex justify-center items-center p-4">
+        <div className="bg-gray-800 rounded shadow p-6 max-w-md w-full">
+          <div className="flex justify-center mb-6">
+            {/* Custom Logo */}
+            <LogoSvg className="w-32 h-auto" />
+          </div>
+          <input
+            type="password"
+            placeholder="Enter password"
+            value={passwordInput}
+            onChange={(e) => {
+              setPasswordInput(e.target.value);
+              setPasswordError(false);
+            }}
+            className="w-full p-2 border border-gray-600 rounded mb-2 bg-gray-700 text-gray-200
+                       focus:outline-none focus:ring-2 focus:ring-[#1375F6] transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLogin();
+            }}
+          />
+          {passwordError && (
+            <p className="text-red-400 text-sm mb-2">Incorrect password</p>
+          )}
+          <button
+            className="w-full p-2 rounded text-white bg-[#1375F6] hover:bg-[#136BE0]
+                       transition-colors"
+            onClick={handleLogin}
+          >
+            Login
+          </button>
         </div>
-        <input
-          type="password"
-          placeholder="Enter password"
-          value={passwordInput}
-          onChange={(e) => {
-            setPasswordInput(e.target.value);
-            setPasswordError(false);
-          }}
-          className="w-full p-2 border rounded mb-2 bg-gray-50 dark:bg-gray-700 
-            text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 
-            focus:ring-[#1375F6] transition-colors"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleLogin();
-          }}
-        />
-        {passwordError && (
-          <p className="text-red-600 text-sm mb-2">Incorrect password</p>
-        )}
-        <button
-          className="w-full p-2 rounded text-white 
-            bg-[#1375F6] hover:bg-[#136BE0] transition-colors"
-          onClick={handleLogin}
-        >
-          Login
-        </button>
       </div>
     );
   }
 
-  // Main Admin UI
   return (
-    <div className="min-h-screen bg-[#F5F5F7] dark:bg-[#1c1c1e] transition-colors">
-      <div className="mx-auto max-w-screen-xl p-4">
-        <h1 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">
-          Document Verification Admin
-        </h1>
+    <div className="bg-gray-900 min-h-screen text-gray-200">
+      <div className="max-w-screen-xl mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Document Verification Admin</h1>
+
         <div className="mb-4">
           <div className="flex gap-2 mb-4">
             <button
               className={`p-2 rounded transition-colors ${
                 currentTab === "pending"
                   ? "bg-[#1375F6] text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  : "bg-gray-700 hover:bg-gray-600"
               }`}
               onClick={() => setCurrentTab("pending")}
             >
@@ -365,7 +348,7 @@ export default function VerificationAdmin() {
               className={`p-2 rounded transition-colors ${
                 currentTab === "approved"
                   ? "bg-[#1375F6] text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  : "bg-gray-700 hover:bg-gray-600"
               }`}
               onClick={() => setCurrentTab("approved")}
             >
@@ -375,7 +358,7 @@ export default function VerificationAdmin() {
               className={`p-2 rounded transition-colors ${
                 currentTab === "rejected"
                   ? "bg-[#1375F6] text-white"
-                  : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  : "bg-gray-700 hover:bg-gray-600"
               }`}
               onClick={() => setCurrentTab("rejected")}
             >
@@ -384,9 +367,8 @@ export default function VerificationAdmin() {
           </div>
 
           <button
-            className="p-2 bg-gray-200 dark:bg-gray-700 rounded 
-              hover:bg-gray-300 dark:hover:bg-gray-600 mb-4 
-              text-gray-900 dark:text-gray-100 transition-colors"
+            className="p-2 bg-gray-700 hover:bg-gray-600 rounded mb-4
+                       transition-colors"
             onClick={fetchUsers}
           >
             Refresh
@@ -394,31 +376,23 @@ export default function VerificationAdmin() {
         </div>
 
         {loading ? (
-          <p className="text-gray-900 dark:text-gray-100">Loading user data...</p>
+          <p className="text-gray-300">Loading user data...</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full bg-white dark:bg-gray-800 border dark:border-gray-700 text-sm">
-              <thead>
+            <table className="min-w-full bg-gray-800 border border-gray-700 text-sm">
+              <thead className="bg-gray-700">
                 <tr>
-                  <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
-                    User
-                  </th>
-                  <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
-                    ID Document
-                  </th>
-                  <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
-                    Driving License
-                  </th>
-                  <th className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
-                    Actions
-                  </th>
+                  <th className="p-2 border border-gray-700">User</th>
+                  <th className="p-2 border border-gray-700">ID Document</th>
+                  <th className="p-2 border border-gray-700">Driving License</th>
+                  <th className="p-2 border border-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users
                   .filter((user) => {
                     if (currentTab === "pending") {
-                      // Documents that are not verified or rejected
+                      // Docs that are neither verified nor rejected
                       return (
                         (user.documents?.["id-document"] &&
                           !user.documents["id-document"].verified &&
@@ -428,7 +402,6 @@ export default function VerificationAdmin() {
                           !user.documents["driving-license"].rejectionReason)
                       );
                     } else if (currentTab === "approved") {
-                      // Documents that are verified
                       return (
                         (user.documents?.["id-document"] &&
                           user.documents["id-document"].verified) ||
@@ -436,7 +409,6 @@ export default function VerificationAdmin() {
                           user.documents["driving-license"].verified)
                       );
                     } else if (currentTab === "rejected") {
-                      // Documents that are rejected
                       return (
                         (user.documents?.["id-document"] &&
                           user.documents["id-document"].rejectionReason) ||
@@ -447,26 +419,30 @@ export default function VerificationAdmin() {
                     return true;
                   })
                   .map((user) => (
-                    <tr key={user.uid || user.userId} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                      <td className="p-2 border dark:border-gray-700 text-gray-900 dark:text-gray-100">
-                        <div>
-                          <p className="font-bold">
-                            {user.displayName || "No Name"}
-                          </p>
-                          <p className="text-xs text-gray-700 dark:text-gray-300">
-                            {user.email || user.phoneNumber || user.uid || user.userId}
-                          </p>
-                        </div>
+                    <tr
+                      key={user.uid || user.userId}
+                      className="hover:bg-gray-700 transition-colors"
+                    >
+                      <td className="p-2 border border-gray-700">
+                        <p className="font-semibold">
+                          {user.displayName || "No Name"}
+                        </p>
+                        <p className="text-xs text-gray-300">
+                          {user.email ||
+                            user.phoneNumber ||
+                            user.uid ||
+                            user.userId}
+                        </p>
                       </td>
-                      <td className="p-2 border dark:border-gray-700">
+                      <td className="p-2 border border-gray-700">
                         {user.documents?.["id-document"] ? (
                           <span
-                            className={`px-2 py-1 rounded-full text-xs ${
+                            className={`px-2 py-1 rounded-full text-xs inline-block ${
                               user.documents["id-document"].verified
-                                ? "bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-100"
+                                ? "bg-green-600 text-green-100"
                                 : user.documents["id-document"].rejectionReason
-                                ? "bg-red-200 dark:bg-red-700 text-red-700 dark:text-red-100"
-                                : "bg-orange-200 dark:bg-orange-700 text-orange-700 dark:text-orange-100"
+                                ? "bg-red-600 text-red-100"
+                                : "bg-orange-600 text-orange-100"
                             }`}
                           >
                             {user.documents["id-document"].verified
@@ -476,20 +452,18 @@ export default function VerificationAdmin() {
                               : "Pending"}
                           </span>
                         ) : (
-                          <span className="text-gray-900 dark:text-gray-100">
-                            Not Submitted
-                          </span>
+                          <span>Not Submitted</span>
                         )}
                       </td>
-                      <td className="p-2 border dark:border-gray-700">
+                      <td className="p-2 border border-gray-700">
                         {user.documents?.["driving-license"] ? (
                           <span
-                            className={`px-2 py-1 rounded-full text-xs ${
+                            className={`px-2 py-1 rounded-full text-xs inline-block ${
                               user.documents["driving-license"].verified
-                                ? "bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-100"
+                                ? "bg-green-600 text-green-100"
                                 : user.documents["driving-license"].rejectionReason
-                                ? "bg-red-200 dark:bg-red-700 text-red-700 dark:text-red-100"
-                                : "bg-orange-200 dark:bg-orange-700 text-orange-700 dark:text-orange-100"
+                                ? "bg-red-600 text-red-100"
+                                : "bg-orange-600 text-orange-100"
                             }`}
                           >
                             {user.documents["driving-license"].verified
@@ -499,16 +473,14 @@ export default function VerificationAdmin() {
                               : "Pending"}
                           </span>
                         ) : (
-                          <span className="text-gray-900 dark:text-gray-100">
-                            Not Submitted
-                          </span>
+                          <span>Not Submitted</span>
                         )}
                       </td>
-                      <td className="p-2 border dark:border-gray-700">
+                      <td className="p-2 border border-gray-700">
                         {user.documents?.["id-document"] && (
                           <button
-                            className="p-1 bg-[#1375F6] text-white rounded mr-2 
-                              hover:bg-[#136BE0] transition-colors text-xs"
+                            className="p-1 bg-[#1375F6] text-white rounded mr-2
+                                       hover:bg-[#136BE0] transition-colors text-xs"
                             onClick={() => viewDocument(user, "id-document")}
                           >
                             View ID
@@ -516,8 +488,8 @@ export default function VerificationAdmin() {
                         )}
                         {user.documents?.["driving-license"] && (
                           <button
-                            className="p-1 bg-[#1375F6] text-white rounded 
-                              hover:bg-[#136BE0] transition-colors text-xs"
+                            className="p-1 bg-[#1375F6] text-white rounded
+                                       hover:bg-[#136BE0] transition-colors text-xs"
                             onClick={() => viewDocument(user, "driving-license")}
                           >
                             View License
@@ -532,73 +504,62 @@ export default function VerificationAdmin() {
         )}
       </div>
 
-      {/* Modal for Document / OCR JSON */}
       {selectedDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-lg max-w-4xl w-full md:w-auto max-h-[90vh] overflow-auto">
-            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 p-4 rounded shadow-lg max-w-4xl w-full md:w-auto max-h-[90vh] overflow-auto">
+            <h2 className="text-xl font-bold mb-4">
               {selectedDocument.type === "id-document"
                 ? "Identity Document"
                 : "Driving License"}
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Document Image */}
               {selectedDocument.data.url && (
                 <div>
-                  <h3 className="font-bold mb-2 text-gray-900 dark:text-gray-100">
-                    Document Image
-                  </h3>
+                  <h3 className="font-bold mb-2">Document Image</h3>
                   <img
                     src={selectedDocument.data.url}
                     alt="Document"
-                    className="max-w-full border rounded dark:border-gray-700"
+                    className="max-w-full border border-gray-700 rounded"
                   />
                 </div>
               )}
 
-              {/* User & Document Info */}
               <div>
-                <h3 className="font-bold mb-2 text-gray-900 dark:text-gray-100">
-                  User Information
-                </h3>
-                <p className="text-gray-900 dark:text-gray-100">
+                <h3 className="font-bold mb-2">User Information</h3>
+                <p>
                   <strong>UID:</strong> {selectedUser?.uid || selectedUser?.userId}
                 </p>
                 {selectedUser?.email && (
-                  <p className="text-gray-900 dark:text-gray-100">
+                  <p>
                     <strong>Email:</strong> {selectedUser.email}
                   </p>
                 )}
                 {selectedUser?.phoneNumber && (
-                  <p className="text-gray-900 dark:text-gray-100">
+                  <p>
                     <strong>Phone:</strong> {selectedUser.phoneNumber}
                   </p>
                 )}
 
-                {/* Extracted Data */}
                 {selectedDocument.data.extractedData && (
                   <div className="mt-4">
-                    <h3 className="font-bold mb-2 text-gray-900 dark:text-gray-100">
-                      Extracted Data
-                    </h3>
-                    <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-900 dark:text-gray-100">
+                    <h3 className="font-bold mb-2">Extracted Data</h3>
+                    <div className="p-2 bg-gray-700 rounded">
+                      <pre className="whitespace-pre-wrap text-xs">
                         {JSON.stringify(selectedDocument.data.extractedData, null, 2)}
                       </pre>
                     </div>
                   </div>
                 )}
 
-                {/* OCR JSON Data */}
                 {jsonContent && (
                   <div className="mt-4">
-                    <h3 className="font-bold mb-2 flex items-center justify-between text-gray-900 dark:text-gray-100">
+                    <h3 className="font-bold mb-2 flex items-center justify-between">
                       <span>OCR JSON Data</span>
                       {!isEditingJson && (
                         <button
-                          className="p-1 bg-[#1375F6] text-white rounded text-xs 
-                            hover:bg-[#136BE0] transition-colors"
+                          className="p-1 bg-[#1375F6] text-white rounded text-xs
+                                     hover:bg-[#136BE0] transition-colors"
                           onClick={() => setIsEditingJson(true)}
                         >
                           Edit JSON
@@ -607,31 +568,28 @@ export default function VerificationAdmin() {
                     </h3>
 
                     {!isEditingJson ? (
-                      <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded max-h-40 overflow-auto">
-                        <pre className="text-xs text-gray-900 dark:text-gray-100">
-                          {jsonContent}
-                        </pre>
+                      <div className="p-2 bg-gray-700 rounded max-h-40 overflow-auto">
+                        <pre className="text-xs">{jsonContent}</pre>
                       </div>
                     ) : (
                       <div>
                         <textarea
-                          className="w-full h-40 p-2 border rounded text-xs bg-gray-50 dark:bg-gray-600 
-                            text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 
-                            focus:ring-[#1375F6]"
+                          className="w-full h-40 p-2 border border-gray-600 rounded text-xs bg-gray-700
+                                     focus:outline-none focus:ring-2 focus:ring-[#1375F6]"
                           value={jsonContent}
                           onChange={(e) => setJsonContent(e.target.value)}
                         />
                         <div className="mt-2 flex gap-2">
                           <button
-                            className="px-3 py-1 bg-green-500 dark:bg-green-600 text-white 
-                              rounded text-xs hover:bg-green-600 dark:hover:bg-green-700 transition-colors"
+                            className="px-3 py-1 bg-green-600 text-green-100 rounded text-xs
+                                       hover:bg-green-500 transition-colors"
                             onClick={saveJsonChanges}
                           >
                             Save JSON Changes
                           </button>
                           <button
-                            className="px-3 py-1 bg-gray-300 dark:bg-gray-500 text-black 
-                              rounded text-xs hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors"
+                            className="px-3 py-1 bg-gray-600 text-gray-100 rounded text-xs
+                                       hover:bg-gray-500 transition-colors"
                             onClick={() => setIsEditingJson(false)}
                           >
                             Cancel
@@ -644,26 +602,25 @@ export default function VerificationAdmin() {
               </div>
             </div>
 
-            {/* Modal Actions */}
             <div className="mt-4 flex justify-between">
               <div className="space-x-2">
                 <button
-                  className="p-2 bg-red-500 dark:bg-red-600 text-white rounded 
-                    hover:bg-red-600 dark:hover:bg-red-700 transition-colors text-sm"
+                  className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
+                             transition-colors text-sm"
                   onClick={() => rejectDocument("unclear")}
                 >
                   Reject: Unclear
                 </button>
                 <button
-                  className="p-2 bg-red-500 dark:bg-red-600 text-white rounded 
-                    hover:bg-red-600 dark:hover:bg-red-700 transition-colors text-sm"
+                  className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
+                             transition-colors text-sm"
                   onClick={() => rejectDocument("mismatch")}
                 >
                   Reject: Mismatch
                 </button>
                 <button
-                  className="p-2 bg-red-500 dark:bg-red-600 text-white rounded 
-                    hover:bg-red-600 dark:hover:bg-red-700 transition-colors text-sm"
+                  className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
+                             transition-colors text-sm"
                   onClick={() => rejectDocument("expired")}
                 >
                   Reject: Expired
@@ -671,8 +628,8 @@ export default function VerificationAdmin() {
               </div>
               <div className="space-x-2">
                 <button
-                  className="p-2 bg-gray-300 dark:bg-gray-500 text-black rounded 
-                    hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors text-sm"
+                  className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500
+                             transition-colors text-sm"
                   onClick={() => {
                     setSelectedDocument(null);
                     setSelectedUser(null);
@@ -683,8 +640,8 @@ export default function VerificationAdmin() {
                   Close
                 </button>
                 <button
-                  className="p-2 bg-green-500 dark:bg-green-600 text-white rounded 
-                    hover:bg-green-600 dark:hover:bg-green-700 transition-colors text-sm"
+                  className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500
+                             transition-colors text-sm"
                   onClick={approveDocument}
                 >
                   Approve
@@ -697,3 +654,13 @@ export default function VerificationAdmin() {
     </div>
   );
 }
+
+/* 
+   Next: Embed Tailwind so we don't rely on a global import.
+   (This is uncommon, but here's how you can do it inline for a single component)
+*/
+<style jsx global>{`
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+`}</style>
