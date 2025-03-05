@@ -32,6 +32,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "../../lib/useBodyScrollLock";
 
+// Redux
+import { useAppDispatch } from "@/store/store";
+import { setDefaultPaymentMethodId } from "@/store/userSlice";
+
 // Minimal styling for CardElement
 const cardStyle = {
   style: {
@@ -268,6 +272,8 @@ interface WalletModalProps {
 }
 
 export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
+  const dispatch = useAppDispatch();
+
   const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
   const [showAddCard, setShowAddCard] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -390,6 +396,11 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
       if (!result.success) {
         throw new Error(result.error);
       }
+
+      // We do an immediate Redux update so UI sees default method instantly
+      dispatch(setDefaultPaymentMethodId(docId));
+
+      // Then re-load methods so we see "isDefault: true" on that card
       await loadPaymentMethods();
     } catch (err) {
       console.error("Error setting default:", err);
