@@ -18,7 +18,7 @@ import {
 
 /**
  * saveBookingDetails:
- * - Reads from Redux store’s booking state
+ * - Reads from Redux store's booking state
  * - Persists it under `users/{uid}/booking: {...}` in Firestore
  */
 export const saveBookingDetails = createAsyncThunk(
@@ -28,6 +28,7 @@ export const saveBookingDetails = createAsyncThunk(
       const state = getState() as RootState;
       const user = state.user.authUser;
       if (!user) {
+        console.warn("User not signed in; cannot save booking details.");
         return rejectWithValue("User not signed in; cannot save booking details.");
       }
 
@@ -62,6 +63,8 @@ export const saveBookingDetails = createAsyncThunk(
               polyline: route.polyline,
             }
           : null,
+        // Add a timestamp for debugging/tracking purposes
+        lastUpdated: new Date().toISOString()
       };
 
       if (userSnap.exists()) {
@@ -76,7 +79,7 @@ export const saveBookingDetails = createAsyncThunk(
         });
       }
 
-      return "success";
+      return { success: true, message: "Booking details saved successfully" };
     } catch (err) {
       console.error("Error saving booking details:", err);
       return rejectWithValue("Failed to save booking details.");
@@ -87,8 +90,7 @@ export const saveBookingDetails = createAsyncThunk(
 /**
  * loadBookingDetails:
  * - Fetches booking data from `users/{uid}/booking`
- * - If booking.step >= 5, we rehydrate Redux to that step
- *   (If step < 5, we skip so user starts fresh.)
+ * - Rehydrates Redux with the booking state
  */
 export const loadBookingDetails = createAsyncThunk(
   "booking/loadBookingDetails",
@@ -97,51 +99,61 @@ export const loadBookingDetails = createAsyncThunk(
       const state = getState() as RootState;
       const user = state.user.authUser;
       if (!user) {
+        console.warn("User not signed in; cannot load booking details.");
         return rejectWithValue("User not signed in; cannot load booking details.");
       }
 
+      console.log("Loading booking details for user:", user.uid);
+
       const userDocRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userDocRef);
+      
       if (!userSnap.exists()) {
-        // No user doc found, so no booking data
-        return;
+        console.log("No user document found");
+        return { success: false, message: "No user document found" };
       }
 
       const data = userSnap.data();
       const booking = data.booking as Partial<BookingState> | undefined;
+      
       if (!booking) {
-        // No booking field found
-        return;
+        console.log("No booking data found in user document");
+        return { success: false, message: "No booking data found" };
       }
 
-      // Only rehydrate if step >= 5
-      if (booking.step && booking.step >= 5) {
-        // step
+      console.log("Found booking data:", booking);
+
+      // Only rehydrate if we found booking data
+      // departureDate
+      if (booking.departureDate) {
+        dispatch(setDepartureDate(new Date(booking.departureDate)));
+      }
+
+      // ticketPlan
+      if (booking.ticketPlan) {
+        dispatch(setTicketPlan(booking.ticketPlan));
+      }
+
+      // departureStationId
+      if (booking.departureStationId) {
+        dispatch(selectDepartureStation(booking.departureStationId));
+      }
+
+      // arrivalStationId
+      if (booking.arrivalStationId) {
+        dispatch(selectArrivalStation(booking.arrivalStationId));
+      }
+
+      // step - do this last so UI updates properly
+      if (booking.step) {
         dispatch(advanceBookingStep(booking.step));
-
-        // departureDate
-        if (booking.departureDate) {
-          dispatch(setDepartureDate(new Date(booking.departureDate)));
-        }
-
-        // ticketPlan
-        if (booking.ticketPlan) {
-          dispatch(setTicketPlan(booking.ticketPlan));
-        }
-
-        // departureStationId
-        if (booking.departureStationId) {
-          dispatch(selectDepartureStation(booking.departureStationId));
-        }
-
-        // arrivalStationId
-        if (booking.arrivalStationId) {
-          dispatch(selectArrivalStation(booking.arrivalStationId));
-        }
-
-        // if you stored route, you might also restore it:
-        // e.g. dispatch(setRoute(booking.route)) if you had an action for that
       }
+
+      return { 
+        success: true, 
+        message: "Booking details loaded successfully",
+        step: booking.step 
+      };
     } catch (err) {
       console.error("Error loading booking details:", err);
       return rejectWithValue("Failed to load booking details.");
