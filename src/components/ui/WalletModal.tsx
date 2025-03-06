@@ -439,7 +439,7 @@ export default function WalletModal({ isOpen, onClose }: WalletModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-black text-white p-0 relative">
+      <DialogContent className="bg-black text-white p-0 relative z-[9999]">
         <DialogHeader className="border-b border-gray-800 p-4">
           <DialogTitle className="text-white text-lg font-medium">
             Wallet
