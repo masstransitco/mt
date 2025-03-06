@@ -45,7 +45,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/80",
+      "fixed inset-0 z-[9999] bg-black/80",
       // ...
       className
     )}
@@ -65,7 +65,7 @@ const DialogContent = React.forwardRef<
       ref={ref}
       style={{
         position: "fixed",
-        zIndex: 50,
+        zIndex: 9999,
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
