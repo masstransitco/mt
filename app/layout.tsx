@@ -13,7 +13,13 @@ import Spinner from "@/components/ui/spinner";
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
 import { useAppDispatch } from "@/store/store";
-import { setAuthUser, signOutUser, setDefaultPaymentMethodId } from "@/store/userSlice";
+import {
+  signOutUser,
+  setDefaultPaymentMethodId,
+  // If you have an AuthUser type, import that as well
+} from "@/store/userSlice";
+import { setAuthUserAndLoadBooking } from "@/store/userSlice"; // <-- The combined thunk
+// OR if you placed the thunk in a different file, import from that file
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -52,21 +58,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     const db = getFirestore(); // initialize Firestore (client side)
     
     // 1) Listen for Firebase Auth changes
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser: User | null) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       setLoading(false);
 
       if (firebaseUser) {
-        // 2) We have a user => setAuthUser in Redux
-        dispatch(
-          setAuthUser({
-            uid: firebaseUser.uid,
-            phoneNumber: firebaseUser.phoneNumber ?? undefined,
-            email: firebaseUser.email ?? undefined,
-            displayName: firebaseUser.displayName ?? undefined,
-          })
-        );
+        // Build our AuthUser object (adjust fields as needed)
+        const userPayload = {
+          uid: firebaseUser.uid,
+          phoneNumber: firebaseUser.phoneNumber ?? undefined,
+          email: firebaseUser.email ?? undefined,
+          displayName: firebaseUser.displayName ?? undefined,
+        };
 
-        // 3) Real-time Firestore subscription to user doc
+        // 2) Dispatch the combined thunk => sets user + tries to rehydrate booking
+        await dispatch(setAuthUserAndLoadBooking(userPayload));
+
+        // 3) Then subscribe to user doc for real-time updates
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const unsubscribeDoc = onSnapshot(userDocRef, (snap) => {
           if (snap.exists()) {
@@ -88,14 +95,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           unsubscribeDoc();
         };
       } else {
-        // No user => signOutUser in Redux
+        // No user => sign out in Redux
         dispatch(signOutUser());
-        // Also no default PM
+        // Also clear out PM
         dispatch(setDefaultPaymentMethodId(null));
       }
     });
 
-    // Cleanup auth subscription
+    // Cleanup Auth subscription
     return () => {
       unsubscribeAuth();
     };
@@ -113,13 +120,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <div className={`${inter.className} h-full flex flex-col relative`}>
       {children}
-      {/* ChatWidget removed */}
+      {/* If you had a chat widget or something, it goes here */}
     </div>
   );
 }
 
 /**
- * The actual Next.js RootLayout component.
+ * The actual Next.js RootLayout component (exported default).
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -133,6 +140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} h-full overflow-x-hidden bg-background`}>
         {/* Disable pinch-to-zoom on mobile browsers */}
         <DisablePinchZoom />
+
         {/* Provide Redux to all child components */}
         <ReduxProvider>
           <LayoutInner>{children}</LayoutInner>
