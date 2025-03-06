@@ -1,9 +1,11 @@
-// src/store/verificationSlice.ts
+// File: src/store/verificationSlice.ts
 
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 
-// 1) Define your document states, ensuring you include all fields you might spread
+//
+// 1) DocumentStatus for ID/License
+//
 export type DocumentStatus = {
   status: "notUploaded" | "pending" | "approved" | "rejected";
   url?: string;
@@ -19,33 +21,52 @@ export type DocumentStatus = {
   uploadedAt?: number;
 };
 
-// 2) Optional address type
+//
+// 2) AddressData for Residential Address
+//
 export interface AddressData {
+  status: "notUploaded" | "pending" | "approved" | "rejected";
   fullAddress?: string;
+  block?: string;
+  floor?: string;
+  flat?: string;
   verified?: boolean;
-  // Add more fields like lat/lng, block, floor, etc., if needed
+  rejectionReason?: string;
+  timestamp?: number;
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
-// 3) One user’s verification data
+//
+// 3) Combined VerificationData for each user
+//
 export interface VerificationData {
   idDocument?: DocumentStatus;
   drivingLicense?: DocumentStatus;
   address?: AddressData;
 }
 
-// 4) The entire slice shape (keyed by user id)
+//
+// 4) Slice shape: indexed by user ID
+//
 export interface VerificationState {
   [uid: string]: VerificationData;
 }
 
+//
 // 5) Initial state
+//
 const initialState: VerificationState = {};
 
-// 6) Async thunk to fetch one user’s verification docs
+//
+// 6) Async thunk to fetch a single user’s doc info from Firestore
+//
 export const fetchVerificationData = createAsyncThunk<
-  // Return type of payload
+  // Payload type
   { uid: string; data: VerificationData },
-  // Argument to this thunk
+  // Argument: the UID
   string
 >("verification/fetchVerificationData", async (uid, { rejectWithValue }) => {
   try {
@@ -54,22 +75,19 @@ export const fetchVerificationData = createAsyncThunk<
     const snapshot = await getDoc(userDocRef);
 
     if (!snapshot.exists()) {
+      // No user doc
       return { uid, data: {} };
     }
     const userData = snapshot.data();
     const documents = userData?.documents || {};
 
-    // Helper to convert a single doc into our DocumentStatus shape
+    // Helper that figures out "approved"/"rejected"/"pending"
     function toDocStatus(doc: any): DocumentStatus {
-      if (!doc) {
-        return { status: "notUploaded" };
-      }
-      // Derive final status from `verified` and `rejectionReason`
-      const derivedStatus = doc.verified
-        ? "approved"
-        : doc.rejectionReason
-        ? "rejected"
-        : "pending";
+      if (!doc) return { status: "notUploaded" };
+
+      let derivedStatus: "approved" | "rejected" | "pending" = "pending";
+      if (doc.verified) derivedStatus = "approved";
+      if (doc.rejectionReason) derivedStatus = "rejected";
 
       return {
         ...doc,
@@ -77,15 +95,23 @@ export const fetchVerificationData = createAsyncThunk<
       };
     }
 
-    // Convert Firestore structure to VerificationData
+    function toAddressData(addr: any): AddressData {
+      if (!addr) return { status: "notUploaded" };
+
+      let derivedStatus: "approved" | "rejected" | "pending" = "pending";
+      if (addr.verified) derivedStatus = "approved";
+      if (addr.rejectionReason) derivedStatus = "rejected";
+
+      return {
+        ...addr,
+        status: derivedStatus,
+      };
+    }
+
     const data: VerificationData = {
       idDocument: toDocStatus(documents["id-document"]),
       drivingLicense: toDocStatus(documents["driving-license"]),
-      address: documents.address
-        ? {
-            ...documents.address,
-          }
-        : undefined,
+      address: toAddressData(documents.address),
     };
 
     return { uid, data };
@@ -95,11 +121,14 @@ export const fetchVerificationData = createAsyncThunk<
   }
 });
 
-// 7) The slice
+//
+// 7) Create slice
+//
 const verificationSlice = createSlice({
   name: "verification",
   initialState,
   reducers: {
+    // Example direct setter for any user’s verification data
     setUserVerification: (
       state,
       action: PayloadAction<{ uid: string; data: VerificationData }>
@@ -107,18 +136,26 @@ const verificationSlice = createSlice({
       const { uid, data } = action.payload;
       state[uid] = data;
     },
-    // Example of a targeted update for ID document
+
+    // Example for updating just the ID doc
     setIdDocument: (
       state,
       action: PayloadAction<{ uid: string; idDocument: DocumentStatus }>
     ) => {
       const { uid, idDocument } = action.payload;
-      if (!state[uid]) {
-        state[uid] = {};
-      }
+      if (!state[uid]) state[uid] = {};
       state[uid].idDocument = idDocument;
     },
-    // Similarly, you can add setDrivingLicense, setAddress, etc.
+
+    // Example for updating the address
+    setAddressData: (
+      state,
+      action: PayloadAction<{ uid: string; address: AddressData }>
+    ) => {
+      const { uid, address } = action.payload;
+      if (!state[uid]) state[uid] = {};
+      state[uid].address = address;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -132,8 +169,6 @@ const verificationSlice = createSlice({
   },
 });
 
-// Export the actions
-export const { setUserVerification, setIdDocument } = verificationSlice.actions;
-
-// Export the reducer
+// 8) Export actions & reducer
+export const { setUserVerification, setIdDocument, setAddressData } = verificationSlice.actions;
 export default verificationSlice.reducer;
