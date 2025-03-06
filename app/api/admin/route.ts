@@ -30,6 +30,13 @@ export async function POST(request: NextRequest) {
         return await handleRejectDocument(body.userId, body.docType, body.reason);
       case "saveJson":
         return await handleSaveJson(body.userId, body.docType, body.jsonContent);
+
+      // ------------------ ADDRESS OPS ------------------
+      case "approveAddress":
+        return await handleApproveAddress(body.userId);
+      case "rejectAddress":
+        return await handleRejectAddress(body.userId, body.reason);
+
       default:
         return NextResponse.json({ success: false, error: "Invalid operation" }, { status: 400 });
     }
@@ -48,7 +55,7 @@ async function handleFetchUsers() {
     ...doc.data(),
   }));
 
-  // If you only want documents with "id-document" or "driving-license", filter here
+  // Return them all – filter logic is typically done in the UI.
   return NextResponse.json({ success: true, users: userData });
 }
 
@@ -60,6 +67,7 @@ async function handleViewDocument(userId: string, docType: string) {
   }
 
   const userData = userDoc.data();
+
   // 2) Read the JSON from Cloud Storage if it exists
   try {
     const fileRef = storage.bucket().file(`ocrResults/${userId}/${docType}.json`);
@@ -87,6 +95,7 @@ async function handleRejectDocument(userId: string, docType: string, reason: str
     unclear: "The uploaded document is unclear or blurry.",
     mismatch: "Document info doesn't match our records.",
     expired: "The document appears to be expired.",
+    // add more if you want
   };
 
   await db.collection("users").doc(userId).update({
@@ -99,8 +108,28 @@ async function handleRejectDocument(userId: string, docType: string, reason: str
 }
 
 async function handleSaveJson(userId: string, docType: string, jsonContent: string) {
-  // Write the updated JSON to Storage
+  // Write the updated JSON to Cloud Storage
   const fileRef = storage.bucket().file(`ocrResults/${userId}/${docType}.json`);
   await fileRef.save(jsonContent, { contentType: "application/json" });
+  return NextResponse.json({ success: true });
+}
+
+// ------------------ ADDRESS HANDLERS ------------------
+
+async function handleApproveAddress(userId: string) {
+  // Mark address as verified, clear any rejection reason
+  await db.collection("users").doc(userId).update({
+    "documents.address.verified": true,
+    "documents.address.rejectionReason": admin.firestore.FieldValue.delete(), // or set to null
+  });
+  return NextResponse.json({ success: true });
+}
+
+async function handleRejectAddress(userId: string, reason: string) {
+  // You can store a reason for rejecting the address
+  await db.collection("users").doc(userId).update({
+    "documents.address.verified": false,
+    "documents.address.rejectionReason": reason,
+  });
   return NextResponse.json({ success: true });
 }
