@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { CreditCard, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SavedPaymentMethod } from "@/lib/stripe";
+import { SavedPaymentMethod, getSavedPaymentMethods } from "@/lib/stripe";
+import { auth } from "@/lib/firebase";
+import { toast } from "react-hot-toast";
 
 // Redux
 import { useAppDispatch } from "@/store/store";
@@ -142,12 +144,10 @@ export function PaymentMethodCard({
 
 /* ------------------------------------------------------------------
    PAYMENT METHODS PANEL
-   Shows the user’s existing payment methods, or skeletons if loading.
-   Clicking "Add Payment Method" calls onOpenWalletModal() so the user
-   can add a card in the dedicated WalletModal.
+   Usually used inside WalletModal, listing all methods.
    ------------------------------------------------------------------ */
 interface PaymentMethodsPanelProps {
-  isLoading: boolean; // <-- new prop to indicate data is still loading
+  isLoading: boolean;
   existingMethods: SavedPaymentMethod[];
   onDeleteMethod: (docId: string) => Promise<void>;
   onSetDefaultMethod: (docId: string) => Promise<void>;
@@ -161,14 +161,10 @@ export function PaymentMethodsPanel({
   onSetDefaultMethod,
   onOpenWalletModal,
 }: PaymentMethodsPanelProps) {
-  // If you need to dispatch 'setDefaultPaymentMethodId' directly here,
-  // you can do so. Usually, you do it in 'onSetDefaultMethod' after your
-  // server confirms success.
   const dispatch = useAppDispatch();
 
   return (
     <div className="space-y-4">
-      {/* If still loading, show skeleton(s) */}
       {isLoading ? (
         <>
           <PaymentMethodSkeleton />
@@ -182,22 +178,18 @@ export function PaymentMethodsPanel({
               method={method}
               onDelete={onDeleteMethod}
               onSetDefault={async (docId) => {
-                // Call the parent's method to handle remote setDefault
                 await onSetDefaultMethod(docId);
-                // Then update in Redux
                 dispatch(setDefaultPaymentMethodId(docId));
               }}
             />
           ))}
         </div>
       ) : (
-        // If not loading AND no methods, show "No payment methods" message
         <p className="text-center text-gray-400 py-4">
           No payment methods saved yet
         </p>
       )}
 
-      {/* "Add Payment Method" button (always visible) */}
       <Button
         variant="outline"
         className="w-full justify-center"
@@ -206,6 +198,80 @@ export function PaymentMethodsPanel({
         {existingMethods.length > 0
           ? "Add Another Payment Method"
           : "Add Payment Method"}
+      </Button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------
+   PAYMENT SUMMARY
+   A minimal UI that shows:
+   - The user's default PM (if any).
+   - Or "No default payment method"
+   - A "Payment Methods" button to open the WalletModal.
+   Intended for step 4 usage in StationDetail.
+   ------------------------------------------------------------------ */
+interface PaymentSummaryProps {
+  onOpenWalletModal: () => void;
+}
+
+/**
+ * PaymentSummary fetches the user's methods (or uses your store)
+ * to display the default one if found. If none, shows a fallback message.
+ */
+export function PaymentSummary({ onOpenWalletModal }: PaymentSummaryProps) {
+  const [methods, setMethods] = useState<SavedPaymentMethod[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    setLoading(true);
+    getSavedPaymentMethods(user.uid)
+      .then((res) => {
+        if (res.success && res.data) {
+          setMethods(res.data);
+        }
+      })
+      .catch((err) => {
+        console.error("[PaymentSummary] Error fetching methods =>", err);
+        toast.error("Failed to load payment methods");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const defaultMethod = methods.find((m) => m.isDefault);
+
+  return (
+    <div className="space-y-2 bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+      <h3 className="text-sm font-semibold text-white">Payment Method</h3>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading...</span>
+        </div>
+      ) : defaultMethod ? (
+        <div className="text-sm text-white">
+          <span className="font-medium uppercase">{defaultMethod.brand}</span>
+          <span> •••• {defaultMethod.last4}</span>
+          <span className="ml-2 text-xs text-green-400">Default</span>
+        </div>
+      ) : (
+        <div className="text-sm text-gray-400">
+          No default payment method
+        </div>
+      )}
+
+      <Button
+        variant="outline"
+        className="text-sm w-full mt-2 justify-center"
+        onClick={onOpenWalletModal}
+      >
+        Payment Methods
       </Button>
     </div>
   );
