@@ -9,39 +9,33 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 
-/**
- * A persistent bottom sheet for the "trip in progress" (step 5).
- * The user pressed "Confirm Trip" => we charged $50 => 
- * Now they can "Unlock" => use it => "End Trip" => final charge.
- */
+// Import our new press-and-hold unlock
+import UnlockButton from "@/components/UnlockButton";
+
 export default function TripSheet() {
   const dispatch = useAppDispatch();
 
   // Timer states
   const [tripActive, setTripActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // 1) Use number | null for intervalRef:
+  // Use number | null for intervalRef:
   const intervalRef = useRef<number | null>(null);
 
-  // Start trip => unlock => begin counting
+  // "Unlock" => start counting usage
   const handleUnlock = () => {
     setTripActive(true);
     setElapsedSeconds(0);
 
-    // 2) If intervalRef already running, clear it
     if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
     }
-
-    // 3) increment every second
     intervalRef.current = window.setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
     }, 1000);
   };
 
-  // End trip => charge the final usage
+  // End trip => charge final usage
   const handleEndTrip = async () => {
-    // 4) Clear interval if it exists
     if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -50,7 +44,7 @@ export default function TripSheet() {
 
     // Convert elapsedSeconds to minutes, rounding up
     const minutesUsed = Math.ceil(elapsedSeconds / 60);
-    const additionalFare = minutesUsed * 100; // $1 per minute, in cents
+    const additionalFare = minutesUsed * 100; // $1/min in cents
 
     if (!auth.currentUser) {
       console.error("Cannot charge user; no currentUser");
@@ -58,21 +52,18 @@ export default function TripSheet() {
     }
 
     try {
-      // e.g. HK$1 per minute => pass in cents
       const result = await chargeUserForTrip(auth.currentUser.uid, additionalFare);
       if (!result?.success) {
         throw new Error(result?.error || "Failed final trip charge.");
       }
-      // Optionally, toast.success(...) to confirm
-      // Then move to step 6 or done
       dispatch(advanceBookingStep(6));
     } catch (err) {
       console.error("Error ending trip:", err);
-      // Possibly show some UI error
+      // Possibly show an error UI
     }
   };
 
-  // Clear interval on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       if (intervalRef.current !== null) {
@@ -81,8 +72,6 @@ export default function TripSheet() {
     };
   }, []);
 
-  // We'll position this absolutely at the bottom
-  // You can style it as a "sheet" as you prefer
   return (
     <motion.div
       initial={{ y: "100%" }}
@@ -101,30 +90,29 @@ export default function TripSheet() {
           size="icon"
           className="text-gray-400 hover:text-white"
           onClick={() => {
-            // If you want them to forcibly end the trip, you might disable this,
-            // or do some confirm. For now, we let them close the sheet:
-            // But we still keep the tripActive state if they close it.
-            dispatch(advanceBookingStep(6)); // e.g. skip
+            // e.g. close the sheet
+            dispatch(advanceBookingStep(6));
           }}
         >
           <X className="w-4 h-4" />
         </Button>
       </div>
 
-      {/* Timer & controls */}
       <div className="space-y-4">
         <div>
           {tripActive ? (
-            <p>Elapsed: {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s</p>
+            <p>
+              Elapsed: {Math.floor(elapsedSeconds / 60)}m{" "}
+              {elapsedSeconds % 60}s
+            </p>
           ) : (
-            <p>Vehicle is locked. Unlock to start the ride.</p>
+            <p>Vehicle is locked. Press &amp; hold to unlock.</p>
           )}
         </div>
 
         {!tripActive ? (
-          <Button onClick={handleUnlock} className="w-full">
-            Unlock Vehicle
-          </Button>
+          /* Replace old button with the press-and-hold UnlockButton */
+          <UnlockButton onUnlocked={handleUnlock} />
         ) : (
           <Button onClick={handleEndTrip} className="w-full">
             End Trip
