@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { advanceBookingStep } from "@/store/bookingSlice";
 import { auth } from "@/lib/firebase";
+import { fetchVerificationData } from "@/store/verificationSlice";
 import { chargeUserForTrip } from "@/lib/stripe";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -19,9 +20,9 @@ import LicenseModal from "@/components/ui/LicenseModal";
 // Types from your verification slice
 import { DocumentStatus, VerificationData } from "@/store/verificationSlice";
 
-// Helper to check "approved"
+// Helper to check "approved" - FIXED to check both status AND verified property
 function isApproved(doc: DocumentStatus | undefined): boolean {
-  return doc?.status === "approved";
+  return doc?.status === "approved" || doc?.verified === true;
 }
 
 export default function TripSheet() {
@@ -35,17 +36,34 @@ export default function TripSheet() {
   // State to control opening the "Update Documents" modal
   const [licenseModalOpen, setLicenseModalOpen] = useState(false);
 
-  // 1) Grab user's verification data from the store
+  // Fetch verification data when component mounts
+  useEffect(() => {
+    if (auth.currentUser) {
+      dispatch(fetchVerificationData(auth.currentUser.uid));
+    }
+  }, [dispatch]);
+
+  // Grab user's verification data from the store
   const verificationData: VerificationData = useAppSelector((state) => {
     if (!auth.currentUser) return {};
     const uid = auth.currentUser.uid;
     return state.verification[uid] || {};
   });
 
-  // 2) Check if ID doc, driving license, and address are all approved
+  // Debug logging
+  useEffect(() => {
+    if (verificationData.idDocument || verificationData.drivingLicense || verificationData.address) {
+      console.log("Verification data:", verificationData);
+    }
+  }, [verificationData]);
+
+  // Check if ID doc, driving license, and address are all approved
   const idApproved = isApproved(verificationData.idDocument);
   const dlApproved = isApproved(verificationData.drivingLicense);
-  const addressApproved = !!verificationData.address?.verified; 
+  // For address, check both the status and verified flag
+  const addressApproved = verificationData.address?.status === "approved" || 
+                          verificationData.address?.verified === true;
+                          
   const fullyVerified = idApproved && dlApproved && addressApproved;
 
   // "Unlock" => start counting usage
