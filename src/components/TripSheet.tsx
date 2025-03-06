@@ -6,9 +6,10 @@ import { advanceBookingStep, resetBookingFlow } from "@/store/bookingSlice";
 import { auth } from "@/lib/firebase";
 import { fetchVerificationData } from "@/store/verificationSlice";
 import { chargeUserForTrip } from "@/lib/stripe";
+import { saveBookingDetails } from "@/store/bookingThunks"; // Import saveBookingDetails
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { toast } from "react-hot-toast"; // For success notifications
 
 // Press-and-hold unlock
 import UnlockButton from "@/components/UnlockButton";
@@ -102,12 +103,18 @@ export default function TripSheet() {
         throw new Error(result?.error || "Failed final trip charge.");
       }
       
-      // RESET the entire booking flow (back to step 1) instead of just advancing to step 6
+      // RESET the entire booking flow (back to step 1)
       dispatch(resetBookingFlow());
+      
+      // IMPORTANT: Save the reset booking state to Firestore
+      // This ensures the step 1 state persists and is loaded on refresh
+      await dispatch(saveBookingDetails());
+      
+      toast.success(`Trip completed! You were charged $${(additionalFare/100).toFixed(2)}`);
       
     } catch (err) {
       console.error("Error ending trip:", err);
-      // Possibly show an error UI
+      toast.error("Failed to end trip. Please try again.");
     }
   };
 
@@ -119,11 +126,6 @@ export default function TripSheet() {
       }
     };
   }, []);
-
-  // Skip this - TripSheet is no longer dismissable in step 5
-  // const handleClose = () => {
-  //   dispatch(advanceBookingStep(6));
-  // };
 
   // Called when user presses "Update Documents" in VerificationState
   const handleUpdateDocuments = () => {
