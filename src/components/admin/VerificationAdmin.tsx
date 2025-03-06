@@ -4,8 +4,8 @@ import React, { useState, useEffect } from "react";
 import { LogoSvg } from "../ui/logo/LogoSvg";
 
 // Redux imports
-import { useAppDispatch, useAppSelector } from "@/store/store"; 
-import { setUserVerification } from "@/store/verificationSlice";  // We'll use this for instant updates
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { setUserVerification } from "@/store/verificationSlice"; // For instant updates
 
 interface DocumentData {
   url: string;
@@ -62,7 +62,8 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
 
   // Document selection for ID, license, or address
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-  const [selectedDocType, setSelectedDocType] = useState<"id-document" | "driving-license" | "address" | null>(null);
+  const [selectedDocType, setSelectedDocType] =
+    useState<"id-document" | "driving-license" | "address" | null>(null);
 
   // OCR JSON
   const [jsonContent, setJsonContent] = useState<string | null>(null);
@@ -100,27 +101,21 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
       if (!data.success) throw new Error(data.error || "Failed to fetch users");
 
       const allUsers: UserData[] = data.users || [];
-      const normalized = allUsers.map((u) => ({ ...u, uid: u.uid || u.userId }));
+      const normalized = allUsers.map((u) => ({
+        ...u,
+        uid: u.uid || u.userId,
+      }));
 
       // Filter to only those who have at least some doc
       const filtered = normalized.filter(
         (u) =>
           u.documents &&
-          (
-            u.documents["id-document"] ||
+          (u.documents["id-document"] ||
             u.documents["driving-license"] ||
-            u.documents.address
-          )
+            u.documents.address)
       );
 
       setUsers(filtered);
-
-      // If you want to store them in Redux instantly as "snapshots" of verification
-      // you can do so, but your verification slice typically expects structured data.
-      // Usually you'd call a function that converts them to your VerificationData shape.
-      // For brevity, we skip that. 
-      // You can keep your existing logic for "setUserVerification" if you want.
-
     } catch (err) {
       console.error("Error fetching users:", err);
       alert("Failed to fetch users. Check console.");
@@ -139,10 +134,17 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
   };
 
   // ---------------------- Document / Address View ----------------------
-  const viewDocument = async (user: UserData, docType: "id-document" | "driving-license") => {
+  const viewDocument = async (
+    user: UserData,
+    docType: "id-document" | "driving-license"
+  ) => {
     resetSelection();
     try {
       const uid = user.uid || user.userId;
+      if (!uid) {
+        console.error("No valid UID found to view document");
+        return;
+      }
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -185,6 +187,10 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
   const approveDocument = async () => {
     if (!selectedUser || !selectedDocType) return;
     const uid = selectedUser.uid || selectedUser.userId;
+    if (!uid) {
+      console.error("No valid UID found for approving doc");
+      return;
+    }
 
     try {
       // 1) Approve in Firestore
@@ -202,9 +208,7 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
       if (!data.success) throw new Error(data.error || "Failed to approve document");
 
       // 2) Dispatch local Redux update for instant UI
-      // We'll retrieve the existing user verification from the store
       const existing = verificationStore[uid] || {};
-      // Make a copy
       const newData = { ...existing };
 
       if (selectedDocType === "id-document") {
@@ -227,7 +231,6 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
 
       alert("Document approved successfully!");
       resetSelection();
-      // Optionally re-fetch the full user list
       fetchUsers();
     } catch (err) {
       console.error(err);
@@ -238,6 +241,10 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
   const rejectDocument = async (reason: string) => {
     if (!selectedUser || !selectedDocType) return;
     const uid = selectedUser.uid || selectedUser.userId;
+    if (!uid) {
+      console.error("No valid UID found for rejecting doc");
+      return;
+    }
 
     try {
       // 1) Reject in Firestore
@@ -258,6 +265,7 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
       // 2) Dispatch local Redux update
       const existing = verificationStore[uid] || {};
       const newData = { ...existing };
+
       if (selectedDocType === "id-document") {
         newData.idDocument = {
           ...newData.idDocument,
@@ -289,6 +297,10 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
   const approveAddress = async () => {
     if (!selectedUser) return;
     const uid = selectedUser.uid || selectedUser.userId;
+    if (!uid) {
+      console.error("No valid UID found for approving address");
+      return;
+    }
 
     try {
       // 1) Approve in Firestore
@@ -307,6 +319,7 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
       // 2) Update store
       const existing = verificationStore[uid] || {};
       const newData = { ...existing };
+
       newData.address = {
         ...newData.address,
         status: "approved",
@@ -328,6 +341,10 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
   const rejectAddress = async (reason: string) => {
     if (!selectedUser) return;
     const uid = selectedUser.uid || selectedUser.userId;
+    if (!uid) {
+      console.error("No valid UID found for rejecting address");
+      return;
+    }
 
     try {
       // 1) Reject in Firestore
@@ -347,6 +364,7 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
       // 2) Update store
       const existing = verificationStore[uid] || {};
       const newData = { ...existing };
+
       newData.address = {
         ...newData.address,
         status: "rejected",
@@ -369,13 +387,20 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
   const saveJsonChanges = async () => {
     if (!selectedUser || !selectedDocType || !jsonContent) return;
 
+    const uid = selectedUser.uid || selectedUser.userId;
+    if (!uid) {
+      console.error("No valid UID found for saving JSON");
+      return;
+    }
+
+    // Validate JSON
     try {
       JSON.parse(jsonContent);
     } catch {
-      return alert("Invalid JSON format!");
+      alert("Invalid JSON format!");
+      return;
     }
 
-    const uid = selectedUser.uid || selectedUser.userId;
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -406,8 +431,12 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
 
     const { "id-document": idDoc, "driving-license": lic, address } = docs;
 
-    const somethingApproved = [idDoc, lic, address].some((item) => item?.verified);
-    const somethingRejected = [idDoc, lic, address].some((item) => item?.rejectionReason);
+    const somethingApproved = [idDoc, lic, address].some(
+      (item) => item?.verified
+    );
+    const somethingRejected = [idDoc, lic, address].some(
+      (item) => item?.rejectionReason
+    );
     const somethingPending = [idDoc, lic, address].some(
       (item) => item && !item.verified && !item.rejectionReason
     );
@@ -537,7 +566,9 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
                     <tr>
                       <th className="p-2 border border-gray-700">User</th>
                       <th className="p-2 border border-gray-700">ID Document</th>
-                      <th className="p-2 border border-gray-700">Driving License</th>
+                      <th className="p-2 border border-gray-700">
+                        Driving License
+                      </th>
                       <th className="p-2 border border-gray-700">Address</th>
                       <th className="p-2 border border-gray-700">Actions</th>
                     </tr>
@@ -577,7 +608,8 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
                             {user.documents?.["driving-license"]
                               ? getStatusBadge(
                                   user.documents["driving-license"].verified,
-                                  user.documents["driving-license"].rejectionReason
+                                  user.documents["driving-license"]
+                                    .rejectionReason
                                 )
                               : "Not Submitted"}
                           </td>
@@ -597,9 +629,7 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
                             {user.documents?.["id-document"] && (
                               <button
                                 className="p-1 bg-[#1375F6] text-white rounded mr-2 text-xs"
-                                onClick={() =>
-                                  viewDocument(user, "id-document")
-                                }
+                                onClick={() => viewDocument(user, "id-document")}
                               >
                                 View ID
                               </button>
@@ -631,7 +661,7 @@ export default function VerificationAdmin({}: VerificationAdminProps) {
             )}
           </div>
 
-          {/* ------------- DOCUMENT MODAL (ID or License) ------------- */}
+          {/* ============= DOCUMENT MODAL (ID or License) ============= */}
           {selectedUser && selectedDocType && selectedDocType !== "address" && (
             <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
               <div className="bg-gray-800 p-4 rounded shadow-lg max-w-4xl w-full md:w-auto max-h-[90vh] overflow-auto">
