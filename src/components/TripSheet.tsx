@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
-import { advanceBookingStep } from "@/store/bookingSlice";
+import { advanceBookingStep, resetBookingFlow } from "@/store/bookingSlice";
 import { auth } from "@/lib/firebase";
 import { fetchVerificationData } from "@/store/verificationSlice";
 import { chargeUserForTrip } from "@/lib/stripe";
@@ -20,7 +20,7 @@ import LicenseModal from "@/components/ui/LicenseModal";
 // Types from your verification slice
 import { DocumentStatus, VerificationData } from "@/store/verificationSlice";
 
-// Helper to check "approved" - FIXED to check both status AND verified property
+// Helper to check "approved" - Fixed to check both status AND verified property
 function isApproved(doc: DocumentStatus | undefined): boolean {
   return doc?.status === "approved" || doc?.verified === true;
 }
@@ -79,7 +79,7 @@ export default function TripSheet() {
     }, 1000);
   };
 
-  // End trip => charge final usage
+  // End trip => charge final usage and RESET booking flow to step 1
   const handleEndTrip = async () => {
     if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
@@ -101,8 +101,10 @@ export default function TripSheet() {
       if (!result?.success) {
         throw new Error(result?.error || "Failed final trip charge.");
       }
-      // Move to step 6 or show final screen
-      dispatch(advanceBookingStep(6));
+      
+      // RESET the entire booking flow (back to step 1) instead of just advancing to step 6
+      dispatch(resetBookingFlow());
+      
     } catch (err) {
       console.error("Error ending trip:", err);
       // Possibly show an error UI
@@ -118,10 +120,10 @@ export default function TripSheet() {
     };
   }, []);
 
-  // If the user closes
-  const handleClose = () => {
-    dispatch(advanceBookingStep(6));
-  };
+  // Skip this - TripSheet is no longer dismissable in step 5
+  // const handleClose = () => {
+  //   dispatch(advanceBookingStep(6));
+  // };
 
   // Called when user presses "Update Documents" in VerificationState
   const handleUpdateDocuments = () => {
@@ -139,17 +141,10 @@ export default function TripSheet() {
                   border-t border-gray-700 rounded-t-lg"
         style={{ minHeight: "220px" }}
       >
-        {/* Title & optional close icon */}
+        {/* Title without close button since it's no longer dismissable */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Trip in Progress</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-gray-400 hover:text-white"
-            onClick={handleClose}
-          >
-            <X className="w-4 h-4" />
-          </Button>
+          {/* Removed the close button */}
         </div>
 
         {/* If user is NOT fully verified => show verification UI w/ "Update Documents" button */}
@@ -165,18 +160,20 @@ export default function TripSheet() {
           <div className="space-y-4">
             <div>
               {tripActive ? (
-                <p>
+                <p className="text-center text-lg font-medium">
                   Elapsed: {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
                 </p>
               ) : (
-                <p>Vehicle is locked. Press &amp; hold to unlock.</p>
+                <p className="text-center mb-4">Vehicle is locked. Press &amp; hold to unlock.</p>
               )}
             </div>
 
             {!tripActive ? (
-              <UnlockButton onUnlocked={handleUnlock} />
+              <div className="w-full aspect-[4/1] flex items-center justify-center">
+                <UnlockButton onUnlocked={handleUnlock} className="w-full h-full" />
+              </div>
             ) : (
-              <Button onClick={handleEndTrip} className="w-full">
+              <Button onClick={handleEndTrip} className="w-full py-6 text-lg">
                 End Trip
               </Button>
             )}
