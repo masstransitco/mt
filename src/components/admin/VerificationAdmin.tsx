@@ -1,23 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { LogoSvg } from "../ui/logo/LogoSvg";
 
-// Redux imports
+// Redux imports (optional)
 import { useAppDispatch } from "@/store/store";
 import { setUserVerification } from "@/store/verificationSlice";
 
-// Firestore doc shape
-interface ExtractedData {
-  documentType?: string;
-  hkidNumber?: string;
-  englishName?: string;
-  chineseName?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  [key: string]: any;
-}
-
+/** 
+ * DocumentData is for ID docs & license. 
+ * Address is stored differently – see below. 
+ */
 interface DocumentData {
   url: string;
   uploadedAt: number;
@@ -27,15 +20,27 @@ interface DocumentData {
   rejectionReason?: string;
   rejectionDetail?: string;
   rejectedAt?: any;
-  extractedData?: ExtractedData;
+  extractedData?: any;
   ocrConfidence?: number;
   processedAt?: any;
 }
 
+/** An Address from Firestore with an optional rejectionReason added: */
+interface Address {
+  fullAddress: string;
+  location: { lat: number; lng: number };
+  block?: string;
+  floor?: string;
+  flat?: string;
+  timestamp: number;
+  verified: boolean;
+  rejectionReason?: string; // Make sure your Firestore can store this
+}
+
 interface UserDocuments {
-  [key: string]: DocumentData | undefined;
   "id-document"?: DocumentData;
   "driving-license"?: DocumentData;
+  address?: Address; // <-- Add 'address' here
 }
 
 interface UserData {
@@ -47,13 +52,8 @@ interface UserData {
   documents?: UserDocuments;
 }
 
-interface SelectedDocumentType {
-  type: string;
-  data: DocumentData;
-}
-
 // ------------------------------------
-// 1) These should match your verificationSlice
+// For your local store usage (if any)
 // ------------------------------------
 type DocStatus = "notUploaded" | "pending" | "approved" | "rejected";
 
@@ -61,51 +61,68 @@ interface DocumentStatus {
   status: DocStatus;
   url?: string;
   verified?: boolean;
-  verifiedAt?: any;
-  verifiedBy?: string;
   rejectionReason?: string;
-  rejectionDetail?: string;
-  rejectedAt?: any;
-  extractedData?: any;
-  ocrConfidence?: number;
-  processedAt?: any;
-  uploadedAt?: number;
+  // ...other fields
 }
 
 interface VerificationData {
   idDocument?: DocumentStatus;
   drivingLicense?: DocumentStatus;
-  // Possibly address, etc.
+  // --- ADDRESS CHANGES BELOW ---
+  address?: DocumentStatus;
 }
 
-// ------------------------------------
-// VerificationAdmin Component
-// ------------------------------------
+// Helper to map Firestore doc -> typed DocumentStatus
+function toDocStatus(doc?: DocumentData): DocumentStatus {
+  if (!doc) return { status: "notUploaded" };
+  if (doc.verified) return { ...doc, status: "approved" };
+  if (doc.rejectionReason) return { ...doc, status: "rejected" };
+  return { ...doc, status: "pending" };
+}
+
+// --- ADDRESS CHANGES BELOW ---
+// Helper to map Firestore address -> typed DocumentStatus
+function toAddressStatus(address?: Address): DocumentStatus {
+  if (!address) return { status: "notUploaded" };
+  if (address.verified) return { status: "approved" };
+  if (address.rejectionReason) return { status: "rejected", rejectionReason: address.rejectionReason };
+  return { status: "pending" };
+}
+
+// Maps an entire user’s documents to local VerificationData
+function convertUserToVerificationData(user: UserData): VerificationData {
+  const docs = user.documents || {};
+  return {
+    idDocument: toDocStatus(docs["id-document"]),
+    drivingLicense: toDocStatus(docs["driving-license"]),
+    // --- ADDRESS CHANGES BELOW ---
+    address: toAddressStatus(docs.address),
+  };
+}
+
 export default function VerificationAdmin() {
-  // Simple password-based login
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState(false);
 
-  // Users
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentTab, setCurrentTab] = useState<"pending" | "approved" | "rejected">("pending");
 
-  // Tab: pending, approved, rejected
-  const [currentTab, setCurrentTab] = useState("pending");
-
-  // Selected doc/user
+  // Document selection for ID or license
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-  const [selectedDocument, setSelectedDocument] = useState<SelectedDocumentType | null>(null);
+  const [selectedDocType, setSelectedDocType] = useState<"id-document" | "driving-license" | "address" | null>(null);
 
   // OCR JSON editing
   const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [isEditingJson, setIsEditingJson] = useState(false);
 
-  // Redux dispatch
+  // For address inspection
+  const [showAddressModal, setShowAddressModal] = useState(false);
+
   const dispatch = useAppDispatch();
 
-  // ---------------------- Login ----------------------
+  // ---------------------- Admin Login ----------------------
   const handleLogin = () => {
     if (passwordInput === "20230301") {
       setIsAuthenticated(true);
@@ -128,26 +145,25 @@ export default function VerificationAdmin() {
         }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to fetch users");
-      }
+      if (!data.success) throw new Error(data.error || "Failed to fetch users");
 
       const allUsers: UserData[] = data.users || [];
+      const normalized = allUsers.map((u) => ({ ...u, uid: u.uid || u.userId }));
 
-      // Normalize user objects to handle both uid and userId
-      const normalizedUsers = allUsers.map((user) => ({
-        ...user,
-        uid: user.uid || user.userId,
-      }));
-
-      // Filter to only users who have at least one doc
-      const filtered = normalizedUsers.filter(
-        (u) => u.documents && (u.documents["id-document"] || u.documents["driving-license"])
+      // Filter to only those who have at least some doc
+      const filtered = normalized.filter(
+        (u) =>
+          u.documents &&
+          (
+            u.documents["id-document"] ||
+            u.documents["driving-license"] ||
+            u.documents.address
+          )
       );
 
       setUsers(filtered);
 
-      // Also push each user's doc data to the verificationSlice
+      // For Redux – store their verification data
       filtered.forEach((user) => {
         const verificationData = convertUserToVerificationData(user);
         dispatch(setUserVerification({ uid: user.uid!, data: verificationData }));
@@ -160,53 +176,11 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ---------------------- Convert Firestore -> VerificationData ----------------------
-  function convertUserToVerificationData(user: UserData): VerificationData {
-    const docs = user.documents || {};
-
-    return {
-      idDocument: toDocStatus(docs["id-document"]),
-      drivingLicense: toDocStatus(docs["driving-license"]),
-    };
-  }
-
-  // Helper that maps a Firestore doc to your slice's typed DocumentStatus
-  function toDocStatus(doc?: DocumentData): DocumentStatus {
-    if (!doc) {
-      return { status: "notUploaded" };
-    }
-
-    // Determine final status from doc.verified, doc.rejectionReason, etc.
-    let derivedStatus: DocStatus = "pending";
-    if (doc.verified) {
-      derivedStatus = "approved";
-    } else if (doc.rejectionReason) {
-      derivedStatus = "rejected";
-    }
-
-    return {
-      // Spread any extra fields
-      ...doc,
-      // Overwrite with typed literal
-      status: derivedStatus,
-    };
-  }
-
-  // ---------------------- View Document ----------------------
-  const viewDocument = async (user: UserData, docType: string) => {
-    const uid = user?.uid || user?.userId;
-    if (!uid) {
-      console.error("No valid uid found on user:", user);
-      return;
-    }
-
-    // Reset states
-    setSelectedUser(null);
-    setSelectedDocument(null);
-    setJsonContent(null);
-    setIsEditingJson(false);
-
+  // ---------------------- View a Document (ID/License) ----------------------
+  const viewDocument = async (user: UserData, docType: "id-document" | "driving-license") => {
+    resetSelection();
     try {
+      const uid = user.uid || user.userId;
       const res = await fetch("/api/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -218,43 +192,48 @@ export default function VerificationAdmin() {
         }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to view document");
-      }
+      if (!data.success) throw new Error(data.error || "Failed to view document");
 
+      // userData with the doc
       const fetchedUser = data.userData as UserData;
       fetchedUser.uid = fetchedUser.uid || fetchedUser.userId;
 
-      const docData = fetchedUser.documents?.[docType];
-      if (!docData) {
-        alert("Document data not found on server response.");
-        return;
-      }
-
       setSelectedUser(fetchedUser);
-      setSelectedDocument({ type: docType, data: docData });
+      setSelectedDocType(docType);
 
+      // If there’s OCR data, store it
       if (data.ocrJson) {
         setJsonContent(JSON.stringify(data.ocrJson, null, 2));
-      } else {
-        setJsonContent(null);
       }
       setIsEditingJson(false);
     } catch (err) {
-      console.error("View document error:", err);
+      console.error(err);
       alert(String(err));
     }
   };
 
-  // ---------------------- Approve Document ----------------------
-  const approveDocument = async () => {
-    if (!selectedUser || !selectedDocument) return;
+  // ---------------------- View an Address ----------------------
+  const viewAddress = (user: UserData) => {
+    // No big call to get doc image – address is pure text. 
+    // If you need to refresh from server, do a fetch here.
+    resetSelection();
+    setSelectedUser(user);
+    setSelectedDocType("address");
+    setShowAddressModal(true);
+  };
 
+  const resetSelection = () => {
+    setSelectedUser(null);
+    setSelectedDocType(null);
+    setJsonContent(null);
+    setIsEditingJson(false);
+    setShowAddressModal(false);
+  };
+
+  // ---------------------- Approve / Reject Document ----------------------
+  const approveDocument = async () => {
+    if (!selectedUser || !selectedDocType) return;
     const uid = selectedUser.uid || selectedUser.userId;
-    if (!uid) {
-      console.error("No valid uid found for selectedUser:", selectedUser);
-      return;
-    }
 
     try {
       const res = await fetch("/api/admin", {
@@ -264,35 +243,24 @@ export default function VerificationAdmin() {
           op: "approveDocument",
           adminPassword: "20230301",
           userId: uid,
-          docType: selectedDocument.type,
+          docType: selectedDocType, // 'id-document' or 'driving-license'
         }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to approve document");
-      }
+      if (!data.success) throw new Error(data.error || "Failed to approve document");
 
       alert("Document approved successfully!");
-
-      setSelectedUser(null);
-      setSelectedDocument(null);
-      setJsonContent(null);
-      fetchUsers(); // Re-fetch to refresh local + Redux state
+      resetSelection();
+      fetchUsers();
     } catch (err) {
-      console.error("Error approving document:", err);
+      console.error(err);
       alert(String(err));
     }
   };
 
-  // ---------------------- Reject Document ----------------------
   const rejectDocument = async (reason: string) => {
-    if (!selectedUser || !selectedDocument) return;
-
+    if (!selectedUser || !selectedDocType) return;
     const uid = selectedUser.uid || selectedUser.userId;
-    if (!uid) {
-      console.error("No valid uid found for selectedUser:", selectedUser);
-      return;
-    }
 
     try {
       const res = await fetch("/api/admin", {
@@ -302,45 +270,87 @@ export default function VerificationAdmin() {
           op: "rejectDocument",
           adminPassword: "20230301",
           userId: uid,
-          docType: selectedDocument.type,
+          docType: selectedDocType,
           reason,
         }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to reject document");
-      }
+      if (!data.success) throw new Error(data.error || "Failed to reject document");
 
       alert("Document rejected successfully!");
-
-      setSelectedUser(null);
-      setSelectedDocument(null);
-      setJsonContent(null);
-      fetchUsers(); // Re-fetch to refresh local + Redux state
+      resetSelection();
+      fetchUsers();
     } catch (err) {
-      console.error("Error rejecting document:", err);
+      console.error(err);
       alert(String(err));
     }
   };
 
-  // ---------------------- Save OCR JSON ----------------------
-  const saveJsonChanges = async () => {
-    if (!selectedUser || !selectedDocument || !jsonContent) return;
+  // ---------------------- Approve / Reject Address ----------------------
+  const approveAddress = async () => {
+    if (!selectedUser) return;
+    const uid = selectedUser.uid || selectedUser.userId;
 
-    // Validate JSON
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          op: "approveAddress", // Implement in /api/admin
+          adminPassword: "20230301",
+          userId: uid,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to approve address");
+
+      alert("Address approved successfully!");
+      resetSelection();
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+      alert(String(err));
+    }
+  };
+
+  const rejectAddress = async (reason: string) => {
+    if (!selectedUser) return;
+    const uid = selectedUser.uid || selectedUser.userId;
+
+    try {
+      const res = await fetch("/api/admin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          op: "rejectAddress", // Implement in /api/admin
+          adminPassword: "20230301",
+          userId: uid,
+          reason,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "Failed to reject address");
+
+      alert("Address rejected successfully!");
+      resetSelection();
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+      alert(String(err));
+    }
+  };
+
+  // ---------------------- Save OCR JSON (ID/License only) ----------------------
+  const saveJsonChanges = async () => {
+    if (!selectedUser || !selectedDocType || !jsonContent) return;
+
     try {
       JSON.parse(jsonContent);
-    } catch (error) {
-      alert("Invalid JSON format. Please fix before saving.");
-      return;
+    } catch {
+      return alert("Invalid JSON format!");
     }
 
     const uid = selectedUser.uid || selectedUser.userId;
-    if (!uid) {
-      console.error("No valid uid found for selectedUser:", selectedUser);
-      return;
-    }
-
     try {
       const res = await fetch("/api/admin", {
         method: "POST",
@@ -349,14 +359,12 @@ export default function VerificationAdmin() {
           op: "saveJson",
           adminPassword: "20230301",
           userId: uid,
-          docType: selectedDocument.type,
+          docType: selectedDocType,
           jsonContent,
         }),
       });
       const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to save JSON");
-      }
+      if (!data.success) throw new Error(data.error || "Failed to save JSON");
 
       alert("JSON file updated successfully!");
       setIsEditingJson(false);
@@ -366,12 +374,50 @@ export default function VerificationAdmin() {
     }
   };
 
-  // ----------------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------------
+  // ---------------------- Helpers ----------------------
+  const getStatusBadge = (verified?: boolean, rejectionReason?: string) => {
+    if (verified) {
+      return <span className="px-2 py-1 rounded-full text-xs bg-green-600 text-green-100">Verified</span>;
+    }
+    if (rejectionReason) {
+      return <span className="px-2 py-1 rounded-full text-xs bg-red-600 text-red-100">Rejected</span>;
+    }
+    return <span className="px-2 py-1 rounded-full text-xs bg-orange-600 text-orange-100">Pending</span>;
+  };
+
+  const userMatchesTab = (user: UserData) => {
+    // Returns true if user belongs in the current tab (pending/approved/rejected)
+    const docs = user.documents;
+    if (!docs) return false;
+
+    // Extract statuses for each doc + address
+    const { "id-document": idDoc, "driving-license": lic, address } = docs;
+
+    // For "approved" tab, we consider the user if ANY doc or address is approved
+    const somethingApproved = [idDoc, lic, address].some((item) => item?.verified);
+    // For "rejected" tab, if ANY doc or address is rejected
+    const somethingRejected = [idDoc, lic, address].some((item) => item?.rejectionReason);
+    // For "pending" tab, if something is not verified nor rejected
+    const somethingPending = [idDoc, lic, address].some(
+      (item) => item && !item.verified && !item.rejectionReason
+    );
+
+    switch (currentTab) {
+      case "approved":
+        return somethingApproved;
+      case "rejected":
+        return somethingRejected;
+      case "pending":
+      default:
+        return somethingPending;
+    }
+  };
+
+  // ---------------------- Render ----------------------
   return (
     <>
       {!isAuthenticated ? (
+        // Simple password prompt
         <div className="bg-gray-900 min-h-screen text-gray-200 flex justify-center items-center p-4">
           <div className="bg-gray-800 rounded shadow p-6 max-w-md w-full">
             <div className="flex justify-center mb-6">
@@ -386,17 +432,14 @@ export default function VerificationAdmin() {
                 setPasswordError(false);
               }}
               className="w-full p-2 border border-gray-600 rounded mb-2 bg-gray-700 text-gray-200
-                focus:outline-none focus:ring-2 focus:ring-[#1375F6] transition-colors"
+                focus:outline-none focus:ring-2 focus:ring-[#1375F6]"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleLogin();
               }}
             />
-            {passwordError && (
-              <p className="text-red-400 text-sm mb-2">Incorrect password</p>
-            )}
+            {passwordError && <p className="text-red-400 text-sm mb-2">Incorrect password</p>}
             <button
-              className="w-full p-2 rounded text-white bg-[#1375F6] hover:bg-[#136BE0]
-                transition-colors"
+              className="w-full p-2 rounded text-white bg-[#1375F6] hover:bg-[#136BE0]"
               onClick={handleLogin}
             >
               Login
@@ -411,30 +454,24 @@ export default function VerificationAdmin() {
             <div className="mb-4">
               <div className="flex gap-2 mb-4">
                 <button
-                  className={`p-2 rounded transition-colors ${
-                    currentTab === "pending"
-                      ? "bg-[#1375F6] text-white"
-                      : "bg-gray-700 hover:bg-gray-600"
+                  className={`p-2 rounded ${
+                    currentTab === "pending" ? "bg-[#1375F6] text-white" : "bg-gray-700 hover:bg-gray-600"
                   }`}
                   onClick={() => setCurrentTab("pending")}
                 >
                   Pending
                 </button>
                 <button
-                  className={`p-2 rounded transition-colors ${
-                    currentTab === "approved"
-                      ? "bg-[#1375F6] text-white"
-                      : "bg-gray-700 hover:bg-gray-600"
+                  className={`p-2 rounded ${
+                    currentTab === "approved" ? "bg-[#1375F6] text-white" : "bg-gray-700 hover:bg-gray-600"
                   }`}
                   onClick={() => setCurrentTab("approved")}
                 >
                   Approved
                 </button>
                 <button
-                  className={`p-2 rounded transition-colors ${
-                    currentTab === "rejected"
-                      ? "bg-[#1375F6] text-white"
-                      : "bg-gray-700 hover:bg-gray-600"
+                  className={`p-2 rounded ${
+                    currentTab === "rejected" ? "bg-[#1375F6] text-white" : "bg-gray-700 hover:bg-gray-600"
                   }`}
                   onClick={() => setCurrentTab("rejected")}
                 >
@@ -443,8 +480,7 @@ export default function VerificationAdmin() {
               </div>
 
               <button
-                className="p-2 bg-gray-700 hover:bg-gray-600 rounded mb-4
-                  transition-colors"
+                className="p-2 bg-gray-700 hover:bg-gray-600 rounded mb-4"
                 onClick={fetchUsers}
               >
                 Refresh
@@ -461,114 +497,80 @@ export default function VerificationAdmin() {
                       <th className="p-2 border border-gray-700">User</th>
                       <th className="p-2 border border-gray-700">ID Document</th>
                       <th className="p-2 border border-gray-700">Driving License</th>
+                      {/* --- ADDRESS CHANGES BELOW --- */}
+                      <th className="p-2 border border-gray-700">Address</th>
                       <th className="p-2 border border-gray-700">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users
-                      .filter((user) => {
-                        if (currentTab === "pending") {
-                          // Docs not verified nor rejected
-                          return (
-                            (user.documents?.["id-document"] &&
-                              !user.documents["id-document"].verified &&
-                              !user.documents["id-document"].rejectionReason) ||
-                            (user.documents?.["driving-license"] &&
-                              !user.documents["driving-license"].verified &&
-                              !user.documents["driving-license"].rejectionReason)
-                          );
-                        } else if (currentTab === "approved") {
-                          return (
-                            (user.documents?.["id-document"] &&
-                              user.documents["id-document"].verified) ||
-                            (user.documents?.["driving-license"] &&
-                              user.documents["driving-license"].verified)
-                          );
-                        } else if (currentTab === "rejected") {
-                          return (
-                            (user.documents?.["id-document"] &&
-                              user.documents["id-document"].rejectionReason) ||
-                            (user.documents?.["driving-license"] &&
-                              user.documents["driving-license"].rejectionReason)
-                          );
-                        }
-                        return true;
-                      })
+                      .filter((user) => userMatchesTab(user))
                       .map((user) => (
-                        <tr
-                          key={user.uid || user.userId}
-                          className="hover:bg-gray-700 transition-colors"
-                        >
+                        <tr key={user.uid || user.userId} className="hover:bg-gray-700">
                           <td className="p-2 border border-gray-700">
-                            <p className="font-semibold">
-                              {user.displayName || "No Name"}
-                            </p>
+                            <p className="font-semibold">{user.displayName || "No Name"}</p>
                             <p className="text-xs text-gray-300">
-                              {user.email ||
-                                user.phoneNumber ||
-                                user.uid ||
-                                user.userId}
+                              {user.email || user.phoneNumber || user.uid || user.userId}
                             </p>
                           </td>
+
+                          {/* ID Document */}
                           <td className="p-2 border border-gray-700">
-                            {user.documents?.["id-document"] ? (
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs inline-block ${
-                                  user.documents["id-document"].verified
-                                    ? "bg-green-600 text-green-100"
-                                    : user.documents["id-document"].rejectionReason
-                                    ? "bg-red-600 text-red-100"
-                                    : "bg-orange-600 text-orange-100"
-                                }`}
-                              >
-                                {user.documents["id-document"].verified
-                                  ? "Verified"
-                                  : user.documents["id-document"].rejectionReason
-                                  ? "Rejected"
-                                  : "Pending"}
-                              </span>
-                            ) : (
-                              <span>Not Submitted</span>
-                            )}
+                            {user.documents?.["id-document"]
+                              ? getStatusBadge(
+                                  user.documents["id-document"].verified,
+                                  user.documents["id-document"].rejectionReason
+                                )
+                              : "Not Submitted"}
                           </td>
+
+                          {/* Driving License */}
                           <td className="p-2 border border-gray-700">
-                            {user.documents?.["driving-license"] ? (
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs inline-block ${
-                                  user.documents["driving-license"].verified
-                                    ? "bg-green-600 text-green-100"
-                                    : user.documents["driving-license"].rejectionReason
-                                    ? "bg-red-600 text-red-100"
-                                    : "bg-orange-600 text-orange-100"
-                                }`}
-                              >
-                                {user.documents["driving-license"].verified
-                                  ? "Verified"
-                                  : user.documents["driving-license"].rejectionReason
-                                  ? "Rejected"
-                                  : "Pending"}
-                              </span>
-                            ) : (
-                              <span>Not Submitted</span>
-                            )}
+                            {user.documents?.["driving-license"]
+                              ? getStatusBadge(
+                                  user.documents["driving-license"].verified,
+                                  user.documents["driving-license"].rejectionReason
+                                )
+                              : "Not Submitted"}
                           </td>
+
+                          {/* --- ADDRESS CHANGES BELOW --- */}
                           <td className="p-2 border border-gray-700">
+                            {user.documents?.address
+                              ? getStatusBadge(
+                                  user.documents.address.verified,
+                                  user.documents.address.rejectionReason
+                                )
+                              : "Not Submitted"}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="p-2 border border-gray-700">
+                            {/* ID Document? */}
                             {user.documents?.["id-document"] && (
                               <button
-                                className="p-1 bg-[#1375F6] text-white rounded mr-2
-                                  hover:bg-[#136BE0] transition-colors text-xs"
+                                className="p-1 bg-[#1375F6] text-white rounded mr-2 text-xs"
                                 onClick={() => viewDocument(user, "id-document")}
                               >
                                 View ID
                               </button>
                             )}
+                            {/* License? */}
                             {user.documents?.["driving-license"] && (
                               <button
-                                className="p-1 bg-[#1375F6] text-white rounded
-                                  hover:bg-[#136BE0] transition-colors text-xs"
+                                className="p-1 bg-[#1375F6] text-white rounded mr-2 text-xs"
                                 onClick={() => viewDocument(user, "driving-license")}
                               >
                                 View License
+                              </button>
+                            )}
+                            {/* Address? */}
+                            {user.documents?.address && (
+                              <button
+                                className="p-1 bg-[#1375F6] text-white rounded text-xs"
+                                onClick={() => viewAddress(user)}
+                              >
+                                View Address
                               </button>
                             )}
                           </td>
@@ -580,68 +582,50 @@ export default function VerificationAdmin() {
             )}
           </div>
 
-          {/* Modal for Document / OCR JSON */}
-          {selectedDocument && (
+          {/* ------------------------- 
+               DOCUMENT MODAL
+               (ID or License) 
+             ------------------------- */}
+          {selectedUser && selectedDocType && selectedDocType !== "address" && (
             <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
               <div className="bg-gray-800 p-4 rounded shadow-lg max-w-4xl w-full md:w-auto max-h-[90vh] overflow-auto">
+                {/* Title */}
                 <h2 className="text-xl font-bold mb-4">
-                  {selectedDocument.type === "id-document"
-                    ? "Identity Document"
-                    : "Driving License"}
+                  {selectedDocType === "id-document" ? "Identity Document" : "Driving License"}
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedDocument.data.url && (
+                  {/* Document Image */}
+                  {selectedUser.documents?.[selectedDocType]?.url && (
                     <div>
                       <h3 className="font-bold mb-2">Document Image</h3>
                       <img
-                        src={selectedDocument.data.url}
+                        src={selectedUser.documents[selectedDocType]?.url}
                         alt="Document"
                         className="max-w-full border border-gray-700 rounded"
                       />
                     </div>
                   )}
 
+                  {/* Right side user info & OCR JSON */}
                   <div>
-                    <h3 className="font-bold mb-2">User Information</h3>
-                    <p>
-                      <strong>UID:</strong>{" "}
-                      {selectedUser?.uid || selectedUser?.userId}
-                    </p>
-                    {selectedUser?.email && (
-                      <p>
-                        <strong>Email:</strong> {selectedUser.email}
-                      </p>
+                    <h3 className="font-bold mb-2">User Info</h3>
+                    <p><strong>UID:</strong> {selectedUser.uid || selectedUser.userId}</p>
+                    {selectedUser.email && (
+                      <p><strong>Email:</strong> {selectedUser.email}</p>
                     )}
-                    {selectedUser?.phoneNumber && (
-                      <p>
-                        <strong>Phone:</strong> {selectedUser.phoneNumber}
-                      </p>
+                    {selectedUser.phoneNumber && (
+                      <p><strong>Phone:</strong> {selectedUser.phoneNumber}</p>
                     )}
 
-                    {selectedDocument.data.extractedData && (
-                      <div className="mt-4">
-                        <h3 className="font-bold mb-2">Extracted Data</h3>
-                        <div className="p-2 bg-gray-700 rounded">
-                          <pre className="whitespace-pre-wrap text-xs">
-                            {JSON.stringify(
-                              selectedDocument.data.extractedData,
-                              null,
-                              2
-                            )}
-                          </pre>
-                        </div>
-                      </div>
-                    )}
-
+                    {/* OCR JSON display */}
                     {jsonContent && (
                       <div className="mt-4">
                         <h3 className="font-bold mb-2 flex items-center justify-between">
                           <span>OCR JSON Data</span>
                           {!isEditingJson && (
                             <button
-                              className="p-1 bg-[#1375F6] text-white rounded text-xs
-                                hover:bg-[#136BE0] transition-colors"
+                              className="p-1 bg-[#1375F6] text-white rounded text-xs"
                               onClick={() => setIsEditingJson(true)}
                             >
                               Edit JSON
@@ -663,15 +647,13 @@ export default function VerificationAdmin() {
                             />
                             <div className="mt-2 flex gap-2">
                               <button
-                                className="px-3 py-1 bg-green-600 text-green-100 rounded text-xs
-                                  hover:bg-green-500 transition-colors"
+                                className="px-3 py-1 bg-green-600 text-green-100 rounded text-xs hover:bg-green-500"
                                 onClick={saveJsonChanges}
                               >
-                                Save JSON Changes
+                                Save JSON
                               </button>
                               <button
-                                className="px-3 py-1 bg-gray-600 text-gray-100 rounded text-xs
-                                  hover:bg-gray-500 transition-colors"
+                                className="px-3 py-1 bg-gray-600 text-gray-100 rounded text-xs hover:bg-gray-500"
                                 onClick={() => setIsEditingJson(false)}
                               >
                                 Cancel
@@ -684,47 +666,113 @@ export default function VerificationAdmin() {
                   </div>
                 </div>
 
+                {/* Approve / Reject Buttons */}
                 <div className="mt-4 flex justify-between">
                   <div className="space-x-2">
                     <button
-                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                        transition-colors text-sm"
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500 text-sm"
                       onClick={() => rejectDocument("unclear")}
                     >
                       Reject: Unclear
                     </button>
                     <button
-                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                        transition-colors text-sm"
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500 text-sm"
                       onClick={() => rejectDocument("mismatch")}
                     >
                       Reject: Mismatch
                     </button>
                     <button
-                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500
-                        transition-colors text-sm"
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500 text-sm"
                       onClick={() => rejectDocument("expired")}
                     >
                       Reject: Expired
                     </button>
                   </div>
+
                   <div className="space-x-2">
                     <button
-                      className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500
-                        transition-colors text-sm"
-                      onClick={() => {
-                        setSelectedDocument(null);
-                        setSelectedUser(null);
-                        setJsonContent(null);
-                        setIsEditingJson(false);
-                      }}
+                      className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500 text-sm"
+                      onClick={resetSelection}
                     >
                       Close
                     </button>
                     <button
-                      className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500
-                        transition-colors text-sm"
+                      className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500 text-sm"
                       onClick={approveDocument}
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ------------------------- 
+               ADDRESS MODAL
+             ------------------------- */}
+          {showAddressModal && selectedUser && selectedDocType === "address" && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+              <div className="bg-gray-800 p-4 rounded shadow-lg max-w-lg w-full max-h-[90vh] overflow-auto">
+                <h2 className="text-xl font-bold mb-4">Residential Address</h2>
+
+                {selectedUser.documents?.address && (
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      <strong>Full Address:</strong> {selectedUser.documents.address.fullAddress}
+                    </p>
+                    {selectedUser.documents.address.block && (
+                      <p>
+                        <strong>Block:</strong> {selectedUser.documents.address.block}
+                      </p>
+                    )}
+                    <p>
+                      <strong>Floor:</strong> {selectedUser.documents.address.floor}
+                    </p>
+                    <p>
+                      <strong>Flat/Unit:</strong> {selectedUser.documents.address.flat}
+                    </p>
+                    <p>
+                      <strong>Timestamp:</strong> {new Date(selectedUser.documents.address.timestamp).toLocaleString()}
+                    </p>
+                    <p>
+                      <strong>Lat/Lng:</strong>{" "}
+                      {selectedUser.documents.address.location.lat}, {selectedUser.documents.address.location.lng}
+                    </p>
+                    {selectedUser.documents.address.rejectionReason && (
+                      <p className="text-red-400">
+                        <strong>Rejected Reason:</strong> {selectedUser.documents.address.rejectionReason}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Approve / Reject Buttons */}
+                <div className="mt-6 flex justify-between">
+                  <div className="space-x-2">
+                    <button
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500 text-sm"
+                      onClick={() => rejectAddress("invalid-proof")}
+                    >
+                      Reject: Invalid
+                    </button>
+                    <button
+                      className="p-2 bg-red-600 text-red-100 rounded hover:bg-red-500 text-sm"
+                      onClick={() => rejectAddress("incomplete")}
+                    >
+                      Reject: Incomplete
+                    </button>
+                  </div>
+                  <div className="space-x-2">
+                    <button
+                      className="p-2 bg-gray-600 text-gray-100 rounded hover:bg-gray-500 text-sm"
+                      onClick={resetSelection}
+                    >
+                      Close
+                    </button>
+                    <button
+                      className="p-2 bg-green-600 text-green-100 rounded hover:bg-green-500 text-sm"
+                      onClick={approveAddress}
                     >
                       Approve
                     </button>
