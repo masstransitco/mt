@@ -30,7 +30,7 @@ import { PaymentSummary } from "@/components/ui/PaymentComponents";
 import TripSheet from "./TripSheet";
 
 // Import your actual WalletModal
-import WalletModal from "@/components/WalletModal";
+import WalletModal from "@/components/ui/WalletModal";
 
 /** Dynamically import the MapCard for step 2/4 display */
 const MapCard = dynamic(() => import("./MapCard"), {
