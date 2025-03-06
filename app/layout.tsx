@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, getFirestore } from "firebase/firestore";
 import { useRouter } from "next/navigation";
+import { toast } from "react-hot-toast"; // Assuming you use this for notifications
 
 import { auth } from "@/lib/firebase";
 import Spinner from "@/components/ui/spinner";
@@ -21,7 +22,7 @@ import {
   selectIsSignedIn
 } from "@/store/userSlice";
 import { loadBookingDetails } from "@/store/bookingThunks";
-import { selectBookingStep } from "@/store/bookingSlice";
+import { selectBookingStep, resetBookingFlow } from "@/store/bookingSlice";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -43,6 +44,27 @@ function DisablePinchZoom() {
   }, []);
 
   return null;
+}
+
+/**
+ * Booking State Recovery Component
+ * Automatically detects and fixes invalid booking states
+ */
+function BookingStateRecovery() {
+  const dispatch = useAppDispatch();
+  const bookingStep = useAppSelector(selectBookingStep);
+  
+  useEffect(() => {
+    // If user is in the invalid step 6, reset them to step 1
+    if (bookingStep === 6) {
+      console.log("Detected user in invalid booking state (step 6), resetting to step 1...");
+      dispatch(resetBookingFlow());
+      // Optional: Show a toast notification to inform the user
+      toast?.success("Your previous trip has been completed. Ready for a new trip!");
+    }
+  }, [bookingStep, dispatch]);
+  
+  return null; // This is just a logic component, no UI
 }
 
 /**
@@ -125,6 +147,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={`${inter.className} h-full flex flex-col relative`}>
+      {/* Include BookingStateRecovery component */}
+      <BookingStateRecovery />
       {children}
     </div>
   );
