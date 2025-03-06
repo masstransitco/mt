@@ -12,21 +12,21 @@ import Spinner from "@/components/ui/spinner";
 
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
-import { useAppDispatch } from "@/store/store";
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   signOutUser,
   setDefaultPaymentMethodId,
-  // If you have an AuthUser type, import that as well
+  setAuthUser,
+  selectAuthUser,
+  selectIsSignedIn
 } from "@/store/userSlice";
-import { setAuthUserAndLoadBooking } from "@/store/userSlice"; // <-- The combined thunk
-// OR if you placed the thunk in a different file, import from that file
+import { loadBookingDetails } from "@/store/bookingThunks";
+import { selectBookingStep } from "@/store/bookingSlice";
 
 const inter = Inter({ subsets: ["latin"] });
 
 /**
  * Component to disable pinch-to-zoom.
- * It listens for touchmove events and, if more than one finger is detected,
- * prevents the default behavior.
  */
 function DisablePinchZoom() {
   useEffect(() => {
@@ -46,23 +46,26 @@ function DisablePinchZoom() {
 }
 
 /**
- * Child component that lives INSIDE the ReduxProvider,
- * so it can safely call useAppDispatch / useAppSelector.
+ * Child component that lives INSIDE the ReduxProvider
  */
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(true);
+  const currentUser = useAppSelector(selectAuthUser);
+  const isSignedIn = useAppSelector(selectIsSignedIn);
+  const bookingStep = useAppSelector(selectBookingStep);
 
+  // This effect runs once on component mount to set up auth listener
   useEffect(() => {
-    const db = getFirestore(); // initialize Firestore (client side)
+    const db = getFirestore();
     
-    // 1) Listen for Firebase Auth changes
+    // Listen for Firebase Auth changes
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
       setLoading(false);
 
       if (firebaseUser) {
-        // Build our AuthUser object (adjust fields as needed)
+        // Build our AuthUser object
         const userPayload = {
           uid: firebaseUser.uid,
           phoneNumber: firebaseUser.phoneNumber ?? undefined,
@@ -70,46 +73,49 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           displayName: firebaseUser.displayName ?? undefined,
         };
 
-        // 2) Dispatch the combined thunk => sets user + tries to rehydrate booking
-        await dispatch(setAuthUserAndLoadBooking(userPayload));
-
-        // 3) Then subscribe to user doc for real-time updates
+        // Dispatch auth user update
+        dispatch(setAuthUser(userPayload));
+        
+        // Subscribe to user doc for real-time updates
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const unsubscribeDoc = onSnapshot(userDocRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data() as any;
-            // If user doc has 'defaultPaymentMethodId', store it in Redux
+            // Handle payment method changes
             if (data.defaultPaymentMethodId) {
               dispatch(setDefaultPaymentMethodId(data.defaultPaymentMethodId));
             } else {
               dispatch(setDefaultPaymentMethodId(null));
             }
           } else {
-            // doc does not exist => no default PM
             dispatch(setDefaultPaymentMethodId(null));
           }
         });
 
-        // Cleanup doc subscription
         return () => {
           unsubscribeDoc();
         };
       } else {
         // No user => sign out in Redux
         dispatch(signOutUser());
-        // Also clear out PM
         dispatch(setDefaultPaymentMethodId(null));
       }
     });
 
-    // Cleanup Auth subscription
     return () => {
       unsubscribeAuth();
     };
-  }, [dispatch, router]);
+  }, [dispatch]);
+
+  // This effect runs whenever auth state or booking step changes
+  useEffect(() => {
+    // If user is signed in, load booking details if they're not already loaded
+    if (isSignedIn && currentUser) {
+      dispatch(loadBookingDetails());
+    }
+  }, [isSignedIn, currentUser, dispatch]);
 
   if (loading) {
-    // Show a loading screen while waiting for Firebase auth check
     return (
       <div className="h-screen w-screen flex items-center justify-center">
         <Spinner size="lg" />
@@ -120,13 +126,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <div className={`${inter.className} h-full flex flex-col relative`}>
       {children}
-      {/* If you had a chat widget or something, it goes here */}
     </div>
   );
 }
 
 /**
- * The actual Next.js RootLayout component (exported default).
+ * The actual Next.js RootLayout component
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -138,10 +143,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className={`${inter.className} h-full overflow-x-hidden bg-background`}>
-        {/* Disable pinch-to-zoom on mobile browsers */}
         <DisablePinchZoom />
-
-        {/* Provide Redux to all child components */}
         <ReduxProvider>
           <LayoutInner>{children}</LayoutInner>
         </ReduxProvider>
