@@ -15,7 +15,9 @@ interface UnlockButtonProps {
  */
 export default function UnlockButton({ onUnlocked }: UnlockButtonProps) {
   const [progress, setProgress] = useState(0);
-  const intervalRef = useRef<NodeJS.Timer | null>(null);
+
+  // Use ReturnType<typeof setInterval> so we can call clearInterval without TS conflict
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const totalDurationMs = 5000; // 5 seconds
   const stepMs = 50; // how often we update
@@ -23,31 +25,28 @@ export default function UnlockButton({ onUnlocked }: UnlockButtonProps) {
   const circleRadius = 40; // adjust for ring size
   const circumference = 2 * Math.PI * circleRadius;
 
-  // Handler to start counting
   const handlePointerDown = () => {
-    // If already counting, skip
-    if (intervalRef.current !== null) return;
+    if (intervalRef.current !== null) return; // Already counting
 
     let currentStep = 0;
     intervalRef.current = setInterval(() => {
       currentStep += 1;
       const newProgress = (currentStep / stepsNeeded) * 100;
-
       setProgress(newProgress);
 
       // If we've reached 100%:
       if (newProgress >= 100) {
         clearInterval(intervalRef.current!);
         intervalRef.current = null;
-        setProgress(100); // ensure it's exact
-        onUnlocked(); // Call the unlock callback
+        setProgress(100);
+        onUnlocked();
       }
     }, stepMs);
   };
 
-  // Handler to reset if user lets go / leaves the button
+  // Cancel if user lets go too soon
   const handlePointerUpOrLeave = () => {
-    if (intervalRef.current) {
+    if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
@@ -63,7 +62,7 @@ export default function UnlockButton({ onUnlocked }: UnlockButtonProps) {
     };
   }, []);
 
-  // strokeDashoffset for the animated circle
+  // strokeDashoffset for the ring
   const dashOffset = circumference - (progress / 100) * circumference;
 
   return (
@@ -73,23 +72,18 @@ export default function UnlockButton({ onUnlocked }: UnlockButtonProps) {
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUpOrLeave}
         onPointerLeave={handlePointerUpOrLeave}
-        style={{
-          // So the ring is pressable on touch devices
-          touchAction: "none",
-        }}
+        style={{ touchAction: "none" }}
       >
-        {/* The label over the center */}
         <span className="absolute text-center text-sm text-white pointer-events-none">
           Press &amp; Hold
         </span>
 
-        {/* The background track circle */}
         <svg
           className="w-full h-full"
           viewBox="0 0 100 100"
           style={{ transform: "rotate(-90deg)" }}
         >
-          {/* The 'track' circle */}
+          {/* track circle */}
           <circle
             cx="50"
             cy="50"
@@ -98,13 +92,13 @@ export default function UnlockButton({ onUnlocked }: UnlockButtonProps) {
             stroke="#2F2F2F"
             strokeWidth="8"
           />
-          {/* The animated progress circle */}
+          {/* progress circle */}
           <circle
             cx="50"
             cy="50"
             r={circleRadius}
             fill="none"
-            stroke="#38bdf8" // tailwind's sky-400
+            stroke="#38bdf8"
             strokeWidth="8"
             strokeDasharray={circumference}
             strokeDashoffset={dashOffset}
@@ -113,7 +107,6 @@ export default function UnlockButton({ onUnlocked }: UnlockButtonProps) {
         </svg>
       </div>
 
-      {/* Optional: Instruction text or dynamic feedback */}
       <p className="mt-2 text-xs text-gray-300">
         Hold for 5s to unlock.
       </p>
