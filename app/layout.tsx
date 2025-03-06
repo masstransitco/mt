@@ -21,7 +21,7 @@ import {
   selectAuthUser,
   selectIsSignedIn
 } from "@/store/userSlice";
-import { loadBookingDetails } from "@/store/bookingThunks";
+import { loadBookingDetails, saveBookingDetails } from "@/store/bookingThunks"; // Added saveBookingDetails
 import { selectBookingStep, resetBookingFlow } from "@/store/bookingSlice";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -53,16 +53,26 @@ function DisablePinchZoom() {
 function BookingStateRecovery() {
   const dispatch = useAppDispatch();
   const bookingStep = useAppSelector(selectBookingStep);
+  const isSignedIn = useAppSelector(selectIsSignedIn);
   
   useEffect(() => {
-    // If user is in the invalid step 6, reset them to step 1
-    if (bookingStep === 6) {
-      console.log("Detected user in invalid booking state (step 6), resetting to step 1...");
+    // Only process if user is signed in
+    if (!isSignedIn) return;
+    
+    // If user is in invalid step 5 or 6, reset them to step 1
+    if (bookingStep === 5 || bookingStep === 6) {
+      console.log(`Detected user in invalid booking state (step ${bookingStep}), resetting to step 1...`);
+      
+      // Reset the booking flow in Redux
       dispatch(resetBookingFlow());
-      // Optional: Show a toast notification to inform the user
-      toast?.success("Your previous trip has been completed. Ready for a new trip!");
+      
+      // Also save this reset to Firestore to persist across page refreshes
+      dispatch(saveBookingDetails());
+      
+      // Notify the user
+      toast.success("Your previous trip has been completed. Ready for a new trip!");
     }
-  }, [bookingStep, dispatch]);
+  }, [bookingStep, dispatch, isSignedIn]);
   
   return null; // This is just a logic component, no UI
 }
