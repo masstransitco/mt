@@ -244,7 +244,7 @@ function StationDetailComponent({
               Processing...
             </>
           ) : isDepartureFlow ? (
-            "Choose Return Station"
+            "Choose Dropoff Station"
           ) : (
             "Confirm Trip"
           )}
