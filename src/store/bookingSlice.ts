@@ -4,8 +4,9 @@
 import { createSlice, createAsyncThunk, PayloadAction, createSelector } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
 import { StationFeature } from "./stationsSlice";
+import { ensureGoogleMapsLoaded, getDirections } from "@/lib/googleMaps";
 
-/** The user’s chosen ticket plan. */
+/** The user's chosen ticket plan. */
 type TicketPlan = "single" | "paygo" | null;
 
 /** Defines the route information between two stations. */
@@ -21,7 +22,7 @@ interface RouteInfo {
 /** The overall state for booking. */
 export interface BookingState {
   /**
-   * The numerical step we’re on (1 → n).
+   * The numerical step we're on (1 → n).
    * 1 = selecting_departure_station
    * 2 = selected_departure_station
    * 3 = selecting_arrival_station
@@ -44,7 +45,7 @@ export interface BookingState {
   /** Error message (if any) for route fetching. */
   routeError: string | null;
 
-  /** The user’s selected ticket plan, or null if not chosen. */
+  /** The user's selected ticket plan, or null if not chosen. */
   ticketPlan: TicketPlan;
 
   /** Numeric station IDs for departure/arrival. */
@@ -63,26 +64,25 @@ export const fetchRoute = createAsyncThunk<
 >(
   "booking/fetchRoute",
   async ({ departure, arrival }, { rejectWithValue }) => {
-    if (!window.google || !window.google.maps) {
-      return rejectWithValue("Google Maps API not available");
-    }
     try {
-      const directionsService = new google.maps.DirectionsService();
+      // Ensure Google Maps is loaded
+      await ensureGoogleMapsLoaded();
+      
       const [depLng, depLat] = departure.geometry.coordinates;
       const [arrLng, arrLat] = arrival.geometry.coordinates;
 
-      const request: google.maps.DirectionsRequest = {
-        origin: { lat: depLat, lng: depLng },
-        destination: { lat: arrLat, lng: arrLng },
-        travelMode: google.maps.TravelMode.DRIVING,
-      };
-
-      const response = await directionsService.route(request);
-      if (!response || !response.routes?.[0]) {
+      // Use our utility function for getting directions
+      const result = await getDirections(
+        { lat: depLat, lng: depLng },
+        { lat: arrLat, lng: arrLng },
+        { travelMode: google.maps.TravelMode.DRIVING }
+      );
+      
+      if (!result.routes?.[0]) {
         return rejectWithValue("No route found");
       }
 
-      const route = response.routes[0];
+      const route = result.routes[0];
       const leg = route.legs?.[0];
       if (!leg?.distance?.value || !leg?.duration?.value) {
         return rejectWithValue("Incomplete route data");
@@ -94,7 +94,7 @@ export const fetchRoute = createAsyncThunk<
 
       return { distance, duration, polyline };
     } catch (err) {
-      console.error(err);
+      console.error("Route fetching error:", err);
       return rejectWithValue("Directions request failed");
     }
   }
@@ -310,10 +310,18 @@ export const selectRouteDecoded = createSelector(
   (route) => {
     if (!route || !route.polyline) return [];
 
-    // Ensure the Google Maps geometry library is loaded
-    if (!window.google?.maps?.geometry?.encoding) return [];
+    try {
+      // Safely check if Google Maps is loaded before using it
+      if (!window.google?.maps?.geometry?.encoding) {
+        ensureGoogleMapsLoaded();
+        return [];
+      }
 
-    const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline);
-    return decodedPath.map((latLng) => latLng.toJSON());
+      const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline);
+      return decodedPath.map((latLng) => latLng.toJSON());
+    } catch (error) {
+      console.error("Error decoding polyline:", error);
+      return [];
+    }
   }
 );
