@@ -4,12 +4,12 @@ import admin from "firebase-admin";
 // Only initialize once
 if (!admin.apps.length) {
   // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
-  // (including "private_key", "client_email", etc.)
   if (process.env.SERVICE_ACCOUNT_KEY) {
     const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
+      storageBucket: "masstransitcompany.firebasestorage.app", // <-- specify bucket
     });
   } else {
     // Option B: Use separate env variables for projectId, privateKey, clientEmail
@@ -19,6 +19,7 @@ if (!admin.apps.length) {
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
       }),
+      storageBucket: "masstransitcompany.firebasestorage.app", // <-- specify bucket
     });
   }
 }
@@ -26,7 +27,7 @@ if (!admin.apps.length) {
 // Export primary admin references that the app might need
 export const db = admin.firestore();
 export const auth = admin.auth();
-export const storage = admin.storage(); // Provide direct access to storage
+export const storage = admin.storage(); // This now uses the default bucket from above
 
 // Optionally export the admin instance itself if needed
 export default admin;
