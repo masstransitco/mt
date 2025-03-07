@@ -4,7 +4,7 @@ import type { RootState } from "./store";
 /* -----------------------------------------------------------
    Possible top-level view states for your UI
 ----------------------------------------------------------- */
-type ViewState = "showCar" | "showMap" | "none";  // Add 'none' to represent no sheet open
+type ViewState = "showMap" | "none";  // Removed "showCar" as it's now directly in StationDetail
 
 /* -----------------------------------------------------------
    Possible layout modes for CarGrid (optional example)
@@ -17,7 +17,7 @@ interface UIState {
 }
 
 const initialState: UIState = {
-  viewState: "showCar", // Default: show the Car screen
+  viewState: "none", // Default: no sheet shown (since CarGrid is now part of StationDetail)
   carGridLayout: "grid",
 };
 
