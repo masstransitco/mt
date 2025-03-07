@@ -23,6 +23,9 @@ import {
 import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
+// Import CarGrid
+import CarGrid from "./CarGrid";
+
 // PaymentSummary is your minimal UI for default PM + "Payment Methods" button
 import { PaymentSummary } from "@/components/ui/PaymentComponents";
 
@@ -222,6 +225,13 @@ function StationDetailComponent({
           <span className="font-medium text-white">{parkingValue}</span>
         </div>
       </div>
+
+      {/* Show CarGrid for the departure flow at step 2 */}
+      {isDepartureFlow && step === 2 && (
+        <div className="py-2">
+          <CarGrid isVisible={true} />
+        </div>
+      )}
 
       {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
       {step === 4 && isSignedIn && (
