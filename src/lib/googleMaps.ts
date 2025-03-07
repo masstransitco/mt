@@ -1,62 +1,164 @@
 // lib/googleMaps.ts
 
 /**
- * Utility for safely loading and using Google Maps services
+ * Improved utility for safely loading and using Google Maps services
  */
 
 // Track the loading state
 let isGoogleMapsLoaded = false;
 let loadPromise: Promise<void> | null = null;
+let waitingResolvers: Array<{resolve: () => void; reject: (err: Error) => void}> = [];
 
 /**
- * Ensures the Google Maps API is fully loaded before using its services
+ * Ensures the Google Maps API is fully loaded and its services are available
  * @returns Promise that resolves when Google Maps is ready
  */
 export const ensureGoogleMapsLoaded = (): Promise<void> => {
-  // Return existing promise if already loading
-  if (loadPromise) return loadPromise;
-  
-  // If already loaded, return resolved promise
-  if (isGoogleMapsLoaded && window.google?.maps) {
+  // If already confirmed as loaded, return immediately
+  if (isGoogleMapsLoaded && window.google?.maps?.DirectionsService) {
     return Promise.resolve();
+  }
+  
+  // Return existing promise if already in the process of loading
+  if (loadPromise) {
+    // Add a new resolver to the waiting list
+    return new Promise<void>((resolve, reject) => {
+      waitingResolvers.push({ resolve, reject });
+    });
   }
   
   // Start loading
   loadPromise = new Promise<void>((resolve, reject) => {
-    // Check if API is already loaded
-    if (window.google?.maps?.DirectionsService) {
-      isGoogleMapsLoaded = true;
-      resolve();
-      return;
-    }
-
-    // Define a timeout for load failures
+    // Also add this initial resolver to the waiting list
+    waitingResolvers.push({ resolve, reject });
+    
+    // Define a maximum wait time
+    const maxWaitTime = 15000; // 15 seconds
+    
+    // Set timeout for the entire operation
     const timeoutId = setTimeout(() => {
-      reject(new Error("Google Maps API load timeout"));
-    }, 10000);
-
-    // Check for Maps loading at intervals
-    const checkLoaded = () => {
-      if (window.google?.maps?.DirectionsService) {
+      const error = new Error("Google Maps API load timeout after 15 seconds");
+      isGoogleMapsLoaded = false;
+      loadPromise = null;
+      
+      // Reject all waiting promises
+      waitingResolvers.forEach(({reject}) => reject(error));
+      waitingResolvers = [];
+    }, maxWaitTime);
+    
+    /**
+     * Helper function to check if Maps API is fully loaded
+     * with all required services
+     */
+    const isFullyLoaded = () => {
+      return window.google?.maps?.DirectionsService &&
+        window.google?.maps?.Geocoder &&
+        window.google?.maps?.places?.AutocompleteService &&
+        window.google?.maps?.geometry?.spherical;
+    };
+    
+    /**
+     * Function that runs when Maps is fully loaded
+     */
+    const onFullyLoaded = () => {
+      console.log("Google Maps API fully loaded with all required services");
+      clearTimeout(timeoutId);
+      isGoogleMapsLoaded = true;
+      loadPromise = null;
+      
+      // Resolve all waiting promises
+      waitingResolvers.forEach(({resolve}) => resolve());
+      waitingResolvers = [];
+    };
+    
+    /**
+     * Recursive polling function
+     */
+    const checkLoaded = (attemptCount = 0) => {
+      // If fully loaded, resolve
+      if (isFullyLoaded()) {
+        onFullyLoaded();
+        return;
+      }
+      
+      // Check for Maps script tag
+      const hasScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+      
+      // After 40 attempts (10 seconds) with script present but not loaded, give up
+      if (hasScript && attemptCount > 40) {
         clearTimeout(timeoutId);
-        isGoogleMapsLoaded = true;
-        resolve();
-      } else if (document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')) {
-        // Script exists but not loaded yet, wait a bit more
-        setTimeout(checkLoaded, 100);
+        const error = new Error("Google Maps API failed to initialize after multiple attempts");
+        loadPromise = null;
+        isGoogleMapsLoaded = false;
+        
+        // Reject all waiting promises
+        waitingResolvers.forEach(({reject}) => reject(error));
+        waitingResolvers = [];
+        return;
+      }
+      
+      // Continue checking if script exists but services aren't loaded yet
+      if (hasScript) {
+        setTimeout(() => checkLoaded(attemptCount + 1), 250);
       } else {
-        // Script doesn't exist at all
-        clearTimeout(timeoutId);
-        reject(new Error("Google Maps API script not found"));
+        // If script doesn't exist after a reasonable wait, give up
+        if (attemptCount > 20) {
+          clearTimeout(timeoutId);
+          const error = new Error("Google Maps API script not found after 5 seconds");
+          loadPromise = null;
+          isGoogleMapsLoaded = false;
+          
+          // Reject all waiting promises
+          waitingResolvers.forEach(({reject}) => reject(error));
+          waitingResolvers = [];
+          return;
+        }
+        
+        // Continue checking for script
+        setTimeout(() => checkLoaded(attemptCount + 1), 250);
       }
     };
-
+    
     // Start checking
     checkLoaded();
   });
   
   return loadPromise;
 };
+
+/**
+ * Handles errors from Google Maps operations with comprehensive retry logic
+ * @param operation The operation function to perform
+ * @param maxRetries Maximum number of retry attempts
+ * @returns Promise resolving to the operation result
+ */
+export async function withMapsErrorHandling<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let retryCount = 0;
+  
+  while (true) {
+    try {
+      await ensureGoogleMapsLoaded();
+      return await operation();
+    } catch (error) {
+      retryCount++;
+      console.error(`Google Maps operation failed (attempt ${retryCount}):`, error);
+      
+      if (retryCount >= maxRetries) {
+        throw error;
+      }
+      
+      // Wait with exponential backoff before retrying
+      await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, retryCount)));
+      
+      // Reset Google Maps loaded state for next retry
+      isGoogleMapsLoaded = false;
+      loadPromise = null;
+    }
+  }
+}
 
 /**
  * Creates a DirectionsService safely, ensuring the API is loaded first
@@ -109,23 +211,25 @@ export const getDirections = async (
   destination: google.maps.LatLngLiteral | string,
   options: Partial<google.maps.DirectionsRequest> = {}
 ): Promise<google.maps.DirectionsResult> => {
-  const directionsService = await createDirectionsService();
-  
-  return new Promise((resolve, reject) => {
-    directionsService.route(
-      {
-        origin,
-        destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-        ...options,
-      },
-      (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          resolve(result);
-        } else {
-          reject(new Error(`Directions request failed: ${status}`));
+  return withMapsErrorHandling(async () => {
+    const directionsService = await createDirectionsService();
+    
+    return new Promise((resolve, reject) => {
+      directionsService.route(
+        {
+          origin,
+          destination,
+          travelMode: google.maps.TravelMode.DRIVING,
+          ...options,
+        },
+        (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            resolve(result);
+          } else {
+            reject(new Error(`Directions request failed: ${status}`));
+          }
         }
-      }
-    );
+      );
+    });
   });
 };
