@@ -19,6 +19,11 @@ import { MapPinDown } from "@/components/ui/icons/MapPinDown";
 import { MapPinUp } from "@/components/ui/icons/MapPinUp";
 import { NearPin } from "@/components/ui/icons/NearPin";
 import { cn } from "@/lib/utils";
+import { 
+  ensureGoogleMapsLoaded, 
+  createGeocoder, 
+  createAutocompleteService 
+} from "@/lib/googleMaps";
 
 /* -----------------------------------------------------------
    Typing & Dot Animations
@@ -158,16 +163,37 @@ const AddressSearch = React.memo(
     const [searchText, setSearchText] = useState("");
     const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
     const geocoder = useRef<google.maps.Geocoder | null>(null);
     const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const mapsLoadedRef = useRef<boolean>(false);
 
+    // Initialize Google Maps services safely
     useEffect(() => {
-      if (window.google && !autocompleteService.current) {
-        autocompleteService.current = new google.maps.places.AutocompleteService();
-        geocoder.current = new google.maps.Geocoder();
-      }
+      const initServices = async () => {
+        try {
+          if (!mapsLoadedRef.current) {
+            await ensureGoogleMapsLoaded();
+            mapsLoadedRef.current = true;
+          }
+          
+          if (!autocompleteService.current) {
+            autocompleteService.current = await createAutocompleteService();
+          }
+          
+          if (!geocoder.current) {
+            geocoder.current = await createGeocoder();
+          }
+        } catch (error) {
+          console.error("Failed to initialize Google Maps services:", error);
+          toast.error("Map services unavailable. Please refresh the page.");
+        }
+      };
+      
+      initServices();
+      
       return () => {
         if (searchTimeoutRef.current) {
           clearTimeout(searchTimeoutRef.current);
@@ -181,43 +207,85 @@ const AddressSearch = React.memo(
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
-      if (!input.trim() || !autocompleteService.current) {
+      
+      if (!input.trim()) {
         setPredictions([]);
         return;
       }
+      
+      setIsLoading(true);
       searchTimeoutRef.current = setTimeout(async () => {
         try {
+          // Initialize services if needed
+          if (!autocompleteService.current) {
+            await ensureGoogleMapsLoaded();
+            autocompleteService.current = await createAutocompleteService();
+          }
+          
           const request: google.maps.places.AutocompleteRequest = {
             input,
             // @ts-ignore
             types: ["establishment", "geocode"],
             componentRestrictions: { country: "HK" },
           };
-          const response = await autocompleteService.current!.getPlacePredictions(request);
-          setPredictions(response.predictions.slice(0, 5));
-          setIsDropdownOpen(response.predictions.length > 0);
+          
+          // Use a promise wrapper for the callback
+          const result = await new Promise<google.maps.places.AutocompletePrediction[]>((resolve, reject) => {
+            autocompleteService.current!.getPlacePredictions(
+              request,
+              (predictions, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
+                  resolve(predictions);
+                } else {
+                  reject(new Error(`Places API error: ${status}`));
+                }
+              }
+            );
+          });
+          
+          setPredictions(result.slice(0, 5));
+          setIsDropdownOpen(result.length > 0);
         } catch (error) {
           console.error("Error fetching predictions:", error);
           setPredictions([]);
           setIsDropdownOpen(false);
+        } finally {
+          setIsLoading(false);
         }
       }, 300);
     }, []);
 
     const handleSelect = useCallback(
       async (prediction: google.maps.places.AutocompletePrediction) => {
-        if (!geocoder.current) return;
         try {
-          const response = await geocoder.current.geocode({
-            placeId: prediction.place_id,
+          // Initialize geocoder if needed
+          if (!geocoder.current) {
+            await ensureGoogleMapsLoaded();
+            geocoder.current = await createGeocoder();
+          }
+          
+          // Use a promise wrapper for the callback
+          const result = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
+            geocoder.current!.geocode(
+              { placeId: prediction.place_id },
+              (results, status) => {
+                if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
+                  resolve(results);
+                } else {
+                  reject(new Error(`Geocoder error: ${status}`));
+                }
+              }
+            );
           });
-          const result = response.results[0];
-          if (result?.geometry?.location) {
-            const { lat, lng } = result.geometry.location;
-            onAddressSelect({ lat: lat(), lng: lng() });
+          
+          const location = result[0]?.geometry?.location;
+          if (location) {
+            onAddressSelect({ lat: location.lat(), lng: location.lng() });
             setSearchText(prediction.structured_formatting.main_text);
             setPredictions([]);
             setIsDropdownOpen(false);
+          } else {
+            throw new Error("No location found in geocoder result");
           }
         } catch (error) {
           console.error("Geocoding error:", error);
@@ -244,16 +312,23 @@ const AddressSearch = React.memo(
                   searchPlaces(e.target.value);
                 }}
                 onFocus={() => setIsDropdownOpen(predictions.length > 0)}
-                onBlur={() => setIsDropdownOpen(false)}
+                onBlur={() => {
+                  // Small delay to allow clicking on dropdown items
+                  setTimeout(() => setIsDropdownOpen(false), 150);
+                }}
                 disabled={disabled}
                 placeholder={placeholder}
                 className={cn(
-                  "w-full bg-slate-950/90 bakcdrop-blur-md text-white",
+                  "w-full bg-slate-950/90 backdrop-blur-md text-white",
                   "focus:outline-none",
                   "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 text-base transition-colors"
                 )}
               />
-              {searchText && (
+              {isLoading ? (
+                <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : searchText ? (
                 <button
                   onClick={() => {
                     setSearchText("");
@@ -265,7 +340,7 @@ const AddressSearch = React.memo(
                 >
                   <X className="w-4 h-4" />
                 </button>
-              )}
+              ) : null}
             </div>
             <AnimatePresence>
               {isDropdownOpen && predictions.length > 0 && (
@@ -357,15 +432,21 @@ function StationSelector({
       toast.error("Geolocation not supported.");
       return;
     }
+    
+    // Show loading feedback
+    toast.loading("Finding your location...");
+    
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        toast.dismiss();
         toast.success("Location found!");
         dispatch(setSearchLocation(loc));
         onAddressSearch(loc);
       },
       (err) => {
         console.error("Geolocation error:", err);
+        toast.dismiss();
         toast.error("Unable to retrieve location.");
       },
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
