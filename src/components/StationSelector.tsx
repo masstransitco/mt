@@ -14,19 +14,11 @@ import {
 } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
-import { closeCurrentSheet, setViewState } from "@/store/uiSlice";
 import { setSearchLocation } from "@/store/userSlice";
-import { CarSignalIcon } from "@/components/ui/icons/CarSignalIcon";
 import { MapPinDown } from "@/components/ui/icons/MapPinDown";
 import { MapPinUp } from "@/components/ui/icons/MapPinUp";
 import { NearPin } from "@/components/ui/icons/NearPin";
 import { cn } from "@/lib/utils";
-
-// Dynamically import CarSheet
-const CarSheet = dynamic(() => import("@/components/booking/CarSheet"), {
-  ssr: false,
-  loading: () => <div className="h-10 bg-gray-800 animate-pulse rounded-md"></div>,
-});
 
 /* -----------------------------------------------------------
    Typing & Dot Animations
@@ -334,7 +326,6 @@ function StationSelector({
   const arrivalId = useAppSelector(selectArrivalStationId);
   const stations = useAppSelector(selectStationsWithDistance);
   const bookingRoute = useAppSelector(selectRoute);
-  const viewState = useAppSelector((state) => state.ui.viewState);
 
   const departureStation = useMemo(
     () => stations.find((s) => s.id === departureId),
@@ -389,14 +380,6 @@ function StationSelector({
     [dispatch, onAddressSearch]
   );
 
-  const handleCarToggle = useCallback(() => {
-    if (viewState === "showCar") {
-      dispatch(closeCurrentSheet());
-    } else {
-      dispatch(setViewState("showCar"));
-    }
-  }, [dispatch, viewState]);
-
   const handleClearDeparture = useCallback(() => {
     dispatch(clearDispatchRoute());
     onClearDeparture?.();
@@ -405,8 +388,6 @@ function StationSelector({
   const handleClearArrival = useCallback(() => {
     onClearArrival?.();
   }, [onClearArrival]);
-
-  const showCarSheet = viewState === "showCar";
 
   return (
     <div className="relative z-10 w-full max-w-screen-md mx-auto px-1">
@@ -503,50 +484,20 @@ function StationSelector({
               </div>
             )}
             
-            {/* Only show these buttons in steps 1 or 2 */}
+            {/* Only show locate me button in steps 1 or 2 */}
             {(step === 1 || step === 2) && (
-              <>
-                <button
-                  onClick={onLocateMe || handleLocateMe}
-                  className="w-10 h-10 bg-gray-800 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
-                  type="button"
-                  aria-label="Find stations near me"
-                >
-                  <NearPin className="w-5 h-5" />
-                </button>
-                
-                <button
-                  onClick={handleCarToggle}
-                  className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors",
-                    showCarSheet 
-                      ? "bg-blue-600 text-white hover:bg-blue-700" 
-                      : "bg-gray-800 text-white hover:bg-gray-700"
-                  )}
-                  type="button"
-                  aria-label="Toggle car view"
-                >
-                  <CarSignalIcon className="w-5 h-5" />
-                </button>
-              </>
+              <button
+                onClick={onLocateMe || handleLocateMe}
+                className="w-10 h-10 bg-gray-800 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md flex items-center justify-center"
+                type="button"
+                aria-label="Find stations near me"
+              >
+                <NearPin className="w-5 h-5" />
+              </button>
             )}
           </div>
         </div>
       </div>
-
-      {/* CarSheet rendered after the selector */}
-      <AnimatePresence>
-        {showCarSheet && (
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="mt-2"
-          >
-            <CarSheet isOpen onToggle={handleCarToggle} className="max-w-screen-md mx-auto mt-10" />
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
