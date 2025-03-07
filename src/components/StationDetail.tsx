@@ -1,8 +1,8 @@
 "use client";
 
-import React, { memo, useState } from "react";
+import React, { memo, useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { Clock, Footprints } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -23,8 +23,15 @@ import {
 import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
-// Import CarGrid
-import CarGrid from "./booking/CarGrid";
+// Dynamically import CarGrid for better code splitting
+const CarGrid = dynamic(() => import("./booking/CarGrid"), {
+  loading: () => (
+    <div className="h-40 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
+      <div className="text-xs text-gray-400">Loading vehicles...</div>
+    </div>
+  ),
+  ssr: false,
+});
 
 // PaymentSummary is your minimal UI for default PM + "Payment Methods" button
 import { PaymentSummary } from "@/components/ui/PaymentComponents";
@@ -52,6 +59,15 @@ interface StationDetailProps {
   onOpenSignIn: () => void;
   onDismiss?: () => void;
 }
+
+// Memoized component to wrap CarGrid for better performance
+const MemoizedCarGrid = memo(({ isVisible }: { isVisible: boolean }) => {
+  // Only render when visible
+  if (!isVisible) return null;
+  
+  return <CarGrid isVisible={isVisible} />;
+});
+MemoizedCarGrid.displayName = "MemoizedCarGrid";
 
 function StationDetailComponent({
   activeStation,
@@ -83,6 +99,22 @@ function StationDetailComponent({
 
   // For showing a spinner on "Confirm Trip"
   const [charging, setCharging] = useState(false);
+  
+  // Flag for lazy-loading the CarGrid
+  const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
+  
+  // Lazy load CarGrid only when we're at step 2
+  useEffect(() => {
+    if (isDepartureFlow && step === 2 && activeStation) {
+      setShouldLoadCarGrid(true);
+    } else {
+      // Give time for exit animations before unloading
+      const timer = setTimeout(() => {
+        setShouldLoadCarGrid(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isDepartureFlow, step, activeStation]);
 
   // If step 5 => show TripSheet exclusively (blocking background)
   if (step === 5) {
@@ -226,12 +258,20 @@ function StationDetailComponent({
         </div>
       </div>
 
-      {/* Show CarGrid for the departure flow at step 2 */}
-      {isDepartureFlow && step === 2 && (
-        <div className="py-2">
-          <CarGrid isVisible={true} />
-        </div>
-      )}
+      {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
+      <AnimatePresence>
+        {isDepartureFlow && step === 2 && (
+          <motion.div 
+            className="py-2"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {shouldLoadCarGrid && <MemoizedCarGrid isVisible={true} />}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
       {step === 4 && isSignedIn && (
