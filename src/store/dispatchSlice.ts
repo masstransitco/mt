@@ -9,6 +9,7 @@ import {
 import type { RootState } from "./store";
 import { DISPATCH_HUB } from "@/constants/map";
 import { StationFeature } from "@/store/stationsSlice";
+import { ensureGoogleMapsLoaded, getDirections } from "@/lib/googleMaps";
 
 /** RouteInfo for the dispatch hub → departure route */
 interface RouteInfo {
@@ -86,26 +87,24 @@ export const fetchDispatchDirections = createAsyncThunk<
   StationFeature,         // Thunk argument (the chosen station)
   { rejectValue: string } // Rejected payload
 >("dispatch/fetchDispatchDirections", async (station, { rejectWithValue }) => {
-  if (!window.google || !window.google.maps) {
-    return rejectWithValue("Google Maps API not available");
-  }
   try {
-    const directionsService = new google.maps.DirectionsService();
-
+    // Ensure Google Maps is loaded
+    await ensureGoogleMapsLoaded();
+    
     const [stationLng, stationLat] = station.geometry.coordinates;
-
-    const request: google.maps.DirectionsRequest = {
-      origin: { lat: DISPATCH_HUB.lat, lng: DISPATCH_HUB.lng },
-      destination: { lat: stationLat, lng: stationLng },
-      travelMode: google.maps.TravelMode.DRIVING,
-    };
-
-    const response = await directionsService.route(request);
-    if (!response?.routes?.[0]) {
+    
+    // Get route using our utility function
+    const result = await getDirections(
+      { lat: DISPATCH_HUB.lat, lng: DISPATCH_HUB.lng },
+      { lat: stationLat, lng: stationLng },
+      { travelMode: google.maps.TravelMode.DRIVING }
+    );
+    
+    if (!result.routes?.[0]) {
       return rejectWithValue("No route found");
     }
 
-    const route = response.routes[0];
+    const route = result.routes[0];
     const leg = route.legs?.[0];
     if (!leg?.distance?.value || !leg.duration?.value) {
       return rejectWithValue("Incomplete route data");
@@ -117,7 +116,7 @@ export const fetchDispatchDirections = createAsyncThunk<
       polyline: route.overview_polyline ?? "",
     };
   } catch (err) {
-    console.error(err);
+    console.error("Dispatch directions error:", err);
     return rejectWithValue("Directions request failed");
   }
 });
@@ -211,16 +210,22 @@ export const selectDispatchRouteDecoded = createSelector(
   (route) => {
     if (!route || !route.polyline) return [];
 
-    // Make sure the Google Maps geometry library is available
-    if (!window.google?.maps?.geometry?.encoding) {
+    try {
+      // Safely check if the Google Maps geometry library is available
+      if (!window.google?.maps?.geometry?.encoding) {
+        ensureGoogleMapsLoaded();
+        return [];
+      }
+
+      const decodedPath = window.google.maps.geometry.encoding.decodePath(
+        route.polyline
+      );
+
+      // Map each LatLng to a plain object { lat, lng }
+      return decodedPath.map((latLng) => latLng.toJSON());
+    } catch (error) {
+      console.error("Error decoding polyline:", error);
       return [];
     }
-
-    const decodedPath = window.google.maps.geometry.encoding.decodePath(
-      route.polyline
-    );
-
-    // Map each LatLng to a plain object { lat, lng }
-    return decodedPath.map((latLng) => latLng.toJSON());
   }
 );
