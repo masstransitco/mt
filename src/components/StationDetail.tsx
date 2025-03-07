@@ -12,6 +12,7 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
+  saveBookingDetails, // Import the thunk to save state
 } from "@/store/bookingSlice";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
@@ -94,16 +95,29 @@ function StationDetailComponent({
   // Distinguish departure vs arrival flow
   const isDepartureFlow = step <= 2;
 
+  // Local state to track if component is fully initialized
+  const [isInitialized, setIsInitialized] = useState(false);
+  
   // State to control the "WalletModal"
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-
-  // For showing a spinner on "Confirm Trip"
-  const [charging, setCharging] = useState(false);
   
   // Flag for lazy-loading the CarGrid
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
   
-  // Lazy load CarGrid only when we're at step 2
+  // For showing a spinner on "Confirm Trip"
+  const [charging, setCharging] = useState(false);
+
+  // Ensure component is properly initialized on mount
+  useEffect(() => {
+    // Short delay to ensure all Redux state is properly loaded
+    const timer = setTimeout(() => {
+      setIsInitialized(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Initialize carGrid loading based on step and activeStation
   useEffect(() => {
     if (isDepartureFlow && step === 2 && activeStation) {
       setShouldLoadCarGrid(true);
@@ -125,6 +139,15 @@ function StationDetailComponent({
           <TripSheet />
         </div>
       </>
+    );
+  }
+
+  // If component not initialized yet, show loading state
+  if (!isInitialized) {
+    return (
+      <div className="p-6 flex justify-center items-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
     );
   }
 
@@ -164,6 +187,10 @@ function StationDetailComponent({
     if (isDepartureFlow && step === 2) {
       // Step 2 => next is step 3
       dispatch(advanceBookingStep(3));
+      
+      // Save booking state to persist it
+      dispatch(saveBookingDetails());
+      
       toast.success("Departure station confirmed! Now select your arrival station.");
       onConfirmDeparture?.();
       return;
@@ -186,8 +213,14 @@ function StationDetailComponent({
         if (!result.success) {
           throw new Error(result.error || "Charge failed");
         }
-        toast.success("Trip booked! Starting fare of HK$50 charged.");
+        
+        // Advance to step 5
         dispatch(advanceBookingStep(5));
+        
+        // Save booking state to persist it
+        dispatch(saveBookingDetails());
+        
+        toast.success("Trip booked! Starting fare of HK$50 charged.");
       } catch (err) {
         console.error("Failed to charge trip =>", err);
         toast.error("Payment failed. Please try again or check your card.");
