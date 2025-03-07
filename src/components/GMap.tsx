@@ -72,6 +72,9 @@ import {
 } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
+// Import our Google Maps utility
+import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
+
 // Lazy-load GaussianSplatModal
 const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
   suspense: true,
@@ -99,6 +102,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
+  const [googleMapsReady, setGoogleMapsReady] = useState(false);
 
   // We still keep the GaussianSplatModal logic if needed
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
@@ -134,6 +138,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
     version: "beta",
     libraries: LIBRARIES,
   });
+
+  // Ensure Google Maps is loaded and ready for our utilities
+  useEffect(() => {
+    if (isLoaded) {
+      // Give a small delay to ensure the API is fully initialized
+      const timer = setTimeout(async () => {
+        try {
+          await ensureGoogleMapsLoaded();
+          setGoogleMapsReady(true);
+        } catch (error) {
+          console.error("Failed to ensure Google Maps is loaded:", error);
+          toast.error("Map services unavailable. Please refresh the page.");
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoaded]);
 
   // 3D overlay for stations & cars
   const {
@@ -199,7 +221,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   useEffect(() => {
     if (!actualMap || !overlayRef.current) return;
-
+    
     const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
       const overlayAny = overlayRef.current as any;
       if (!overlayAny?.raycast || !overlayAny?.camera) return;
@@ -270,11 +292,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Load icons / map options
   // --------------------------
   useEffect(() => {
-    if (isLoaded && window.google) {
+    if (isLoaded && googleMapsReady && window.google) {
       setMapOptions(createMapOptions());
       setMarkerIcons(createMarkerIcons());
     }
-  }, [isLoaded]);
+  }, [isLoaded, googleMapsReady]);
 
   // --------------------------
   // Fetch data (stations + cars)
@@ -295,15 +317,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // Once loaded, hide the spinner overlay
   useEffect(() => {
-    if (isLoaded && !stationsLoading && !carsLoading) {
+    if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
-  }, [isLoaded, stationsLoading, carsLoading]);
+  }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
 
   // --------------------------
-  // Booking route logic
+  // Booking route logic - Only trigger once Google Maps is fully loaded
   // --------------------------
   useEffect(() => {
+    if (!googleMapsReady) return;
+    
     if (departureStationId && arrivalStationId) {
       const departureStation = stations.find((s) => s.id === departureStationId);
       const arrivalStation = stations.find((s) => s.id === arrivalStationId);
@@ -311,9 +335,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
         dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
       }
     }
-  }, [departureStationId, arrivalStationId, stations, dispatch]);
+  }, [departureStationId, arrivalStationId, stations, dispatch, googleMapsReady]);
 
+  // --------------------------
+  // Dispatch route logic - Only trigger once Google Maps is fully loaded
+  // --------------------------
   useEffect(() => {
+    if (!googleMapsReady) return;
+    
     if (!departureStationId) {
       dispatch(clearDispatchRoute());
       return;
@@ -322,30 +351,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (depStation) {
       dispatch(fetchDispatchDirections(depStation));
     }
-  }, [departureStationId, stations, dispatch]);
+  }, [departureStationId, stations, dispatch, googleMapsReady]);
 
   // --------------------------
   // Sorting logic
   // --------------------------
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-      if (!window.google?.maps?.geometry?.spherical) return stationsToSort;
-      const newStations = [...stationsToSort];
-      return newStations.sort((a, b) => {
-        const [lngA, latA] = a.geometry.coordinates;
-        const [lngB, latB] = b.geometry.coordinates;
-        const distA = window.google.maps.geometry.spherical.computeDistanceBetween(
-          new window.google.maps.LatLng(latA, lngA),
-          new window.google.maps.LatLng(point.lat, point.lng)
-        );
-        const distB = window.google.maps.geometry.spherical.computeDistanceBetween(
-          new window.google.maps.LatLng(latB, lngB),
-          new window.google.maps.LatLng(point.lat, point.lng)
-        );
-        return distA - distB;
-      });
+      if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) return stationsToSort;
+      
+      try {
+        const newStations = [...stationsToSort];
+        return newStations.sort((a, b) => {
+          const [lngA, latA] = a.geometry.coordinates;
+          const [lngB, latB] = b.geometry.coordinates;
+          const distA = window.google.maps.geometry.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(latA, lngA),
+            new window.google.maps.LatLng(point.lat, point.lng)
+          );
+          const distB = window.google.maps.geometry.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(latB, lngB),
+            new window.google.maps.LatLng(point.lat, point.lng)
+          );
+          return distA - distB;
+        });
+      } catch (error) {
+        console.error("Error sorting stations by distance:", error);
+        return stationsToSort;
+      }
     },
-    []
+    [googleMapsReady]
   );
 
   // --------------------------
@@ -354,19 +389,25 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
+      
       actualMap.panTo(location);
       actualMap.setZoom(15);
 
-      const sorted = sortStationsByDistanceToPoint(location, stations);
-      setSearchLocation(location);
-      setSortedStations(sorted);
+      if (googleMapsReady) {
+        const sorted = sortStationsByDistanceToPoint(location, stations);
+        setSearchLocation(location);
+        setSortedStations(sorted);
+      } else {
+        setSearchLocation(location);
+        setSortedStations(stations);
+      }
 
       if (openSheet !== "list") {
         setPreviousSheet(openSheet);
         setOpenSheet("list");
       }
     },
-    [actualMap, stations, openSheet, sortStationsByDistanceToPoint]
+    [actualMap, stations, openSheet, sortStationsByDistanceToPoint, googleMapsReady]
   );
 
   // --------------------------
@@ -427,6 +468,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
       toast.error("Geolocation not supported.");
       return;
     }
+    
+    // Show loading toast
+    const loadingToast = toast.loading("Finding your location...");
+    
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -435,16 +480,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
           actualMap.panTo(loc);
           actualMap.setZoom(15);
         }
-        const sorted = sortStationsByDistanceToPoint(loc, stations);
-        setSearchLocation(loc);
-        setSortedStations(sorted);
+        
+        toast.dismiss(loadingToast);
+        
+        if (googleMapsReady) {
+          const sorted = sortStationsByDistanceToPoint(loc, stations);
+          setSearchLocation(loc);
+          setSortedStations(sorted);
+        } else {
+          setSearchLocation(loc);
+          setSortedStations(stations);
+        }
+        
         openNewSheet("list");
         toast.success("Location found!");
       },
       (err) => {
         console.error("Geolocation error:", err);
+        toast.dismiss(loadingToast);
         toast.error("Unable to retrieve location.");
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     );
   };
 
