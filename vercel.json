@@ -8,7 +8,7 @@
     "CLAUDE_API_KEY": "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",
     "STRIPE_SECRET_KEY": "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",
     "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51NQ1QOKiuJLHFXjqTIjzMrDcMoHcFhia7Sp9XoZ3yw56VrLd3WoQShmeXNFBN8TfwFIyWEzhm7oX4fv7wKPK6mly002FjR1ojM",
-    "NEXT_PUBLIC_APP_URL": "https://mt-sigma.vercel.app/"
+    "NEXT_PUBLIC_APP_URL": "https://www.masstransitcar.com/"
   },
     "crons": [
     {
