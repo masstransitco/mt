@@ -23,6 +23,8 @@ import {
 } from "@/store/userSlice";
 import { loadBookingDetails, saveBookingDetails } from "@/store/bookingThunks"; // Added saveBookingDetails
 import { selectBookingStep, resetBookingFlow } from "@/store/bookingSlice";
+import { fetchCars } from "@/store/carSlice";
+import { fetchDispatchLocations } from "@/store/dispatchSlice";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -67,7 +69,21 @@ function BookingStateRecovery() {
       dispatch(resetBookingFlow());
       
       // Also save this reset to Firestore to persist across page refreshes
-      dispatch(saveBookingDetails());
+      dispatch(saveBookingDetails())
+        .then(() => {
+          // After reset is saved, reload fresh data
+          console.log("Booking reset saved, refreshing car and location data...");
+          return Promise.all([
+            dispatch(fetchCars()),
+            dispatch(fetchDispatchLocations())
+          ]);
+        })
+        .then(() => {
+          console.log("Car and location data refreshed after booking reset");
+        })
+        .catch(err => {
+          console.error("Error during booking reset sequence:", err);
+        });
       
       // Notify the user
       toast.success("Your previous trip has been completed. Ready for a new trip!");
