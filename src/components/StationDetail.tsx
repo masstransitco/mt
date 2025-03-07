@@ -24,7 +24,7 @@ import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
 // Import CarGrid
-import CarGrid from "./CarGrid";
+import CarGrid from "./booking/CarGrid";
 
 // PaymentSummary is your minimal UI for default PM + "Payment Methods" button
 import { PaymentSummary } from "@/components/ui/PaymentComponents";
