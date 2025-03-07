@@ -1,32 +1,55 @@
-// File: src/app/api/cars/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/lib/firebase-admin";      // Make sure this is your Firebase Admin SDK import
-import { fetchVehicleList } from "@/lib/cartrack"; // Your existing function that fetches live vehicles
+import admin from "@/lib/firebase-admin";
+import { fetchVehicleList } from "@/lib/cartrack";
 
 export async function GET(request: NextRequest) {
   try {
-    // 1) Fetch all vehicles from CarTrack
+    // 1) Fetch all vehicles from your CarTrack function
     const vehicles = await fetchVehicleList();
 
-    // 2) Convert to JSON
-    const jsonData = JSON.stringify(vehicles, null, 2);
-
-    // 3) Save to Firebase Storage under "cars/fallback.json" (or any path you like)
-    //    This effectively creates a fallback directory for lat/long if real-time fetches fail.
+    // Prepare the bucket reference
     const bucket = admin.storage().bucket();
-    const fileRef = bucket.file("cars/fallback.json");
-    await fileRef.save(jsonData, {
-      metadata: { contentType: "application/json" },
-      resumable: false,
-    });
 
-    // 4) Return response
+    // Use today's date in "YYYY-MM-DD" format
+    const today = new Date().toISOString().split("T")[0];
+
+    // 2) For each vehicle, store/append to that vehicle's daily file
+    for (const vehicle of vehicles) {
+      // We'll use the registration as part of the path
+      const reg = vehicle.registration || "unknownReg";
+
+      // Example path: "cars/NY1234/2025-03-07.json"
+      const filePath = `cars/${reg}/${today}.json`;
+      const fileRef = bucket.file(filePath);
+
+      // Read existing file content if it exists
+      const [exists] = await fileRef.exists();
+      let existingData: any[] = [];
+
+      if (exists) {
+        const [contents] = await fileRef.download();
+        existingData = JSON.parse(contents.toString());
+      }
+
+      // 3) Append the new record
+      //    Optionally attach a "capturedAt" timestamp
+      const record = {
+        ...vehicle,
+        capturedAt: new Date().toISOString(),
+      };
+      existingData.push(record);
+
+      // 4) Save back to Cloud Storage
+      await fileRef.save(JSON.stringify(existingData, null, 2), {
+        metadata: { contentType: "application/json" },
+        resumable: false,
+      });
+    }
+
+    // 5) Return a response
     return NextResponse.json({
       success: true,
-      message: "Fetched vehicle list and saved to Firebase Storage",
-      count: vehicles.length,
-      data: vehicles,
+      message: `Fetched ${vehicles.length} vehicles and saved daily JSON by registration.`,
     });
   } catch (error: any) {
     console.error("API /cars route error:", error);
