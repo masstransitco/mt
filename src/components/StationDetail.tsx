@@ -12,8 +12,8 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-  saveBookingDetails, // Import the thunk to save state
 } from "@/store/bookingSlice";
+import { saveBookingDetails } from "@/store/bookingThunks"; // Fixed import from bookingThunks
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
