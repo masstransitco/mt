@@ -228,6 +228,24 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
       <div className="flex flex-row">
         {/* 3D Viewer Container - fixed width ratio */}
         <div className="relative w-1/2 aspect-video">
+          {/* Dropdown moved to overlay on top left of 3D viewer */}
+          <div 
+            className="absolute top-3 left-3 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <select
+              className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-2 py-1 text-white text-xs backdrop-blur-sm"
+              onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
+              value={selectedCar.id}
+            >
+              {group.cars.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
           {shouldRender3D && isVisible ? (
             <Car3DViewer
               modelUrl={modelUrl}
@@ -247,22 +265,6 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
           <div>
             <div className="flex items-start justify-between">
               <p className="font-medium text-lg leading-tight text-white">{selectedCar.model}</p>
-              <div
-                className="flex flex-col items-end relative"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <select
-                  className="mb-1 cursor-pointer bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-xs"
-                  onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
-                  value={selectedCar.id}
-                >
-                  {group.cars.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
 
             <div className="flex items-center mt-3">
@@ -291,14 +293,15 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
               )}
             </div>
           </div>
-
-          {formattedLastDriven && (
-            <div className="mt-3 text-gray-400 text-xs">
-              Last driven: {formattedLastDriven}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Footer for last driven info */}
+      {formattedLastDriven && (
+        <div className="bg-gray-800/50 px-4 py-2 text-gray-400 text-xs border-t border-gray-800/80 w-full">
+          Last driven: {formattedLastDriven}
+        </div>
+      )}
     </motion.div>
   );
 }
