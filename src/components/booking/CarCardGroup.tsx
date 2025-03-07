@@ -41,7 +41,7 @@ interface CarCardGroupProps {
 
 /** Fallback skeleton while the 3D viewer loads. */
 const ViewerSkeleton = () => (
-  <div className="relative w-full h-full bg-gray-900/30 rounded-l-lg overflow-hidden">
+  <div className="relative w-full h-full bg-gray-900/30 rounded-lg overflow-hidden">
     <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
   </div>
 );
@@ -224,9 +224,10 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row">
-        {/* 3D Viewer Container */}
-        <div className="relative w-full md:w-1/2 aspect-[5/3] md:aspect-auto">
+      {/* Make card layout always horizontal */}
+      <div className="flex flex-row">
+        {/* 3D Viewer Container - fixed width ratio */}
+        <div className="relative w-1/2 aspect-video">
           {shouldRender3D && isVisible ? (
             <Car3DViewer
               modelUrl={modelUrl}
@@ -241,8 +242,8 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-4 md:w-1/2 flex flex-col justify-between">
+        {/* Content - fixed to right side */}
+        <div className="p-4 w-1/2 flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between">
               <p className="font-medium text-lg leading-tight text-white">{selectedCar.model}</p>
