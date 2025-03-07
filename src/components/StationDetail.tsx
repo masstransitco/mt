@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState, useEffect } from "react";
+import React, { memo, useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -13,7 +13,7 @@ import {
   selectDepartureStationId,
   selectArrivalStationId,
 } from "@/store/bookingSlice";
-import { saveBookingDetails } from "@/store/bookingThunks"; // Fixed import from bookingThunks
+import { saveBookingDetails } from "@/store/bookingThunks";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import { cn } from "@/lib/utils";
@@ -24,13 +24,26 @@ import {
 import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
 
-// Dynamically import CarGrid for better code splitting
+// Loading fallback components
+const LoadingFallback = () => (
+  <div className="h-40 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
+    <div className="text-xs text-gray-400">Loading vehicles...</div>
+  </div>
+);
+
+const MapCardFallback = () => (
+  <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
+    <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+  </div>
+);
+
+// Dynamically import CarGrid with improved loading handling
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
-  loading: () => (
-    <div className="h-40 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
-      <div className="text-xs text-gray-400">Loading vehicles...</div>
-    </div>
-  ),
+  loading: ({ error, isLoading, pastDelay }) => {
+    if (error) return <div>Error loading vehicles</div>;
+    if (isLoading && pastDelay) return <LoadingFallback />;
+    return null;
+  },
   ssr: false,
 });
 
@@ -45,11 +58,11 @@ import WalletModal from "@/components/ui/WalletModal";
 
 /** Dynamically import the MapCard for step 2/4 display */
 const MapCard = dynamic(() => import("./MapCard"), {
-  loading: () => (
-    <div className="h-52 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
-      <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-    </div>
-  ),
+  loading: ({ error, isLoading, pastDelay }) => {
+    if (error) return <div>Error loading map</div>;
+    if (isLoading && pastDelay) return <MapCardFallback />;
+    return null;
+  },
   ssr: false,
 });
 
@@ -63,12 +76,111 @@ interface StationDetailProps {
 
 // Memoized component to wrap CarGrid for better performance
 const MemoizedCarGrid = memo(({ isVisible }: { isVisible: boolean }) => {
-  // Only render when visible
   if (!isVisible) return null;
   
-  return <CarGrid isVisible={isVisible} />;
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <CarGrid isVisible={isVisible} />
+    </Suspense>
+  );
 });
 MemoizedCarGrid.displayName = "MemoizedCarGrid";
+
+// Extract Station Stats to a separate component
+const StationStats = memo(({ 
+  activeStation, 
+  step, 
+  driveTimeMin,
+  parkingValue 
+}: {
+  activeStation: StationFeature;
+  step: number;
+  driveTimeMin: string | null;
+  parkingValue: string;
+}) => {
+  return (
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
+      {activeStation.properties.waitTime && (
+        <div className="flex justify-between items-center text-sm">
+          <div className="flex items-center gap-2 text-gray-300">
+            <Clock className="w-4 h-4 text-blue-400" />
+            <span>Est. Wait Time</span>
+          </div>
+          <span className="font-medium text-white">
+            {activeStation.properties.waitTime} min
+          </span>
+        </div>
+      )}
+
+      {step === 2 && typeof activeStation.distance === "number" && (
+        <div className="flex justify-between items-center text-sm">
+          <div className="flex items-center gap-2 text-gray-300">
+            <Footprints className="w-4 h-4 text-blue-400" />
+            <span>Distance from You</span>
+          </div>
+          <span className="font-medium text-white">
+            {activeStation.distance.toFixed(1)} km
+          </span>
+        </div>
+      )}
+
+      {step === 4 && driveTimeMin && (
+        <div className="flex justify-between items-center text-sm">
+          <div className="flex items-center gap-2 text-gray-300">
+            <span>Drive Time</span>
+          </div>
+          <span className="font-medium text-white">{driveTimeMin} min</span>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center text-sm">
+        <div className="flex items-center gap-2 text-gray-300">
+          <span>Parking</span>
+        </div>
+        <span className="font-medium text-white">{parkingValue}</span>
+      </div>
+    </div>
+  );
+});
+StationStats.displayName = "StationStats";
+
+// Confirmation button component
+const ConfirmButton = memo(({
+  isDepartureFlow,
+  charging,
+  disabled,
+  onClick
+}: {
+  isDepartureFlow: boolean;
+  charging: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) => {
+  return (
+    <div className="pt-3">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
+          "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed"
+        )}
+      >
+        {charging ? (
+          <>
+            <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
+            Processing...
+          </>
+        ) : isDepartureFlow ? (
+          "Choose Dropoff Station"
+        ) : (
+          "Confirm Trip"
+        )}
+      </button>
+    </div>
+  );
+});
+ConfirmButton.displayName = "ConfirmButton";
 
 function StationDetailComponent({
   activeStation,
@@ -79,37 +191,47 @@ function StationDetailComponent({
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
 
-  // Booking flow
-  const step = useAppSelector(selectBookingStep);
-  const route = useAppSelector(selectRoute);
-  const departureId = useAppSelector(selectDepartureStationId);
-  const arrivalId = useAppSelector(selectArrivalStationId);
+  // Use selective Redux state subscription
+  const {
+    step,
+    route,
+    departureId,
+    arrivalId,
+    dispatchRoute,
+    isSignedIn,
+    hasDefaultPaymentMethod
+  } = useAppSelector(state => ({
+    step: selectBookingStep(state),
+    route: selectRoute(state),
+    departureId: selectDepartureStationId(state),
+    arrivalId: selectArrivalStationId(state),
+    dispatchRoute: selectDispatchRoute(state),
+    isSignedIn: selectIsSignedIn(state),
+    hasDefaultPaymentMethod: selectHasDefaultPaymentMethod(state)
+  }));
 
-  // Possibly for dispatch details
-  const dispatchRoute = useAppSelector(selectDispatchRoute);
+  // Distinguish departure vs arrival flow - memoized
+  const isDepartureFlow = useMemo(() => step <= 2, [step]);
 
-  // Auth + Payment
-  const isSignedIn = useAppSelector(selectIsSignedIn);
-  const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod);
-
-  // Distinguish departure vs arrival flow
-  const isDepartureFlow = step <= 2;
-
-  // Local state to track if component is fully initialized
+  // Local state
   const [isInitialized, setIsInitialized] = useState(false);
-  
-  // State to control the "WalletModal"
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-  
-  // Flag for lazy-loading the CarGrid
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
-  
-  // For showing a spinner on "Confirm Trip"
   const [charging, setCharging] = useState(false);
+
+  // Derived values with useMemo
+  const parkingValue = useMemo(() => 
+    step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "", 
+    [step]
+  );
+
+  const driveTimeMin = useMemo(() => 
+    route && departureId && arrivalId ? Math.round(route.duration / 60).toString() : null,
+    [route, departureId, arrivalId]
+  );
 
   // Ensure component is properly initialized on mount
   useEffect(() => {
-    // Short delay to ensure all Redux state is properly loaded
     const timer = setTimeout(() => {
       setIsInitialized(true);
     }, 100);
@@ -119,16 +241,76 @@ function StationDetailComponent({
   
   // Initialize carGrid loading based on step and activeStation
   useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
     if (isDepartureFlow && step === 2 && activeStation) {
       setShouldLoadCarGrid(true);
     } else {
-      // Give time for exit animations before unloading
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setShouldLoadCarGrid(false);
       }, 300);
-      return () => clearTimeout(timer);
     }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [isDepartureFlow, step, activeStation]);
+
+  // Handle wallet modal opening
+  const handleOpenWalletModal = useCallback(() => {
+    setWalletModalOpen(true);
+  }, []);
+
+  // Handle wallet modal closing
+  const handleCloseWalletModal = useCallback(() => {
+    setWalletModalOpen(false);
+  }, []);
+
+  // The "Confirm Trip" logic - memoized with useCallback
+  const handleConfirm = useCallback(async () => {
+    if (isDepartureFlow && step === 2) {
+      dispatch(advanceBookingStep(3));
+      dispatch(saveBookingDetails());
+      toast.success("Departure station confirmed! Now select your arrival station.");
+      onConfirmDeparture?.();
+      return;
+    }
+
+    if (!isDepartureFlow && step === 4) {
+      if (!isSignedIn) {
+        onOpenSignIn();
+        return;
+      }
+      if (!hasDefaultPaymentMethod) {
+        toast.error("Please add/set a default payment method first.");
+        return;
+      }
+      try {
+        setCharging(true);
+        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
+        if (!result.success) {
+          throw new Error(result.error || "Charge failed");
+        }
+        
+        dispatch(advanceBookingStep(5));
+        dispatch(saveBookingDetails());
+        toast.success("Trip booked! Starting fare of HK$50 charged.");
+      } catch (err) {
+        console.error("Failed to charge trip =>", err);
+        toast.error("Payment failed. Please try again or check your card.");
+      } finally {
+        setCharging(false);
+      }
+    }
+  }, [
+    isDepartureFlow, 
+    step, 
+    isSignedIn, 
+    hasDefaultPaymentMethod, 
+    dispatch, 
+    onConfirmDeparture,
+    onOpenSignIn
+  ]);
 
   // If step 5 => show TripSheet exclusively (blocking background)
   if (step === 5) {
@@ -172,64 +354,6 @@ function StationDetailComponent({
     );
   }
 
-  // Step-based parking label
-  const parkingValue =
-    step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "";
-
-  // Convert route duration to minutes if present
-  const driveTimeMin =
-    route && departureId && arrivalId
-      ? Math.round(route.duration / 60).toString()
-      : null;
-
-  // The "Confirm Trip" logic
-  const handleConfirm = async () => {
-    if (isDepartureFlow && step === 2) {
-      // Step 2 => next is step 3
-      dispatch(advanceBookingStep(3));
-      
-      // Save booking state to persist it
-      dispatch(saveBookingDetails());
-      
-      toast.success("Departure station confirmed! Now select your arrival station.");
-      onConfirmDeparture?.();
-      return;
-    }
-
-    if (!isDepartureFlow && step === 4) {
-      // Step 4 => finalize arrival
-      if (!isSignedIn) {
-        onOpenSignIn();
-        return;
-      }
-      if (!hasDefaultPaymentMethod) {
-        toast.error("Please add/set a default payment method first.");
-        return;
-      }
-      try {
-        setCharging(true);
-        // $50 => pass 5000 (cents)
-        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
-        if (!result.success) {
-          throw new Error(result.error || "Charge failed");
-        }
-        
-        // Advance to step 5
-        dispatch(advanceBookingStep(5));
-        
-        // Save booking state to persist it
-        dispatch(saveBookingDetails());
-        
-        toast.success("Trip booked! Starting fare of HK$50 charged.");
-      } catch (err) {
-        console.error("Failed to charge trip =>", err);
-        toast.error("Payment failed. Please try again or check your card.");
-      } finally {
-        setCharging(false);
-      }
-    }
-  };
-
   return (
     <motion.div
       className="p-4 space-y-4"
@@ -238,58 +362,25 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      <MapCard
-        coordinates={[
-          activeStation.geometry.coordinates[0],
-          activeStation.geometry.coordinates[1],
-        ]}
-        name={activeStation.properties.Place}
-        address={activeStation.properties.Address}
-        className="mt-2 mb-2"
+      <Suspense fallback={<MapCardFallback />}>
+        <MapCard
+          coordinates={[
+            activeStation.geometry.coordinates[0],
+            activeStation.geometry.coordinates[1],
+          ]}
+          name={activeStation.properties.Place}
+          address={activeStation.properties.Address}
+          className="mt-2 mb-2"
+        />
+      </Suspense>
+
+      {/* Station Stats - extracted to a separate component */}
+      <StationStats 
+        activeStation={activeStation}
+        step={step}
+        driveTimeMin={driveTimeMin}
+        parkingValue={parkingValue}
       />
-
-      {/* Station Stats */}
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-        {activeStation.properties.waitTime && (
-          <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2 text-gray-300">
-              <Clock className="w-4 h-4 text-blue-400" />
-              <span>Est. Wait Time</span>
-            </div>
-            <span className="font-medium text-white">
-              {activeStation.properties.waitTime} min
-            </span>
-          </div>
-        )}
-
-        {step === 2 && typeof activeStation.distance === "number" && (
-          <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2 text-gray-300">
-              <Footprints className="w-4 h-4 text-blue-400" />
-              <span>Distance from You</span>
-            </div>
-            <span className="font-medium text-white">
-              {activeStation.distance.toFixed(1)} km
-            </span>
-          </div>
-        )}
-
-        {step === 4 && driveTimeMin && (
-          <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2 text-gray-300">
-              <span>Drive Time</span>
-            </div>
-            <span className="font-medium text-white">{driveTimeMin} min</span>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center text-sm">
-          <div className="flex items-center gap-2 text-gray-300">
-            <span>Parking</span>
-          </div>
-          <span className="font-medium text-white">{parkingValue}</span>
-        </div>
-      </div>
 
       {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
       <AnimatePresence>
@@ -308,36 +399,21 @@ function StationDetailComponent({
 
       {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
       {step === 4 && isSignedIn && (
-        <PaymentSummary onOpenWalletModal={() => setWalletModalOpen(true)} />
+        <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
       )}
 
-      {/* Confirm button (with spinner if charging) */}
-      <div className="pt-3">
-        <button
-          onClick={handleConfirm}
-          disabled={charging || !(step === 2 || step === 4)}
-          className={cn(
-            "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
-            "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed"
-          )}
-        >
-          {charging ? (
-            <>
-              <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
-              Processing...
-            </>
-          ) : isDepartureFlow ? (
-            "Choose Dropoff Station"
-          ) : (
-            "Confirm Trip"
-          )}
-        </button>
-      </div>
+      {/* Confirm button - extracted to a separate component */}
+      <ConfirmButton 
+        isDepartureFlow={isDepartureFlow}
+        charging={charging}
+        disabled={charging || !(step === 2 || step === 4)}
+        onClick={handleConfirm}
+      />
 
-      {/* Actually render the WalletModal here so that "onOpenWalletModal" works */}
+      {/* WalletModal with memoized callbacks */}
       <WalletModal
         isOpen={walletModalOpen}
-        onClose={() => setWalletModalOpen(false)}
+        onClose={handleCloseWalletModal}
       />
     </motion.div>
   );
