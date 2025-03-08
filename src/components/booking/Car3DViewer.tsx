@@ -237,6 +237,7 @@ interface ModelCacheEntry {
   lastUsed: number;
   isLoaded: boolean;
   refCount: number;
+  loadedModel?: any; // Store reference to loaded model
 }
 
 const modelsCache = new Map<string, ModelCacheEntry>();
@@ -259,39 +260,33 @@ function cleanupUnusedModels(exceptUrl?: string) {
     // If not used recently and refCount is 0, remove it
     if (entry.refCount <= 0 && now - entry.lastUsed > TIMEOUT) {
       try {
-        // Try to unload from GLTF cache
-        const cached = useGLTF.cache.get(url);
-        if (cached) {
+        // Use our cached reference to the model if available
+        if (entry.loadedModel && entry.loadedModel.scene) {
           // Properly dispose resources
-          if (cached.scene) {
-            cached.scene.traverse((object) => {
-              if (object instanceof THREE.Mesh) {
-                if (object.geometry) object.geometry.dispose();
-                if (object.material) {
-                  if (Array.isArray(object.material)) {
-                    object.material.forEach(material => {
-                      if (material instanceof THREE.Material) {
-                        material.dispose();
-                      }
-                    });
-                  } else if (object.material instanceof THREE.Material) {
-                    object.material.dispose();
-                  }
+          entry.loadedModel.scene.traverse((object: any) => {
+            if (object instanceof THREE.Mesh) {
+              if (object.geometry) object.geometry.dispose();
+              if (object.material) {
+                if (Array.isArray(object.material)) {
+                  object.material.forEach((material: any) => {
+                    if (material instanceof THREE.Material) {
+                      material.dispose();
+                    }
+                  });
+                } else if (object.material instanceof THREE.Material) {
+                  object.material.dispose();
                 }
               }
-            });
-          }
-          
-          // Remove from drei cache
-          useGLTF.cache.delete(url);
-          
-          // Remove from our cache
-          modelsCache.delete(url);
-          entriesRemoved++;
-          
-          // Reduce estimated memory
-          estimatedMemoryUsage -= 10 * 1024 * 1024; // Estimate 10MB per model
+            }
+          });
         }
+        
+        // Remove from our cache
+        modelsCache.delete(url);
+        entriesRemoved++;
+        
+        // Reduce estimated memory
+        estimatedMemoryUsage -= 10 * 1024 * 1024; // Estimate 10MB per model
       } catch (err) {
         console.warn("Failed to clean up model:", url, err);
       }
@@ -345,16 +340,31 @@ function Car3DViewer({
     if (!cacheEntry.isLoaded) {
       // Preload model if not in cache yet
       try {
+        // We can preload but we can't access the cache directly,
+        // so we'll store the result in our own cache
         useGLTF.preload(modelUrl);
         estimatedMemoryUsage += 10 * 1024 * 1024; // Estimate 10MB per model
+        
+        // We'll load it ourselves and store a reference
+        const loadModel = async () => {
+          try {
+            // Load the model and store it in our cache
+            const model = await useGLTF(modelUrl);
+            cacheEntry.loadedModel = model;
+            
+            if (isMounted) {
+              setIsModelReady(true);
+            }
+          } catch (err) {
+            console.warn("Failed to load model for caching:", err);
+          }
+        };
+        
+        loadModel();
         
         // Mark as loaded
         cacheEntry.isLoaded = true;
         modelsCache.set(modelUrl, cacheEntry);
-        
-        if (isMounted) {
-          setIsModelReady(true);
-        }
       } catch (err) {
         console.warn("Model preload failed:", err);
       }
@@ -464,8 +474,21 @@ export function preloadCarModels(urls: string[]) {
     
     if (!cacheEntry.isLoaded) {
       try {
+        // Preload but we can't directly access cache
         useGLTF.preload(url);
         estimatedMemoryUsage += 10 * 1024 * 1024; // Estimate 10MB per model
+        
+        // Load the model and store it in our cache
+        const loadModel = async () => {
+          try {
+            const model = await useGLTF(url);
+            cacheEntry.loadedModel = model;
+          } catch (err) {
+            console.warn("Failed to load model for caching:", err);
+          }
+        };
+        
+        loadModel();
         
         cacheEntry.isLoaded = true;
         modelsCache.set(url, cacheEntry);
@@ -480,14 +503,13 @@ export function preloadCarModels(urls: string[]) {
 export function disposeAllModels() {
   modelsCache.forEach((entry, url) => {
     try {
-      const cached = useGLTF.cache.get(url);
-      if (cached && cached.scene) {
-        cached.scene.traverse((object) => {
+      if (entry.loadedModel && entry.loadedModel.scene) {
+        entry.loadedModel.scene.traverse((object: any) => {
           if (object instanceof THREE.Mesh) {
             if (object.geometry) object.geometry.dispose();
             if (object.material) {
               if (Array.isArray(object.material)) {
-                object.material.forEach(material => {
+                object.material.forEach((material: any) => {
                   if (material instanceof THREE.Material) {
                     material.dispose();
                   }
@@ -499,7 +521,6 @@ export function disposeAllModels() {
           }
         });
       }
-      useGLTF.cache.delete(url);
     } catch (e) {
       console.warn("Error disposing model:", url, e);
     }
