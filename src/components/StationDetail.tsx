@@ -205,119 +205,6 @@ const ActionButtons = memo(({
 });
 ActionButtons.displayName = "ActionButtons";
 
-function StationDetailContent({
-  activeStation,
-  step,
-  isDepartureFlow,
-  charging,
-  driveTimeMin,
-  parkingValue,
-  shouldLoadCarGrid,
-  isSignedIn,
-  handleConfirm,
-  handleOpenWalletModal,
-  handleCloseWalletModal,
-  walletModalOpen,
-}: {
-  activeStation: StationFeature | null;
-  step: number;
-  isDepartureFlow: boolean;
-  charging: boolean;
-  driveTimeMin: string | null;
-  parkingValue: string;
-  shouldLoadCarGrid: boolean;
-  isSignedIn: boolean;
-  handleConfirm: () => void;
-  handleOpenWalletModal: () => void;
-  handleCloseWalletModal: () => void;
-  walletModalOpen: boolean;
-}) {
-  // If no station selected at step 2 or 4 => show fallback
-  if (!activeStation) {
-    return (
-      <div className="p-6 space-y-4">
-        <div className="text-sm text-gray-300">
-          {isDepartureFlow
-            ? "Select a departure station from the map or list below."
-            : "Select an arrival station from the map or list below."}
-        </div>
-        <div className="grid grid-cols-2 gap-3 text-xs">
-          <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
-            <span>View parking</span>
-          </div>
-          <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
-            <span>Check availability</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div
-      className="p-4 space-y-4"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 10 }}
-      transition={{ type: "tween", duration: 0.2 }}
-    >
-      <Suspense fallback={<MapCardFallback />}>
-        <MapCard
-          coordinates={[
-            activeStation.geometry.coordinates[0],
-            activeStation.geometry.coordinates[1],
-          ]}
-          name={activeStation.properties.Place}
-          address={activeStation.properties.Address}
-          className="mt-2 mb-2"
-        />
-      </Suspense>
-
-      {/* Station Stats - extracted to a separate component */}
-      <StationStats 
-        activeStation={activeStation}
-        step={step}
-        driveTimeMin={driveTimeMin}
-        parkingValue={parkingValue}
-      />
-
-      {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
-      <AnimatePresence>
-        {isDepartureFlow && step === 2 && (
-          <motion.div 
-            className="py-2"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            {shouldLoadCarGrid && <MemoizedCarGrid isVisible={true} />}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
-      {step === 4 && isSignedIn && (
-        <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
-      )}
-
-      {/* Confirm button - extracted to a separate component */}
-      <ConfirmButton 
-        isDepartureFlow={isDepartureFlow}
-        charging={charging}
-        disabled={charging || !(step === 2 || step === 4)}
-        onClick={handleConfirm}
-      />
-
-      {/* WalletModal with memoized callbacks */}
-      <WalletModal
-        isOpen={walletModalOpen}
-        onClose={handleCloseWalletModal}
-      />
-    </motion.div>
-  );
-}
-
 function StationDetail({
   stationId,
   isOpen,
@@ -327,9 +214,6 @@ function StationDetail({
   const dispatch = useAppDispatch();
   const stations = useAppSelector(state => state.stations.items);
   
-  // Debugging
-  console.log("StationDetail render", { stationId, isOpen });
-
   // Use selective Redux state subscription
   const {
     step,
@@ -369,18 +253,6 @@ function StationDetail({
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
   const [charging, setCharging] = useState(false);
-
-  // IMPORTANT: Logic to prevent opening on step 1 and 3
-  const shouldBlockOpening = 
-    (step === 1 && stepName === "selecting_departure_station") ||
-    (step === 3 && stepName === "selecting_arrival_station");
-
-  console.log("StationDetail state", { 
-    shouldBlockOpening, 
-    step, 
-    stepName,
-    activeStation: !!activeStation 
-  });
 
   // Derived values with useMemo
   const parkingValue = useMemo(() => 
@@ -483,13 +355,6 @@ function StationDetail({
     onOpenSignIn
   ]);
 
-  // Force close if we shouldn't be open due to step
-  useEffect(() => {
-    if (shouldBlockOpening && isOpen) {
-      onClose();
-    }
-  }, [shouldBlockOpening, isOpen, onClose]);
-
   // If step 5 => show TripSheet exclusively (blocking background)
   if (step === 5) {
     return (
@@ -502,50 +367,90 @@ function StationDetail({
     );
   }
 
-  // Don't render if it's not open or should be blocked
-  if (!isOpen || shouldBlockOpening) {
+  // If no station or not open, don't render anything
+  if (!isOpen || !stationId || !activeStation) {
     return null;
   }
 
-  // Generate subtitle based on whether this is departure or arrival
-  const sheetSubtitle = isDepartureStation 
-    ? "Departure Station" 
-    : isArrivalStation 
-      ? "Arrival Station" 
-      : "Station Details";
+  if (!isInitialized) {
+    return (
+      <div className="p-6 flex justify-center items-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      {!isInitialized ? (
-        <div className="p-6 flex justify-center items-center">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      ) : (
-        <>
-          <StationDetailContent
-            activeStation={activeStation}
-            step={step}
-            isDepartureFlow={isDepartureFlow}
-            charging={charging}
-            driveTimeMin={driveTimeMin}
-            parkingValue={parkingValue}
-            shouldLoadCarGrid={shouldLoadCarGrid}
-            isSignedIn={isSignedIn}
-            handleConfirm={handleConfirm}
-            handleOpenWalletModal={handleOpenWalletModal}
-            handleCloseWalletModal={handleCloseWalletModal}
-            walletModalOpen={walletModalOpen}
+      <motion.div
+        className="p-4 space-y-4"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 10 }}
+        transition={{ type: "tween", duration: 0.2 }}
+      >
+        <Suspense fallback={<MapCardFallback />}>
+          <MapCard
+            coordinates={[
+              activeStation.geometry.coordinates[0],
+              activeStation.geometry.coordinates[1],
+            ]}
+            name={activeStation.properties.Place}
+            address={activeStation.properties.Address}
+            className="mt-2 mb-2"
           />
-          
-          {/* Show Clear Station button when appropriate */}
-          {(isDepartureStation || isArrivalStation) && (
-            <ActionButtons
-              isDepartureFlow={isDepartureFlow}
-              onClearStation={handleClearStation}
-            />
+        </Suspense>
+
+        {/* Station Stats - extracted to a separate component */}
+        <StationStats 
+          activeStation={activeStation}
+          step={step}
+          driveTimeMin={driveTimeMin}
+          parkingValue={parkingValue}
+        />
+
+        {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
+        <AnimatePresence>
+          {isDepartureFlow && step === 2 && (
+            <motion.div 
+              className="py-2"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {shouldLoadCarGrid && <MemoizedCarGrid isVisible={true} />}
+            </motion.div>
           )}
-        </>
-      )}
+        </AnimatePresence>
+
+        {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
+        {step === 4 && isSignedIn && (
+          <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+        )}
+
+        {/* Confirm button - extracted to a separate component */}
+        <ConfirmButton 
+          isDepartureFlow={isDepartureFlow}
+          charging={charging}
+          disabled={charging || !(step === 2 || step === 4)}
+          onClick={handleConfirm}
+        />
+
+        {/* Show Clear Station button when appropriate */}
+        {(isDepartureStation || isArrivalStation) && (
+          <ActionButtons
+            isDepartureFlow={isDepartureFlow}
+            onClearStation={handleClearStation}
+          />
+        )}
+
+        {/* WalletModal with memoized callbacks */}
+        <WalletModal
+          isOpen={walletModalOpen}
+          onClose={handleCloseWalletModal}
+        />
+      </motion.div>
     </div>
   );
 }
