@@ -26,7 +26,6 @@ import {
 } from "@/store/userSlice";
 import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
-import Sheet from "@/components/ui/sheet";
 
 // Loading fallback components
 const LoadingFallback = () => (
@@ -328,6 +327,9 @@ function StationDetail({
   const dispatch = useAppDispatch();
   const stations = useAppSelector(state => state.stations.items);
   
+  // Debugging
+  console.log("StationDetail render", { stationId, isOpen });
+
   // Use selective Redux state subscription
   const {
     step,
@@ -372,6 +374,13 @@ function StationDetail({
   const shouldBlockOpening = 
     (step === 1 && stepName === "selecting_departure_station") ||
     (step === 3 && stepName === "selecting_arrival_station");
+
+  console.log("StationDetail state", { 
+    shouldBlockOpening, 
+    step, 
+    stepName,
+    activeStation: !!activeStation 
+  });
 
   // Derived values with useMemo
   const parkingValue = useMemo(() => 
@@ -493,6 +502,11 @@ function StationDetail({
     );
   }
 
+  // Don't render if it's not open or should be blocked
+  if (!isOpen || shouldBlockOpening) {
+    return null;
+  }
+
   // Generate subtitle based on whether this is departure or arrival
   const sheetSubtitle = isDepartureStation 
     ? "Departure Station" 
@@ -501,41 +515,38 @@ function StationDetail({
       : "Station Details";
 
   return (
-    <Sheet
-      isOpen={isOpen}
-      title={activeStation?.properties.Place || "Station Details"}
-      subtitle={sheetSubtitle}
-      onDismiss={onClose}
-    >
+    <div>
       {!isInitialized ? (
         <div className="p-6 flex justify-center items-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : (
-        <StationDetailContent
-          activeStation={activeStation}
-          step={step}
-          isDepartureFlow={isDepartureFlow}
-          charging={charging}
-          driveTimeMin={driveTimeMin}
-          parkingValue={parkingValue}
-          shouldLoadCarGrid={shouldLoadCarGrid}
-          isSignedIn={isSignedIn}
-          handleConfirm={handleConfirm}
-          handleOpenWalletModal={handleOpenWalletModal}
-          handleCloseWalletModal={handleCloseWalletModal}
-          walletModalOpen={walletModalOpen}
-        />
+        <>
+          <StationDetailContent
+            activeStation={activeStation}
+            step={step}
+            isDepartureFlow={isDepartureFlow}
+            charging={charging}
+            driveTimeMin={driveTimeMin}
+            parkingValue={parkingValue}
+            shouldLoadCarGrid={shouldLoadCarGrid}
+            isSignedIn={isSignedIn}
+            handleConfirm={handleConfirm}
+            handleOpenWalletModal={handleOpenWalletModal}
+            handleCloseWalletModal={handleCloseWalletModal}
+            walletModalOpen={walletModalOpen}
+          />
+          
+          {/* Show Clear Station button when appropriate */}
+          {(isDepartureStation || isArrivalStation) && (
+            <ActionButtons
+              isDepartureFlow={isDepartureFlow}
+              onClearStation={handleClearStation}
+            />
+          )}
+        </>
       )}
-      
-      {/* Show Clear Station button when appropriate */}
-      {(isDepartureStation || isArrivalStation) && (
-        <ActionButtons
-          isDepartureFlow={isDepartureFlow}
-          onClearStation={handleClearStation}
-        />
-      )}
-    </Sheet>
+    </div>
   );
 }
 
