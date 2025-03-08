@@ -135,16 +135,25 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
 
   // Helper function to dispose of materials with proper type checks
   const disposeMaterial = (material: THREE.Material) => {
-    // Need to use type guards for each property since they might not exist on the base Material type
-    if ('map' in material && material.map) material.map.dispose();
-    if ('lightMap' in material && material.lightMap) material.lightMap.dispose();
-    if ('bumpMap' in material && material.bumpMap) material.bumpMap.dispose();
-    if ('normalMap' in material && material.normalMap) material.normalMap.dispose();
-    if ('specularMap' in material && material.specularMap) material.specularMap.dispose();
-    if ('envMap' in material && material.envMap) material.envMap.dispose();
-    if ('emissiveMap' in material && material.emissiveMap) material.emissiveMap.dispose();
+    // Handle MeshStandardMaterial specifically
+    if (material instanceof THREE.MeshStandardMaterial) {
+      if (material.map) material.map.dispose();
+      if (material.lightMap) material.lightMap.dispose();
+      if (material.bumpMap) material.bumpMap.dispose();
+      if (material.normalMap) material.normalMap.dispose();
+      if (material.emissiveMap) material.emissiveMap.dispose();
+      if (material.metalnessMap) material.metalnessMap.dispose();
+      if (material.roughnessMap) material.roughnessMap.dispose();
+    }
+    // Handle MeshBasicMaterial
+    else if (material instanceof THREE.MeshBasicMaterial) {
+      if (material.map) material.map.dispose();
+      if (material.lightMap) material.lightMap.dispose();
+      if (material.specularMap) material.specularMap.dispose();
+    }
+    // Handle other material types as needed
     
-    // Finally dispose the material itself
+    // Always dispose the material itself
     material.dispose();
   };
 
@@ -261,9 +270,11 @@ function cleanupUnusedModels(exceptUrl?: string) {
                 if (object.material) {
                   if (Array.isArray(object.material)) {
                     object.material.forEach(material => {
-                      if (material) material.dispose();
+                      if (material instanceof THREE.Material) {
+                        material.dispose();
+                      }
                     });
-                  } else {
+                  } else if (object.material instanceof THREE.Material) {
                     object.material.dispose();
                   }
                 }
@@ -477,9 +488,11 @@ export function disposeAllModels() {
             if (object.material) {
               if (Array.isArray(object.material)) {
                 object.material.forEach(material => {
-                  if (material) material.dispose();
+                  if (material instanceof THREE.Material) {
+                    material.dispose();
+                  }
                 });
-              } else {
+              } else if (object.material instanceof THREE.Material) {
                 object.material.dispose();
               }
             }
