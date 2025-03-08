@@ -315,6 +315,22 @@ function Car3DViewer({
   // Track if model is properly loaded
   const [isModelReady, setIsModelReady] = useState(false);
   
+  // Monitor for context loss
+  useEffect(() => {
+    const handleContextLost = () => {
+      console.warn("WebGL context lost");
+    };
+    
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.addEventListener('webglcontextlost', handleContextLost);
+      
+      return () => {
+        canvas.removeEventListener('webglcontextlost', handleContextLost);
+      };
+    }
+  }, [canvasRef]);
+  
   // Intelligent model preloading with memory management
   useEffect(() => {
     if (!isVisible) return;
@@ -416,8 +432,6 @@ function Car3DViewer({
           powerPreference: "high-performance",
           premultipliedAlpha: true,
           logarithmicDepthBuffer: false,
-          // Clean up WebGL context when unmounted
-          onContextLost: () => console.warn("WebGL context lost"),
         }}
         shadows={interactive} // Only enable shadows in interactive mode
         camera={{ position: [0, 2, 3], fov: 15 }}
