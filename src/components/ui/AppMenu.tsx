@@ -203,11 +203,8 @@ export default function AppMenu({
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-medium text-white truncate">
-                      {user.phoneNumber || '+852 *********'}
-                    </h3>
-                    <p className="text-sm text-gray-300 truncate">
                       {user.email || user.phoneNumber || 'User'}
-                    </p>
+                    </h3>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
                 </motion.button>
@@ -235,7 +232,7 @@ export default function AppMenu({
                 className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-blue-600/20">
+                  <div className="p-2 rounded-full bg-blue-600/20 flex items-center justify-center">
                     <Route className="w-5 h-5 text-blue-500" />
                   </div>
                   <span className="font-medium text-gray-200">Trips</span>
@@ -249,7 +246,7 @@ export default function AppMenu({
                 className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-blue-600/20">
+                  <div className="p-2 rounded-full bg-blue-600/20 flex items-center justify-center">
                     <Wallet className="w-5 h-5 text-blue-500" />
                   </div>
                   <span className="font-medium text-gray-200">Wallet</span>
@@ -264,7 +261,7 @@ export default function AppMenu({
                 className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-800 transition-colors duration-200"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-full bg-blue-600/20">
+                  <div className="p-2 rounded-full bg-blue-600/20 flex items-center justify-center">
                     <LicenseIcon />
                   </div>
                   <span className="font-medium text-gray-200">License & ID</span>
@@ -288,15 +285,8 @@ export default function AppMenu({
             onClick={handleDiscoverClick}
             className="w-full flex items-center gap-3 rounded-lg p-3 hover:bg-gray-800 transition-colors duration-200"
           >
-            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700">
-              <Image
-                src="/brand/discover.gif"
-                alt="Discover"
-                width={48}
-                height={48}
-                className="w-full h-full object-cover"
-                priority
-              />
+            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-700 bg-gray-800 flex items-center justify-center">
+              <span className="text-lg font-medium text-gray-300">D</span>
             </div>
             <div className="flex-1 text-left">
               <h3 className="font-medium text-white">Discover</h3>
@@ -315,11 +305,11 @@ export default function AppMenu({
         >
           {user && (
             <motion.button
-              whileHover={{ x: 2, color: '#ef4444' }}
+              whileHover={{ x: 2 }}
               onClick={handleSignOut}
-              className="flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors duration-200 mb-6"
+              className="flex items-center gap-2 text-rose-900 hover:text-rose-800 transition-colors duration-200 mb-6 text-sm"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
               <span className="font-medium">Sign Out</span>
             </motion.button>
           )}
