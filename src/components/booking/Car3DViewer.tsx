@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useRef, useEffect, useMemo, memo, useState, useCallback } from "react";
+import React, { Suspense, useRef, useEffect, useMemo, memo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -48,7 +48,6 @@ LoadingScreen.displayName = "LoadingScreen";
 function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
   const modelRef = useRef<THREE.Object3D | null>(null);
-  const { gl, scene: threeScene } = useThree();
   
   const { scene: originalScene } = useGLTF(url, "/draco/", true) as any;
   const scene = useMemo(() => originalScene.clone(), [originalScene]);
@@ -64,8 +63,7 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
     // Optimize materials and geometries
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
-        // Skip the geometry optimization that used BufferGeometryUtils
-        // Instead just ensure we have bounds computed
+        // Ensure bounds are computed
         if (!child.geometry.boundingBox) {
           child.geometry.computeBoundingBox();
         }
@@ -135,15 +133,18 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
     };
   }, [scene, url, interactive]);
 
-  // Helper function to dispose of materials
+  // Helper function to dispose of materials with proper type checks
   const disposeMaterial = (material: THREE.Material) => {
-    if (material.map) material.map.dispose();
-    if (material.lightMap) material.lightMap.dispose();
-    if (material.bumpMap) material.bumpMap.dispose();
-    if (material.normalMap) material.normalMap.dispose();
-    if (material.specularMap) material.specularMap.dispose();
-    if (material.envMap) material.envMap.dispose();
+    // Need to use type guards for each property since they might not exist on the base Material type
+    if ('map' in material && material.map) material.map.dispose();
+    if ('lightMap' in material && material.lightMap) material.lightMap.dispose();
+    if ('bumpMap' in material && material.bumpMap) material.bumpMap.dispose();
+    if ('normalMap' in material && material.normalMap) material.normalMap.dispose();
+    if ('specularMap' in material && material.specularMap) material.specularMap.dispose();
+    if ('envMap' in material && material.envMap) material.envMap.dispose();
     if ('emissiveMap' in material && material.emissiveMap) material.emissiveMap.dispose();
+    
+    // Finally dispose the material itself
     material.dispose();
   };
 
@@ -259,7 +260,9 @@ function cleanupUnusedModels(exceptUrl?: string) {
                 if (object.geometry) object.geometry.dispose();
                 if (object.material) {
                   if (Array.isArray(object.material)) {
-                    object.material.forEach(material => material.dispose());
+                    object.material.forEach(material => {
+                      if (material) material.dispose();
+                    });
                   } else {
                     object.material.dispose();
                   }
@@ -473,7 +476,9 @@ export function disposeAllModels() {
             if (object.geometry) object.geometry.dispose();
             if (object.material) {
               if (Array.isArray(object.material)) {
-                object.material.forEach(material => material.dispose());
+                object.material.forEach(material => {
+                  if (material) material.dispose();
+                });
               } else {
                 object.material.dispose();
               }
