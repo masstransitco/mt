@@ -627,30 +627,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </Sheet>
 
           {/* Station Detail Sheet */}
-          <Sheet
-            key={detailKey}
-            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-            onDismiss={() => {
-              requestAnimationFrame(() => {
-                closeCurrentSheet();
-                if (overlayRef.current?.requestRedraw) {
-                  overlayRef.current.requestRedraw();
-                }
-              });
-            }}
-            title={getSheetTitle()}
-            subtitle={getSheetSubtitle()}
-          >
-            {stationToShow && (
-              <StationDetail
+<Sheet
   key={detailKey}
-  stationId={stationToShow?.id ?? null}
-  isOpen={!!stationToShow} // Make sure this evaluates to true when a station is selected
-  onClose={closeCurrentSheet}
-  onOpenSignIn={handleOpenSignIn}
-/>
-            )}
-          </Sheet>
+  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+  onDismiss={() => {
+    requestAnimationFrame(() => {
+      closeCurrentSheet();
+      if (overlayRef.current?.requestRedraw) {
+        overlayRef.current.requestRedraw();
+      }
+    });
+  }}
+  title={getSheetTitle()}
+  subtitle={getSheetSubtitle()}
+>
+  <StationDetail
+    key={detailKey}
+    stationId={stationToShow?.id ?? null}
+    isOpen={!!stationToShow}
+    onClose={closeCurrentSheet}
+    onOpenSignIn={handleOpenSignIn}
+  />
+</Sheet>
 
           {/* GaussianSplatModal (still here if needed) */}
           <Suspense fallback={<div>Loading modal...</div>}>
