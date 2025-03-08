@@ -644,12 +644,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   <StationDetail
     key={detailKey}
     stationId={stationToShow?.id ?? null}
-    isOpen={!!stationToShow}
+    isOpen={true} // Always pass true when stationToShow exists
     onClose={closeCurrentSheet}
     onOpenSignIn={handleOpenSignIn}
   />
 </Sheet>
-
           {/* GaussianSplatModal (still here if needed) */}
           <Suspense fallback={<div>Loading modal...</div>}>
             {isSplatModalOpen && (
