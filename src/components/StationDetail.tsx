@@ -8,10 +8,13 @@ import { Clock, Footprints } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
+  selectBookingStepName,
   advanceBookingStep,
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
+  clearDepartureStation,
+  clearArrivalStation,
 } from "@/store/bookingSlice";
 import { saveBookingDetails } from "@/store/bookingThunks";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
@@ -23,6 +26,7 @@ import {
 } from "@/store/userSlice";
 import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
+import Sheet from "@/components/ui/sheet";
 
 // Loading fallback components
 const LoadingFallback = () => (
@@ -67,11 +71,10 @@ const MapCard = dynamic(() => import("./MapCard"), {
 });
 
 interface StationDetailProps {
-  activeStation: StationFeature | null;
-  stations?: StationFeature[];
-  onConfirmDeparture?: () => void;
+  stationId: number | null;
+  isOpen: boolean;
+  onClose: () => void;
   onOpenSignIn: () => void;
-  onDismiss?: () => void;
 }
 
 // Memoized component to wrap CarGrid for better performance
@@ -182,157 +185,54 @@ const ConfirmButton = memo(({
 });
 ConfirmButton.displayName = "ConfirmButton";
 
-function StationDetailComponent({
+// Actions section component with Clear button
+const ActionButtons = memo(({
+  isDepartureFlow, 
+  onClearStation
+}: {
+  isDepartureFlow: boolean;
+  onClearStation: () => void;
+}) => {
+  return (
+    <div className="pt-3">
+      <button
+        onClick={onClearStation}
+        className="w-full py-3 text-sm font-medium rounded-md transition-colors text-white bg-red-600 hover:bg-red-700"
+      >
+        Clear {isDepartureFlow ? "Departure" : "Arrival"} Station
+      </button>
+    </div>
+  );
+});
+ActionButtons.displayName = "ActionButtons";
+
+function StationDetailContent({
   activeStation,
-  stations,
-  onConfirmDeparture,
-  onOpenSignIn,
-  onDismiss,
-}: StationDetailProps) {
-  const dispatch = useAppDispatch();
-
-  // Use selective Redux state subscription
-  const {
-    step,
-    route,
-    departureId,
-    arrivalId,
-    dispatchRoute,
-    isSignedIn,
-    hasDefaultPaymentMethod
-  } = useAppSelector(state => ({
-    step: selectBookingStep(state),
-    route: selectRoute(state),
-    departureId: selectDepartureStationId(state),
-    arrivalId: selectArrivalStationId(state),
-    dispatchRoute: selectDispatchRoute(state),
-    isSignedIn: selectIsSignedIn(state),
-    hasDefaultPaymentMethod: selectHasDefaultPaymentMethod(state)
-  }));
-
-  // Distinguish departure vs arrival flow - memoized
-  const isDepartureFlow = useMemo(() => step <= 2, [step]);
-
-  // Local state
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
-  const [charging, setCharging] = useState(false);
-
-  // Derived values with useMemo
-  const parkingValue = useMemo(() => 
-    step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "", 
-    [step]
-  );
-
-  const driveTimeMin = useMemo(() => 
-    route && departureId && arrivalId ? Math.round(route.duration / 60).toString() : null,
-    [route, departureId, arrivalId]
-  );
-
-  // Ensure component is properly initialized on mount
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsInitialized(true);
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, []);
-  
-  // Initialize carGrid loading based on step and activeStation
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    if (isDepartureFlow && step === 2 && activeStation) {
-      setShouldLoadCarGrid(true);
-    } else {
-      timer = setTimeout(() => {
-        setShouldLoadCarGrid(false);
-      }, 300);
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isDepartureFlow, step, activeStation]);
-
-  // Handle wallet modal opening
-  const handleOpenWalletModal = useCallback(() => {
-    setWalletModalOpen(true);
-  }, []);
-
-  // Handle wallet modal closing
-  const handleCloseWalletModal = useCallback(() => {
-    setWalletModalOpen(false);
-  }, []);
-
-  // The "Confirm Trip" logic - memoized with useCallback
-  const handleConfirm = useCallback(async () => {
-    if (isDepartureFlow && step === 2) {
-      dispatch(advanceBookingStep(3));
-      dispatch(saveBookingDetails());
-      toast.success("Departure station confirmed! Now select your arrival station.");
-      onConfirmDeparture?.();
-      return;
-    }
-
-    if (!isDepartureFlow && step === 4) {
-      if (!isSignedIn) {
-        onOpenSignIn();
-        return;
-      }
-      if (!hasDefaultPaymentMethod) {
-        toast.error("Please add/set a default payment method first.");
-        return;
-      }
-      try {
-        setCharging(true);
-        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
-        if (!result.success) {
-          throw new Error(result.error || "Charge failed");
-        }
-        
-        dispatch(advanceBookingStep(5));
-        dispatch(saveBookingDetails());
-        toast.success("Trip booked! Starting fare of HK$50 charged.");
-      } catch (err) {
-        console.error("Failed to charge trip =>", err);
-        toast.error("Payment failed. Please try again or check your card.");
-      } finally {
-        setCharging(false);
-      }
-    }
-  }, [
-    isDepartureFlow, 
-    step, 
-    isSignedIn, 
-    hasDefaultPaymentMethod, 
-    dispatch, 
-    onConfirmDeparture,
-    onOpenSignIn
-  ]);
-
-  // If step 5 => show TripSheet exclusively (blocking background)
-  if (step === 5) {
-    return (
-      <>
-        <div className="fixed inset-0 bg-black/50 z-40 pointer-events-auto" />
-        <div className="fixed inset-0 z-50 flex flex-col">
-          <TripSheet />
-        </div>
-      </>
-    );
-  }
-
-  // If component not initialized yet, show loading state
-  if (!isInitialized) {
-    return (
-      <div className="p-6 flex justify-center items-center">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
+  step,
+  isDepartureFlow,
+  charging,
+  driveTimeMin,
+  parkingValue,
+  shouldLoadCarGrid,
+  isSignedIn,
+  handleConfirm,
+  handleOpenWalletModal,
+  handleCloseWalletModal,
+  walletModalOpen,
+}: {
+  activeStation: StationFeature | null;
+  step: number;
+  isDepartureFlow: boolean;
+  charging: boolean;
+  driveTimeMin: string | null;
+  parkingValue: string;
+  shouldLoadCarGrid: boolean;
+  isSignedIn: boolean;
+  handleConfirm: () => void;
+  handleOpenWalletModal: () => void;
+  handleCloseWalletModal: () => void;
+  walletModalOpen: boolean;
+}) {
   // If no station selected at step 2 or 4 => show fallback
   if (!activeStation) {
     return (
@@ -419,4 +319,224 @@ function StationDetailComponent({
   );
 }
 
-export default memo(StationDetailComponent);
+function StationDetail({
+  stationId,
+  isOpen,
+  onClose,
+  onOpenSignIn,
+}: StationDetailProps) {
+  const dispatch = useAppDispatch();
+  const stations = useAppSelector(state => state.stations.items);
+  
+  // Use selective Redux state subscription
+  const {
+    step,
+    stepName,
+    route,
+    departureId,
+    arrivalId,
+    dispatchRoute,
+    isSignedIn,
+    hasDefaultPaymentMethod
+  } = useAppSelector(state => ({
+    step: selectBookingStep(state),
+    stepName: selectBookingStepName(state),
+    route: selectRoute(state),
+    departureId: selectDepartureStationId(state),
+    arrivalId: selectArrivalStationId(state),
+    dispatchRoute: selectDispatchRoute(state),
+    isSignedIn: selectIsSignedIn(state),
+    hasDefaultPaymentMethod: selectHasDefaultPaymentMethod(state)
+  }));
+
+  // Find the station details
+  const activeStation = useMemo(() => 
+    stations.find(s => s.id === stationId) || null,
+    [stations, stationId]
+  );
+
+  // Determine if this is a departure or arrival selection
+  const isDepartureStation = stationId === departureId;
+  const isArrivalStation = stationId === arrivalId;
+
+  // Distinguish departure vs arrival flow - memoized
+  const isDepartureFlow = useMemo(() => step <= 2, [step]);
+
+  // Local state
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
+  const [charging, setCharging] = useState(false);
+
+  // IMPORTANT: Logic to prevent opening on step 1 and 3
+  const shouldBlockOpening = 
+    (step === 1 && stepName === "selecting_departure_station") ||
+    (step === 3 && stepName === "selecting_arrival_station");
+
+  // Derived values with useMemo
+  const parkingValue = useMemo(() => 
+    step === 2 ? "Touchless Exit" : step === 4 ? "Touchless Entry" : "", 
+    [step]
+  );
+
+  const driveTimeMin = useMemo(() => 
+    route && departureId && arrivalId ? Math.round(route.duration / 60).toString() : null,
+    [route, departureId, arrivalId]
+  );
+
+  // Ensure component is properly initialized on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialized(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Initialize carGrid loading based on step and activeStation
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (isDepartureFlow && step === 2 && activeStation) {
+      setShouldLoadCarGrid(true);
+    } else {
+      timer = setTimeout(() => {
+        setShouldLoadCarGrid(false);
+      }, 300);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isDepartureFlow, step, activeStation]);
+
+  // Handle wallet modal opening
+  const handleOpenWalletModal = useCallback(() => {
+    setWalletModalOpen(true);
+  }, []);
+
+  // Handle wallet modal closing
+  const handleCloseWalletModal = useCallback(() => {
+    setWalletModalOpen(false);
+  }, []);
+
+  // Handler for clear button - clearing station selection
+  const handleClearStation = useCallback(() => {
+    if (isDepartureStation) {
+      dispatch(clearDepartureStation());
+    } else if (isArrivalStation) {
+      dispatch(clearArrivalStation());
+    }
+    onClose();
+  }, [isDepartureStation, isArrivalStation, dispatch, onClose]);
+
+  // The "Confirm Trip" logic - memoized with useCallback
+  const handleConfirm = useCallback(async () => {
+    if (isDepartureFlow && step === 2) {
+      dispatch(advanceBookingStep(3));
+      dispatch(saveBookingDetails());
+      toast.success("Departure station confirmed! Now select your arrival station.");
+      return;
+    }
+
+    if (!isDepartureFlow && step === 4) {
+      if (!isSignedIn) {
+        onOpenSignIn();
+        return;
+      }
+      if (!hasDefaultPaymentMethod) {
+        toast.error("Please add/set a default payment method first.");
+        return;
+      }
+      try {
+        setCharging(true);
+        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
+        if (!result.success) {
+          throw new Error(result.error || "Charge failed");
+        }
+        
+        dispatch(advanceBookingStep(5));
+        dispatch(saveBookingDetails());
+        toast.success("Trip booked! Starting fare of HK$50 charged.");
+      } catch (err) {
+        console.error("Failed to charge trip =>", err);
+        toast.error("Payment failed. Please try again or check your card.");
+      } finally {
+        setCharging(false);
+      }
+    }
+  }, [
+    isDepartureFlow, 
+    step, 
+    isSignedIn, 
+    hasDefaultPaymentMethod, 
+    dispatch,
+    onOpenSignIn
+  ]);
+
+  // Force close if we shouldn't be open due to step
+  useEffect(() => {
+    if (shouldBlockOpening && isOpen) {
+      onClose();
+    }
+  }, [shouldBlockOpening, isOpen, onClose]);
+
+  // If step 5 => show TripSheet exclusively (blocking background)
+  if (step === 5) {
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/50 z-40 pointer-events-auto" />
+        <div className="fixed inset-0 z-50 flex flex-col">
+          <TripSheet />
+        </div>
+      </>
+    );
+  }
+
+  // Generate subtitle based on whether this is departure or arrival
+  const sheetSubtitle = isDepartureStation 
+    ? "Departure Station" 
+    : isArrivalStation 
+      ? "Arrival Station" 
+      : "Station Details";
+
+  return (
+    <Sheet
+      isOpen={isOpen}
+      title={activeStation?.properties.Place || "Station Details"}
+      subtitle={sheetSubtitle}
+      onDismiss={onClose}
+    >
+      {!isInitialized ? (
+        <div className="p-6 flex justify-center items-center">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <StationDetailContent
+          activeStation={activeStation}
+          step={step}
+          isDepartureFlow={isDepartureFlow}
+          charging={charging}
+          driveTimeMin={driveTimeMin}
+          parkingValue={parkingValue}
+          shouldLoadCarGrid={shouldLoadCarGrid}
+          isSignedIn={isSignedIn}
+          handleConfirm={handleConfirm}
+          handleOpenWalletModal={handleOpenWalletModal}
+          handleCloseWalletModal={handleCloseWalletModal}
+          walletModalOpen={walletModalOpen}
+        />
+      )}
+      
+      {/* Show Clear Station button when appropriate */}
+      {(isDepartureStation || isArrivalStation) && (
+        <ActionButtons
+          isDepartureFlow={isDepartureFlow}
+          onClearStation={handleClearStation}
+        />
+      )}
+    </Sheet>
+  );
+}
+
+export default memo(StationDetail);
