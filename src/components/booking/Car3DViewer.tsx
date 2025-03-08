@@ -64,12 +64,8 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
     // Optimize materials and geometries
     scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
-        // Ensure geometry is optimized
-        if (!child.geometry.index && child.geometry.getAttribute('position').count > 100) {
-          child.geometry = THREE.BufferGeometryUtils.mergeVertices(child.geometry);
-        }
-        
-        // Only compute bounds if needed
+        // Skip the geometry optimization that used BufferGeometryUtils
+        // Instead just ensure we have bounds computed
         if (!child.geometry.boundingBox) {
           child.geometry.computeBoundingBox();
         }
@@ -135,15 +131,6 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
         }
         
         modelRef.current = null;
-      }
-      
-      // Force garbage collection if available
-      if (window.gc) {
-        try {
-          window.gc();
-        } catch (e) {
-          console.debug('Manual GC not available');
-        }
       }
     };
   }, [scene, url, interactive]);
@@ -416,7 +403,6 @@ function Car3DViewer({
           touchAction: "none", // Better touch handling
           outline: "none", // No focus outline
         }}
-        performance={{ min: 0.5 }} // Allow ThreeJS to reduce quality when FPS drops
       >
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
