@@ -644,10 +644,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
             {stationToShow && (
               <StationDetail
   key={detailKey}
-  stationId={stationToShow?.id || null} // Pass the station ID instead of the entire station
-  isOpen={!!stationToShow} // Convert stationToShow to boolean for isOpen
-  onClose={closeCurrentSheet} // Rename onDismiss to onClose
-  onOpenSignIn={handleOpenSignIn} // This prop already exists in StationDetail
+  stationId={stationToShow?.id ?? null}
+  isOpen={!!stationToShow} // Make sure this evaluates to true when a station is selected
+  onClose={closeCurrentSheet}
+  onOpenSignIn={handleOpenSignIn}
 />
             )}
           </Sheet>
