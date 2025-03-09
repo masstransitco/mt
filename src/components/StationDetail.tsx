@@ -8,13 +8,10 @@ import { Clock, Footprints } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
-  selectBookingStepName,
   advanceBookingStep,
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-  clearDepartureStation,
-  clearArrivalStation,
 } from "@/store/bookingSlice";
 import { saveBookingDetails } from "@/store/bookingThunks";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
@@ -70,10 +67,11 @@ const MapCard = dynamic(() => import("./MapCard"), {
 });
 
 interface StationDetailProps {
-  stationId: number | null;
-  isOpen: boolean;
-  onClose: () => void;
+  activeStation: StationFeature | null;
+  stations?: StationFeature[];
+  onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
+  onDismiss?: () => void;
 }
 
 // Memoized component to wrap CarGrid for better performance
@@ -184,40 +182,18 @@ const ConfirmButton = memo(({
 });
 ConfirmButton.displayName = "ConfirmButton";
 
-// Actions section component with Clear button
-const ActionButtons = memo(({
-  isDepartureFlow, 
-  onClearStation
-}: {
-  isDepartureFlow: boolean;
-  onClearStation: () => void;
-}) => {
-  return (
-    <div className="pt-3">
-      <button
-        onClick={onClearStation}
-        className="w-full py-3 text-sm font-medium rounded-md transition-colors text-white bg-red-600 hover:bg-red-700"
-      >
-        Clear {isDepartureFlow ? "Departure" : "Arrival"} Station
-      </button>
-    </div>
-  );
-});
-ActionButtons.displayName = "ActionButtons";
-
-function StationDetail({
-  stationId,
-  isOpen,
-  onClose,
+function StationDetailComponent({
+  activeStation,
+  stations,
+  onConfirmDeparture,
   onOpenSignIn,
+  onDismiss,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
-  const stations = useAppSelector(state => state.stations.items);
-  
+
   // Use selective Redux state subscription
   const {
     step,
-    stepName,
     route,
     departureId,
     arrivalId,
@@ -226,7 +202,6 @@ function StationDetail({
     hasDefaultPaymentMethod
   } = useAppSelector(state => ({
     step: selectBookingStep(state),
-    stepName: selectBookingStepName(state),
     route: selectRoute(state),
     departureId: selectDepartureStationId(state),
     arrivalId: selectArrivalStationId(state),
@@ -234,16 +209,6 @@ function StationDetail({
     isSignedIn: selectIsSignedIn(state),
     hasDefaultPaymentMethod: selectHasDefaultPaymentMethod(state)
   }));
-
-  // Find the station details
-  const activeStation = useMemo(() => 
-    stations.find(s => s.id === stationId) || null,
-    [stations, stationId]
-  );
-
-  // Determine if this is a departure or arrival selection
-  const isDepartureStation = stationId === departureId;
-  const isArrivalStation = stationId === arrivalId;
 
   // Distinguish departure vs arrival flow - memoized
   const isDepartureFlow = useMemo(() => step <= 2, [step]);
@@ -301,22 +266,13 @@ function StationDetail({
     setWalletModalOpen(false);
   }, []);
 
-  // Handler for clear button - clearing station selection
-  const handleClearStation = useCallback(() => {
-    if (isDepartureStation) {
-      dispatch(clearDepartureStation());
-    } else if (isArrivalStation) {
-      dispatch(clearArrivalStation());
-    }
-    onClose();
-  }, [isDepartureStation, isArrivalStation, dispatch, onClose]);
-
   // The "Confirm Trip" logic - memoized with useCallback
   const handleConfirm = useCallback(async () => {
     if (isDepartureFlow && step === 2) {
       dispatch(advanceBookingStep(3));
       dispatch(saveBookingDetails());
       toast.success("Departure station confirmed! Now select your arrival station.");
+      onConfirmDeparture?.();
       return;
     }
 
@@ -351,7 +307,8 @@ function StationDetail({
     step, 
     isSignedIn, 
     hasDefaultPaymentMethod, 
-    dispatch,
+    dispatch, 
+    onConfirmDeparture,
     onOpenSignIn
   ]);
 
@@ -367,11 +324,7 @@ function StationDetail({
     );
   }
 
-  // If no station or not open, don't render anything
-  if (!isOpen || !stationId || !activeStation) {
-    return null;
-  }
-
+  // If component not initialized yet, show loading state
   if (!isInitialized) {
     return (
       <div className="p-6 flex justify-center items-center">
@@ -380,79 +333,90 @@ function StationDetail({
     );
   }
 
+  // If no station selected at step 2 or 4 => show fallback
+  if (!activeStation) {
+    return (
+      <div className="p-6 space-y-4">
+        <div className="text-sm text-gray-300">
+          {isDepartureFlow
+            ? "Select a departure station from the map or list below."
+            : "Select an arrival station from the map or list below."}
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
+            <span>View parking</span>
+          </div>
+          <div className="p-3 rounded-lg bg-gray-800/50 flex items-center gap-2 text-gray-300">
+            <span>Check availability</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <motion.div
-        className="p-4 space-y-4"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 10 }}
-        transition={{ type: "tween", duration: 0.2 }}
-      >
-        <Suspense fallback={<MapCardFallback />}>
-          <MapCard
-            coordinates={[
-              activeStation.geometry.coordinates[0],
-              activeStation.geometry.coordinates[1],
-            ]}
-            name={activeStation.properties.Place}
-            address={activeStation.properties.Address}
-            className="mt-2 mb-2"
-          />
-        </Suspense>
-
-        {/* Station Stats - extracted to a separate component */}
-        <StationStats 
-          activeStation={activeStation}
-          step={step}
-          driveTimeMin={driveTimeMin}
-          parkingValue={parkingValue}
+    <motion.div
+      className="p-4 space-y-4"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      transition={{ type: "tween", duration: 0.2 }}
+    >
+      <Suspense fallback={<MapCardFallback />}>
+        <MapCard
+          coordinates={[
+            activeStation.geometry.coordinates[0],
+            activeStation.geometry.coordinates[1],
+          ]}
+          name={activeStation.properties.Place}
+          address={activeStation.properties.Address}
+          className="mt-2 mb-2"
         />
+      </Suspense>
 
-        {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
-        <AnimatePresence>
-          {isDepartureFlow && step === 2 && (
-            <motion.div 
-              className="py-2"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {shouldLoadCarGrid && <MemoizedCarGrid isVisible={true} />}
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Station Stats - extracted to a separate component */}
+      <StationStats 
+        activeStation={activeStation}
+        step={step}
+        driveTimeMin={driveTimeMin}
+        parkingValue={parkingValue}
+      />
 
-        {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
-        {step === 4 && isSignedIn && (
-          <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+      {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
+      <AnimatePresence>
+        {isDepartureFlow && step === 2 && (
+          <motion.div 
+            className="py-2"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {shouldLoadCarGrid && <MemoizedCarGrid isVisible={true} />}
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        {/* Confirm button - extracted to a separate component */}
-        <ConfirmButton 
-          isDepartureFlow={isDepartureFlow}
-          charging={charging}
-          disabled={charging || !(step === 2 || step === 4)}
-          onClick={handleConfirm}
-        />
+      {/* If user is signed in & step === 4 => show PaymentSummary above Confirm */}
+      {step === 4 && isSignedIn && (
+        <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+      )}
 
-        {/* Show Clear Station button when appropriate */}
-        {(isDepartureStation || isArrivalStation) && (
-          <ActionButtons
-            isDepartureFlow={isDepartureFlow}
-            onClearStation={handleClearStation}
-          />
-        )}
+      {/* Confirm button - extracted to a separate component */}
+      <ConfirmButton 
+        isDepartureFlow={isDepartureFlow}
+        charging={charging}
+        disabled={charging || !(step === 2 || step === 4)}
+        onClick={handleConfirm}
+      />
 
-        {/* WalletModal with memoized callbacks */}
-        <WalletModal
-          isOpen={walletModalOpen}
-          onClose={handleCloseWalletModal}
-        />
-      </motion.div>
-    </div>
+      {/* WalletModal with memoized callbacks */}
+      <WalletModal
+        isOpen={walletModalOpen}
+        onClose={handleCloseWalletModal}
+      />
+    </motion.div>
   );
 }
 
-export default memo(StationDetail);
+export default memo(StationDetailComponent);
