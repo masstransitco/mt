@@ -9,8 +9,6 @@ import {
   useDragControls,
 } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/store/store";
-import { selectBookingStep, selectBookingStepName } from "@/store/bookingSlice";
 
 /* ------------------------------------------------------------------
    ANIMATION CONSTANTS & HELPER
@@ -166,21 +164,6 @@ export default function Sheet({
   countLabel,
   onDismiss,
 }: SheetProps) {
-  // Get current booking step from Redux
-  const bookingStep = useAppSelector(selectBookingStep);
-  const bookingStepName = useAppSelector(selectBookingStepName);
-  
-  // Determine if this is a step that should persist the sheet in minimized state
-  const isPersistentStep = bookingStep === 2 || bookingStep === 4;
-  
-  // Only show the sheet if it's opened by parent, and not in steps 1 & 3
-  const shouldBlockShowing = 
-    (bookingStep === 1 && bookingStepName === "selecting_departure_station") ||
-    (bookingStep === 3 && bookingStepName === "selecting_arrival_station");
-  
-  // The effective open state considers both props and step restrictions
-  const effectiveIsOpen = isOpen && !shouldBlockShowing;
-  
   const [isMinimized, setIsMinimized] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -211,19 +194,11 @@ export default function Sheet({
 
   // Recalc position each time we open
   useEffect(() => {
-    if (effectiveIsOpen && headerRef.current) {
+    if (isOpen && headerRef.current) {
       const headerHeight = headerRef.current.offsetHeight + 4;
       minimizedPosition.current = window.innerHeight - headerHeight;
     }
-  }, [effectiveIsOpen, title, subtitle, count]);
-
-  // Auto-minimize when transitioning to a persistent step
-  useEffect(() => {
-    if (effectiveIsOpen && isPersistentStep && !isMinimized) {
-      // Only auto-minimize if we're already showing and the step changes
-      setIsMinimized(true);
-    }
-  }, [isPersistentStep, effectiveIsOpen, isMinimized]);
+  }, [isOpen, title, subtitle, count]);
 
   // Lock scroll only when fully open (not minimized)
   useEffect(() => {
@@ -232,7 +207,7 @@ export default function Sheet({
     let originalHeight = "";
     let originalTop = "";
 
-    if (effectiveIsOpen && !isMinimized) {
+    if (isOpen && !isMinimized) {
       originalOverflow = document.body.style.overflow;
       originalPosition = document.body.style.position;
       originalHeight = document.body.style.height;
@@ -259,14 +234,14 @@ export default function Sheet({
         }
       }
     };
-  }, [effectiveIsOpen, isMinimized]);
+  }, [isOpen, isMinimized]);
 
-  // Reset the sheet state each time it opens (except for persistent steps)
+  // Reset the sheet state each time it opens
   useEffect(() => {
-    if (effectiveIsOpen && !isPersistentStep) {
+    if (isOpen) {
       setIsMinimized(false);
     }
-  }, [effectiveIsOpen, isPersistentStep]);
+  }, [isOpen]);
 
   // Framer Motion controls
   const y = useMotionValue(0);
@@ -275,17 +250,17 @@ export default function Sheet({
 
   // Re-sync minimized state with y
   useEffect(() => {
-    if (!effectiveIsOpen) {
+    if (!isOpen) {
       y.set(0);
     } else if (isMinimized && minimizedPosition.current > 0) {
       y.set(minimizedPosition.current);
     } else {
       y.set(0);
     }
-  }, [effectiveIsOpen, isMinimized, y]);
+  }, [isOpen, isMinimized, y]);
 
   /* ----------------------------------------------------------------
-     BACKDROP CLICK => only minimize if expanded and persistent, don't dismiss
+     BACKDROP CLICK => only minimize if expanded
   ---------------------------------------------------------------- */
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -296,16 +271,10 @@ export default function Sheet({
         if (isTransitioning.current) return;
         isTransitioning.current = true;
 
-        // If it's persistent step, just minimize
-        if (isPersistentStep) {
-          if (!isMinimized && minimizedPosition.current > 0) {
-            setIsMinimized(true);
-            y.set(minimizedPosition.current);
-          }
-        } 
-        // If it's not a persistent step, call onDismiss
-        else if (onDismiss) {
-          onDismiss();
+        // If not minimized => minimize
+        if (!isMinimized && minimizedPosition.current > 0) {
+          setIsMinimized(true);
+          y.set(minimizedPosition.current);
         }
 
         setTimeout(() => {
@@ -313,7 +282,7 @@ export default function Sheet({
         }, 300);
       }
     },
-    [isMinimized, y, isPersistentStep, onDismiss]
+    [isMinimized, y]
   );
 
   /* ----------------------------------------------------------------
@@ -445,9 +414,9 @@ export default function Sheet({
 
   return (
     <AnimatePresence>
-      {effectiveIsOpen && (
+      {isOpen && (
         <div className="fixed inset-0 z-[999] flex flex-col pointer-events-none">
-          {/* Only show a clickable backdrop if expanded (not minimized) */}
+          {/* Only show a clickable backdrop if expanded */}
           {!isMinimized && (
             <motion.div
               className="absolute inset-0 bg-black pointer-events-auto"
