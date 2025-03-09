@@ -626,29 +626,32 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </div>
           </Sheet>
 
-          {/* Station Detail Sheet */}
-<Sheet
-  key={detailKey}
-  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-  onDismiss={() => {
-    requestAnimationFrame(() => {
-      closeCurrentSheet();
-      if (overlayRef.current?.requestRedraw) {
-        overlayRef.current.requestRedraw();
-      }
-    });
-  }}
-  title={getSheetTitle()}
-  subtitle={getSheetSubtitle()}
->
-  <StationDetail
-    key={detailKey}
-    stationId={stationToShow?.id ?? null}
-    isOpen={true} // Always pass true when stationToShow exists
-    onClose={closeCurrentSheet}
-    onOpenSignIn={handleOpenSignIn}
-  />
-</Sheet>
+         {/* Station Detail Sheet */}
+          <Sheet
+            key={detailKey}
+            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+            onDismiss={() => {
+              requestAnimationFrame(() => {
+                closeCurrentSheet();
+                if (overlayRef.current?.requestRedraw) {
+                  overlayRef.current.requestRedraw();
+                }
+              });
+            }}
+            title={getSheetTitle()}
+            subtitle={getSheetSubtitle()}
+          >
+            {stationToShow && (
+              <StationDetail
+                key={detailKey}
+                stations={searchLocation ? sortedStations : stations}
+                activeStation={stationToShow}
+                onOpenSignIn={handleOpenSignIn}
+                onDismiss={closeCurrentSheet}
+              />
+            )}
+          </Sheet>
+
           {/* GaussianSplatModal (still here if needed) */}
           <Suspense fallback={<div>Loading modal...</div>}>
             {isSplatModalOpen && (
