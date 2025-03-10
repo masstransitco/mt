@@ -72,7 +72,6 @@ import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import {
   createVirtualStationFromCar,
-  addVirtualCarStation,
 } from "@/lib/stationUtils";
 
 // Lazy‐load GaussianSplatModal
@@ -89,17 +88,21 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
-  // Local States
+  // Local map & UI states
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
+
+  // Steps for bottom sheets
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("car");
   const [previousSheet, setPreviousSheet] = useState<OpenSheetType>("none");
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
+
+  // Google Maps script readiness
   const [googleMapsReady, setGoogleMapsReady] = useState(false);
 
   // QR code states
@@ -107,13 +110,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [virtualStationId, setVirtualStationId] = useState<number | null>(null);
   const [isQrScanStation, setIsQrScanStation] = useState(false);
 
-  // Optional Splat Modal
+  // Optional modals
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
-
-  // Sign‐in modal
   const [signInModalOpen, setSignInModalOpen] = useState(false);
 
-  // Redux States
+  // Redux states
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
@@ -125,10 +126,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
   const scannedCar = useAppSelector(selectScannedCar);
-
-  // Route decoding
-  const decodedPath = useAppSelector(selectRouteDecoded);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
+
+  // Decode route from booking
+  const decodedPath = useAppSelector(selectRouteDecoded);
+  // Decode dispatch route
   const decodedDispatchPath = useAppSelector(selectDispatchRouteDecoded);
 
   // Load Google Maps script
@@ -139,7 +141,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
-  // Ensure Google Maps is loaded
+  // Once loaded, ensure Maps is truly ready
   useEffect(() => {
     if (isLoaded) {
       const timer = setTimeout(async () => {
@@ -171,7 +173,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     cars
   );
 
-  // Keep booking step in ref
+  // Keep booking step in a ref
   const bookingStepRef = useRef(bookingStep);
   useEffect(() => {
     bookingStepRef.current = bookingStep;
@@ -206,7 +208,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [googleMapsReady]
   );
 
-  // QR Scan success => create virtual station
+  // QR scan success => create a virtual station
   const handleQrScanSuccess = useCallback(() => {
     if (scannedCar) {
       console.log("QR Scan Success, scannedCar ID:", scannedCar.id);
@@ -217,16 +219,16 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-      // Insert or replace in station list
-      const existingIndex = stations.findIndex(s => s.id === vStationId);
-      let updatedStations = [...stations];
+      // Insert or replace in station array
+      const existingIndex = stations.findIndex((s) => s.id === vStationId);
+      const updatedStations = [...stations];
       if (existingIndex >= 0) {
         updatedStations[existingIndex] = virtualStation;
       } else {
         updatedStations.push(virtualStation);
       }
 
-      // Sort if we have user location
+      // Sort if we have userLocation
       if (userLocation) {
         const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
         setSortedStations(sorted);
@@ -242,7 +244,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
         actualMap.setZoom(16);
       }
-      console.log("Sheet should be opening with virtual station:", vStationId);
+      console.log("Sheet opening with virtual station:", vStationId);
     }
   }, [
     scannedCar,
@@ -252,7 +254,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     actualMap
   ]);
 
-  // If we detect scannedCar in step 2 => set up virtual station automatically
+  // If user scanned a car in step=2 => auto setup
   useEffect(() => {
     if (scannedCar && bookingStep === 2) {
       console.log("Scanned car in step 2, setting up virtual station...");
@@ -263,8 +265,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-      const existingIndex = stations.findIndex(s => s.id === vStationId);
-      let updatedStations = [...stations];
+      const existingIndex = stations.findIndex((s) => s.id === vStationId);
+      const updatedStations = [...stations];
       if (existingIndex >= 0) {
         updatedStations[existingIndex] = virtualStation;
       } else {
@@ -279,7 +281,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       }
 
       setTimeout(() => {
-        if (bookingStep === 2) {
+        if (bookingStepRef.current === 2) {
           setDetailKey(Date.now());
           setForceSheetOpen(true);
           setOpenSheet("detail");
@@ -287,7 +289,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
             actualMap.setZoom(16);
           }
-          console.log("Detail sheet opened for scanned car after short delay");
+          console.log("Detail sheet opened after short delay for scanned car.");
         }
       }, 300);
     }
@@ -303,20 +305,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Station selection logic
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      // If we're in a QR flow (isQrScanStation) but the user picks a *different* station
-      // => automatically reset the QR state, so we do not get "broken flow"
-      if (isQrScanStation && station.id !== virtualStationId) {
-        console.log("User is switching from QR-based station to a normal station => reset QR flow");
+      const stepNow = bookingStepRef.current;
+
+      // If we are in a QR-based departure station & user picks a different station for departure,
+      // only reset if we're still in step ≤2 (haven't locked in).
+      if (
+        isQrScanStation &&
+        station.id !== virtualStationId &&
+        stepNow <= 2
+      ) {
+        console.log("User switching from QR-based station to normal => reset QR flow");
         dispatch(clearDepartureStation());
         dispatch(setScannedCar(null));
         setIsQrScanStation(false);
         setVirtualStationId(null);
-        // Optionally set step to 1 to start over
         dispatch(advanceBookingStep(1));
       }
 
       // Now proceed with normal station selection
-      const stepNow = bookingStepRef.current; // safer reference
       if (stepNow === 1) {
         dispatch(selectDepartureStation(station.id));
         dispatch(advanceBookingStep(2));
@@ -332,20 +338,15 @@ export default function GMap({ googleApiKey }: GMapProps) {
         dispatch(selectArrivalStation(station.id));
         toast.success("Arrival station re-selected!");
       } else {
-        toast(`Station clicked, but no action—already at step ${stepNow}`);
+        toast(`Station tapped, but no action at step ${stepNow}`);
       }
 
-      setDetailKey(prev => prev + 1);
+      setDetailKey((prev) => prev + 1);
       setForceSheetOpen(true);
       setOpenSheet("detail");
       setPreviousSheet("none");
     },
-    [
-      dispatch,
-      isQrScanStation,
-      virtualStationId
-      // plus other needed dependencies
-    ]
+    [dispatch, isQrScanStation, virtualStationId]
   );
 
   const handleStationSelectedFromList = useCallback(
@@ -355,7 +356,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [handleStationSelection]
   );
 
-  // Map click => raycast => find station => handleStationSelection
+  // Raycast for station cubes => call handleStationSelection
   useEffect(() => {
     if (!actualMap || !overlayRef.current) return;
 
@@ -399,7 +400,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           }
 
           if (stationId !== undefined) {
-            const stationClicked = stations.find(s => s.id === stationId);
+            const stationClicked = stations.find((s) => s.id === stationId);
             if (stationClicked) {
               handleStationSelection(stationClicked);
               ev.stop();
@@ -420,7 +421,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     redInstancedMeshRef,
     stationIndexMapsRef,
     stations,
-    handleStationSelection,
+    handleStationSelection
   ]);
 
   // Load icons / map options
@@ -431,7 +432,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, googleMapsReady]);
 
-  // Fetch data (stations + cars)
+  // Fetch data
   useEffect(() => {
     (async () => {
       try {
@@ -446,7 +447,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Hide spinner once loaded
+  // Once fully loaded, hide spinner
   useEffect(() => {
     if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -458,8 +459,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (!googleMapsReady) return;
 
     if (departureStationId && arrivalStationId) {
-      const departureStation = stations.find(s => s.id === departureStationId);
-      const arrivalStation = stations.find(s => s.id === arrivalStationId);
+      const departureStation = stations.find((s) => s.id === departureStationId);
+      const arrivalStation = stations.find((s) => s.id === arrivalStationId);
       if (departureStation && arrivalStation) {
         dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
       }
@@ -474,7 +475,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(clearDispatchRoute());
       return;
     }
-    const depStation = stations.find(s => s.id === departureStationId);
+    const depStation = stations.find((s) => s.id === departureStationId);
     if (depStation) {
       dispatch(fetchDispatchDirections(depStation));
     }
@@ -505,8 +506,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
       actualMap,
       stations,
       openSheet,
-      sortStationsByDistanceToPoint,
-      googleMapsReady
+      googleMapsReady,
+      sortStationsByDistanceToPoint
     ]
   );
 
@@ -516,7 +517,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(advanceBookingStep(1));
     dispatch(clearDispatchRoute());
 
-    // If we were in a QR station, reset everything
+    // If we were in a QR station, reset
     if (isQrScanStation) {
       setIsQrScanStation(false);
       setVirtualStationId(null);
@@ -541,7 +542,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [dispatch, openSheet]);
 
-  // Helpers to open/close sheets
+  // Helpers for opening/closing sheets
   const openNewSheet = (newSheet: OpenSheetType) => {
     if (newSheet !== "detail") {
       setForceSheetOpen(false);
@@ -564,9 +565,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   };
 
-  // Closing the detail sheet
+  // Close detail sheet
   const handleStationDetailClose = useCallback(() => {
-    // If it was a QR station, reset the user to step 1 & clear the station
+    // If it was a QR station, reset user to step=1 if we haven't locked in
     if (isQrScanStation) {
       console.log("Dismissing a QR-scanned station => clearing station + step=1");
       dispatch(clearDepartureStation());
@@ -583,12 +584,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     } else {
       console.log("Dismissing a normal station => do not discard station");
     }
-
-    // Then close the sheet
     closeCurrentSheet();
   }, [isQrScanStation, closeCurrentSheet, dispatch]);
 
-  // Handle QR scanner open
+  // QR scanner open
   const handleOpenQrScanner = useCallback(() => {
     setIsQrScannerOpen(true);
   }, []);
@@ -641,10 +640,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
     openNewSheet
   ]);
 
-  // Derived error state
+  // Any error?
   const hasError = stationsError || carsError || loadError;
 
-  // Identify station to show in "detail"
+  // Which station are we focusing on in step≥3 (arrival) or step≤2 (departure)
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
 
   console.log(
@@ -661,14 +660,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     isQrScanStation &&
     virtualStationId === hasStationSelected
   ) {
-    console.log("Virtual station match - using scanned car as station");
+    console.log("Virtual station match => using scannedCar station");
     if (scannedCar && virtualStationId !== null) {
       stationToShow = createVirtualStationFromCar(scannedCar, virtualStationId);
     }
   } else {
-    // Normal station
+    // normal station
     const stationsToSearch = sortedStations.length > 0 ? sortedStations : stations;
-    stationToShow = stationsToSearch.find(s => s.id === hasStationSelected) ?? null;
+    stationToShow = stationsToSearch.find((s) => s.id === hasStationSelected) ?? null;
   }
 
   console.log(
@@ -678,7 +677,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     stationToShow?.properties?.isVirtualCarLocation
   );
 
-  // For sheet titles
+  // For sheet titles/subtitles
   const formatTime = (date: Date) => {
     let hours = date.getHours();
     const minutes = date.getMinutes();
@@ -690,39 +689,35 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const getSheetTitle = useCallback(() => {
     if (!stationToShow) return "";
-
     const isVirtualStation =
       isQrScanStation ||
-      (stationToShow.properties?.isVirtualCarLocation === true);
+      stationToShow.properties?.isVirtualCarLocation === true;
 
     if (isVirtualStation && bookingStep <= 2) {
       return "Ready to drive";
     }
-
     if (bookingStep <= 2) {
+      // Possibly show dispatch arrival
       if (dispatchRoute?.duration) {
         const now = new Date();
         const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-        const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-        return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
+        const end = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
+        return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(end)}`;
       }
       return "Pick-up station";
     }
-
     return "Trip details";
   }, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
 
   const getSheetSubtitle = useCallback(() => {
     if (!stationToShow) return "";
-
     const isVirtualStation =
       isQrScanStation ||
-      (stationToShow.properties?.isVirtualCarLocation === true);
+      stationToShow.properties?.isVirtualCarLocation === true;
 
     if (isVirtualStation && bookingStep <= 2) {
       return "Car is ready at your current location";
     }
-
     if (bookingStep <= 2) {
       return "Your car will be delivered here";
     } else if (bookingStep === 4) {
@@ -735,6 +730,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return "Return the car at your arrival station";
   }, [bookingStep, stationToShow, isQrScanStation]);
 
+  // Sign In
   const handleOpenSignIn = useCallback(() => {
     setSignInModalOpen(true);
   }, []);
@@ -770,7 +766,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 setActualMap(map);
               }}
             >
-              {/* 3D overlay is separate */}
+              {/* 3D overlay handled by useThreeOverlay */}
             </GoogleMap>
           </div>
 
