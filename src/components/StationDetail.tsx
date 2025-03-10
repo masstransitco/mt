@@ -32,7 +32,7 @@ import {
 } from "@/store/userSlice";
 import { chargeUserForTrip } from "@/lib/stripe";
 import { auth } from "@/lib/firebase";
-import { setScannedCar } from "@/store/carSlice";
+import { setScannedCar, selectScannedCar } from "@/store/carSlice";
 
 // Lazy loads, fallbacks, etc.
 const LoadingFallback = () => (
@@ -47,6 +47,7 @@ const MapCardFallback = () => (
   </div>
 );
 
+// Dynamically import CarGrid
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: ({ error, isLoading, pastDelay }) => {
     if (error) return <div>Error loading vehicles</div>;
@@ -60,6 +61,7 @@ import { PaymentSummary } from "@/components/ui/PaymentComponents";
 import TripSheet from "./TripSheet";
 import WalletModal from "@/components/ui/WalletModal";
 
+// Dynamically import MapCard
 const MapCard = dynamic(() => import("./MapCard"), {
   loading: ({ error, isLoading, pastDelay }) => {
     if (error) return <div>Error loading map</div>;
@@ -76,139 +78,148 @@ interface StationDetailProps {
   onOpenSignIn: () => void;
   onDismiss?: () => void;
   isQrScanStation?: boolean;
-  /** Called when the entire detail panel is closed (by parent) */
   onClose?: () => void;
 }
 
-// CarGrid wrapper for performance
-const MemoizedCarGrid = memo(({ isVisible }: { isVisible: boolean }) => {
+// A small wrapper for CarGrid
+const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
+  isVisible,
+  isQrScanStation,
+  scannedCar,
+}: {
+  isVisible: boolean;
+  isQrScanStation?: boolean;
+  scannedCar?: any;
+}) {
   if (!isVisible) return null;
   return (
     <Suspense fallback={<LoadingFallback />}>
-      <CarGrid isVisible={isVisible} />
+      <CarGrid
+        isVisible={isVisible}
+        isQrScanStation={isQrScanStation}
+        scannedCar={scannedCar}
+      />
     </Suspense>
   );
 });
 MemoizedCarGrid.displayName = "MemoizedCarGrid";
 
-const StationStats = memo(
-  ({
-    activeStation,
-    step,
-    driveTimeMin,
-    parkingValue,
-    isVirtualCarStation,
-  }: {
-    activeStation: StationFeature;
-    step: number;
-    driveTimeMin: string | null;
-    parkingValue: string;
-    isVirtualCarStation: boolean;
-  }) => {
-    const isVirtualCarLocation =
-      isVirtualCarStation ||
-      (activeStation.properties?.isVirtualCarLocation === true);
+/** StationStats for display */
+const StationStats = memo(function StationStats({
+  activeStation,
+  step,
+  driveTimeMin,
+  parkingValue,
+  isVirtualCarStation,
+}: {
+  activeStation: StationFeature;
+  step: number;
+  driveTimeMin: string | null;
+  parkingValue: string;
+  isVirtualCarStation: boolean;
+}) {
+  const isVirtualCarLocation =
+    isVirtualCarStation ||
+    (activeStation.properties?.isVirtualCarLocation === true);
 
-    return (
-      <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
-        {/* For a virtual car station, show Ready to Drive */}
-        {isVirtualCarLocation ? (
-          <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2 text-gray-300">
-              <Clock className="w-4 h-4 text-green-400" />
-              <span>Status</span>
-            </div>
-            <span className="font-medium text-green-400">Ready to Drive</span>
+  return (
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
+      {/* For a virtual car station, show Ready to Drive */}
+      {isVirtualCarLocation ? (
+        <div className="flex justify-between items-center text-sm">
+          <div className="flex items-center gap-2 text-gray-300">
+            <Clock className="w-4 h-4 text-green-400" />
+            <span>Status</span>
           </div>
-        ) : activeStation.properties.waitTime ? (
+          <span className="font-medium text-green-400">Ready to Drive</span>
+        </div>
+      ) : activeStation.properties.waitTime ? (
+        <div className="flex justify-between items-center text-sm">
+          <div className="flex items-center gap-2 text-gray-300">
+            <Clock className="w-4 h-4 text-blue-400" />
+            <span>Est. Wait Time</span>
+          </div>
+          <span className="font-medium text-white">
+            {activeStation.properties.waitTime} min
+          </span>
+        </div>
+      ) : null}
+
+      {step === 2 &&
+        typeof activeStation.distance === "number" &&
+        !isVirtualCarLocation && (
           <div className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2 text-gray-300">
-              <Clock className="w-4 h-4 text-blue-400" />
-              <span>Est. Wait Time</span>
+              <Footprints className="w-4 h-4 text-blue-400" />
+              <span>Distance from You</span>
             </div>
             <span className="font-medium text-white">
-              {activeStation.properties.waitTime} min
+              {activeStation.distance.toFixed(1)} km
             </span>
-          </div>
-        ) : null}
-
-        {step === 2 &&
-          typeof activeStation.distance === "number" &&
-          !isVirtualCarLocation && (
-            <div className="flex justify-between items-center text-sm">
-              <div className="flex items-center gap-2 text-gray-300">
-                <Footprints className="w-4 h-4 text-blue-400" />
-                <span>Distance from You</span>
-              </div>
-              <span className="font-medium text-white">
-                {activeStation.distance.toFixed(1)} km
-              </span>
-            </div>
-          )}
-
-        {step === 4 && driveTimeMin && (
-          <div className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2 text-gray-300">
-              <span>Drive Time</span>
-            </div>
-            <span className="font-medium text-white">{driveTimeMin} min</span>
           </div>
         )}
 
+      {step === 4 && driveTimeMin && (
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
-            <span>Parking</span>
+            <span>Drive Time</span>
           </div>
-          <span className="font-medium text-white">
-            {isVirtualCarLocation ? "Current Location" : parkingValue}
-          </span>
+          <span className="font-medium text-white">{driveTimeMin} min</span>
         </div>
+      )}
+
+      <div className="flex justify-between items-center text-sm">
+        <div className="flex items-center gap-2 text-gray-300">
+          <span>Parking</span>
+        </div>
+        <span className="font-medium text-white">
+          {isVirtualCarLocation ? "Current Location" : parkingValue}
+        </span>
       </div>
-    );
-  }
-);
+    </div>
+  );
+});
 StationStats.displayName = "StationStats";
 
-const ConfirmButton = memo(
-  ({
-    isDepartureFlow,
-    charging,
-    disabled,
-    onClick,
-    isVirtualCarLocation,
-  }: {
-    isDepartureFlow: boolean;
-    charging: boolean;
-    disabled: boolean;
-    onClick: () => void;
-    isVirtualCarLocation?: boolean;
-  }) => {
-    return (
-      <div className="pt-3">
-        <button
-          onClick={onClick}
-          disabled={disabled}
-          className={cn(
-            "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
-            "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed",
-            isVirtualCarLocation && "bg-green-600 hover:bg-green-700"
-          )}
-        >
-          {charging ? (
-            <>
-              <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
-              Processing...
-            </>
-          ) : isDepartureFlow ? (
-            isVirtualCarLocation ? "Start Driving Now" : "Choose Dropoff Station"
-          ) : (
-            "Confirm Trip"
-          )}
-        </button>
-      </div>
-    );
-  }
-);
+/** Confirm button for step 2 or 4 */
+const ConfirmButton = memo(function ConfirmButton({
+  isDepartureFlow,
+  charging,
+  disabled,
+  onClick,
+  isVirtualCarLocation,
+}: {
+  isDepartureFlow: boolean;
+  charging: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  isVirtualCarLocation?: boolean;
+}) {
+  return (
+    <div className="pt-3">
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={cn(
+          "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
+          "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed",
+          isVirtualCarLocation && "bg-green-600 hover:bg-green-700"
+        )}
+      >
+        {charging ? (
+          <>
+            <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
+            Processing...
+          </>
+        ) : isDepartureFlow ? (
+          isVirtualCarLocation ? "Start Driving Now" : "Choose Dropoff Station"
+        ) : (
+          "Confirm Trip"
+        )}
+      </button>
+    </div>
+  );
+});
 ConfirmButton.displayName = "ConfirmButton";
 
 function StationDetailComponent({
@@ -222,7 +233,7 @@ function StationDetailComponent({
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
 
-  // Step & state
+  // Step & state from Redux
   const step = useAppSelector(selectBookingStep);
   const route = useAppSelector(selectRoute);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -231,8 +242,12 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod);
 
+  // If you stored scannedCar in Redux:
+  const scannedCarRedux = useAppSelector(selectScannedCar);
+
   const isDepartureFlow = useMemo(() => step <= 2, [step]);
 
+  // Local UI states
   const [isInitialized, setIsInitialized] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
@@ -250,6 +265,7 @@ function StationDetailComponent({
     return Math.round(route.duration / 60).toString();
   }, [route, departureId, arrivalId]);
 
+  // If this station is a virtual "car" location or if we explicitly are in QR scan mode
   const isVirtualCarLocation = useMemo(() => {
     if (!activeStation) return isQrScanStation;
     return (
@@ -258,7 +274,7 @@ function StationDetailComponent({
     );
   }, [activeStation, isQrScanStation]);
 
-  // Basic mount init
+  // Initialize once
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsInitialized(true);
@@ -267,7 +283,7 @@ function StationDetailComponent({
     return () => clearTimeout(timer);
   }, []);
 
-  // CarGrid loading
+  // Decide if we want to load CarGrid
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isDepartureFlow && step === 2 && activeStation) {
@@ -282,6 +298,7 @@ function StationDetailComponent({
     };
   }, [isDepartureFlow, step, activeStation]);
 
+  // Also forcibly load if we’re in QR mode at step 2
   useEffect(() => {
     if (isQrScanStation && step === 2) {
       setShouldLoadCarGrid(true);
@@ -295,10 +312,9 @@ function StationDetailComponent({
     setWalletModalOpen(false);
   }, []);
 
-  // Since we're removing the top-right "X" for QR stations,
-  // we can still keep a handleClose if the parent calls it.
+  /** If parent forcibly closes detail (like user swiped down), handle cleaning up for QR. */
   const handleClose = useCallback(() => {
-    // If the parent calls this for some reason
+    // If it's a QR-station, reset departure + scannedCar
     if (isQrScanStation || isVirtualCarLocation) {
       dispatch(clearDepartureStation());
       dispatch(setScannedCar(null));
@@ -314,7 +330,9 @@ function StationDetailComponent({
     }
   }, [dispatch, isQrScanStation, isVirtualCarLocation, onClose]);
 
+  /** Confirm logic for step 2 or step 4 */
   const handleConfirm = useCallback(async () => {
+    // Step 2 => user picking arrival next
     if (isDepartureFlow && step === 2) {
       dispatch(advanceBookingStep(3));
       if (isVirtualCarLocation) {
@@ -326,6 +344,7 @@ function StationDetailComponent({
       return;
     }
 
+    // Step 4 => finalize payment
     if (!isDepartureFlow && step === 4) {
       if (!isSignedIn) {
         onOpenSignIn();
@@ -360,22 +379,21 @@ function StationDetailComponent({
     dispatch,
     isSignedIn,
     onOpenSignIn,
-    hasDefaultPaymentMethod
+    hasDefaultPaymentMethod,
   ]);
 
+  /** Possibly show an "estimated pickup time" for dispatch if not virtualCar */
   const estimatedPickupTime = useMemo(() => {
-    if (isVirtualCarLocation || !dispatchRoute || !dispatchRoute.duration) {
-      return null;
-    }
+    if (isVirtualCarLocation || !dispatchRoute?.duration) return null;
     const now = new Date();
     const pickupTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-    const hours = pickupTime.getHours() % 12 || 12;
-    const minutes = pickupTime.getMinutes();
+    const hh = pickupTime.getHours() % 12 || 12;
+    const mm = pickupTime.getMinutes();
     const ampm = pickupTime.getHours() >= 12 ? "pm" : "am";
-    return `${hours}:${minutes < 10 ? "0" + minutes : minutes}${ampm}`;
+    return `${hh}:${mm < 10 ? "0" + mm : mm}${ampm}`;
   }, [isVirtualCarLocation, dispatchRoute]);
 
-  // EARLY RETURNS
+  // If user already in final step, show TripSheet
   if (step === 5) {
     return (
       <>
@@ -395,6 +413,7 @@ function StationDetailComponent({
     );
   }
 
+  // If tried to render but no station
   if (!activeStation && attemptedRender) {
     console.error(
       "StationDetail attempted to render but activeStation is null",
@@ -404,6 +423,7 @@ function StationDetailComponent({
     );
   }
 
+  // Fallback UI if no station
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -424,7 +444,7 @@ function StationDetailComponent({
     );
   }
 
-  // NORMAL RENDER
+  // Normal UI
   return (
     <motion.div
       className="p-4 space-y-4"
@@ -433,11 +453,7 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/*
-        Removed the "X" button for isQrScanStation.
-        If a user wants to close the sheet, they'll do it via the parent's onDismiss.
-      */}
-
+      {/*  No "X" button for isQrScanStation here, the parent calls onClose */}
       <Suspense fallback={<MapCardFallback />}>
         <MapCard
           coordinates={[
@@ -450,7 +466,7 @@ function StationDetailComponent({
         />
       </Suspense>
 
-      {/* If there's a non-virtual station at step 2, show estimated pickup time */}
+      {/* if step=2 and not virtual => show dispatch pickup time */}
       {step === 2 && !isVirtualCarLocation && estimatedPickupTime && (
         <div className="text-sm text-center bg-blue-600/20 rounded-md p-2 border border-blue-500/30">
           <span className="text-gray-200">Estimated car arrival: </span>
@@ -467,7 +483,7 @@ function StationDetailComponent({
         isVirtualCarStation={isVirtualCarLocation}
       />
 
-      {/* Show CarGrid if departure flow at step 2 */}
+      {/* CarGrid if step=2 (departure) */}
       <AnimatePresence>
         {isDepartureFlow && step === 2 && (
           <motion.div
@@ -478,13 +494,18 @@ function StationDetailComponent({
             transition={{ duration: 0.2 }}
           >
             {(shouldLoadCarGrid || isVirtualCarLocation) && (
-              <MemoizedCarGrid isVisible={true} />
+              <MemoizedCarGrid
+                isVisible
+                // Now pass the needed props for QR flow
+                isQrScanStation={isQrScanStation}
+                scannedCar={scannedCarRedux} 
+              />
             )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* PaymentSummary if user is signed in & step 4 */}
+      {/* PaymentSummary if step=4 and user is signed in */}
       {step === 4 && isSignedIn && (
         <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
       )}
