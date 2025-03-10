@@ -72,7 +72,7 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onDismiss?: () => void;
-  isQrScanStation?: boolean; // Added this properly to the interface
+  isQrScanStation?: boolean;
 }
 
 // Memoized component to wrap CarGrid for better performance
@@ -92,18 +92,18 @@ const StationStats = memo(({
   activeStation, 
   step, 
   driveTimeMin,
-  parkingValue 
+  parkingValue,
+  isVirtualCarStation
 }: {
   activeStation: StationFeature;
   step: number;
   driveTimeMin: string | null;
   parkingValue: string;
+  isVirtualCarStation: boolean;
 }) => {
-  // Check if this is a virtual car location (QR scanned)
-const isVirtualCarLocation = useMemo(() => 
-  (activeStation?.properties?.isVirtualCarLocation === true) || (isQrScanStation === true),
-  [activeStation, isQrScanStation]
-);
+  // Get virtual car status - derive it from the prop or the station properties
+  const isVirtualCarLocation = isVirtualCarStation || 
+    (activeStation.properties && activeStation.properties.isVirtualCarLocation === true);
   
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
@@ -206,7 +206,7 @@ const ConfirmButton = memo(({
 ConfirmButton.displayName = "ConfirmButton";
 
 function StationDetailComponent({
-  activeStation = null,
+  activeStation,
   stations = [],
   onConfirmDeparture = () => {},
   onOpenSignIn = () => {},
@@ -218,7 +218,7 @@ function StationDetailComponent({
   // Log for debugging
   console.log("StationDetail rendering with station:", activeStation?.id, 
               "isQrScanStation:", isQrScanStation,
-              "hasVirtualCarLocation:", activeStation?.properties.isVirtualCarLocation);
+              "hasVirtualCarLocation:", activeStation?.properties?.isVirtualCarLocation);
 
   // Use selective Redux state subscription
   const {
@@ -260,11 +260,11 @@ function StationDetailComponent({
     [route, departureId, arrivalId]
   );
 
-  // Check if this is a virtual car station (from QR code)
-  const isVirtualCarLocation = useMemo(() => 
-    activeStation?.properties.isVirtualCarLocation === true || isQrScanStation === true,
-    [activeStation, isQrScanStation]
-  );
+  // Check if this is a virtual car station (from QR code) - safely access properties
+  const isVirtualCarLocation = useMemo(() => {
+    if (!activeStation) return isQrScanStation;
+    return (activeStation.properties?.isVirtualCarLocation === true) || isQrScanStation;
+  }, [activeStation, isQrScanStation]);
 
   // Ensure component is properly initialized on mount
   useEffect(() => {
@@ -295,7 +295,8 @@ function StationDetailComponent({
 
   // Special effect for QR scanned car stations
   useEffect(() => {
-    if ((activeStation?.properties.isVirtualCarLocation || isQrScanStation) && step === 2) {
+    const isVirtual = activeStation?.properties?.isVirtualCarLocation === true;
+    if ((isVirtual || isQrScanStation) && step === 2) {
       console.log("QR scanned car detected, forcing car grid to load");
       setShouldLoadCarGrid(true);
     }
@@ -321,13 +322,13 @@ function StationDetailComponent({
       // Make sure to save to Firestore AFTER modifying state
       await dispatch(saveBookingDetails());
       
-      if (isVirtualCarLocation || isQrScanStation) {
+      if (isVirtualCarLocation) {
         toast.success("Car ready! Now select your dropoff station.");
       } else {
         toast.success("Departure station confirmed! Now select your arrival station.");
       }
       
-      onConfirmDeparture?.();
+      onConfirmDeparture();
       return;
     }
 
@@ -365,8 +366,7 @@ function StationDetailComponent({
     dispatch, 
     onConfirmDeparture,
     onOpenSignIn,
-    isVirtualCarLocation,
-    isQrScanStation
+    isVirtualCarLocation
   ]);
 
   // If step 5 => show TripSheet exclusively (blocking background)
@@ -465,6 +465,7 @@ function StationDetailComponent({
         step={step}
         driveTimeMin={driveTimeMin}
         parkingValue={parkingValue}
+        isVirtualCarStation={isVirtualCarLocation}
       />
 
       {/* Show CarGrid for the departure flow at step 2 with AnimatePresence for mounting/unmounting */}
