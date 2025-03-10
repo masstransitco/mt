@@ -4,7 +4,7 @@ import { Scanner, IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import { useAppDispatch } from '@/store/store';
 import { fetchCarByRegistration, setScannedCar } from '@/store/carSlice';
 import { selectCar } from '@/store/userSlice';
-import { createVirtualStationFromCar, addVirtualCarStation } from '@/lib/stationUtils';
+import { createVirtualStationFromCar } from '@/lib/stationUtils';
 import { selectDepartureStation, advanceBookingStep } from '@/store/bookingSlice';
 import { saveBookingDetails } from "@/store/bookingThunks";
 import { fetchDispatchLocations } from '@/store/dispatchSlice';
@@ -78,11 +78,11 @@ export default function QrScannerOverlay({
       console.log("QR scan complete, car selected, station created, booking saved");
       
       // Notify parent component of success (will be used to open detail sheet)
+      // Use a longer delay to ensure state updates have time to propagate
       if (onScanSuccess) {
-        // Use setTimeout to ensure state updates are processed first
         setTimeout(() => {
           onScanSuccess();
-        }, 100);
+        }, 500);
       }
       
       toast.success(`Car ${registration} selected and ready to drive`);
@@ -118,7 +118,6 @@ export default function QrScannerOverlay({
             >
               ✕
             </button>
-            
             <div className="p-4 text-center text-white space-y-3 bg-black bg-opacity-50 rounded-lg">
               <h2 className="text-xl font-bold">Scan Car QR Code</h2>
               <p className="text-sm">
