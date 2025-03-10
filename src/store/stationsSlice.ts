@@ -30,6 +30,8 @@ export interface StationFeature {
     availableSpots: number;
     waitTime?: number;
     ObjectId: number; // for any unique ID usage
+    isVirtualCarLocation?: boolean; // Flag for virtual stations created from cars
+    carId?: number; // Reference to the car for easier lookup
   };
   distance?: number; 
   walkTime?: number; // in minutes
