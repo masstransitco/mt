@@ -36,13 +36,17 @@ import { selectScannedCar } from "@/store/carSlice";
 import TripSheet from "./TripSheet";
 import WalletModal from "@/components/ui/WalletModal";
 
-// 1) Dynamic import of PaymentSummary
-const PaymentSummary = dynamic(() => import("@/components/ui/PaymentComponents").then(
-  (mod) => ({ default: mod.PaymentSummary })
-), {
-  loading: () => <div className="text-sm text-gray-400">Loading payment...</div>,
-  ssr: false,
-});
+/** 
+ * 1) Dynamically import PaymentSummary 
+ *    so it only loads when step=4.
+ */
+const PaymentSummary = dynamic(
+  () => import("@/components/ui/PaymentComponents").then((mod) => ({ default: mod.PaymentSummary })),
+  {
+    loading: () => <div className="text-sm text-gray-400">Loading payment...</div>,
+    ssr: false,
+  }
+);
 
 // --- A small fallback component for <Suspense> around MapCard --- //
 function MapCardFallback() {
@@ -88,7 +92,7 @@ interface StationDetailProps {
   onOpenSignIn: () => void;
   onDismiss?: () => void;
   isQrScanStation?: boolean;
-  onClose?: () => void;
+  onClose?: () => void; // We'll keep this if needed for programmatic close
 }
 
 /** A small wrapper for CarGrid */
@@ -105,12 +109,13 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
   return (
     <Suspense
       fallback={
-        <div className="h-40 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
+        <div className="h-52 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
           <div className="text-xs text-gray-400">Loading vehicles...</div>
         </div>
       }
     >
       <CarGrid
+        className="h-52 w-full"
         isVisible={isVisible}
         isQrScanStation={isQrScanStation}
         scannedCar={scannedCar}
@@ -264,8 +269,7 @@ function StationDetailComponent({
   // Flow booleans
   const isDepartureFlow = useMemo(() => step <= 2, [step]);
 
-  // UI & local states
-  // (4) - No more artificial "isInitialized" delay
+  // Local states
   const [isInitialized, setIsInitialized] = useState(true);
   const [attemptedRender, setAttemptedRender] = useState(true);
 
@@ -286,22 +290,17 @@ function StationDetailComponent({
     return Math.round(route.duration / 60).toString();
   }, [route, departureId, arrivalId]);
 
-  // Identify if the station is a “virtual” car location
+  // Identify if station is a “virtual” car location
   const isVirtualCarLocation = useMemo(
     () => !!activeStation?.properties?.isVirtualCarLocation,
     [activeStation]
   );
 
-  // (3) Debounce or throttle fetchRoute calls
+  // Debounce route fetching
   const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (
-      step >= 3 &&
-      departureId &&
-      arrivalId &&
-      stations.length > 0
-    ) {
+    if (step >= 3 && departureId && arrivalId && stations.length > 0) {
       // Clear previous debounce
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
@@ -314,8 +313,6 @@ function StationDetailComponent({
         }
       }, 300);
     }
-
-    // Cleanup
     return () => {
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
@@ -338,17 +335,12 @@ function StationDetailComponent({
     };
   }, [isDepartureFlow, step, activeStation]);
 
-  // Also forcibly load CarGrid if we have a QR station at step=2
+  // For QR station, forcibly load CarGrid at step=2
   useEffect(() => {
     if (isQrScanStation && step === 2) {
       setShouldLoadCarGrid(true);
     }
   }, [isQrScanStation, step]);
-
-  // A simple onClose callback
-  const handleClose = useCallback(() => {
-    onClose?.();
-  }, [onClose]);
 
   // Payment modal open/close
   const handleOpenWalletModal = useCallback(() => {
@@ -419,7 +411,7 @@ function StationDetailComponent({
     return `${hh}:${mm < 10 ? "0" + mm : mm}${ampm}`;
   }, [isVirtualCarLocation, dispatchRoute]);
 
-  // If user already in final step (5)
+  // If user is already in final step (5), show TripSheet
   if (step === 5) {
     return (
       <>
@@ -431,7 +423,7 @@ function StationDetailComponent({
     );
   }
 
-  // If not yet ready to render
+  // If we want a loading spinner until fully loaded
   if (!isInitialized) {
     return (
       <div className="p-6 flex justify-center items-center">
@@ -477,17 +469,9 @@ function StationDetailComponent({
       className="p-4 space-y-4 relative"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      // We'll keep a simple exit for now; removing AnimatePresence usage around this entire block
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {/* Optional close button if you want the user to close the sheet */}
-      <button
-        onClick={handleClose}
-        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white w-8 h-8 rounded-full"
-        aria-label="Close"
-      >
-        ✕
-      </button>
+      {/* No "X" button – user will rely on gestures or outside triggers */}
 
       {/* Map preview */}
       <Suspense fallback={<MapCardFallback />}>
@@ -498,7 +482,7 @@ function StationDetailComponent({
           ]}
           name={activeStation.properties.Place}
           address={activeStation.properties.Address}
-          className="mt-2 mb-2"
+          className="mt-2 mb-2 h-52 w-full"
         />
       </Suspense>
 
@@ -520,7 +504,6 @@ function StationDetailComponent({
       />
 
       {/* CarGrid if step=2 (choose your car) */}
-      {/* 5) Remove AnimatePresence; just fade in/out with motion */}
       {isDepartureFlow && step === 2 && (
         <motion.div
           className="py-2"
