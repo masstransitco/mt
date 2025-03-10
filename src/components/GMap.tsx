@@ -76,7 +76,7 @@ import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
 // Import our Google Maps utility
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
-import { addVirtualCarStation } from "@/lib/stationUtils";
+import { createVirtualStationFromCar, addVirtualCarStation } from "@/lib/stationUtils";
 
 // Lazy-load GaussianSplatModal
 const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
