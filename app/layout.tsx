@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, getFirestore } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { toast } from "react-hot-toast"; // Assuming you use this for notifications
+import { toast } from "react-hot-toast"; // For notifications
 
 import { auth } from "@/lib/firebase";
 import Spinner from "@/components/ui/spinner";
@@ -21,7 +21,7 @@ import {
   selectAuthUser,
   selectIsSignedIn
 } from "@/store/userSlice";
-import { loadBookingDetails, saveBookingDetails } from "@/store/bookingThunks"; // Added saveBookingDetails
+import { loadBookingDetails, saveBookingDetails } from "@/store/bookingThunks";
 import { selectBookingStep, resetBookingFlow } from "@/store/bookingSlice";
 import { fetchCars } from "@/store/carSlice";
 import { fetchDispatchLocations } from "@/store/dispatchSlice";
@@ -29,7 +29,7 @@ import { fetchDispatchLocations } from "@/store/dispatchSlice";
 const inter = Inter({ subsets: ["latin"] });
 
 /**
- * Component to disable pinch-to-zoom.
+ * Prevent pinch-to-zoom on mobile.
  */
 function DisablePinchZoom() {
   useEffect(() => {
@@ -50,7 +50,8 @@ function DisablePinchZoom() {
 
 /**
  * Booking State Recovery Component
- * Automatically detects and fixes invalid booking states
+ * Currently does not forcibly reset step 5, allowing the user
+ * to remain in step 5 if that's what's persisted.
  */
 function BookingStateRecovery() {
   const dispatch = useAppDispatch();
@@ -61,9 +62,11 @@ function BookingStateRecovery() {
     // Only process if user is signed in
     if (!isSignedIn) return;
     
-    // If user is in invalid step 5 or 6, reset them to step 1
-    if (bookingStep === 5 || bookingStep === 6) {
-      console.log(`Detected user in invalid booking state (step ${bookingStep}), resetting to step 1...`);
+    // Example: If you had a step 6 or some truly invalid step, you could handle it here.
+    // Right now, we do nothing if step === 5, so it persists properly.
+    // If you have no invalid states, you can remove this entire component.
+    if (bookingStep === 6) {
+      console.log(`Detected user in invalid booking state (step 6), resetting to step 1...`);
       
       // Reset the booking flow in Redux
       dispatch(resetBookingFlow());
@@ -85,16 +88,15 @@ function BookingStateRecovery() {
           console.error("Error during booking reset sequence:", err);
         });
       
-      // Notify the user
       toast.success("Your previous trip has been completed. Ready for a new trip!");
     }
   }, [bookingStep, dispatch, isSignedIn]);
   
-  return null; // This is just a logic component, no UI
+  return null; // no UI
 }
 
 /**
- * Child component that lives INSIDE the ReduxProvider
+ * Component inside the ReduxProvider
  */
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -102,9 +104,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const currentUser = useAppSelector(selectAuthUser);
   const isSignedIn = useAppSelector(selectIsSignedIn);
-  const bookingStep = useAppSelector(selectBookingStep);
 
-  // This effect runs once on component mount to set up auth listener
+  // Set up auth listener once
   useEffect(() => {
     const db = getFirestore();
     
@@ -129,7 +130,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         const unsubscribeDoc = onSnapshot(userDocRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data() as any;
-            // Handle payment method changes
+            // Payment method changes
             if (data.defaultPaymentMethodId) {
               dispatch(setDefaultPaymentMethodId(data.defaultPaymentMethodId));
             } else {
@@ -155,9 +156,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     };
   }, [dispatch]);
 
-  // This effect runs whenever auth state or booking step changes
+  // When auth state or user changes, load booking details if signed in
   useEffect(() => {
-    // If user is signed in, load booking details if they're not already loaded
     if (isSignedIn && currentUser) {
       dispatch(loadBookingDetails());
     }
@@ -173,7 +173,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={`${inter.className} h-full flex flex-col relative`}>
-      {/* Include BookingStateRecovery component */}
       <BookingStateRecovery />
       {children}
     </div>
@@ -181,7 +180,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The actual Next.js RootLayout component
+ * The Next.js RootLayout
  */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
