@@ -244,6 +244,7 @@ function StationDetailComponent({
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
   const [charging, setCharging] = useState(false);
+  const [attemptedRender, setAttemptedRender] = useState(false);
 
   // Derived values with useMemo
   const parkingValue = useMemo(() => 
@@ -266,6 +267,7 @@ function StationDetailComponent({
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsInitialized(true);
+      setAttemptedRender(true);
     }, 100);
     
     return () => clearTimeout(timer);
@@ -385,6 +387,14 @@ function StationDetailComponent({
     );
   }
 
+  // Log the state when we attempted a render but found no activeStation
+  if (!activeStation && attemptedRender) {
+    console.error("StationDetail attempted to render but activeStation is null", 
+                  "departureId:", departureId, 
+                  "arrivalId:", arrivalId,
+                  "isQrScanStation:", isQrScanStation);
+  }
+
   // If no station selected at step 2 or 4 => show fallback
   if (!activeStation) {
     return (
@@ -406,6 +416,18 @@ function StationDetailComponent({
     );
   }
 
+  // Calculate estimated pickup time for station (not needed for virtual cars)
+  const estimatedPickupTime = useMemo(() => {
+    if (isVirtualCarLocation || !dispatchRoute?.duration) return null;
+    
+    const now = new Date();
+    const pickupTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+    const hours = pickupTime.getHours() % 12 || 12;
+    const minutes = pickupTime.getMinutes();
+    const ampm = pickupTime.getHours() >= 12 ? 'pm' : 'am';
+    return `${hours}:${minutes < 10 ? '0' + minutes : minutes}${ampm}`;
+  }, [dispatchRoute, isVirtualCarLocation]);
+
   return (
     <motion.div
       className="p-4 space-y-4"
@@ -425,6 +447,14 @@ function StationDetailComponent({
           className="mt-2 mb-2"
         />
       </Suspense>
+
+      {/* Show estimated pickup time if applicable */}
+      {step === 2 && !isVirtualCarLocation && estimatedPickupTime && (
+        <div className="text-sm text-center bg-blue-600/20 rounded-md p-2 border border-blue-500/30">
+          <span className="text-gray-200">Estimated car arrival: </span>
+          <span className="font-medium text-white">{estimatedPickupTime}</span>
+        </div>
+      )}
 
       {/* Station Stats - extracted to a separate component */}
       <StationStats 
