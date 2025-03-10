@@ -329,9 +329,15 @@ function StationDetailComponent({
       onClose();
       
       // Add a notification to let the user know they need to scan again
-      toast.info("Scan the car's QR code again if you want to select this vehicle", {
+      // Using standard toast instead of toast.info which doesn't exist
+      toast("Scan the car's QR code again if you want to select this vehicle", {
         duration: 4000,
-        position: "bottom-center"
+        position: "bottom-center",
+        icon: "ℹ️", // Information icon
+        style: {
+          background: "#3b82f6", // Blue background
+          color: "#ffffff",      // White text
+        },
       });
     } else {
       // For regular stations, just call the parent close handler
