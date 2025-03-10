@@ -4,8 +4,9 @@ import { Scanner, IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import { useAppDispatch } from '@/store/store';
 import { fetchCarByRegistration, setScannedCar } from '@/store/carSlice';
 import { selectCar } from '@/store/userSlice';
-import { createVirtualStationFromCar } from '@/lib/stationUtils';
+import { createVirtualStationFromCar, addVirtualCarStation } from '@/lib/stationUtils';
 import { selectDepartureStation, advanceBookingStep } from '@/store/bookingSlice';
+import { fetchDispatchLocations } from '@/store/dispatchSlice';
 import { toast } from 'react-hot-toast';
 
 interface QrScannerOverlayProps {
@@ -55,24 +56,27 @@ export default function QrScannerOverlay({
       }
       
       // Set the scanned car in Redux
-      dispatch(setScannedCar(carResult));
+      await dispatch(setScannedCar(carResult));
       
       // Select the car in user slice
-      dispatch(selectCar(carResult.id));
+      await dispatch(selectCar(carResult.id));
       
-      // Create a virtual station based on car's location
+      // Also fetch dispatch locations to ensure car model data is available
+      await dispatch(fetchDispatchLocations());
+      
+      // Create a virtual station ID based on car ID
       const virtualStationId = 1000000 + carResult.id; // Use a high number to avoid conflicts
-      const virtualStation = createVirtualStationFromCar(carResult, virtualStationId);
       
-      // Select the virtual station as departure
-      dispatch(selectDepartureStation(virtualStationId));
-      
-      // Move to step 2 (selected_departure_station)
-      dispatch(advanceBookingStep(2));
+      // Select the virtual station as departure and advance to step 2
+      await dispatch(selectDepartureStation(virtualStationId));
+      await dispatch(advanceBookingStep(2)); // Explicitly move to step 2 (selected_departure_station)
       
       // Notify parent component of success (will be used to open detail sheet)
       if (onScanSuccess) {
-        onScanSuccess();
+        // Use setTimeout to ensure state updates are processed first
+        setTimeout(() => {
+          onScanSuccess();
+        }, 100);
       }
       
       toast.success(`Car ${registration} selected and ready to drive`);
