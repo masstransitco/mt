@@ -3,7 +3,6 @@
 import React, { memo, useMemo, useState, useEffect, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { selectCar } from "@/store/userSlice";
-
 import {
   BatteryFull,
   BatteryMedium,
@@ -16,13 +15,13 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import type { Car } from "@/types/cars";
 
-// Lazy-load Car3DViewer
-const Car3DViewer = dynamic(() => import("./Car3DViewer").then(mod => mod.default), {
-  ssr: false,
-  loading: () => <ViewerSkeleton />,
-});
+/** Fallback skeleton while the 3D viewer loads */
+const ViewerSkeleton = () => (
+  <div className="relative w-full h-full bg-gray-900/30 rounded-lg overflow-hidden">
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
+  </div>
+);
 
-/** A group of cars (all with the same model). */
 export interface CarGroup {
   model: string;
   cars: Car[];
@@ -30,23 +29,27 @@ export interface CarGroup {
 
 interface CarCardGroupProps {
   group: CarGroup;
-  /** If the entire grid (or parent) is visible or not. */
   isVisible?: boolean;
-  /**
-   * Optionally pass a ref to a scrollable container
-   * if you want IntersectionObserver to detect horizontal scrolling.
-   */
   rootRef?: React.RefObject<HTMLDivElement>;
+  /** If true, we skip showing the "select car" dropdown, because there's only one scanned car. */
+  isQrScanStation?: boolean;
 }
 
-/** Fallback skeleton while the 3D viewer loads. */
-const ViewerSkeleton = () => (
-  <div className="relative w-full h-full bg-gray-900/30 rounded-lg overflow-hidden">
-    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
-  </div>
-);
+/** Dynamically load your Car3DViewer. */
+const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
+  ssr: false,
+  loading: () => <ViewerSkeleton />,
+});
 
-function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
+/**
+ * Renders a group of cars (usually all of the same model).
+ */
+function CarCardGroup({
+  group,
+  isVisible = true,
+  rootRef,
+  isQrScanStation = false,
+}: CarCardGroupProps) {
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
@@ -56,7 +59,7 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
   const popupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Cleanup timeouts on unmount
+  // On unmount, clear any timeouts
   useEffect(() => {
     return () => {
       if (popupTimeoutRef.current) {
@@ -65,9 +68,8 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
     };
   }, []);
 
-  // IntersectionObserver: load 3D only if card is visible in the scroll container
+  // IntersectionObserver to load the 3D model only when visible
   useEffect(() => {
-    // If the parent/entire grid is hidden, or we have no container ref, bail out
     if (!isVisible) {
       setShouldRender3D(false);
       return;
@@ -76,13 +78,11 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
 
     const options: IntersectionObserverInit = {
       threshold: 0.1,
-      // If you have a custom scroll container, use it as the root
-      // Otherwise omit 'root' to use the browser viewport
       root: rootRef?.current ?? null,
     };
 
     const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
+      entries.forEach((entry) => {
         if (entry.isIntersecting) {
           setShouldRender3D(true);
         }
@@ -96,82 +96,64 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
     };
   }, [isVisible, rootRef]);
 
-  // Decide which car is selected in this group (or default to the first one)
-  const selectedCar = useMemo(() => {
-    return group.cars.find((c) => c.id === selectedCarId) || group.cars[0];
-  }, [group.cars, selectedCarId]);
-
   // If the user has selected any car in this group
   const isGroupSelected = useMemo(() => {
     return group.cars.some((c) => c.id === selectedCarId);
   }, [group.cars, selectedCarId]);
 
-  // 3D model URL
-  const modelUrl = selectedCar?.modelUrl || "/cars/defaultModel.glb";
+  // Decide which car is actually displayed:
+  // If we have only 1 car (QR flow or small group), skip the logic
+  const displayedCar = useMemo(() => {
+    if (group.cars.length === 1) {
+      return group.cars[0];
+    }
+    // Otherwise pick the selected one or the first
+    const foundSelected = group.cars.find((c) => c.id === selectedCarId);
+    return foundSelected || group.cars[0];
+  }, [group.cars, selectedCarId]);
 
-  // Battery calculations
-  const { batteryPercentage, BatteryIcon, batteryIconColor } = useMemo(() => {
-    const rawBattery = selectedCar.electric_battery_percentage_left;
+  // If we had battery logic or odometer logic, you can put it here:
+  // Example battery logic
+  const { batteryPercentage, batteryIconColor, BatteryIcon } = useMemo(() => {
+    const rawBattery = displayedCar.electric_battery_percentage_left;
     const parsed = rawBattery != null ? Number(rawBattery) : NaN;
-    const percentage = !isNaN(parsed) && parsed >= 1 && parsed <= 100 ? parsed : 92;
+    const percentage =
+      !isNaN(parsed) && parsed >= 1 && parsed <= 100 ? parsed : 90;
 
     let Icon = BatteryFull;
-    let color = "text-green-500";
+    let color = "text-green-400";
 
     if (percentage <= 9) {
       Icon = BatteryWarning;
       color = "text-red-500";
     } else if (percentage < 40) {
       Icon = BatteryLow;
-      color = "text-orange-500";
+      color = "text-orange-400";
     } else if (percentage < 80) {
       Icon = BatteryMedium;
       color = "text-lime-400";
     }
 
-    return { batteryPercentage: percentage, BatteryIcon: Icon, batteryIconColor: color };
-  }, [selectedCar.electric_battery_percentage_left]);
+    return {
+      batteryPercentage: percentage,
+      batteryIconColor: color,
+      BatteryIcon: Icon,
+    };
+  }, [displayedCar]);
 
-  // Format date/time
-  const formattedLastDriven = useMemo(() => {
-    const locationUpdated = selectedCar.location_updated;
-    if (!locationUpdated) return "";
-    const d = new Date(locationUpdated);
-    if (Number.isNaN(d.getTime())) return "";
+  // 3D model
+  const modelUrl = displayedCar?.modelUrl || "/cars/defaultModel.glb";
 
-    const day = d.getDate();
-    const suffix = getDaySuffix(day);
-    const monthNames = [
-      "January","February","March","April","May","June",
-      "July","August","September","October","November","December",
-    ];
-    const month = monthNames[d.getMonth()] || "";
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const isPM = hours >= 12;
-    const hours12 = hours % 12 || 12;
-    const ampm = isPM ? "pm" : "am";
-    const minutesStr = String(minutes).padStart(2, "0");
-
-    return `${day}${suffix} ${month} ${hours12}:${minutesStr}${ampm}`;
-  }, [selectedCar.location_updated]);
-
-  // Handlers
-  const handleCardClick = () => {
-    if (!isGroupSelected) {
-      dispatch(selectCar(selectedCar.id));
-    }
-  };
-
+  // Switch the selected car
   const handleSelectCar = (carId: number) => {
     dispatch(selectCar(carId));
     setShowOdometerPopup(false);
   };
 
+  // Example odometer popup
   const handleOdometerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setShowOdometerPopup(prev => !prev);
-    // Reset auto-hide timer
+    setShowOdometerPopup((prev) => !prev);
     if (popupTimeoutRef.current) {
       clearTimeout(popupTimeoutRef.current);
     }
@@ -183,39 +165,38 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
   return (
     <motion.div
       ref={cardRef}
-      onClick={handleCardClick}
+      onClick={() => {
+        // If group not selected, select the displayedCar
+        if (!isGroupSelected) {
+          dispatch(selectCar(displayedCar.id));
+        }
+      }}
       initial={{ opacity: 0, y: 10 }}
-      animate={{ 
-        opacity: 1, 
+      animate={{
+        opacity: 1,
         y: 0,
-        scale: isGroupSelected ? 1.0 : 0.98 
+        scale: isGroupSelected ? 1.0 : 0.98,
       }}
-      transition={{ 
-        type: "tween", 
-        duration: 0.2,
-        delay: 0.05
-      }}
-      className={`
-        relative
-        overflow-hidden
-        rounded-lg
-        bg-gray-900/50
-        text-white
-        border border-gray-800
-        backdrop-blur-sm
-        shadow-md
-        transition-colors
-        cursor-pointer
-        mb-4
+      transition={{ type: "tween", duration: 0.2, delay: 0.05 }}
+      className="
+        relative 
+        overflow-hidden 
+        rounded-lg 
+        bg-gray-900/50 
+        text-white 
+        border border-gray-800 
+        backdrop-blur-sm 
+        shadow-md 
+        transition-colors 
+        cursor-pointer 
+        mb-4 
         w-full
-        ${isGroupSelected ? "ring-1 ring-blue-500" : ""}
-      `}
+      "
       style={{
         contain: "content",
-        willChange: isGroupSelected ? "transform" : "auto",
       }}
     >
-      {/* Badge if user selected a car from this group */}
+      {/* "Selected" badge if group is selected */}
       {isGroupSelected && (
         <div className="absolute top-3 right-3 z-10">
           <div className="px-2 py-1 rounded-full bg-blue-500/80 text-white text-xs backdrop-blur-sm">
@@ -224,32 +205,33 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
         </div>
       )}
 
-      {/* Make card layout always horizontal */}
       <div className="flex flex-row">
-        {/* 3D Viewer Container - fixed width ratio */}
+        {/* Left side: 3D viewer */}
         <div className="relative w-1/2 aspect-video">
-          {/* Dropdown moved to overlay on top left of 3D viewer */}
-          <div 
-            className="absolute top-3 left-3 z-10"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <select
-              className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-2 py-1 text-white text-xs backdrop-blur-sm"
-              onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
-              value={selectedCar.id}
+          {/* Only show the <select> if NOT in QR flow and we have multiple cars */}
+          {(!isQrScanStation && group.cars.length > 1) && (
+            <div
+              className="absolute top-3 left-3 z-10"
+              onClick={(e) => e.stopPropagation()}
             >
-              {group.cars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
+              <select
+                className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-2 py-1 text-white text-xs backdrop-blur-sm"
+                onChange={(e) => handleSelectCar(parseInt(e.target.value, 10))}
+                value={displayedCar.id}
+              >
+                {group.cars.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {shouldRender3D && isVisible ? (
             <Car3DViewer
               modelUrl={modelUrl}
-              imageUrl={selectedCar?.image}
+              imageUrl={displayedCar?.image}
               interactive={isGroupSelected}
               height="100%"
               width="100%"
@@ -260,70 +242,58 @@ function CarCardGroup({ group, isVisible = true, rootRef }: CarCardGroupProps) {
           )}
         </div>
 
-        {/* Content - fixed to right side */}
+        {/* Right side content */}
         <div className="p-4 w-1/2 flex flex-col justify-between">
+          {/* Title + stats */}
           <div>
             <div className="flex items-start justify-between">
-              <p className="font-medium text-lg leading-tight text-white">{selectedCar.model}</p>
+              <p className="font-medium text-base leading-tight text-white">
+                {displayedCar.model || "Unknown Model"}
+              </p>
             </div>
 
-            <div className="flex items-center mt-3">
+            {/* Battery + range row */}
+            <div className="flex items-center mt-2 gap-2">
               <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-2 py-1">
                 <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
-                <span className="text-xs font-medium">{batteryPercentage}%</span>
+                <span className="text-xs font-medium">
+                  {batteryPercentage}%
+                </span>
               </div>
-              
-              <div className="ml-2 flex items-center gap-1 bg-gray-800/70 rounded-full px-2 py-1">
+
+              <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-2 py-1">
                 <Gauge className="w-4 h-4 text-blue-400" />
-                <span className="text-xs">{(batteryPercentage * 3.51).toFixed(0)} km</span>
+                <span className="text-xs">
+                  {(batteryPercentage * 3.2).toFixed(0)} km
+                </span>
               </div>
             </div>
-            
+
+            {/* Example: Odometer info */}
             <div className="flex items-center mt-3 text-gray-400 text-xs">
-              <Info 
-                className="w-4 h-4 mr-1 cursor-pointer hover:text-white transition-colors" 
-                onClick={handleOdometerClick} 
+              <Info
+                className="w-4 h-4 mr-1 cursor-pointer hover:text-white transition-colors"
+                onClick={handleOdometerClick}
               />
-              <span>Year: {selectedCar.year}</span>
-              
+              <span>Year: {displayedCar.year || "2021"}</span>
+
               {showOdometerPopup && (
                 <div className="absolute left-4 bottom-16 bg-gray-800 text-white text-xs px-3 py-2 rounded-md shadow-lg border border-gray-700 z-10">
-                  Total distance: {selectedCar.odometer} km
+                  Total distance: {displayedCar.odometer || "N/A"} km
                 </div>
               )}
             </div>
           </div>
+
+          {/* Possibly more detail in the bottom-right */}
+          <div className="mt-4 text-xs text-gray-400">
+            {/* e.g. dynamic info about location_updated, etc. */}
+            Last updated: {String(displayedCar.location_updated || "")}
+          </div>
         </div>
       </div>
-
-      {/* Footer for last driven info */}
-      {formattedLastDriven && (
-        <div className="bg-gray-800/50 px-4 py-2 text-gray-400 text-xs border-t border-gray-800/80 w-full">
-          Last driven: {formattedLastDriven}
-        </div>
-      )}
     </motion.div>
   );
 }
 
-function getDaySuffix(day: number): string {
-  if (day >= 11 && day <= 13) return "th";
-  switch (day % 10) {
-    case 1:
-      return "st";
-    case 2:
-      return "nd";
-    case 3:
-      return "rd";
-    default:
-      return "th";
-  }
-}
-
-export default memo(CarCardGroup, (prev, next) => {
-  return (
-    prev.isVisible === next.isVisible &&
-    prev.group.model === next.group.model &&
-    prev.group.cars.length === next.group.cars.length
-  );
-});
+export default memo(CarCardGroup);
