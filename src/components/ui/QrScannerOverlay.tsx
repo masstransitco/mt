@@ -7,10 +7,13 @@ import { useAppDispatch } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import { selectCar } from "@/store/userSlice";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
-import { selectDepartureStation, advanceBookingStep } from "@/store/bookingSlice";
+import {
+  selectDepartureStation,
+  advanceBookingStep,
+} from "@/store/bookingSlice";
 import { fetchDispatchLocations } from "@/store/dispatchSlice";
+import { addVirtualStation } from "@/store/stationsSlice"; // <-- new import
 import { toast } from "react-hot-toast";
-// REMOVED or COMMENTED OUT -> import { saveBookingDetails } from "@/store/bookingThunks";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
@@ -39,8 +42,8 @@ export default function QrScannerOverlay({
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
-        // Extract car registration from URL
-        // e.g. "www.masstransitcar.com/zk5419"
+        // Example QR: "https://www.masstransitcar.com/zk5419"
+        // Extract car registration from the last part
         const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         if (!match) {
           toast.error("Invalid QR code format");
@@ -51,7 +54,7 @@ export default function QrScannerOverlay({
         const registration = match[1].toUpperCase();
         console.log("Car registration:", registration);
 
-        // Fetch car by registration
+        // 1) Fetch car from your backend
         const carResult = await dispatch(fetchCarByRegistration(registration)).unwrap();
         if (!carResult) {
           toast.error(`Car ${registration} not found`);
@@ -59,30 +62,31 @@ export default function QrScannerOverlay({
           return;
         }
 
-        // Store scanned car in Redux
+        // 2) Store scanned car in Redux
         await dispatch(setScannedCar(carResult));
 
-        // Select the car in user slice
+        // 3) Also pick it in user slice (if you have a "selectCar" flow)
         await dispatch(selectCar(carResult.id));
 
-        // Fetch dispatch locations if needed
+        // 4) Possibly fetch dispatch data (if your flow needs it)
         await dispatch(fetchDispatchLocations());
 
-        // Create virtual station ID from car ID
+        // 5) Create a unique station ID for this "virtual" car station
         const virtualStationId = 1000000 + carResult.id;
 
-        // Use that as departure station, go to step 2
+        // Build the "virtual station" object from the car
+        const virtualStation = createVirtualStationFromCar(carResult, virtualStationId);
+
+        // 6) Add the virtual station to Redux
+        dispatch(addVirtualStation(virtualStation));
+
+        // 7) Mark this newly added station as the departure station, then go to step 2
         await dispatch(selectDepartureStation(virtualStationId));
         await dispatch(advanceBookingStep(2));
 
-        // Previously persisted booking state here, but removing that to avoid partial saves:
-        /*
-        // await dispatch(saveBookingDetails());
-        */
-
         console.log("QR scan complete, car selected, station created.");
 
-        // Optionally notify parent to open detail sheet
+        // Optionally notify parent that we scanned successfully
         if (onScanSuccess) {
           setTimeout(() => {
             onScanSuccess();
@@ -144,7 +148,7 @@ export default function QrScannerOverlay({
 
                 {loading && (
                   <div className="p-8 flex items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
