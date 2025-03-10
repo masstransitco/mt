@@ -78,7 +78,7 @@ export const fetchStations = createAsyncThunk<
   { rejectValue: string }
 >("stations/fetchStations", async (_, { rejectWithValue }) => {
   try {
-    const cached = localStorage.getItem("stations");
+    const cached = typeof window !== "undefined" && localStorage.getItem("stations");
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       // Cache valid for 1 hour
@@ -96,10 +96,12 @@ export const fetchStations = createAsyncThunk<
 
     if (data.type === "FeatureCollection") {
       const features: StationFeature[] = data.features;
-      localStorage.setItem(
-        "stations",
-        JSON.stringify({ data: features, timestamp: Date.now() })
-      );
+      if (typeof window !== "undefined") {
+        localStorage.setItem(
+          "stations",
+          JSON.stringify({ data: features, timestamp: Date.now() })
+        );
+      }
       return { data: features, timestamp: Date.now() };
     }
     throw new Error("Invalid data format");
@@ -166,7 +168,6 @@ export const fetchStationVacancy = createAsyncThunk<
   }
 );
 
-/* --------------------------- Slice --------------------------- */
 const stationsSlice = createSlice({
   name: "stations",
   initialState,
@@ -191,6 +192,19 @@ const stationsSlice = createSlice({
       if (endIndex >= state.items.length) {
         state.hasMore = false;
       }
+    },
+
+    /**
+     * Add a new virtual station (e.g. from a scanned car) to the store
+     */
+    addVirtualStation(state, action: PayloadAction<StationFeature>) {
+      // Optionally check if it already exists
+      const existing = state.items.find((s) => s.id === action.payload.id);
+      if (!existing) {
+        state.items.push(action.payload);
+      }
+      // If you want to also show it in the listStations, you can push it there too,
+      // or let it appear next time you fetch/paginate, depending on your logic.
     },
   },
   extraReducers: (builder) => {
@@ -244,24 +258,18 @@ const stationsSlice = createSlice({
   },
 });
 
-export const { loadNextStationsPage } = stationsSlice.actions;
+export const { loadNextStationsPage, addVirtualStation } = stationsSlice.actions;
 export default stationsSlice.reducer;
 
 /* --------------------------- Selectors --------------------------- */
 export const selectStationsLoading = (state: RootState) => state.stations.loading;
 export const selectStationsError = (state: RootState) => state.stations.error;
 
-/** 
- * For GMap: returns all stations, unsliced. 
- * If you want them distance-sorted, you can do a separate "withDistance" version.
- */
+/** Returns all stations, unsliced. */
 export const selectAllStations = (state: RootState) => state.stations.items;
 
-/** 
- * For the list: returns only the paged subset (12, 24, 36, etc).
- */
+/** Returns only the paged subset (12, 24, 36, etc). */
 export const selectPagedStations = (state: RootState) => state.stations.listStations;
-
 export const selectHasMoreStations = (state: RootState) => state.stations.hasMore;
 
 /**
