@@ -13,6 +13,7 @@ import {
   selectRoute,
 } from "@/store/bookingSlice";
 import { selectStationsWithDistance, StationFeature } from "@/store/stationsSlice";
+import { selectScannedCar } from "@/store/carSlice";
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { setSearchLocation } from "@/store/userSlice";
 import { MapPinDown } from "@/components/ui/icons/MapPinDown";
@@ -24,6 +25,8 @@ import {
   createGeocoder, 
   createAutocompleteService 
 } from "@/lib/googleMaps";
+import { createVirtualStationFromCar } from "@/lib/stationUtils";
+import type { Car } from "@/types/cars";
 
 /* -----------------------------------------------------------
    Typing & Dot Animations
@@ -388,6 +391,9 @@ interface StationSelectorProps {
   onClearArrival?: () => void;
   onLocateMe?: () => void;
   onScan?: () => void; // Added this prop for QR scanning
+  isQrScanStation?: boolean; // Added to track QR scanned status
+  virtualStationId?: number | null; // Added to track virtual station ID
+  scannedCar?: Car | null; // Added to access scanned car data 
 }
 
 function StationSelector({
@@ -396,6 +402,9 @@ function StationSelector({
   onClearArrival,
   onLocateMe,
   onScan, // Added in the props destructuring
+  isQrScanStation = false,
+  virtualStationId = null,
+  scannedCar = null,
 }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
@@ -403,15 +412,36 @@ function StationSelector({
   const arrivalId = useAppSelector(selectArrivalStationId);
   const stations = useAppSelector(selectStationsWithDistance);
   const bookingRoute = useAppSelector(selectRoute);
+  const reduxScannedCar = useAppSelector(selectScannedCar);
 
-  const departureStation = useMemo(
-    () => stations.find((s) => s.id === departureId),
-    [stations, departureId]
-  );
+  // Use either passed scannedCar or get it from Redux
+  const actualScannedCar = scannedCar || reduxScannedCar;
+
+  // Enhanced departureStation lookup to support virtual stations
+  const departureStation = useMemo(() => {
+    // First check if this is a virtual station from a QR-scanned car
+    const isVirtualStation = isQrScanStation && 
+                            actualScannedCar && 
+                            departureId && 
+                            (virtualStationId === departureId || 
+                             departureId === 1000000 + actualScannedCar.id);
+    
+    if (isVirtualStation && actualScannedCar) {
+      console.log("Creating virtual station for display in StationSelector");
+      // Generate virtual station on-the-fly
+      const vStationId = virtualStationId || (1000000 + actualScannedCar.id);
+      return createVirtualStationFromCar(actualScannedCar, vStationId);
+    }
+    
+    // Normal station lookup
+    return stations.find((s) => s.id === departureId);
+  }, [stations, departureId, isQrScanStation, virtualStationId, actualScannedCar]);
+
   const arrivalStation = useMemo(
     () => stations.find((s) => s.id === arrivalId),
     [stations, arrivalId]
   );
+  
   const distanceInKm = useMemo(
     () => (bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null),
     [bookingRoute]
@@ -471,6 +501,13 @@ function StationSelector({
   const handleClearArrival = useCallback(() => {
     onClearArrival?.();
   }, [onClearArrival]);
+
+  // Handle QR code scanning button
+  const handleScan = useCallback(() => {
+    if (onScan) {
+      onScan();
+    }
+  }, [onScan]);
 
   return (
     <div className="relative z-10 w-full max-w-screen-md mx-auto px-1">
@@ -565,6 +602,32 @@ function StationSelector({
               <div className="text-xs font-medium text-white px-3 py-1 bg-blue-600/60 backdrop-blur-sm rounded-full mr-2">
                 {distanceInKm} km
               </div>
+            )}
+            
+            {/* QR Scan button - only show in steps 1 or 2 */}
+            {(step === 1 || step === 2) && onScan && (
+              <button
+                onClick={handleScan}
+                className="w-10 h-10 bg-gray-800 text-white rounded-full hover:bg-green-700 transition-colors shadow-md flex items-center justify-center mr-2"
+                type="button"
+                aria-label="Scan QR code"
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="w-5 h-5" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <rect x="7" y="7" width="3" height="3"/>
+                  <rect x="14" y="7" width="3" height="3"/>
+                  <rect x="7" y="14" width="3" height="3"/>
+                  <rect x="14" y="14" width="3" height="3"/>
+                </svg>
+              </button>
             )}
             
             {/* Only show locate me button in steps 1 or 2 */}
