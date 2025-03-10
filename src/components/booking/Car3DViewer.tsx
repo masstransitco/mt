@@ -7,7 +7,6 @@ import {
   useGLTF,
   Html,
   Environment,
-  Preload,
   AdaptiveDpr,
   AdaptiveEvents,
   useProgress,
@@ -23,8 +22,13 @@ import LoadingOverlay from "@/components/ui/loading-overlay";
 interface Car3DViewerProps {
   modelUrl: string;
   imageUrl?: string;
+  /** 
+   * You can keep these if you like, 
+   * but we’ll override with a fixed height anyway 
+   */
   width?: string | number;
   height?: string | number;
+
   isVisible?: boolean;
   interactive?: boolean;
 }
@@ -71,12 +75,10 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
           child.geometry.computeBoundingSphere();
         }
         
-        // Optimize materials
+        // If not interactive, reduce texture quality
         if (child.material instanceof THREE.MeshStandardMaterial) {
           child.material.roughness = 0.4;
           child.material.metalness = 0.8;
-          
-          // Lower texture quality for non-interactive mode
           if (!interactive && child.material.map) {
             child.material.map.minFilter = THREE.LinearFilter;
             child.material.map.generateMipmaps = false;
@@ -85,7 +87,7 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
       }
     });
 
-    // Position the model based on type
+    // Optional positioning based on model name
     if (url.includes("kona.glb")) {
       const box = new THREE.Box3().setFromObject(scene);
       const size = box.getSize(new THREE.Vector3());
@@ -103,59 +105,47 @@ function CarModel({ url, interactive }: { url: string; interactive: boolean }) {
       scene.position.set(0, -0.3, 0);
     }
 
-    // Proper cleanup when component unmounts
+    // Cleanup on unmount
     return () => {
       if (modelRef.current) {
-        // Recursively dispose of all resources
         modelRef.current.traverse((object) => {
           if (object instanceof THREE.Mesh) {
-            if (object.geometry) {
-              object.geometry.dispose();
-            }
-            
+            object.geometry?.dispose();
+
             if (object.material) {
               if (Array.isArray(object.material)) {
-                object.material.forEach(material => disposeMaterial(material));
+                object.material.forEach(disposeMaterial);
               } else {
                 disposeMaterial(object.material);
               }
             }
           }
         });
-        
-        // Remove from scene
+
         if (groupRef.current) {
           groupRef.current.remove(modelRef.current);
         }
-        
         modelRef.current = null;
       }
     };
   }, [scene, url, interactive]);
 
-  // Helper function to dispose of materials with proper type checks
-  const disposeMaterial = (material: THREE.Material) => {
-    // Handle MeshStandardMaterial specifically
+  function disposeMaterial(material: THREE.Material) {
     if (material instanceof THREE.MeshStandardMaterial) {
-      if (material.map) material.map.dispose();
-      if (material.lightMap) material.lightMap.dispose();
-      if (material.bumpMap) material.bumpMap.dispose();
-      if (material.normalMap) material.normalMap.dispose();
-      if (material.emissiveMap) material.emissiveMap.dispose();
-      if (material.metalnessMap) material.metalnessMap.dispose();
-      if (material.roughnessMap) material.roughnessMap.dispose();
+      material.map?.dispose();
+      material.lightMap?.dispose();
+      material.bumpMap?.dispose();
+      material.normalMap?.dispose();
+      material.emissiveMap?.dispose();
+      material.metalnessMap?.dispose();
+      material.roughnessMap?.dispose();
+    } else if (material instanceof THREE.MeshBasicMaterial) {
+      material.map?.dispose();
+      material.lightMap?.dispose();
+      material.specularMap?.dispose();
     }
-    // Handle MeshBasicMaterial
-    else if (material instanceof THREE.MeshBasicMaterial) {
-      if (material.map) material.map.dispose();
-      if (material.lightMap) material.lightMap.dispose();
-      if (material.specularMap) material.specularMap.dispose();
-    }
-    // Handle other material types as needed
-    
-    // Always dispose the material itself
     material.dispose();
-  };
+  }
 
   return scene ? <primitive ref={groupRef} object={scene} /> : null;
 }
@@ -179,23 +169,31 @@ const CameraSetup = memo(({ interactive }: { interactive: boolean }) => {
 CameraSetup.displayName = "CameraSetup";
 
 /* -------------------------------------
-   Lights & ambient - memoized for performance
+   Lights & ambient - memoized
 ------------------------------------- */
 const SceneLighting = memo(() => {
-  // Optimize shadow maps only when needed
   const shadowMapSize = 512;
-  
   return (
     <>
-      <directionalLight 
-        position={[5, 5, 5]} 
-        intensity={1.0} 
-        castShadow 
+      <directionalLight
+        position={[5, 5, 5]}
+        intensity={1.0}
+        castShadow
         shadow-mapSize-width={shadowMapSize}
-        shadow-mapSize-height={shadowMapSize} 
+        shadow-mapSize-height={shadowMapSize}
       />
-      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" castShadow={false} />
-      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" castShadow={false} />
+      <directionalLight
+        position={[-5, 5, -5]}
+        intensity={0.25}
+        color="#FFE4B5"
+        castShadow={false}
+      />
+      <directionalLight
+        position={[0, -5, 0]}
+        intensity={0.15}
+        color="#4169E1"
+        castShadow={false}
+      />
       <ambientLight intensity={0.3} />
     </>
   );
@@ -203,17 +201,17 @@ const SceneLighting = memo(() => {
 SceneLighting.displayName = "SceneLighting";
 
 /* -------------------------------------
-   Optional PostProcessing - optimized for performance
+   PostProcessing with advanced SSAO 
+   (May cause type errors on older versions)
 ------------------------------------- */
 const PostProcessing = memo(({ interactive }: { interactive: boolean }) => {
-  // Skip expensive effects for non-interactive mode
   if (!interactive) return null;
-  
+
   return (
     <EffectComposer multisampling={2} enabled={interactive} enableNormalPass>
       <SSAO
         blendFunction={BlendFunction.MULTIPLY}
-        samples={8} // Reduced for better performance
+        samples={8}
         radius={3}
         intensity={20}
         luminanceInfluence={0.5}
@@ -231,143 +229,112 @@ const PostProcessing = memo(({ interactive }: { interactive: boolean }) => {
 PostProcessing.displayName = "PostProcessing";
 
 /* -------------------------------------
-   Preloading logic with improved cache
+   Caching & Memory Management
 ------------------------------------- */
 interface ModelCacheEntry {
   lastUsed: number;
   isLoaded: boolean;
   refCount: number;
-  loadedModel?: any; // Store reference to loaded model
+  loadedModel?: any;
 }
 
 const modelsCache = new Map<string, ModelCacheEntry>();
-
-// Memory budget monitoring
 let estimatedMemoryUsage = 0;
-const MEMORY_BUDGET = 100 * 1024 * 1024; // 100MB
+const MEMORY_BUDGET = 100 * 1024 * 1024;
 
-// Force cleanup of old models
 function cleanupUnusedModels(exceptUrl?: string) {
   const now = Date.now();
-  const TIMEOUT = 60 * 1000; // 1 minute timeout
-  
+  const TIMEOUT = 60 * 1000; // 1 minute
+
   let entriesRemoved = 0;
-  
   modelsCache.forEach((entry, url) => {
-    // Skip the current model
     if (url === exceptUrl) return;
-    
-    // If not used recently and refCount is 0, remove it
     if (entry.refCount <= 0 && now - entry.lastUsed > TIMEOUT) {
       try {
-        // Use our cached reference to the model if available
         if (entry.loadedModel && entry.loadedModel.scene) {
-          // Properly dispose resources
           entry.loadedModel.scene.traverse((object: any) => {
             if (object instanceof THREE.Mesh) {
-              if (object.geometry) object.geometry.dispose();
+              object.geometry?.dispose();
               if (object.material) {
                 if (Array.isArray(object.material)) {
-                  object.material.forEach((material: any) => {
-                    if (material instanceof THREE.Material) {
-                      material.dispose();
-                    }
-                  });
-                } else if (object.material instanceof THREE.Material) {
+                  object.material.forEach((mat: THREE.Material) => mat.dispose());
+                } else {
                   object.material.dispose();
                 }
               }
             }
           });
         }
-        
-        // Remove from our cache
         modelsCache.delete(url);
         entriesRemoved++;
-        
-        // Reduce estimated memory
-        estimatedMemoryUsage -= 10 * 1024 * 1024; // Estimate 10MB per model
+        estimatedMemoryUsage -= 10 * 1024 * 1024;
       } catch (err) {
         console.warn("Failed to clean up model:", url, err);
       }
     }
   });
-  
   if (entriesRemoved > 0) {
     console.debug(`Cleaned up ${entriesRemoved} unused models`);
   }
 }
 
 /* -------------------------------------
-   Main Car3DViewer component - optimized
+   Main Car3DViewer
 ------------------------------------- */
 function Car3DViewer({
   modelUrl,
   imageUrl,
   width = "100%",
-  height = "100%",
+  height = "52px", // default ignored if we fix "h-52"
   isVisible = true,
   interactive = false,
 }: Car3DViewerProps) {
-  const finalImageUrl = imageUrl ?? "/cars/fallback.png";
+
+  // We'll ignore `width` and `height` in favor of a fixed Tailwind class
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // Track if model is properly loaded
   const [isModelReady, setIsModelReady] = useState(false);
-  
-  // Monitor for context loss
+
   useEffect(() => {
     const handleContextLost = () => {
       console.warn("WebGL context lost");
     };
-    
     const canvas = canvasRef.current;
     if (canvas) {
-      canvas.addEventListener('webglcontextlost', handleContextLost);
-      
+      canvas.addEventListener("webglcontextlost", handleContextLost);
       return () => {
-        canvas.removeEventListener('webglcontextlost', handleContextLost);
+        canvas.removeEventListener("webglcontextlost", handleContextLost);
       };
     }
-  }, [canvasRef]);
-  
-  // Intelligent model preloading with memory management
+  }, []);
+
+  // Preloading & caching
   useEffect(() => {
     if (!isVisible) return;
-    
+
     let isMounted = true;
-    
-    // Check if we should clean cache
     if (estimatedMemoryUsage > MEMORY_BUDGET * 0.8) {
       cleanupUnusedModels(modelUrl);
     }
-    
-    // Update or create cache entry
-    const cacheEntry = modelsCache.get(modelUrl) || { 
-      lastUsed: Date.now(), 
+
+    const cacheEntry = modelsCache.get(modelUrl) || {
+      lastUsed: Date.now(),
       isLoaded: false,
-      refCount: 0 
+      refCount: 0,
     };
-    
     cacheEntry.refCount++;
     cacheEntry.lastUsed = Date.now();
     modelsCache.set(modelUrl, cacheEntry);
-    
+
     if (!cacheEntry.isLoaded) {
-      // Preload model if not in cache yet
       try {
-        // We can preload but we can't access the cache directly,
-        // so we'll store the result in our own cache
         useGLTF.preload(modelUrl);
-        estimatedMemoryUsage += 10 * 1024 * 1024; // Estimate 10MB per model
-        
-        // We'll load it ourselves and store a reference
+        estimatedMemoryUsage += 10 * 1024 * 1024;
+
         const loadModel = async () => {
           try {
-            // Load the model and store it in our cache
             const model = await useGLTF(modelUrl);
             cacheEntry.loadedModel = model;
-            
             if (isMounted) {
               setIsModelReady(true);
             }
@@ -375,26 +342,21 @@ function Car3DViewer({
             console.warn("Failed to load model for caching:", err);
           }
         };
-        
         loadModel();
-        
-        // Mark as loaded
+
         cacheEntry.isLoaded = true;
         modelsCache.set(modelUrl, cacheEntry);
       } catch (err) {
         console.warn("Model preload failed:", err);
       }
     } else {
-      // Model is already in cache
       if (isMounted) {
         setIsModelReady(true);
       }
     }
-    
-    // Cleanup when component unmounts
+
     return () => {
       isMounted = false;
-      
       const entry = modelsCache.get(modelUrl);
       if (entry) {
         entry.refCount--;
@@ -404,28 +366,15 @@ function Car3DViewer({
     };
   }, [modelUrl, isVisible]);
 
-  // No need to render anything if not visible
   if (!isVisible) return null;
 
-  // Memoize container styles
-  const containerStyles = useMemo<React.CSSProperties>(
-    () => ({ 
-      width, 
-      height, 
-      overflow: "hidden", 
-      position: "relative",
-      contain: "strict", // Isolate rendering for performance
-      willChange: interactive ? "transform" : "auto", // Optimize for GPU
-    }),
-    [width, height, interactive]
-  );
-
   return (
-    <div style={containerStyles}>
+    // "h-52 w-full" ensures a fixed height matching your map card
+    <div className="h-52 w-full relative overflow-hidden contain-strict">
       <Canvas
         ref={canvasRef}
         gl={{
-          antialias: interactive, // Disable antialiasing when not interactive for performance
+          antialias: interactive,
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 0.8,
           preserveDrawingBuffer: false,
@@ -433,13 +382,14 @@ function Car3DViewer({
           premultipliedAlpha: true,
           logarithmicDepthBuffer: false,
         }}
-        shadows={interactive} // Only enable shadows in interactive mode
-        camera={{ position: [0, 2, 3], fov: 15 }}
-        dpr={interactive ? [1, 1.5] : [1, 1]} // Lower resolution for non-interactive mode
-        frameloop={interactive ? "always" : "demand"} // Only animate when needed
-        style={{ 
-          touchAction: "none", // Better touch handling
-          outline: "none", // No focus outline
+        shadows={interactive}
+        camera={{ position: [3, 3, 3], fov: 15 }}
+        dpr={interactive ? [1, 1.5] : [1, 1]}
+        frameloop={interactive ? "always" : "demand"}
+        style={{
+          touchAction: "none",
+          outline: "none",
+          // We rely on the parent .h-52, so no explicit height or width
         }}
       >
         <AdaptiveDpr pixelated />
@@ -447,7 +397,7 @@ function Car3DViewer({
         <SceneLighting />
         {interactive && <PostProcessing interactive={interactive} />}
         <Environment preset="sunset" background={false} />
-      
+
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup interactive={interactive} />
           <CarModel url={modelUrl} interactive={interactive} />
@@ -457,42 +407,37 @@ function Car3DViewer({
   );
 }
 
-// Optimize with memo to prevent unnecessary re-renders
-export default memo(Car3DViewer, (prevProps, nextProps) => {
-  // Custom comparison function to determine if re-render is needed
+// Memo to prevent unnecessary re-renders
+export default memo(Car3DViewer, (prev, next) => {
   return (
-    prevProps.modelUrl === nextProps.modelUrl &&
-    prevProps.isVisible === nextProps.isVisible &&
-    prevProps.interactive === nextProps.interactive &&
-    prevProps.width === nextProps.width &&
-    prevProps.height === nextProps.height
+    prev.modelUrl === next.modelUrl &&
+    prev.isVisible === next.isVisible &&
+    prev.interactive === next.interactive
   );
 });
 
-// Improved preload function with memory management
+/* -------------------------------------
+   Preloading & Disposal
+------------------------------------- */
 export function preloadCarModels(urls: string[]) {
-  // Limit how many we preload based on memory budget
   const MAX_PRELOAD = 3;
   const filtered = urls.slice(0, MAX_PRELOAD);
-  
+
   if (estimatedMemoryUsage > MEMORY_BUDGET * 0.5) {
     cleanupUnusedModels();
   }
-  
+
   filtered.forEach((url) => {
-    const cacheEntry = modelsCache.get(url) || { 
-      lastUsed: Date.now(), 
+    const cacheEntry = modelsCache.get(url) || {
+      lastUsed: Date.now(),
       isLoaded: false,
-      refCount: 0 
+      refCount: 0,
     };
-    
+
     if (!cacheEntry.isLoaded) {
       try {
-        // Preload but we can't directly access cache
         useGLTF.preload(url);
-        estimatedMemoryUsage += 10 * 1024 * 1024; // Estimate 10MB per model
-        
-        // Load the model and store it in our cache
+        estimatedMemoryUsage += 10 * 1024 * 1024;
         const loadModel = async () => {
           try {
             const model = await useGLTF(url);
@@ -501,34 +446,28 @@ export function preloadCarModels(urls: string[]) {
             console.warn("Failed to load model for caching:", err);
           }
         };
-        
         loadModel();
-        
+
         cacheEntry.isLoaded = true;
         modelsCache.set(url, cacheEntry);
       } catch (err) {
-        console.warn("Preload not available or failed: ", err);
+        console.warn("Preload not available or failed:", err);
       }
     }
   });
 }
 
-// Helper function to dispose of all cached models
 export function disposeAllModels() {
   modelsCache.forEach((entry, url) => {
     try {
       if (entry.loadedModel && entry.loadedModel.scene) {
         entry.loadedModel.scene.traverse((object: any) => {
           if (object instanceof THREE.Mesh) {
-            if (object.geometry) object.geometry.dispose();
+            object.geometry?.dispose();
             if (object.material) {
               if (Array.isArray(object.material)) {
-                object.material.forEach((material: any) => {
-                  if (material instanceof THREE.Material) {
-                    material.dispose();
-                  }
-                });
-              } else if (object.material instanceof THREE.Material) {
+                object.material.forEach((mat: THREE.Material) => mat.dispose());
+              } else {
                 object.material.dispose();
               }
             }
@@ -539,7 +478,7 @@ export function disposeAllModels() {
       console.warn("Error disposing model:", url, e);
     }
   });
-  
+
   modelsCache.clear();
   estimatedMemoryUsage = 0;
 }
