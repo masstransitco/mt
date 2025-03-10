@@ -187,6 +187,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
     bookingStepRef.current = bookingStep;
   }, [bookingStep]);
 
+    // --------------------------
+  // Sorting logic
+  // --------------------------
+  const sortStationsByDistanceToPoint = useCallback(
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+      if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) return stationsToSort;
+      
+      try {
+        const newStations = [...stationsToSort];
+        return newStations.sort((a, b) => {
+          const [lngA, latA] = a.geometry.coordinates;
+          const [lngB, latB] = b.geometry.coordinates;
+          const distA = window.google.maps.geometry.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(latA, lngA),
+            new window.google.maps.LatLng(point.lat, point.lng)
+          );
+          const distB = window.google.maps.geometry.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(latB, lngB),
+            new window.google.maps.LatLng(point.lat, point.lng)
+          );
+          return distA - distB;
+        });
+      } catch (error) {
+        console.error("Error sorting stations by distance:", error);
+        return stationsToSort;
+      }
+    },
+    [googleMapsReady]
+  );
+
   // --------------------------
   // QR Scan Success Handler
   // --------------------------
@@ -404,35 +434,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, stations, dispatch, googleMapsReady]);
 
-  // --------------------------
-  // Sorting logic
-  // --------------------------
-  const sortStationsByDistanceToPoint = useCallback(
-    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-      if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) return stationsToSort;
-      
-      try {
-        const newStations = [...stationsToSort];
-        return newStations.sort((a, b) => {
-          const [lngA, latA] = a.geometry.coordinates;
-          const [lngB, latB] = b.geometry.coordinates;
-          const distA = window.google.maps.geometry.spherical.computeDistanceBetween(
-            new window.google.maps.LatLng(latA, lngA),
-            new window.google.maps.LatLng(point.lat, point.lng)
-          );
-          const distB = window.google.maps.geometry.spherical.computeDistanceBetween(
-            new window.google.maps.LatLng(latB, lngB),
-            new window.google.maps.LatLng(point.lat, point.lng)
-          );
-          return distA - distB;
-        });
-      } catch (error) {
-        console.error("Error sorting stations by distance:", error);
-        return stationsToSort;
-      }
-    },
-    [googleMapsReady]
-  );
 
   // --------------------------
   // Handle address search
