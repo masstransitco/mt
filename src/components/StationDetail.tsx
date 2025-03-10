@@ -203,12 +203,12 @@ const ConfirmButton = memo(({
 ConfirmButton.displayName = "ConfirmButton";
 
 function StationDetailComponent({
-  activeStation,
-  stations,
-  onConfirmDeparture,
-  onOpenSignIn,
-  onDismiss,
-  isQrScanStation,
+  activeStation = null,
+  stations = [],
+  onConfirmDeparture = () => {},
+  onOpenSignIn = () => {},
+  onDismiss = () => {},
+  isQrScanStation = false,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   
