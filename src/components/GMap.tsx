@@ -217,92 +217,48 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [googleMapsReady]
   );
 
-// --------------------------
-// QR Scan Success Handler
-// --------------------------
-const handleQrScanSuccess = useCallback(() => {
-  // This will be called when QR scan is successful
-  if (scannedCar) {
-    console.log('QR Scan Success, scannedCar ID:', scannedCar.id, 'isVirtualCarLocation being set');
-    
-    // Create a virtual station ID based on car ID
-    const vStationId = 1000000 + scannedCar.id;
-    setVirtualStationId(vStationId);
-    setIsQrScanStation(true);
-    
-    // Explicitly create and add a virtual station to the stations list
-    const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-    
-    // Add it to stations if it doesn't exist
-    const existingVirtualStation = stations.find(s => s.id === vStationId);
-    let updatedStations = stations;
-    
-    if (!existingVirtualStation) {
-      updatedStations = addVirtualCarStation(stations, scannedCar, vStationId);
-    }
-    
-    // Sort these stations if we have a location
-    if (userLocation) {
-      const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
-      setSortedStations(sorted);
-    } else {
-      setSortedStations(updatedStations);
-    }
-    
-    // Force open the detail panel (important for QR flow)
-    setDetailKey((prev) => prev + 1);
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    
-    // If the map is loaded, center it on the car's position
-    if (actualMap) {
-      actualMap.panTo({
-        lat: scannedCar.lat,
-        lng: scannedCar.lng
-      });
-      actualMap.setZoom(16);
-    }
-    
-    console.log('Sheet should be opening with key:', detailKey + 1);
-  }
-}, [scannedCar, stations, userLocation, sortStationsByDistanceToPoint, actualMap, detailKey]);
-
-// Modify the useEffect that watches for scanned car changes
-useEffect(() => {
-  if (scannedCar && bookingStep === 2) {
-    console.log('Scanned car detected in step 2, setting up virtual station');
-    
-    // Create a virtual station ID
-    const vStationId = 1000000 + scannedCar.id;
-    setVirtualStationId(vStationId);
-    setIsQrScanStation(true);
-    
-    // Create the virtual station
-    const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-    
-    // Check if this virtual station already exists
-    const existingVirtualStation = stations.find(s => s.id === vStationId);
-    let updatedStations = stations;
-    
-    if (!existingVirtualStation) {
-      updatedStations = [...stations, virtualStation];
-    }
-    
-    // Sort these stations if we have a location
-    if (userLocation) {
-      const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
-      setSortedStations(sorted);
-    } else {
-      setSortedStations(updatedStations);
-    }
-    
-    // Open detail panel with a forced delay to ensure state is updated
-    setTimeout(() => {
-      setDetailKey((prev) => prev + 1);
+  // --------------------------
+  // QR Scan Success Handler
+  // --------------------------
+  const handleQrScanSuccess = useCallback(() => {
+    // This will be called when QR scan is successful
+    if (scannedCar) {
+      console.log('QR Scan Success, scannedCar ID:', scannedCar.id, 'isVirtualCarLocation being set');
+      
+      // Create a virtual station ID based on car ID
+      const vStationId = 1000000 + scannedCar.id;
+      setVirtualStationId(vStationId);
+      setIsQrScanStation(true);
+      
+      // Explicitly create and add a virtual station to the stations list
+      const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
+      
+      // Check if this virtual station already exists in stations, otherwise add it
+      const existingVirtualStationIndex = stations.findIndex(s => s.id === vStationId);
+      let updatedStations = [...stations];
+      
+      if (existingVirtualStationIndex >= 0) {
+        // Replace the existing virtual station
+        updatedStations[existingVirtualStationIndex] = virtualStation;
+      } else {
+        // Add the new virtual station
+        updatedStations.push(virtualStation);
+      }
+      
+      // Sort stations by distance if we have a user location
+      if (userLocation) {
+        const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
+        setSortedStations(sorted);
+      } else {
+        setSortedStations(updatedStations);
+      }
+      
+      // Force open the detail panel with new key to ensure re-render
+      setDetailKey(Date.now()); // Use timestamp for guaranteed uniqueness
       setForceSheetOpen(true);
       setOpenSheet("detail");
       
-      // If the map is loaded, center it on the car's position
+      // Center map on car location
       if (actualMap) {
         actualMap.panTo({
           lat: scannedCar.lat,
@@ -311,10 +267,65 @@ useEffect(() => {
         actualMap.setZoom(16);
       }
       
-      console.log('Detail sheet scheduled to open for scanned car after delay');
-    }, 200);
-  }
-}, [scannedCar, virtualStationId, stations, userLocation, sortStationsByDistanceToPoint, bookingStep, actualMap]);
+      console.log('Sheet should be opening with virtual station:', vStationId);
+    }
+  }, [scannedCar, stations, userLocation, sortStationsByDistanceToPoint, actualMap]);
+
+  // Watch for scanned car changes
+  useEffect(() => {
+    if (scannedCar && bookingStep === 2) {
+      console.log('Scanned car detected in step 2, setting up virtual station');
+      
+      // Create a virtual station ID based on car ID
+      const vStationId = 1000000 + scannedCar.id;
+      setVirtualStationId(vStationId);
+      setIsQrScanStation(true);
+      
+      // Create the virtual station
+      const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
+      
+      // Check if this virtual station already exists in stations, otherwise add it
+      const existingStationIndex = stations.findIndex(s => s.id === vStationId);
+      let updatedStations = [...stations];
+      
+      if (existingStationIndex >= 0) {
+        // Replace the existing virtual station
+        updatedStations[existingStationIndex] = virtualStation;
+      } else {
+        // Add the new virtual station
+        updatedStations.push(virtualStation);
+      }
+      
+      // Sort stations by distance if we have a user location
+      if (userLocation) {
+        const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
+        setSortedStations(sorted);
+      } else {
+        setSortedStations(updatedStations);
+      }
+      
+      // Open detail panel after a delay to ensure state is updated
+      setTimeout(() => {
+        // Ensure we're still in the right step
+        if (bookingStep === 2) {
+          setDetailKey(Date.now());
+          setForceSheetOpen(true);
+          setOpenSheet("detail");
+          
+          // Center map on car location
+          if (actualMap) {
+            actualMap.panTo({
+              lat: scannedCar.lat,
+              lng: scannedCar.lng
+            });
+            actualMap.setZoom(16);
+          }
+          
+          console.log('Detail sheet scheduled to open for scanned car after delay');
+        }
+      }, 300);
+    }
+  }, [scannedCar, stations, userLocation, sortStationsByDistanceToPoint, bookingStep, actualMap]);
 
   // --------------------------
   // Station selection logic
@@ -625,9 +636,31 @@ useEffect(() => {
 
   // Identify which station to show in "detail" view
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
-  const stationToShow = hasStationSelected
-    ? stations.find((s) => s.id === hasStationSelected)
-    : null;
+  
+  // Add explicit logging to help diagnose the issue
+  console.log("Looking for station with ID:", hasStationSelected, 
+              "Step:", bookingStep,
+              "Virtual ID:", virtualStationId,
+              "Is QR Scan:", isQrScanStation);
+
+  // Find the station to display in the detail panel
+  let stationToShow: StationFeature | null = null;
+
+  // First, check if this is a virtual station from a scanned car
+  if (hasStationSelected && isQrScanStation && virtualStationId === hasStationSelected) {
+    console.log("Virtual station match - using scanned car as station");
+    if (scannedCar) {
+      // Create a fresh virtual station object
+      stationToShow = createVirtualStationFromCar(scannedCar, virtualStationId);
+    }
+  } else {
+    // Normal station lookup - prefer sortedStations if available since they might include a virtual station
+    const stationsToSearch = sortedStations.length > 0 ? sortedStations : stations;
+    stationToShow = stationsToSearch.find(s => s.id === hasStationSelected) ?? null;
+  }
+
+  console.log("Station to show:", stationToShow?.id, 
+              "Is virtual:", stationToShow?.properties.isVirtualCarLocation);
 
   // Format time
   const formatTime = (date: Date) => {
@@ -643,9 +676,9 @@ useEffect(() => {
   const getSheetTitle = useCallback(() => {
     if (!stationToShow) return "";
     
-    // Special title for QR scanned car
-    if (isQrScanStation && bookingStep <= 2) {
-      return "Start your trip";
+    // Special title for QR scanned car or virtual station
+    if ((isQrScanStation || stationToShow.properties.isVirtualCarLocation) && bookingStep <= 2) {
+      return "Ready to drive";
     }
     
     if (bookingStep <= 2) {
@@ -665,7 +698,7 @@ useEffect(() => {
     if (!stationToShow) return "";
     
     // Special subtitle for QR scanned car
-    if (isQrScanStation && bookingStep <= 2) {
+    if ((isQrScanStation || stationToShow.properties.isVirtualCarLocation) && bookingStep <= 2) {
       return "Car is ready at your current location";
     }
     
