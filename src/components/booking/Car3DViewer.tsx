@@ -305,7 +305,7 @@ function Car3DViewer({
   modelUrl,
   imageUrl,
   width = "100%",
-  height = "300px",
+  height = "150px",
   isVisible = true,
   interactive = false,
 }: Car3DViewerProps) {
