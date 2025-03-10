@@ -387,6 +387,7 @@ interface StationSelectorProps {
   onClearDeparture?: () => void;
   onClearArrival?: () => void;
   onLocateMe?: () => void;
+  onScan?: () => void; // Added this prop for QR scanning
 }
 
 function StationSelector({
@@ -394,6 +395,7 @@ function StationSelector({
   onClearDeparture,
   onClearArrival,
   onLocateMe,
+  onScan, // Added in the props destructuring
 }: StationSelectorProps) {
   const dispatch = useAppDispatch();
   const step = useAppSelector(selectBookingStep);
