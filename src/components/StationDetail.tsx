@@ -12,6 +12,8 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
+  clearDepartureStation, // Import the action to clear departure station
+  resetBookingFlow,      // Import the action to reset booking flow
 } from "@/store/bookingSlice";
 import { saveBookingDetails } from "@/store/bookingThunks";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
@@ -73,6 +75,7 @@ interface StationDetailProps {
   onOpenSignIn: () => void;
   onDismiss?: () => void;
   isQrScanStation?: boolean;
+  onClose?: () => void; // Add a new onClose callback prop
 }
 
 // Memoized component to wrap CarGrid for better performance
@@ -212,6 +215,7 @@ function StationDetailComponent({
   onOpenSignIn = () => {},
   onDismiss = () => {},
   isQrScanStation = false,
+  onClose = () => {}, // Default empty function for onClose
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
   
@@ -311,6 +315,29 @@ function StationDetailComponent({
   const handleCloseWalletModal = useCallback(() => {
     setWalletModalOpen(false);
   }, []);
+
+  // Handle component closing - specifically for QR scanned stations
+  const handleClose = useCallback(() => {
+    // If this is a QR scan station, reset the state
+    if (isQrScanStation || (activeStation?.properties?.isVirtualCarLocation === true)) {
+      // Clear departure station and reset to step 1
+      dispatch(clearDepartureStation());
+      console.log("Cleared QR scan virtual station state");
+      
+      // Call the parent onClose callback to handle UI state
+      // (likely hiding this component in the parent)
+      onClose();
+      
+      // Add a notification to let the user know they need to scan again
+      toast.info("Scan the car's QR code again if you want to select this vehicle", {
+        duration: 4000,
+        position: "bottom-center"
+      });
+    } else {
+      // For regular stations, just call the parent close handler
+      onClose();
+    }
+  }, [dispatch, isQrScanStation, activeStation, onClose]);
 
   // The "Confirm Trip" logic - memoized with useCallback
   const handleConfirm = useCallback(async () => {
@@ -442,6 +469,32 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
+      {/* Add a close button for QR scanned stations */}
+      {isQrScanStation && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={handleClose}
+            className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-gray-800/50"
+            aria-label="Close"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              width="20" 
+              height="20" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      )}
+
       <Suspense fallback={<MapCardFallback />}>
         <MapCard
           coordinates={[
