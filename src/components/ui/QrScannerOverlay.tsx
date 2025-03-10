@@ -6,6 +6,7 @@ import { fetchCarByRegistration, setScannedCar } from '@/store/carSlice';
 import { selectCar } from '@/store/userSlice';
 import { createVirtualStationFromCar, addVirtualCarStation } from '@/lib/stationUtils';
 import { selectDepartureStation, advanceBookingStep } from '@/store/bookingSlice';
+import { saveBookingDetails } from "@/store/bookingThunks";
 import { fetchDispatchLocations } from '@/store/dispatchSlice';
 import { toast } from 'react-hot-toast';
 
@@ -70,6 +71,11 @@ export default function QrScannerOverlay({
       // Select the virtual station as departure and advance to step 2
       await dispatch(selectDepartureStation(virtualStationId));
       await dispatch(advanceBookingStep(2)); // Explicitly move to step 2 (selected_departure_station)
+      
+      // Save booking details to Firestore for persistence
+      await dispatch(saveBookingDetails());
+      
+      console.log("QR scan complete, car selected, station created, booking saved");
       
       // Notify parent component of success (will be used to open detail sheet)
       if (onScanSuccess) {
