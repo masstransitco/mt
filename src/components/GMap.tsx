@@ -218,46 +218,87 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   // --------------------------
-  // QR Scan Success Handler
-  // --------------------------
-  const handleQrScanSuccess = useCallback(() => {
-    // This will be called when QR scan is successful
-    if (scannedCar) {
-      // Create a virtual station ID based on car ID
-      const vStationId = 1000000 + scannedCar.id;
-      setVirtualStationId(vStationId);
-      setIsQrScanStation(true);
-      
-      // Force open the detail panel
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-    }
-  }, [scannedCar, setDetailKey, setForceSheetOpen, setOpenSheet]);
-
-  // Watch for scanned car changes
-  useEffect(() => {
-    if (scannedCar && !virtualStationId) {
-      // Create a virtual station ID
-      const vStationId = 1000000 + scannedCar.id;
-      setVirtualStationId(vStationId);
-      setIsQrScanStation(true);
-      
-      // Add a virtual station to the stations list
+// QR Scan Success Handler
+// --------------------------
+const handleQrScanSuccess = useCallback(() => {
+  // This will be called when QR scan is successful
+  if (scannedCar) {
+    console.log('QR Scan Success, scanned car:', scannedCar);
+    
+    // Create a virtual station ID based on car ID
+    const vStationId = 1000000 + scannedCar.id;
+    setVirtualStationId(vStationId);
+    setIsQrScanStation(true);
+    
+    // Add a virtual station to the stations list if needed
+    const existingVirtualStation = stations.find(s => s.id === vStationId);
+    
+    if (!existingVirtualStation) {
       const updatedStations = addVirtualCarStation([...stations], scannedCar, vStationId);
       
       // Sort these stations if we have a location
       if (userLocation) {
         const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
         setSortedStations(sorted);
+      } else {
+        setSortedStations(updatedStations);
       }
-      
-      // Open detail panel
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
     }
-  }, [scannedCar, virtualStationId, stations, userLocation, sortStationsByDistanceToPoint]);
+    
+    // Force open the detail panel
+    setDetailKey((prev) => prev + 1);
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    
+    // If the map is loaded, center it on the car's position
+    if (actualMap) {
+      actualMap.panTo({
+        lat: scannedCar.lat,
+        lng: scannedCar.lng
+      });
+      actualMap.setZoom(16);
+    }
+  }
+}, [scannedCar, stations, userLocation, sortStationsByDistanceToPoint, actualMap]);
+
+// Watch for scanned car changes
+useEffect(() => {
+  if (scannedCar && bookingStep === 2) {
+    // Create a virtual station ID
+    const vStationId = 1000000 + scannedCar.id;
+    setVirtualStationId(vStationId);
+    setIsQrScanStation(true);
+    
+    // Add a virtual station to the stations list if needed
+    const existingVirtualStation = stations.find(s => s.id === vStationId);
+    
+    if (!existingVirtualStation) {
+      const updatedStations = addVirtualCarStation([...stations], scannedCar, vStationId);
+      
+      // Sort these stations if we have a location
+      if (userLocation) {
+        const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
+        setSortedStations(sorted);
+      } else {
+        setSortedStations(updatedStations);
+      }
+    }
+    
+    // Open detail panel
+    setDetailKey((prev) => prev + 1);
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    
+    // If the map is loaded, center it on the car's position
+    if (actualMap) {
+      actualMap.panTo({
+        lat: scannedCar.lat,
+        lng: scannedCar.lng
+      });
+      actualMap.setZoom(16);
+    }
+  }
+}, [scannedCar, virtualStationId, stations, userLocation, sortStationsByDistanceToPoint, bookingStep, actualMap]);
 
   // --------------------------
   // Station selection logic
