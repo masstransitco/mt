@@ -14,73 +14,66 @@ interface RouteInfo {
   polyline?: string;
 }
 
-/**
- * The data shape we pass to react-window's List:
- * - an array of StationFeature
- * - a callback when user selects a station
- * - optional Redux-derived props, so we don't do store lookups here
+/** 
+ * The data shape we pass to react-window's List: 
  */
 export interface StationListItemData {
   items: StationFeature[];
   onStationSelected?: (station: StationFeature) => void;
   departureId?: number | null;
   arrivalId?: number | null;
-  /** 
-   * Must allow null if your store says dispatchRoute can be null
-   */
   dispatchRoute?: RouteInfo | null;
 }
 
 interface StationListItemProps
   extends ListChildComponentProps<StationListItemData> {}
 
-/**
- * A single row item in the station list (react-window).
- */
+/** A single row item in the station list (react-window). */
 function StationListItemComponent(props: StationListItemProps) {
   const { index, style, data } = props;
-  const { items: stations, onStationSelected, departureId, arrivalId, dispatchRoute } = data;
+  const {
+    items: stations,
+    onStationSelected,
+    departureId,
+    arrivalId,
+    dispatchRoute,
+  } = data;
 
-  // The station for this row
   const station = stations[index];
   if (!station) {
-    // If this index is beyond our actual stations, render a placeholder
+    // placeholder row
     return (
       <div 
         style={style} 
         className="px-4 py-3 text-gray-400 bg-gray-900/50 border-b border-gray-800"
       >
         <div className="animate-pulse flex space-x-4">
-          <div className="h-3 bg-gray-700 rounded w-3/4"></div>
+          <div className="h-3 bg-gray-700 rounded w-3/4" />
         </div>
       </div>
     );
   }
 
-  // Compare station.id to departureId/arrivalId
   const isDeparture = station.id === departureId;
-  const isSelected = isDeparture || station.id === arrivalId;
+  const isArrival = station.id === arrivalId;
+  const isSelected = isDeparture || isArrival;
 
+  // On click, we call the parent
   const handleClick = useCallback(() => {
     if (!onStationSelected) {
-      toast("No onStationSelected callback provided.");
+      toast("No callback for station selection!");
       return;
     }
     onStationSelected(station);
   }, [onStationSelected, station]);
 
-  // Pull out walking/driving times
-  // If walking is 0, we hide it. 
+  // Maybe show walkTime or dispatch time
   const walkTime = station.walkTime ?? station.properties?.walkTime ?? 0;
   const showWalkTime = walkTime > 0;
 
-  // For the car/driving time:
-  // Only show the dispatch time if this station is the departure + we have a route.
-  // Hide the car icon + "0" for stations that aren't selected as departure.
   let displayTime = null;
   let showCarIcon = false;
   if (isDeparture && dispatchRoute?.duration) {
-    // If we do have a dispatch route, show its duration (in minutes).
     displayTime = Math.round(dispatchRoute.duration / 60);
     showCarIcon = true;
   }
@@ -89,19 +82,13 @@ function StationListItemComponent(props: StationListItemProps) {
     <div
       style={style}
       onClick={handleClick}
-      onWheel={(e) => e.stopPropagation()}   // prevent scroll from bubbling
-      onTouchMove={(e) => e.stopPropagation()}
       className={cn(
         "px-4 py-3 cursor-pointer transition-colors border-b border-gray-800",
-        isSelected 
-          ? "bg-gray-800" 
-          : "bg-black hover:bg-gray-900"
+        isSelected ? "bg-gray-800" : "bg-black hover:bg-gray-900"
       )}
     >
       <div className="flex justify-between items-start">
-        {/* LEFT: Station name + footprints icon */}
         <div className="space-y-2">
-          {/* Station name row */}
           <div className="flex items-center gap-2">
             {isSelected ? (
               <div className={cn(
@@ -127,18 +114,14 @@ function StationListItemComponent(props: StationListItemProps) {
             </h3>
           </div>
 
-          {/* Bottom row — only render if we have either a nonzero walk time or a dispatch route time */}
           {(showWalkTime || displayTime) && (
             <div className="flex items-center gap-4 text-xs">
-              {/* Footprints + walking time */}
               {showWalkTime && (
                 <div className="flex items-center gap-1.5 text-gray-400">
                   <Footprints className="w-3.5 h-3.5 text-gray-500" />
                   <span>{walkTime} min walk</span>
                 </div>
               )}
-
-              {/* Car + dispatch route time (only if isDeparture and dispatchRoute) */}
               {showCarIcon && displayTime && (
                 <div className="flex items-center gap-1.5 text-gray-400">
                   <CarFront className="w-3.5 h-3.5 text-gray-500" />
