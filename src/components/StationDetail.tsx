@@ -21,6 +21,7 @@ import {
   selectArrivalStationId,
   clearDepartureStation,
   resetBookingFlow,
+  fetchRoute, // <-- Import our thunk to fetch the route
 } from "@/store/bookingSlice";
 import { saveBookingDetails } from "@/store/bookingThunks";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
@@ -283,7 +284,7 @@ function StationDetailComponent({
     return () => clearTimeout(timer);
   }, []);
 
-  // Decide if we want to load CarGrid
+  // Decide if we want to load CarGrid (step=2, or forced in QR mode)
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isDepartureFlow && step === 2 && activeStation) {
@@ -304,6 +305,17 @@ function StationDetailComponent({
       setShouldLoadCarGrid(true);
     }
   }, [isQrScanStation, step]);
+
+  /** Once we have departure & arrival IDs and are at step >= 3, fetch route */
+  useEffect(() => {
+    if (step >= 3 && departureId && arrivalId && stations.length > 0) {
+      const depStation = stations.find((s) => s.id === departureId);
+      const arrStation = stations.find((s) => s.id === arrivalId);
+      if (depStation && arrStation) {
+        dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
+      }
+    }
+  }, [step, departureId, arrivalId, stations, dispatch]);
 
   const handleOpenWalletModal = useCallback(() => {
     setWalletModalOpen(true);
@@ -498,7 +510,7 @@ function StationDetailComponent({
                 isVisible
                 // Now pass the needed props for QR flow
                 isQrScanStation={isQrScanStation}
-                scannedCar={scannedCarRedux} 
+                scannedCar={scannedCarRedux}
               />
             )}
           </motion.div>
