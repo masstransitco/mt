@@ -100,7 +100,10 @@ const StationStats = memo(({
   parkingValue: string;
 }) => {
   // Check if this is a virtual car location (QR scanned)
-  const isVirtualCarLocation = activeStation.properties.isVirtualCarLocation === true;
+const isVirtualCarLocation = useMemo(() => 
+  (activeStation?.properties?.isVirtualCarLocation === true) || (isQrScanStation === true),
+  [activeStation, isQrScanStation]
+);
   
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
