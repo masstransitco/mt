@@ -29,6 +29,7 @@ import {
   selectAllCars,
   selectCarsLoading,
   selectCarsError,
+  selectScannedCar,
 } from "@/store/carSlice";
 import { selectUserLocation, setUserLocation } from "@/store/userSlice";
 import {
@@ -57,6 +58,7 @@ import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import StationDetail from "./StationDetail";
 import { StationListItem } from "./StationListItem";
+import QrScannerOverlay from "@/components/ui/QrScannerOverlay";
 
 // Import your SignInModal
 import SignInModal from "@/components/ui/SignInModal";
@@ -74,6 +76,7 @@ import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 
 // Import our Google Maps utility
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
+import { addVirtualCarStation } from "@/lib/stationUtils";
 
 // Lazy-load GaussianSplatModal
 const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
@@ -103,6 +106,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
   const [googleMapsReady, setGoogleMapsReady] = useState(false);
+  
+  // QR code related states
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [virtualStationId, setVirtualStationId] = useState<number | null>(null);
+  const [isQrScanStation, setIsQrScanStation] = useState(false);
 
   // We still keep the GaussianSplatModal logic if needed
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
@@ -123,6 +131,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const bookingStep = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
+  const scannedCar = useAppSelector(selectScannedCar);
 
   // Booking route decode
   const decodedPath = useAppSelector(selectRouteDecoded);
@@ -177,6 +186,48 @@ export default function GMap({ googleApiKey }: GMapProps) {
   useEffect(() => {
     bookingStepRef.current = bookingStep;
   }, [bookingStep]);
+
+  // --------------------------
+  // QR Scan Success Handler
+  // --------------------------
+  const handleQrScanSuccess = useCallback(() => {
+    // This will be called when QR scan is successful
+    if (scannedCar) {
+      // Create a virtual station ID based on car ID
+      const vStationId = 1000000 + scannedCar.id;
+      setVirtualStationId(vStationId);
+      setIsQrScanStation(true);
+      
+      // Force open the detail panel
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+    }
+  }, [scannedCar, setDetailKey, setForceSheetOpen, setOpenSheet]);
+
+  // Watch for scanned car changes
+  useEffect(() => {
+    if (scannedCar && !virtualStationId) {
+      // Create a virtual station ID
+      const vStationId = 1000000 + scannedCar.id;
+      setVirtualStationId(vStationId);
+      setIsQrScanStation(true);
+      
+      // Add a virtual station to the stations list
+      const updatedStations = addVirtualCarStation([...stations], scannedCar, vStationId);
+      
+      // Sort these stations if we have a location
+      if (userLocation) {
+        const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
+        setSortedStations(sorted);
+      }
+      
+      // Open detail panel
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+    }
+  }, [scannedCar, virtualStationId, stations, userLocation, sortStationsByDistanceToPoint]);
 
   // --------------------------
   // Station selection logic
@@ -417,6 +468,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
     dispatch(clearDispatchRoute());
+    
+    // Clear QR scan station flag if set
+    if (isQrScanStation) {
+      setIsQrScanStation(false);
+      setVirtualStationId(null);
+    }
+    
     toast.success("Departure station cleared. (Back to selecting departure.)");
     if (openSheet === "detail") {
       setOpenSheet("none");
@@ -526,6 +584,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Sheet Title
   const getSheetTitle = useCallback(() => {
     if (!stationToShow) return "";
+    
+    // Special title for QR scanned car
+    if (isQrScanStation && bookingStep <= 2) {
+      return "Start your trip";
+    }
+    
     if (bookingStep <= 2) {
       if (dispatchRoute?.duration) {
         const now = new Date();
@@ -536,11 +600,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
       return "Pick-up station";
     }
     return "Trip details";
-  }, [bookingStep, dispatchRoute, stationToShow]);
+  }, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
 
   // Sheet Subtitle
   const getSheetSubtitle = useCallback(() => {
     if (!stationToShow) return "";
+    
+    // Special subtitle for QR scanned car
+    if (isQrScanStation && bookingStep <= 2) {
+      return "Car is ready at your current location";
+    }
+    
     if (bookingStep <= 2) {
       return "Your car will be delivered here";
     } else if (bookingStep === 4) {
@@ -551,12 +621,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
       );
     }
     return "Return the car at your arrival station";
-  }, [bookingStep, stationToShow]);
+  }, [bookingStep, stationToShow, isQrScanStation]);
 
   // Open sign-in when user tries to confirm trip but isn't signed in
   const handleOpenSignIn = () => {
     setSignInModalOpen(true);
   };
+
+  // Open QR scanner
+  const handleOpenQrScanner = useCallback(() => {
+    setIsQrScannerOpen(true);
+  }, []);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -599,6 +674,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             onClearDeparture={handleClearDepartureInSelector}
             onClearArrival={handleClearArrivalInSelector}
             onLocateMe={handleLocateMe}
+            onScan={handleOpenQrScanner}
           />
 
           {/* Station List Sheet */}
@@ -648,9 +724,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 activeStation={stationToShow}
                 onOpenSignIn={handleOpenSignIn}
                 onDismiss={closeCurrentSheet}
+                isQrScanStation={isQrScanStation}
               />
             )}
           </Sheet>
+
+          {/* QR Scanner Overlay */}
+          <QrScannerOverlay
+            isOpen={isQrScannerOpen}
+            onClose={() => setIsQrScannerOpen(false)}
+            onScanSuccess={handleQrScanSuccess}
+          />
 
           {/* GaussianSplatModal (still here if needed) */}
           <Suspense fallback={<div>Loading modal...</div>}>
