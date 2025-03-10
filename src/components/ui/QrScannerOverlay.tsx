@@ -1,12 +1,10 @@
-// src/components/ui/QrScannerOverlay.tsx
-
 import React, { useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Scanner, IDetectedBarcode } from '@yudiel/react-qr-scanner';
 import { useAppDispatch } from '@/store/store';
-import { fetchCarByRegistration } from '@/store/carSlice'; // We'll create this
+import { fetchCarByRegistration, setScannedCar } from '@/store/carSlice';
 import { selectCar } from '@/store/userSlice';
-import { createVirtualStationFromCar } from '@/lib/stationUtils'; // We'll create this
+import { createVirtualStationFromCar } from '@/lib/stationUtils';
 import { selectDepartureStation, advanceBookingStep } from '@/store/bookingSlice';
 import { toast } from 'react-hot-toast';
 
@@ -47,7 +45,7 @@ export default function QrScannerOverlay({
       const registration = match[1].toUpperCase();
       console.log('Car registration:', registration);
       
-      // Fetch car by registration (we'll create this thunk)
+      // Fetch car by registration
       const carResult = await dispatch(fetchCarByRegistration(registration)).unwrap();
       
       if (!carResult) {
@@ -55,6 +53,9 @@ export default function QrScannerOverlay({
         onClose();
         return;
       }
+      
+      // Set the scanned car in Redux
+      dispatch(setScannedCar(carResult));
       
       // Select the car in user slice
       dispatch(selectCar(carResult.id));
@@ -74,7 +75,7 @@ export default function QrScannerOverlay({
         onScanSuccess();
       }
       
-      toast.success(`Car ${registration} selected`);
+      toast.success(`Car ${registration} selected and ready to drive`);
     } catch (error) {
       console.error('Error processing QR code:', error);
       toast.error("Failed to process the car QR code");
