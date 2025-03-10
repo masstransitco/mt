@@ -1,109 +1,120 @@
 "use client";
 
-import React, {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { FixedSizeList as List, ListOnItemsRenderedProps } from "react-window";
 import {
   InfiniteLoader,
   InfiniteLoaderChildProps,
 } from "react-window-infinite-loader";
-
-import { useAppSelector } from "@/store/store";
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
+  selectBookingStep,
   selectDepartureStationId,
   selectArrivalStationId,
+  selectDepartureStation as actionSelectDeparture,
+  selectArrivalStation as actionSelectArrival,
 } from "@/store/bookingSlice";
 import { selectDispatchRoute } from "@/store/dispatchSlice";
 import { StationFeature } from "@/store/stationsSlice";
 import StationListItem, { StationListItemData } from "./StationListItem";
 import { MapPin, Navigation } from "lucide-react";
+import { toast } from "react-hot-toast";
 
 /**
- * Props for StationList
+ * The props for our StationList component.
+ * userLocation is typed as google.maps.LatLngLiteral | null
  */
 interface StationListProps {
-  /** An array of station data (possibly paged from Redux) */
+  /** The array of stations to display. */
   stations: StationFeature[];
-  /** Callback when user selects a station */
-  onStationSelected?: (station: StationFeature) => void;
-  /** Optional scrollable height for the list container */
+  /** Scroll height for react-window. */
   height?: number;
-  /** Whether to show a top legend row */
+  /** Whether to show a small legend row on top. */
   showLegend?: boolean;
-  /** The user's location (for walking time calc) */
+  /** The user's location, typed as LatLngLiteral or null. */
   userLocation?: google.maps.LatLngLiteral | null;
 }
 
-/** Helper to calculate walking time */
+/** Example helper to compute walking time. */
 function calculateWalkingTime(
   station: StationFeature,
   userLocation: google.maps.LatLngLiteral | null
 ): number {
   if (!userLocation || !station.geometry?.coordinates) return 0;
 
+  // Basic haversine for distance in km
   const [lng, lat] = station.geometry.coordinates;
+  const { lat: userLat, lng: userLng } = userLocation;
 
-  // Basic haversine to get distance in km
   const toRad = (val: number) => (val * Math.PI) / 180;
-  const R = 6371; // Earth’s radius in km
-  const dLat = toRad(userLocation.lat - lat);
-  const dLng = toRad(userLocation.lng - lng);
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(userLat - lat);
+  const dLng = toRad(userLng - lng);
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat)) *
-      Math.cos(toRad(userLocation.lat)) *
+      Math.cos(toRad(userLat)) *
       Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distanceKm = R * c;
 
-  // ~12 min per km
+  // E.g. assume 12 min per km
   return Math.round(distanceKm * 12);
 }
 
-/** Helper to calculate a rough driving time (demo only) */
+/** A placeholder drivingTime function */
 function calculateDrivingTime(station: StationFeature): number {
   if (!station.geometry?.coordinates) return 0;
-  const [lng, lat] = station.geometry.coordinates;
-
-  // “dispatch hub”
-  const centerLat = 22.302;
-  const centerLng = 114.177;
-
-  // simplistic approach
-  const distanceFactor = Math.abs(lat - centerLat) + Math.abs(lng - centerLng);
-  return Math.max(5, Math.round(distanceFactor * 100));
+  // Put your own logic here if needed
+  return 8; // e.g. 8 minutes as a stub
 }
 
+/**
+ * Our main StationList component, using react-window.
+ */
 function StationList({
   stations,
-  onStationSelected,
   height = 300,
   showLegend = true,
   userLocation,
 }: StationListProps) {
-  // Pull from Redux
+  const dispatch = useAppDispatch();
+
+  // Flow and station IDs from Redux
+  const step = useAppSelector(selectBookingStep);
   const departureId = useAppSelector(selectDepartureStationId);
   const arrivalId = useAppSelector(selectArrivalStationId);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
   /**
-   * Process the stations immediately so that walkTime/drivingTime are
-   * populated on first render (no second pass).
+   * Local callback: picks departure if step ≤ 2, picks arrival if step in [3,4].
+   */
+  const handleStationSelected = useCallback(
+    (station: StationFeature) => {
+      if (step <= 2) {
+        dispatch(actionSelectDeparture(station.id));
+      } else if (step >= 3 && step <= 4) {
+        dispatch(actionSelectArrival(station.id));
+      } else {
+        toast("Cannot select station at this stage.");
+      }
+    },
+    [dispatch, step]
+  );
+
+  /**
+   * Preprocess the stations array to embed walkTime + drivingTime
+   * so each row can display them easily.
    */
   const processedStations = useMemo(() => {
-    if (!stations || stations.length === 0) return [];
     return stations.map((st) => {
-      const walkTime = userLocation ? calculateWalkingTime(st, userLocation) : 0;
+      const walkTime = calculateWalkingTime(st, userLocation || null);
       const drivingTime = calculateDrivingTime(st);
       return {
         ...st,
         walkTime,
         drivingTime,
+        // Optionally, embed them into st.properties as well
         properties: {
           ...st.properties,
           walkTime,
@@ -113,16 +124,14 @@ function StationList({
     });
   }, [stations, userLocation]);
 
-  /**
-   * For infinite scrolling, maintain how many have been “loaded” into view.
-   */
-  const [loadedCount, setLoadedCount] = useState(5);
+  // For infinite scrolling
+  const [loadedCount, setLoadedCount] = useState(10);
   const [visibleStations, setVisibleStations] = useState<StationFeature[]>([]);
   const [hasMore, setHasMore] = useState(false);
 
-  // Whenever processedStations changes, reset or update visible
+  // slice out the first loadedCount stations
   useEffect(() => {
-    if (processedStations.length === 0) {
+    if (!processedStations.length) {
       setVisibleStations([]);
       setHasMore(false);
       return;
@@ -132,30 +141,32 @@ function StationList({
     setHasMore(slice.length < processedStations.length);
   }, [processedStations, loadedCount]);
 
-  /** The data given to each row in react-window */
+  // The item data we pass to each row
   const itemData = useMemo<StationListItemData>(() => {
     return {
       items: visibleStations,
-      onStationSelected,
+      onStationSelected: handleStationSelected,
       departureId,
       arrivalId,
       dispatchRoute,
     };
-  }, [visibleStations, onStationSelected, departureId, arrivalId, dispatchRoute]);
+  }, [
+    visibleStations,
+    handleStationSelected,
+    departureId,
+    arrivalId,
+    dispatchRoute,
+  ]);
 
-  /** If we still have more, itemCount includes an extra “placeholder” row. */
   const itemCount = hasMore ? visibleStations.length + 1 : visibleStations.length;
-
-  /** Is item loaded? */
   const isItemLoaded = useCallback(
     (index: number) => index < visibleStations.length,
     [visibleStations]
   );
 
-  /** Called when user scrolls near bottom. */
+  // load more stations each time the user scrolls near bottom
   const loadMoreItems = useCallback(
     async (startIndex: number, stopIndex: number) => {
-      // Example approach: load 5 more each time
       setLoadedCount((prev) => prev + 5);
     },
     []
@@ -169,14 +180,13 @@ function StationList({
             {stations.length} stations found
           </div>
           <div className="flex gap-3">
-            {/* Legend for pickup */}
+            {/* Example Legend: one for departure, one for arrival */}
             <div className="flex items-center gap-1.5">
               <div className="p-1 rounded-full bg-blue-600">
                 <MapPin className="w-3 h-3 text-white" />
               </div>
               <span className="text-xs text-gray-300">Pickup</span>
             </div>
-            {/* Legend for dropoff */}
             <div className="flex items-center gap-1.5">
               <div className="p-1 rounded-full bg-green-600">
                 <Navigation className="w-3 h-3 text-white" />
@@ -195,7 +205,6 @@ function StationList({
         >
           {(loaderProps: InfiniteLoaderChildProps) => {
             const { onItemsRendered, ref } = loaderProps;
-
             return (
               <List
                 height={height}
