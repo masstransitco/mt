@@ -72,6 +72,7 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onDismiss?: () => void;
+  isQrScanStation?: boolean;
 }
 
 // Memoized component to wrap CarGrid for better performance
