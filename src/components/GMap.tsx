@@ -672,47 +672,55 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return `${hours}:${minutesStr}${ampm}`;
   };
 
-  // Sheet Title
-  const getSheetTitle = useCallback(() => {
-    if (!stationToShow) return "";
-    
-    // Special title for QR scanned car or virtual station
-    if ((isQrScanStation || stationToShow.properties.isVirtualCarLocation) && bookingStep <= 2) {
-      return "Ready to drive";
+// Sheet Title
+const getSheetTitle = useCallback(() => {
+  if (!stationToShow) return "";
+  
+  // Check if this is a virtual car station first
+  const isVirtualStation = isQrScanStation || 
+    (stationToShow.properties && stationToShow.properties.isVirtualCarLocation === true);
+  
+  // Special title for QR scanned car or virtual station
+  if (isVirtualStation && bookingStep <= 2) {
+    return "Ready to drive";
+  }
+  
+  if (bookingStep <= 2) {
+    if (dispatchRoute?.duration) {
+      const now = new Date();
+      const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+      const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
+      return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
     }
-    
-    if (bookingStep <= 2) {
-      if (dispatchRoute?.duration) {
-        const now = new Date();
-        const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-        const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-        return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
-      }
-      return "Pick-up station";
-    }
-    return "Trip details";
-  }, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
+    return "Pick-up station";
+  }
+  return "Trip details";
+}, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
 
-  // Sheet Subtitle
-  const getSheetSubtitle = useCallback(() => {
-    if (!stationToShow) return "";
-    
-    // Special subtitle for QR scanned car
-    if ((isQrScanStation || stationToShow.properties.isVirtualCarLocation) && bookingStep <= 2) {
-      return "Car is ready at your current location";
-    }
-    
-    if (bookingStep <= 2) {
-      return "Your car will be delivered here";
-    } else if (bookingStep === 4) {
-      return (
-        <span>
-          Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
-        </span>
-      );
-    }
-    return "Return the car at your arrival station";
-  }, [bookingStep, stationToShow, isQrScanStation]);
+// Sheet Subtitle
+const getSheetSubtitle = useCallback(() => {
+  if (!stationToShow) return "";
+  
+  // Check if this is a virtual car station first
+  const isVirtualStation = isQrScanStation || 
+    (stationToShow.properties && stationToShow.properties.isVirtualCarLocation === true);
+  
+  // Special subtitle for QR scanned car
+  if (isVirtualStation && bookingStep <= 2) {
+    return "Car is ready at your current location";
+  }
+  
+  if (bookingStep <= 2) {
+    return "Your car will be delivered here";
+  } else if (bookingStep === 4) {
+    return (
+      <span>
+        Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
+      </span>
+    );
+  }
+  return "Return the car at your arrival station";
+}, [bookingStep, stationToShow, isQrScanStation]);
 
   // Open sign-in when user tries to confirm trip but isn't signed in
   const handleOpenSignIn = () => {
