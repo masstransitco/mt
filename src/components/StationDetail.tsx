@@ -369,6 +369,19 @@ function StationDetailComponent({
     isVirtualCarLocation
   ]);
 
+  // Calculate estimated pickup time for station (not needed for virtual cars)
+  // Fixed useMemo with proper dependency array
+  const estimatedPickupTime = useMemo(() => {
+    if (isVirtualCarLocation || !dispatchRoute?.duration) return null;
+    
+    const now = new Date();
+    const pickupTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+    const hours = pickupTime.getHours() % 12 || 12;
+    const minutes = pickupTime.getMinutes();
+    const ampm = pickupTime.getHours() >= 12 ? 'pm' : 'am';
+    return `${hours}:${minutes < 10 ? '0' + minutes : minutes}${ampm}`;
+  }, [isVirtualCarLocation, dispatchRoute]); // Fixed by adding proper dependencies
+
   // If step 5 => show TripSheet exclusively (blocking background)
   if (step === 5) {
     return (
@@ -418,18 +431,6 @@ function StationDetailComponent({
       </div>
     );
   }
-
-  // Calculate estimated pickup time for station (not needed for virtual cars)
-  const estimatedPickupTime = useMemo(() => {
-    if (isVirtualCarLocation || !dispatchRoute?.duration) return null;
-    
-    const now = new Date();
-    const pickupTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-    const hours = pickupTime.getHours() % 12 || 12;
-    const minutes = pickupTime.getMinutes();
-    const ampm = pickupTime.getHours() >= 12 ? 'pm' : 'am';
-    return `${hours}:${minutes < 10 ? '0' + minutes : minutes}${ampm}`;
-  }, [dispatchRoute, isVirtualCarLocation]);
 
   return (
     <motion.div
