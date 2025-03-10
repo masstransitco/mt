@@ -187,7 +187,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     bookingStepRef.current = bookingStep;
   }, [bookingStep]);
 
-    // --------------------------
+  // --------------------------
   // Sorting logic
   // --------------------------
   const sortStationsByDistanceToPoint = useCallback(
@@ -533,7 +533,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   // Clear station logic
   // --------------------------
-  const handleClearDepartureInSelector = () => {
+  const handleClearDepartureInSelector = useCallback(() => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
     dispatch(clearDispatchRoute());
@@ -549,9 +549,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setOpenSheet("none");
       setPreviousSheet("none");
     }
-  };
+  }, [dispatch, openSheet, isQrScanStation]);
 
-  const handleClearArrivalInSelector = () => {
+  const handleClearArrivalInSelector = useCallback(() => {
     dispatch(clearArrivalStation());
     dispatch(advanceBookingStep(3));
     dispatch(clearRoute());
@@ -560,7 +560,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setOpenSheet("none");
       setPreviousSheet("none");
     }
-  };
+  }, [dispatch, openSheet]);
 
   // --------------------------
   // Helpers to open/close sheets
@@ -586,6 +586,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setPreviousSheet("none");
     }
   };
+
+  // Handle QR scanner open
+  const handleOpenQrScanner = useCallback(() => {
+    setIsQrScannerOpen(true);
+  }, []);
 
   // --------------------------
   // Geolocation
@@ -672,65 +677,70 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return `${hours}:${minutesStr}${ampm}`;
   };
 
-// Sheet Title
-const getSheetTitle = useCallback(() => {
-  if (!stationToShow) return "";
-  
-  // Check if this is a virtual car station first
-  const isVirtualStation = isQrScanStation || 
-    (stationToShow.properties && stationToShow.properties.isVirtualCarLocation === true);
-  
-  // Special title for QR scanned car or virtual station
-  if (isVirtualStation && bookingStep <= 2) {
-    return "Ready to drive";
-  }
-  
-  if (bookingStep <= 2) {
-    if (dispatchRoute?.duration) {
-      const now = new Date();
-      const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-      const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-      return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
+  // Sheet Title
+  const getSheetTitle = useCallback(() => {
+    if (!stationToShow) return "";
+    
+    // Check if this is a virtual car station first
+    const isVirtualStation = isQrScanStation || 
+      (stationToShow.properties && stationToShow.properties.isVirtualCarLocation === true);
+    
+    // Special title for QR scanned car or virtual station
+    if (isVirtualStation && bookingStep <= 2) {
+      return "Ready to drive";
     }
-    return "Pick-up station";
-  }
-  return "Trip details";
-}, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
+    
+    if (bookingStep <= 2) {
+      if (dispatchRoute?.duration) {
+        const now = new Date();
+        const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+        const arrivalTimeEnd = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
+        return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(arrivalTimeEnd)}`;
+      }
+      return "Pick-up station";
+    }
+    return "Trip details";
+  }, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
 
-// Sheet Subtitle
-const getSheetSubtitle = useCallback(() => {
-  if (!stationToShow) return "";
-  
-  // Check if this is a virtual car station first
-  const isVirtualStation = isQrScanStation || 
-    (stationToShow.properties && stationToShow.properties.isVirtualCarLocation === true);
-  
-  // Special subtitle for QR scanned car
-  if (isVirtualStation && bookingStep <= 2) {
-    return "Car is ready at your current location";
-  }
-  
-  if (bookingStep <= 2) {
-    return "Your car will be delivered here";
-  } else if (bookingStep === 4) {
-    return (
-      <span>
-        Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
-      </span>
-    );
-  }
-  return "Return the car at your arrival station";
-}, [bookingStep, stationToShow, isQrScanStation]);
+  // Sheet Subtitle
+  const getSheetSubtitle = useCallback(() => {
+    if (!stationToShow) return "";
+    
+    // Check if this is a virtual car station first
+    const isVirtualStation = isQrScanStation || 
+      (stationToShow.properties && stationToShow.properties.isVirtualCarLocation === true);
+    
+    // Special subtitle for QR scanned car
+    if (isVirtualStation && bookingStep <= 2) {
+      return "Car is ready at your current location";
+    }
+    
+    if (bookingStep <= 2) {
+      return "Your car will be delivered here";
+    } else if (bookingStep === 4) {
+      return (
+        <span>
+          Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
+        </span>
+      );
+    }
+    return "Return the car at your arrival station";
+  }, [bookingStep, stationToShow, isQrScanStation]);
 
   // Open sign-in when user tries to confirm trip but isn't signed in
   const handleOpenSignIn = () => {
     setSignInModalOpen(true);
   };
 
-  // Open QR scanner
-  const handleOpenQrScanner = useCallback(() => {
-    setIsQrScannerOpen(true);
-  }, []);
+  // Handle StationDetail close - specifically for QR scanned car
+  const handleStationDetailClose = useCallback(() => {
+    // If this was a QR scanned station, make sure to reset QR scan state
+    if (isQrScanStation) {
+      setIsQrScanStation(false);
+      setVirtualStationId(null);
+    }
+    closeCurrentSheet();
+  }, [isQrScanStation, closeCurrentSheet]);
 
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
@@ -767,13 +777,16 @@ const getSheetSubtitle = useCallback(() => {
             </GoogleMap>
           </div>
 
-          {/* Station Selector Overlay */}
+          {/* Station Selector Overlay - Pass QR scan related props */}
           <StationSelector
             onAddressSearch={handleAddressSearch}
             onClearDeparture={handleClearDepartureInSelector}
             onClearArrival={handleClearArrivalInSelector}
             onLocateMe={handleLocateMe}
             onScan={handleOpenQrScanner}
+            isQrScanStation={isQrScanStation}
+            virtualStationId={virtualStationId}
+            scannedCar={scannedCar}
           />
 
           {/* Station List Sheet */}
@@ -801,18 +814,11 @@ const getSheetSubtitle = useCallback(() => {
             </div>
           </Sheet>
 
-         {/* Station Detail Sheet */}
+         {/* Station Detail Sheet - Add onClose prop */}
           <Sheet
             key={detailKey}
             isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-            onDismiss={() => {
-              requestAnimationFrame(() => {
-                closeCurrentSheet();
-                if (overlayRef.current?.requestRedraw) {
-                  overlayRef.current.requestRedraw();
-                }
-              });
-            }}
+            onDismiss={handleStationDetailClose}
             title={getSheetTitle()}
             subtitle={getSheetSubtitle()}
           >
@@ -824,6 +830,7 @@ const getSheetSubtitle = useCallback(() => {
                 onOpenSignIn={handleOpenSignIn}
                 onDismiss={closeCurrentSheet}
                 isQrScanStation={isQrScanStation}
+                onClose={handleStationDetailClose}
               />
             )}
           </Sheet>
