@@ -121,10 +121,12 @@ interface IconProps {
 
 const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
   return (
-    <div className={cn(
-      "p-1.5 rounded-full flex items-center justify-center",
-      highlight ? "bg-blue-600" : "bg-gray-700"
-    )}>
+    <div
+      className={cn(
+        "p-1.5 rounded-full flex items-center justify-center",
+        highlight ? "bg-blue-600" : "bg-gray-700"
+      )}
+    >
       {step === 1 ? (
         <Search className="w-4 h-4 backdrop-blur-md text-white" />
       ) : (
@@ -137,10 +139,12 @@ DepartureIcon.displayName = "DepartureIcon";
 
 const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
   return (
-    <div className={cn(
-      "p-1.5 rounded-full flex items-center justify-center",
-      highlight ? "bg-blue-600" : "bg-gray-700"
-    )}>
+    <div
+      className={cn(
+        "p-1.5 rounded-full flex items-center justify-center",
+        highlight ? "bg-blue-600" : "bg-gray-700"
+      )}
+    >
       {step === 3 ? (
         <Search className="w-4 h-4 backdrop-blur-md text-white" />
       ) : (
@@ -161,91 +165,97 @@ interface AddressSearchProps {
   selectedStation?: StationFeature;
 }
 
-const AddressSearch = React.memo(
-  ({ onAddressSelect, disabled, placeholder, selectedStation }: AddressSearchProps) => {
-    const [searchText, setSearchText] = useState("");
-    const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+const AddressSearch = React.memo(function AddressSearch({
+  onAddressSelect,
+  disabled,
+  placeholder,
+  selectedStation,
+}: AddressSearchProps) {
+  const [searchText, setSearchText] = useState("");
+  const [predictions, setPredictions] =
+    useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-    const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
-    const geocoder = useRef<google.maps.Geocoder | null>(null);
-    const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const mapsLoadedRef = useRef<boolean>(false);
+  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
+  const geocoder = useRef<google.maps.Geocoder | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const mapsLoadedRef = useRef<boolean>(false);
 
-    // Initialize Google Maps services safely
-    useEffect(() => {
-      const initServices = async () => {
-        try {
-          if (!mapsLoadedRef.current) {
-            await ensureGoogleMapsLoaded();
-            mapsLoadedRef.current = true;
-          }
-          
-          if (!autocompleteService.current) {
-            autocompleteService.current = await createAutocompleteService();
-          }
-          
-          if (!geocoder.current) {
-            geocoder.current = await createGeocoder();
-          }
-        } catch (error) {
-          console.error("Failed to initialize Google Maps services:", error);
-          toast.error("Map services unavailable. Please refresh the page.");
+  // Initialize Google Maps services safely
+  useEffect(() => {
+    const initServices = async () => {
+      try {
+        if (!mapsLoadedRef.current) {
+          await ensureGoogleMapsLoaded();
+          mapsLoadedRef.current = true;
         }
-      };
-      
-      initServices();
-      
-      return () => {
-        if (searchTimeoutRef.current) {
-          clearTimeout(searchTimeoutRef.current);
+
+        if (!autocompleteService.current) {
+          autocompleteService.current = await createAutocompleteService();
         }
-      };
-    }, []);
 
-    const isStationSelected = Boolean(selectedStation);
+        if (!geocoder.current) {
+          geocoder.current = await createGeocoder();
+        }
+      } catch (error) {
+        console.error("Failed to initialize Google Maps services:", error);
+        toast.error("Map services unavailable. Please refresh the page.");
+      }
+    };
 
-    const searchPlaces = useCallback((input: string) => {
+    initServices();
+
+    return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
       }
-      
+    };
+  }, []);
+
+  const isStationSelected = Boolean(selectedStation);
+
+  const searchPlaces = useCallback(
+    (input: string) => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
       if (!input.trim()) {
         setPredictions([]);
         return;
       }
-      
+
       setIsLoading(true);
       searchTimeoutRef.current = setTimeout(async () => {
         try {
-          // Initialize services if needed
           if (!autocompleteService.current) {
             await ensureGoogleMapsLoaded();
             autocompleteService.current = await createAutocompleteService();
           }
-          
+
           const request: google.maps.places.AutocompleteRequest = {
             input,
             // @ts-ignore
             types: ["establishment", "geocode"],
             componentRestrictions: { country: "HK" },
           };
-          
-          // Use a promise wrapper for the callback
-          const result = await new Promise<google.maps.places.AutocompletePrediction[]>((resolve, reject) => {
-            autocompleteService.current!.getPlacePredictions(
-              request,
-              (predictions, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-                  resolve(predictions);
+
+          const result = await new Promise<google.maps.places.AutocompletePrediction[]>(
+            (resolve, reject) => {
+              autocompleteService.current!.getPlacePredictions(request, (preds, status) => {
+                if (
+                  status === google.maps.places.PlacesServiceStatus.OK &&
+                  preds
+                ) {
+                  resolve(preds);
                 } else {
                   reject(new Error(`Places API error: ${status}`));
                 }
-              }
-            );
-          });
-          
+              });
+            }
+          );
+
           setPredictions(result.slice(0, 5));
           setIsDropdownOpen(result.length > 0);
         } catch (error) {
@@ -256,130 +266,131 @@ const AddressSearch = React.memo(
           setIsLoading(false);
         }
       }, 300);
-    }, []);
+    },
+    []
+  );
 
-    const handleSelect = useCallback(
-      async (prediction: google.maps.places.AutocompletePrediction) => {
-        try {
-          // Initialize geocoder if needed
-          if (!geocoder.current) {
-            await ensureGoogleMapsLoaded();
-            geocoder.current = await createGeocoder();
-          }
-          
-          // Use a promise wrapper for the callback
-          const result = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-            geocoder.current!.geocode(
-              { placeId: prediction.place_id },
-              (results, status) => {
-                if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
-                  resolve(results);
-                } else {
-                  reject(new Error(`Geocoder error: ${status}`));
-                }
-              }
-            );
-          });
-          
-          const location = result[0]?.geometry?.location;
-          if (location) {
-            onAddressSelect({ lat: location.lat(), lng: location.lng() });
-            setSearchText(prediction.structured_formatting.main_text);
-            setPredictions([]);
-            setIsDropdownOpen(false);
-          } else {
-            throw new Error("No location found in geocoder result");
-          }
-        } catch (error) {
-          console.error("Geocoding error:", error);
-          toast.error("Unable to locate address");
+  const handleSelect = useCallback(
+    async (prediction: google.maps.places.AutocompletePrediction) => {
+      try {
+        if (!geocoder.current) {
+          await ensureGoogleMapsLoaded();
+          geocoder.current = await createGeocoder();
         }
-      },
-      [onAddressSelect]
-    );
 
-    return (
-      <div className="flex-1">
-        {isStationSelected ? (
-          <div className="px-1 py-1 text-white font-medium">
-            {selectedStation!.properties.Place}
-          </div>
-        ) : (
+        const result = await new Promise<google.maps.GeocoderResult[]>(
+          (resolve, reject) => {
+            geocoder.current!.geocode({ placeId: prediction.place_id }, (results, status) => {
+              if (
+                status === google.maps.GeocoderStatus.OK &&
+                results &&
+                results.length > 0
+              ) {
+                resolve(results);
+              } else {
+                reject(new Error(`Geocoder error: ${status}`));
+              }
+            });
+          }
+        );
+
+        const location = result[0]?.geometry?.location;
+        if (location) {
+          onAddressSelect({ lat: location.lat(), lng: location.lng() });
+          setSearchText(prediction.structured_formatting.main_text);
+          setPredictions([]);
+          setIsDropdownOpen(false);
+        } else {
+          throw new Error("No location found in geocoder result");
+        }
+      } catch (error) {
+        console.error("Geocoding error:", error);
+        toast.error("Unable to locate address");
+      }
+    },
+    [onAddressSelect]
+  );
+
+  return (
+    <div className="flex-1">
+      {isStationSelected ? (
+        <div className="px-1 py-1 text-white font-medium">
+          {selectedStation!.properties.Place}
+        </div>
+      ) : (
+        <div className="relative">
           <div className="relative">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchText}
-                onChange={(e) => {
-                  setSearchText(e.target.value);
-                  searchPlaces(e.target.value);
-                }}
-                onFocus={() => setIsDropdownOpen(predictions.length > 0)}
-                onBlur={() => {
-                  // Small delay to allow clicking on dropdown items
-                  setTimeout(() => setIsDropdownOpen(false), 150);
-                }}
-                disabled={disabled}
-                placeholder={placeholder}
-                className={cn(
-                  "w-full bg-slate-950/90 backdrop-blur-md text-white",
-                  "focus:outline-none",
-                  "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 text-base transition-colors"
-                )}
-              />
-              {isLoading ? (
-                <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : searchText ? (
-                <button
-                  onClick={() => {
-                    setSearchText("");
-                    setPredictions([]);
-                    setIsDropdownOpen(false);
-                  }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700 p-1 rounded-full transition-colors"
-                  type="button"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              ) : null}
-            </div>
-            <AnimatePresence>
-              {isDropdownOpen && predictions.length > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
-                >
-                  {predictions.map((prediction) => (
-                    <button
-                      key={prediction.place_id}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => handleSelect(prediction)}
-                      className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-b-0"
-                      type="button"
-                    >
-                      <div className="font-medium">
-                        {prediction.structured_formatting.main_text}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {prediction.structured_formatting.secondary_text}
-                      </div>
-                    </button>
-                  ))}
-                </motion.div>
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                searchPlaces(e.target.value);
+              }}
+              onFocus={() => setIsDropdownOpen(predictions.length > 0)}
+              onBlur={() => {
+                // Small delay to allow clicking on dropdown items
+                setTimeout(() => setIsDropdownOpen(false), 150);
+              }}
+              disabled={disabled}
+              placeholder={placeholder}
+              className={cn(
+                "w-full bg-slate-950/90 backdrop-blur-md text-white",
+                "focus:outline-none",
+                "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 text-base transition-colors"
               )}
-            </AnimatePresence>
+            />
+            {isLoading ? (
+              <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : searchText ? (
+              <button
+                onClick={() => {
+                  setSearchText("");
+                  setPredictions([]);
+                  setIsDropdownOpen(false);
+                }}
+                className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:bg-gray-700 p-1 rounded-full transition-colors"
+                type="button"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            ) : null}
           </div>
-        )}
-      </div>
-    );
-  }
-);
-
+          <AnimatePresence>
+            {isDropdownOpen && predictions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.2 }}
+                className="absolute top-full left-0 right-0 mt-1 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-50 max-h-64 overflow-y-auto"
+              >
+                {predictions.map((prediction) => (
+                  <button
+                    key={prediction.place_id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelect(prediction)}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 transition-colors border-b border-gray-800 last:border-b-0"
+                    type="button"
+                  >
+                    <div className="font-medium">
+                      {prediction.structured_formatting.main_text}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {prediction.structured_formatting.secondary_text}
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+});
 AddressSearch.displayName = "AddressSearch";
 
 /* -----------------------------------------------------------
@@ -390,10 +401,10 @@ interface StationSelectorProps {
   onClearDeparture?: () => void;
   onClearArrival?: () => void;
   onLocateMe?: () => void;
-  onScan?: () => void; // Added this prop for QR scanning
-  isQrScanStation?: boolean; // Added to track QR scanned status
-  virtualStationId?: number | null; // Added to track virtual station ID
-  scannedCar?: Car | null; // Added to access scanned car data 
+  onScan?: () => void; // For QR scanning
+  isQrScanStation?: boolean;
+  virtualStationId?: number | null;
+  scannedCar?: Car | null;
 }
 
 function StationSelector({
@@ -401,7 +412,7 @@ function StationSelector({
   onClearDeparture,
   onClearArrival,
   onLocateMe,
-  onScan, // Added in the props destructuring
+  onScan,
   isQrScanStation = false,
   virtualStationId = null,
   scannedCar = null,
@@ -417,23 +428,21 @@ function StationSelector({
   // Use either passed scannedCar or get it from Redux
   const actualScannedCar = scannedCar || reduxScannedCar;
 
-  // Enhanced departureStation lookup to support virtual stations
+  // Possibly create a “virtual station” if departure is from QR
   const departureStation = useMemo(() => {
-    // First check if this is a virtual station from a QR-scanned car
-    const isVirtualStation = isQrScanStation && 
-                            actualScannedCar && 
-                            departureId && 
-                            (virtualStationId === departureId || 
-                             departureId === 1000000 + actualScannedCar.id);
-    
+    const isVirtualStation =
+      isQrScanStation &&
+      actualScannedCar &&
+      departureId &&
+      (virtualStationId === departureId ||
+        departureId === 1000000 + actualScannedCar.id);
+
     if (isVirtualStation && actualScannedCar) {
       console.log("Creating virtual station for display in StationSelector");
-      // Generate virtual station on-the-fly
-      const vStationId = virtualStationId || (1000000 + actualScannedCar.id);
+      const vStationId = virtualStationId || 1000000 + actualScannedCar.id;
       return createVirtualStationFromCar(actualScannedCar, vStationId);
     }
-    
-    // Normal station lookup
+    // Normal station
     return stations.find((s) => s.id === departureId);
   }, [stations, departureId, isQrScanStation, virtualStationId, actualScannedCar]);
 
@@ -441,17 +450,17 @@ function StationSelector({
     () => stations.find((s) => s.id === arrivalId),
     [stations, arrivalId]
   );
-  
+
+  // If route is present, show distance in KM
   const distanceInKm = useMemo(
     () => (bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null),
     [bookingRoute]
   );
 
-  // Step logic
+  // Step-based highlight
   const highlightDeparture = step <= 2;
   const highlightArrival = step >= 3;
 
-  // Subtle highlight vs default - removed border color as requested
   const highlightDepartureClass = highlightDeparture
     ? "bg-slate-950/80"
     : "bg-gray-900";
@@ -459,20 +468,18 @@ function StationSelector({
     ? "bg-slate-950/80"
     : "bg-gray-900";
 
+  // “Locate me” logic
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
       toast.error("Geolocation not supported.");
       return;
     }
-    
-    // Show loading feedback
     toast.loading("Finding your location...");
-    
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         toast.dismiss();
         toast.success("Location found!");
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         dispatch(setSearchLocation(loc));
         onAddressSearch(loc);
       },
@@ -494,6 +501,7 @@ function StationSelector({
   );
 
   const handleClearDeparture = useCallback(() => {
+    // Clear any dispatch route, also handle parent's onClear
     dispatch(clearDispatchRoute());
     onClearDeparture?.();
   }, [dispatch, onClearDeparture]);
@@ -502,11 +510,8 @@ function StationSelector({
     onClearArrival?.();
   }, [onClearArrival]);
 
-  // Handle QR code scanning button
   const handleScan = useCallback(() => {
-    if (onScan) {
-      onScan();
-    }
+    onScan?.();
   }, [onScan]);
 
   return (
@@ -518,7 +523,7 @@ function StationSelector({
         className="bg-zinc-800/50 rounded-lg backdrop-blur-md px-1 py-1 space-y-1 border-0.5 border-zinc-800/90 shadow-xl"
         style={{ overscrollBehavior: "hidden", touchAction: "none" }}
       >
-        {/* Same-station error */}
+        {/* If departure & arrival are the same, show an error */}
         <AnimatePresence>
           {departureId && arrivalId && departureId === arrivalId && (
             <motion.div 
@@ -533,12 +538,17 @@ function StationSelector({
           )}
         </AnimatePresence>
 
-        {/* DEPARTURE INPUT */}
-        <div className={`flex items-center gap-3 rounded-full p-1 border border-gray-800 transition-all duration-200 ${highlightDepartureClass}`}>
+        {/* DEPARTURE input */}
+        <div
+          className={cn(
+            "flex items-center gap-3 rounded-full p-1 border border-gray-800 transition-all duration-200",
+            highlightDepartureClass
+          )}
+        >
           <DepartureIcon highlight={highlightDeparture} step={step} />
           <AddressSearch
             onAddressSelect={handleAddressSearch}
-            disabled={step >= 3}
+            disabled={step >= 3} // once step≥3, can't alter departure
             placeholder="Where from?"
             selectedStation={departureStation}
           />
@@ -554,14 +564,17 @@ function StationSelector({
           )}
         </div>
 
-        {/* ARRIVAL INPUT */}
+        {/* ARRIVAL input (only if step≥3) */}
         <AnimatePresence>
           {step >= 3 && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className={`flex items-center gap-3 rounded-full p-1 border border-gray-800 transition-all duration-200 ${highlightArrivalClass}`}
+              className={cn(
+                "flex items-center gap-3 rounded-full p-1 border border-gray-800 transition-all duration-200",
+                highlightArrivalClass
+              )}
             >
               <ArrivalIcon highlight={highlightArrival} step={step} />
               <AddressSearch
@@ -592,10 +605,12 @@ function StationSelector({
           <div className="flex items-center gap-2">
             <AnimatedDot />
             <span className="text-xs text-white px-2 py-1 min-w-[14ch] whitespace-nowrap backdrop-blur-sm rounded-md">
-              <AnimatedInfoText text={step < 3 ? "Choose pick-up station" : "Select arrival station"} />
+              <AnimatedInfoText
+                text={step < 3 ? "Choose pick-up station" : "Select arrival station"}
+              />
             </span>
           </div>
-          
+
           {/* Right side - Action Buttons and Distance */}
           <div className="flex items-center gap-2">
             {departureStation && arrivalStation && distanceInKm && (
@@ -603,7 +618,7 @@ function StationSelector({
                 {distanceInKm} km
               </div>
             )}
-            
+
             {/* QR Scan button - only show in steps 1 or 2 */}
             {(step === 1 || step === 2) && onScan && (
               <button
@@ -612,24 +627,25 @@ function StationSelector({
                 type="button"
                 aria-label="Scan QR code"
               >
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className="w-5 h-5" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <rect x="7" y="7" width="3" height="3"/>
-                  <rect x="14" y="7" width="3" height="3"/>
-                  <rect x="7" y="14" width="3" height="3"/>
-                  <rect x="14" y="14" width="3" height="3"/>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-5 h-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <rect x="7" y="7" width="3" height="3" />
+                  <rect x="14" y="7" width="3" height="3" />
+                  <rect x="7" y="14" width="3" height="3" />
+                  <rect x="14" y="14" width="3" height="3" />
                 </svg>
               </button>
             )}
-            
+
             {/* Only show locate me button in steps 1 or 2 */}
             {(step === 1 || step === 2) && (
               <button
