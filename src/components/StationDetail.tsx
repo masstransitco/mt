@@ -319,8 +319,8 @@ function StationDetailComponent({
       // but for now we'll just use the same flow
       dispatch(advanceBookingStep(3));
       
-      // Make sure to save to Firestore AFTER modifying state
-      await dispatch(saveBookingDetails());
+      // REMOVED: saveBookingDetails call at step 2
+      // No longer persisting state when advancing from step 2 to 3
       
       if (isVirtualCarLocation) {
         toast.success("Car ready! Now select your dropoff station.");
@@ -349,7 +349,10 @@ function StationDetailComponent({
         }
         
         dispatch(advanceBookingStep(5));
+        
+        // KEPT: Only call saveBookingDetails when advancing to step 5
         await dispatch(saveBookingDetails());
+        
         toast.success("Trip booked! Starting fare of HK$50 charged.");
       } catch (err) {
         console.error("Failed to charge trip =>", err);
@@ -370,7 +373,6 @@ function StationDetailComponent({
   ]);
 
   // Calculate estimated pickup time for station (not needed for virtual cars)
-  // Fixed useMemo with proper dependency array
   const estimatedPickupTime = useMemo(() => {
     if (isVirtualCarLocation || !dispatchRoute?.duration) return null;
     
@@ -380,7 +382,7 @@ function StationDetailComponent({
     const minutes = pickupTime.getMinutes();
     const ampm = pickupTime.getHours() >= 12 ? 'pm' : 'am';
     return `${hours}:${minutes < 10 ? '0' + minutes : minutes}${ampm}`;
-  }, [isVirtualCarLocation, dispatchRoute]); // Fixed by adding proper dependencies
+  }, [isVirtualCarLocation, dispatchRoute]);
 
   // If step 5 => show TripSheet exclusively (blocking background)
   if (step === 5) {
