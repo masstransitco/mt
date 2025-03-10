@@ -1,4 +1,5 @@
-// Make sure to import everything you need at the top...
+"use client";
+
 import React, {
   memo,
   useState,
@@ -75,6 +76,7 @@ interface StationDetailProps {
   onOpenSignIn: () => void;
   onDismiss?: () => void;
   isQrScanStation?: boolean;
+  /** Called when the entire detail panel is closed (by parent) */
   onClose?: () => void;
 }
 
@@ -220,9 +222,7 @@ function StationDetailComponent({
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
 
-  // ---------------------------------------
-  //  ALL HOOKS BEFORE EARLY RETURNS
-  // ---------------------------------------
+  // Step & state
   const step = useAppSelector(selectBookingStep);
   const route = useAppSelector(selectRoute);
   const departureId = useAppSelector(selectDepartureStationId);
@@ -231,7 +231,6 @@ function StationDetailComponent({
   const isSignedIn = useAppSelector(selectIsSignedIn);
   const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod);
 
-  // Distinguish departure vs arrival flow
   const isDepartureFlow = useMemo(() => step <= 2, [step]);
 
   const [isInitialized, setIsInitialized] = useState(false);
@@ -254,11 +253,12 @@ function StationDetailComponent({
   const isVirtualCarLocation = useMemo(() => {
     if (!activeStation) return isQrScanStation;
     return (
-      activeStation.properties?.isVirtualCarLocation === true || isQrScanStation
+      activeStation.properties?.isVirtualCarLocation === true ||
+      isQrScanStation
     );
   }, [activeStation, isQrScanStation]);
 
-  // Initialize once
+  // Basic mount init
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsInitialized(true);
@@ -267,7 +267,7 @@ function StationDetailComponent({
     return () => clearTimeout(timer);
   }, []);
 
-  // Decide if we want to load CarGrid
+  // CarGrid loading
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isDepartureFlow && step === 2 && activeStation) {
@@ -282,7 +282,6 @@ function StationDetailComponent({
     };
   }, [isDepartureFlow, step, activeStation]);
 
-  // If QR station at step 2, forcibly load CarGrid
   useEffect(() => {
     if (isQrScanStation && step === 2) {
       setShouldLoadCarGrid(true);
@@ -296,8 +295,10 @@ function StationDetailComponent({
     setWalletModalOpen(false);
   }, []);
 
-  // Close detail if it's a QR station => reset everything
+  // Since we're removing the top-right "X" for QR stations,
+  // we can still keep a handleClose if the parent calls it.
   const handleClose = useCallback(() => {
+    // If the parent calls this for some reason
     if (isQrScanStation || isVirtualCarLocation) {
       dispatch(clearDepartureStation());
       dispatch(setScannedCar(null));
@@ -313,7 +314,6 @@ function StationDetailComponent({
     }
   }, [dispatch, isQrScanStation, isVirtualCarLocation, onClose]);
 
-  // "Confirm" logic
   const handleConfirm = useCallback(async () => {
     if (isDepartureFlow && step === 2) {
       dispatch(advanceBookingStep(3));
@@ -360,10 +360,9 @@ function StationDetailComponent({
     dispatch,
     isSignedIn,
     onOpenSignIn,
-    hasDefaultPaymentMethod,
+    hasDefaultPaymentMethod
   ]);
 
-  // Compute estimated pickup time at the top level
   const estimatedPickupTime = useMemo(() => {
     if (isVirtualCarLocation || !dispatchRoute || !dispatchRoute.duration) {
       return null;
@@ -376,11 +375,7 @@ function StationDetailComponent({
     return `${hours}:${minutes < 10 ? "0" + minutes : minutes}${ampm}`;
   }, [isVirtualCarLocation, dispatchRoute]);
 
-  // ---------------------------------------
-  //  NOW THE EARLY RETURNS AFTER HOOKS
-  // ---------------------------------------
-
-  // If it's step 5 => show TripSheet
+  // EARLY RETURNS
   if (step === 5) {
     return (
       <>
@@ -392,7 +387,6 @@ function StationDetailComponent({
     );
   }
 
-  // If we haven't inited => show spinner
   if (!isInitialized) {
     return (
       <div className="p-6 flex justify-center items-center">
@@ -401,7 +395,6 @@ function StationDetailComponent({
     );
   }
 
-  // If we tried to render but found no station
   if (!activeStation && attemptedRender) {
     console.error(
       "StationDetail attempted to render but activeStation is null",
@@ -411,7 +404,6 @@ function StationDetailComponent({
     );
   }
 
-  // If no station selected at step 2 or 4 => fallback
   if (!activeStation) {
     return (
       <div className="p-6 space-y-4">
@@ -432,9 +424,7 @@ function StationDetailComponent({
     );
   }
 
-  // ---------------------------------------
-  //  NORMAL RENDER
-  // ---------------------------------------
+  // NORMAL RENDER
   return (
     <motion.div
       className="p-4 space-y-4"
@@ -443,30 +433,10 @@ function StationDetailComponent({
       exit={{ opacity: 0, y: 10 }}
       transition={{ type: "tween", duration: 0.2 }}
     >
-      {isQrScanStation && (
-        <div className="flex justify-end mb-2">
-          <button
-            onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-white transition-colors rounded-full hover:bg-gray-800/50"
-            aria-label="Close"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-      )}
+      {/*
+        Removed the "X" button for isQrScanStation.
+        If a user wants to close the sheet, they'll do it via the parent's onDismiss.
+      */}
 
       <Suspense fallback={<MapCardFallback />}>
         <MapCard
@@ -480,7 +450,7 @@ function StationDetailComponent({
         />
       </Suspense>
 
-      {/* Show estimated pickup time if not a virtual car and we have a value */}
+      {/* If there's a non-virtual station at step 2, show estimated pickup time */}
       {step === 2 && !isVirtualCarLocation && estimatedPickupTime && (
         <div className="text-sm text-center bg-blue-600/20 rounded-md p-2 border border-blue-500/30">
           <span className="text-gray-200">Estimated car arrival: </span>
