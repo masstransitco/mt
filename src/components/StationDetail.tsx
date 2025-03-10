@@ -72,7 +72,7 @@ interface StationDetailProps {
   onConfirmDeparture?: () => void;
   onOpenSignIn: () => void;
   onDismiss?: () => void;
-  isQrScanStation?: boolean;
+  isQrScanStation?: boolean; // Added this properly to the interface
 }
 
 // Memoized component to wrap CarGrid for better performance
@@ -99,8 +99,8 @@ const StationStats = memo(({
   driveTimeMin: string | null;
   parkingValue: string;
 }) => {
-  // Special case for QR scanned car (virtual station)
-  const isVirtualCarLocation = activeStation.properties.isVirtualCarLocation;
+  // Check if this is a virtual car location (QR scanned)
+  const isVirtualCarLocation = activeStation.properties.isVirtualCarLocation === true;
   
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 space-y-3 border border-gray-700">
@@ -211,6 +211,11 @@ function StationDetailComponent({
   isQrScanStation,
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
+  
+  // Log for debugging
+  console.log("StationDetail rendering with station:", activeStation?.id, 
+              "isQrScanStation:", isQrScanStation,
+              "hasVirtualCarLocation:", activeStation?.properties.isVirtualCarLocation);
 
   // Use selective Redux state subscription
   const {
@@ -253,8 +258,8 @@ function StationDetailComponent({
 
   // Check if this is a virtual car station (from QR code)
   const isVirtualCarLocation = useMemo(() => 
-    activeStation?.properties.isVirtualCarLocation === true,
-    [activeStation]
+    activeStation?.properties.isVirtualCarLocation === true || isQrScanStation === true,
+    [activeStation, isQrScanStation]
   );
 
   // Ensure component is properly initialized on mount
@@ -285,10 +290,11 @@ function StationDetailComponent({
 
   // Special effect for QR scanned car stations
   useEffect(() => {
-    if (activeStation?.properties.isVirtualCarLocation && step === 2) {
+    if ((activeStation?.properties.isVirtualCarLocation || isQrScanStation) && step === 2) {
+      console.log("QR scanned car detected, forcing car grid to load");
       setShouldLoadCarGrid(true);
     }
-  }, [activeStation, step]);
+  }, [activeStation, step, isQrScanStation]);
 
   // Handle wallet modal opening
   const handleOpenWalletModal = useCallback(() => {
@@ -306,7 +312,9 @@ function StationDetailComponent({
       // For QR scanned cars, we could have a different flow
       // but for now we'll just use the same flow
       dispatch(advanceBookingStep(3));
-      dispatch(saveBookingDetails());
+      
+      // Make sure to save to Firestore AFTER modifying state
+      await dispatch(saveBookingDetails());
       
       if (isVirtualCarLocation || isQrScanStation) {
         toast.success("Car ready! Now select your dropoff station.");
@@ -335,7 +343,7 @@ function StationDetailComponent({
         }
         
         dispatch(advanceBookingStep(5));
-        dispatch(saveBookingDetails());
+        await dispatch(saveBookingDetails());
         toast.success("Trip booked! Starting fare of HK$50 charged.");
       } catch (err) {
         console.error("Failed to charge trip =>", err);
