@@ -15,7 +15,7 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import type { Car } from "@/types/cars";
 
-/** Fallback skeleton while the 3D viewer loads */
+// Fallback skeleton while the 3D viewer loads
 const ViewerSkeleton = () => (
   <div className="relative w-full h-full bg-gray-900/30 rounded-lg overflow-hidden">
     <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
@@ -35,15 +35,12 @@ interface CarCardGroupProps {
   isQrScanStation?: boolean;
 }
 
-/** Dynamically load your Car3DViewer. */
+// Dynamically load your Car3DViewer.
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => <ViewerSkeleton />,
 });
 
-/**
- * Renders a group of cars (usually all of the same model).
- */
 function CarCardGroup({
   group,
   isVisible = true,
@@ -58,15 +55,6 @@ function CarCardGroup({
 
   const popupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-
-  // On unmount, clear any timeouts
-  useEffect(() => {
-    return () => {
-      if (popupTimeoutRef.current) {
-        clearTimeout(popupTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // IntersectionObserver to load the 3D model only when visible
   useEffect(() => {
@@ -96,23 +84,29 @@ function CarCardGroup({
     };
   }, [isVisible, rootRef]);
 
+  // Cleanup popup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (popupTimeoutRef.current) {
+        clearTimeout(popupTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // If the user has selected any car in this group
   const isGroupSelected = useMemo(() => {
     return group.cars.some((c) => c.id === selectedCarId);
   }, [group.cars, selectedCarId]);
 
-  // Decide which car is actually displayed:
-  // If we have only 1 car (QR flow or small group), skip the logic
+  // Decide which car is displayed
   const displayedCar = useMemo(() => {
     if (group.cars.length === 1) {
       return group.cars[0];
     }
-    // Otherwise pick the selected one or the first
     const foundSelected = group.cars.find((c) => c.id === selectedCarId);
     return foundSelected || group.cars[0];
   }, [group.cars, selectedCarId]);
 
-  // If we had battery logic or odometer logic, you can put it here:
   // Example battery logic
   const { batteryPercentage, batteryIconColor, BatteryIcon } = useMemo(() => {
     const rawBattery = displayedCar.electric_battery_percentage_left;
@@ -166,7 +160,6 @@ function CarCardGroup({
     <motion.div
       ref={cardRef}
       onClick={() => {
-        // If group not selected, select the displayedCar
         if (!isGroupSelected) {
           dispatch(selectCar(displayedCar.id));
         }
@@ -178,6 +171,8 @@ function CarCardGroup({
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "tween", duration: 0.2, delay: 0.05 }}
+      // Fixed height: h-40 -> you can pick something else
+      // overflow-hidden -> ensures no content spills out
       className="
         relative 
         overflow-hidden 
@@ -191,6 +186,7 @@ function CarCardGroup({
         cursor-pointer 
         mb-4 
         w-full
+        h-40
       "
       style={{
         contain: "content",
@@ -205,10 +201,11 @@ function CarCardGroup({
         </div>
       )}
 
-      <div className="flex flex-row">
-        {/* Left side: 3D viewer */}
-        <div className="relative w-1/2 aspect-video">
-          {/* Only show the <select> if NOT in QR flow and we have multiple cars */}
+      {/* Row layout: left = 3D model, right = stats */}
+      <div className="flex flex-row h-full">
+        {/* Left: 3D viewer container, no aspect-video */}
+        <div className="relative w-1/2 h-full overflow-hidden">
+          {/* Optional dropdown if we have multiple cars & not in QR flow */}
           {(!isQrScanStation && group.cars.length > 1) && (
             <div
               className="absolute top-3 left-3 z-10"
@@ -228,6 +225,7 @@ function CarCardGroup({
             </div>
           )}
 
+          {/* Decide whether to render 3D or skeleton */}
           {shouldRender3D && isVisible ? (
             <Car3DViewer
               modelUrl={modelUrl}
@@ -242,9 +240,9 @@ function CarCardGroup({
           )}
         </div>
 
-        {/* Right side content */}
-        <div className="p-4 w-1/2 flex flex-col justify-between">
-          {/* Title + stats */}
+        {/* Right: Info panel */}
+        <div className="w-1/2 h-full p-4 flex flex-col justify-between">
+          {/* Top half: car name & battery stats */}
           <div>
             <div className="flex items-start justify-between">
               <p className="font-medium text-base leading-tight text-white">
@@ -270,7 +268,7 @@ function CarCardGroup({
             </div>
 
             {/* Example: Odometer info */}
-            <div className="flex items-center mt-3 text-gray-400 text-xs">
+            <div className="flex items-center mt-3 text-gray-400 text-xs relative">
               <Info
                 className="w-4 h-4 mr-1 cursor-pointer hover:text-white transition-colors"
                 onClick={handleOdometerClick}
@@ -278,16 +276,15 @@ function CarCardGroup({
               <span>Year: {displayedCar.year || "2021"}</span>
 
               {showOdometerPopup && (
-                <div className="absolute left-4 bottom-16 bg-gray-800 text-white text-xs px-3 py-2 rounded-md shadow-lg border border-gray-700 z-10">
+                <div className="absolute left-0 bottom-6 bg-gray-800 text-white text-xs px-3 py-2 rounded-md shadow-lg border border-gray-700 z-10">
                   Total distance: {displayedCar.odometer || "N/A"} km
                 </div>
               )}
             </div>
           </div>
 
-          {/* Possibly more detail in the bottom-right */}
+          {/* Bottom: extra info */}
           <div className="mt-4 text-xs text-gray-400">
-            {/* e.g. dynamic info about location_updated, etc. */}
             Last updated: {String(displayedCar.location_updated || "")}
           </div>
         </div>
