@@ -118,6 +118,7 @@ export default function QrScannerOverlay({
             >
               ✕
             </button>
+            
             <div className="p-4 text-center text-white space-y-3 bg-black bg-opacity-50 rounded-lg">
               <h2 className="text-xl font-bold">Scan Car QR Code</h2>
               <p className="text-sm">
