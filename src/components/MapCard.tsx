@@ -1,15 +1,23 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
+import React, {
+  useRef,
+  useEffect,
+  useState,
+  useCallback
+} from "react";
 import { createPortal } from "react-dom";
-import mapboxgl from "mapbox-gl";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-// Set your Mapbox token
-mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
+// We'll dynamically import mapbox-gl only after expanding.
+const importMapbox = () => import("mapbox-gl");
+
+// In Next.js, you typically read from process.env.NEXT_PUBLIC_...
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
 interface MapCardProps {
   coordinates: [number, number]; // [longitude, latitude]
@@ -18,83 +26,66 @@ interface MapCardProps {
   className?: string;
 }
 
-/**
- * A component that always shows the map by default, with an optional “expand” mode
- * using a React portal to ensure full-screen layout.
- */
 const MapCard: React.FC<MapCardProps> = ({
   coordinates,
   name,
   address,
   className,
 }) => {
+  // Refs & states
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const marker = useRef<mapboxgl.Marker | null>(null);
+  const mapRef = useRef<any>(null);     
+  const markerRef = useRef<any>(null);  
+  const animFrameRef = useRef<number | null>(null);
+
   const [expanded, setExpanded] = useState(false);
-  const [mapInitialized, setMapInitialized] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Basic bounding box logic
-  const getBoundingBox = (center: [number, number], radiusKm: number = 0.25) => {
-    const earthRadiusKm = 6371;
-    const latRadian = (center[1] * Math.PI) / 180;
+  // Keep track of the portal element (avoid “null container” errors)
+  const [portalElem, setPortalElem] = useState<HTMLElement | null>(null);
 
-    const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
-    const lngDelta =
-      (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
+  useEffect(() => {
+    // We’re on the client side, so do a check for #portal-root
+    if (typeof window !== "undefined") {
+      const el = document.getElementById("portal-root");
+      setPortalElem(el);
+    }
+  }, []);
 
-    return new mapboxgl.LngLatBounds(
-      [center[0] - lngDelta, center[1] - latDelta], // SW
-      [center[0] + lngDelta, center[1] + latDelta]  // NE
-    );
-  };
+  // === Create/destroy the Map when expanded/collapsed
+  useEffect(() => {
+    if (expanded) {
+      createMap();
+    } else {
+      destroyMap();
+    }
+    return () => destroyMap();
+  }, [expanded]);
 
-  // Animate marker gently
-  const animateMarker = () => {
-    if (!marker.current) return;
-    const markerEl = marker.current.getElement();
-
-    const scaleFactor = 1.1;
-    const duration = 1500;
-    const start = Date.now();
-    let frameId: number | null = null;
-
-    const animate = () => {
-      if (!marker.current) return;
-      const elapsed = Date.now() - start;
-      const progress = (elapsed % duration) / duration;
-
-      // sine wave from 0 -> 1 -> 0
-      const scale = 1 + (Math.sin(progress * Math.PI * 2) * 0.5 + 0.5) * (scaleFactor - 1);
-
-      const currentEl = marker.current.getElement();
-      const currentTransform = currentEl.style.transform || "";
-      const scaleMatch = currentTransform.match(/scale\([0-9.]+\)/);
-      const newTransform = scaleMatch
-        ? currentTransform.replace(scaleMatch[0], `scale(${scale})`)
-        : `${currentTransform} scale(${scale})`;
-
-      currentEl.style.transform = newTransform;
-      frameId = requestAnimationFrame(animate);
-    };
-
-    frameId = requestAnimationFrame(animate);
-    return () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
+  // === If user resizes window while expanded => resize map
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapRef.current) {
+        mapRef.current.resize();
       }
     };
-  };
+    if (expanded) {
+      window.addEventListener("resize", handleResize);
+    }
+    return () => window.removeEventListener("resize", handleResize);
+  }, [expanded]);
 
-  // Initialize the map on mount
-  useEffect(() => {
-    if (!mapContainer.current) return;
-
-    // Set bounding box for focus
-    const bounds = getBoundingBox(coordinates);
+  // === Create map using dynamic import
+  const createMap = useCallback(async () => {
+    if (!mapContainer.current || mapRef.current) return; // Map already created or container missing
 
     try {
-      map.current = new mapboxgl.Map({
+      const mapbox = await importMapbox();
+      mapbox.default.accessToken = MAPBOX_TOKEN;
+
+      const bounds = getBoundingBox(coordinates);
+
+      mapRef.current = new mapbox.default.Map({
         container: mapContainer.current,
         style: "mapbox://styles/mapbox/dark-v11",
         center: coordinates,
@@ -108,12 +99,11 @@ const MapCard: React.FC<MapCardProps> = ({
         maxZoom: 19,
       });
 
-      map.current.on("load", () => {
-        setMapInitialized(true);
-
-        // Attempt to add 3D buildings
+      mapRef.current.on("load", () => {
+        setMapLoaded(true);
+        // Attempt 3D buildings
         try {
-          map.current?.addLayer({
+          mapRef.current.addLayer({
             id: "3d-buildings",
             source: "composite",
             "source-layer": "building",
@@ -126,43 +116,74 @@ const MapCard: React.FC<MapCardProps> = ({
               "fill-extrusion-opacity": 0.6,
             },
           });
-        } catch (error) {
-          console.warn("Could not add 3D buildings layer:", error);
+        } catch (err) {
+          console.warn("Could not add 3D buildings layer:", err);
         }
 
-        // Add a marker
-        marker.current = new mapboxgl.Marker({
-          color: "#3b82f6",
-        })
+        // Add marker & animate
+        markerRef.current = new mapbox.default.Marker({ color: "#3b82f6" })
           .setLngLat(coordinates)
-          .addTo(map.current!);
+          .addTo(mapRef.current);
+        startMarkerAnimation();
 
-        // Kick off marker pulsing
-        animateMarker();
-
-        // “Fly in” or “zoom in” effect
-        startEntranceAnimation(map.current!);
+        // Fly-in effect
+        startEntranceAnimation(mapRef.current);
       });
 
-      map.current.on("error", (e) => {
+      mapRef.current.on("error", (e: any) => {
         console.error("Mapbox error:", e);
       });
     } catch (err) {
-      console.error("Error initializing Mapbox:", err);
+      console.error("Error loading mapbox-gl or creating map:", err);
     }
-
-    // Cleanup
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-      marker.current = null;
-    };
   }, [coordinates]);
 
-  // Entrance camera animation
-  const startEntranceAnimation = (mapInstance: mapboxgl.Map) => {
+  // === Destroy the map
+  const destroyMap = useCallback(() => {
+    // Cancel marker animation
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    // Remove map
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+    markerRef.current = null;
+    setMapLoaded(false);
+  }, []);
+
+  // === Marker pulsing animation
+  const startMarkerAnimation = () => {
+    if (!markerRef.current) return;
+    const markerEl = markerRef.current.getElement();
+
+    const scaleFactor = 1.1;
+    const duration = 1500;
+    const start = Date.now();
+
+    const animate = () => {
+      if (!markerRef.current) return; // if map removed
+      const elapsed = Date.now() - start;
+      const progress = (elapsed % duration) / duration;
+      const scale = 1 + (Math.sin(progress * Math.PI * 2) * 0.5 + 0.5) * (scaleFactor - 1);
+
+      const currentTransform = markerEl.style.transform || "";
+      const scaleMatch = currentTransform.match(/scale\([0-9.]+\)/);
+      const newTransform = scaleMatch
+        ? currentTransform.replace(scaleMatch[0], `scale(${scale})`)
+        : `${currentTransform} scale(${scale})`;
+
+      markerEl.style.transform = newTransform;
+      animFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animFrameRef.current = requestAnimationFrame(animate);
+  };
+
+  // === Entrance camera animation
+  const startEntranceAnimation = (mapInstance: any) => {
     const startZoom = mapInstance.getZoom();
     const startBearing = mapInstance.getBearing();
     const startPitch = mapInstance.getPitch();
@@ -177,11 +198,11 @@ const MapCard: React.FC<MapCardProps> = ({
     const animate = () => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = easeInOutCubic(progress);
+      const ease = easeInOutCubic(progress);
 
-      const newZoom = startZoom + (targetZoom - startZoom) * easeProgress;
-      const newBearing = startBearing + (targetBearing - startBearing) * easeProgress;
-      const newPitch = startPitch + (targetPitch - startPitch) * easeProgress;
+      const newZoom = startZoom + (targetZoom - startZoom) * ease;
+      const newBearing = startBearing + (targetBearing - startBearing) * ease;
+      const newPitch = startPitch + (targetPitch - startPitch) * ease;
 
       mapInstance.setZoom(newZoom);
       mapInstance.setBearing(newBearing);
@@ -193,39 +214,21 @@ const MapCard: React.FC<MapCardProps> = ({
     requestAnimationFrame(animate);
   };
 
-  // Easing function
-  const easeInOutCubic = (t: number): number => {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  };
-
-  // Handle window resize to keep map sized
-  useEffect(() => {
-    const handleResize = () => {
-      if (map.current) {
-        map.current.resize();
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // Expand or minimize
+  // === Toggle expanded
   const toggleExpanded = () => {
     setExpanded((prev) => !prev);
-    // Wait briefly, then resize the map
     setTimeout(() => {
-      if (map.current) {
-        map.current.resize();
-        // Recenter the marker if needed
-        if (marker.current) {
-          const pos = marker.current.getLngLat();
-          marker.current.setLngLat(pos);
+      if (mapRef.current) {
+        mapRef.current.resize();
+        if (markerRef.current) {
+          const pos = markerRef.current.getLngLat();
+          markerRef.current.setLngLat(pos);
         }
       }
     }, 300);
   };
 
-  // This is our main card UI (for both collapsed & expanded)
+  // === The main card content
   const cardContent = (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -234,26 +237,25 @@ const MapCard: React.FC<MapCardProps> = ({
       transition={{ duration: 0.3 }}
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700",
-        // When expanded, go “fixed inset-4” to appear near fullscreen
         expanded ? "fixed inset-4 z-50" : "h-52",
         className
       )}
     >
-      {/* Map container */}
+      {/* Map container (placeholder when collapsed) */}
       <div
         ref={mapContainer}
         className="absolute inset-0 bg-gray-800"
         style={{ width: "100%", height: "100%" }}
       />
 
-      {/* Loading overlay if map not done yet */}
-      {!mapInitialized && (
+      {/* Spinner while map is loading in expanded mode */}
+      {!mapLoaded && expanded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
         </div>
       )}
 
-      {/* Expand/minimize button in top-right */}
+      {/* Expand/minimize button */}
       <div className="absolute top-2 right-2 flex space-x-2 z-10">
         <button
           onClick={toggleExpanded}
@@ -264,12 +266,11 @@ const MapCard: React.FC<MapCardProps> = ({
         </button>
       </div>
 
-      {/* Bottom overlay for station name + address */}
+      {/* Bottom overlay with station name & address */}
       <div
         className="absolute bottom-0 left-0 right-0 z-10 p-3"
         style={{
-          background:
-            "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0) 100%)",
+          background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 60%, rgba(0,0,0,0) 100%)",
         }}
       >
         <div className="text-white text-sm font-medium">{name}</div>
@@ -278,13 +279,35 @@ const MapCard: React.FC<MapCardProps> = ({
     </motion.div>
   );
 
-  // If expanded, portal the cardContent to <div id="portal-root" />
-  if (expanded) {
-    return createPortal(cardContent, document.getElementById("portal-root")!);
+  // === If expanded and we have a valid portal element, portal it
+  if (expanded && portalElem) {
+    return createPortal(cardContent, portalElem);
   }
 
-  // If not expanded, just render in place
+  // Otherwise, render inline (collapsed or no portal root available)
   return cardContent;
 };
 
 export default MapCard;
+
+
+/* -----------------------------------------
+   Helper Functions
+----------------------------------------- */
+
+function getBoundingBox(center: [number, number], radiusKm = 0.25) {
+  const earthRadiusKm = 6371;
+  const latRadian = (center[1] * Math.PI) / 180;
+  const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
+  const lngDelta =
+    (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
+
+  return [
+    [center[0] - lngDelta, center[1] - latDelta], // SW
+    [center[0] + lngDelta, center[1] + latDelta], // NE
+  ];
+}
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
