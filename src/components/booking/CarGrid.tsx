@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCars, selectAvailableForDispatch } from "@/store/carSlice";
-import { fetchDispatchLocations } from "@/store/dispatchSlice";
+import { fetchDispatchLocations, selectDispatchRadius, selectManualSelectionMode } from "@/store/dispatchSlice";
 import { selectCar } from "@/store/userSlice";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
 import CarCardGroup, { CarGroup } from "./CarCardGroup";
@@ -13,7 +13,7 @@ import type { Car } from "@/types/cars";
 interface CarGridProps {
   className?: string;
   isVisible?: boolean;
-  /** New Props to handle scanning logic */
+  /** For QR scanning: if a car is scanned, override auto-selection */
   isQrScanStation?: boolean;
   scannedCar?: Car | null;
 }
@@ -27,37 +27,34 @@ export default function CarGrid({
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   
-  // Get cars from custom hook (or directly from Redux as backup)
+  // Get global dispatch settings
+  const dispatchRadius = useAppSelector(selectDispatchRadius);
+  const manualSelectionMode = useAppSelector(selectManualSelectionMode);
+  
+  // Get the available cars – the custom hook auto-filters based on dispatch settings
   let availableCars = useAvailableCarsForDispatch();
   
-  // Also directly access Redux store for logging/debugging
+  // Directly access Redux store for logging/debugging
   const storeAvailableCars = useAppSelector(selectAvailableForDispatch);
   
-  // If in QR mode and scannedCar exists, use that instead
+  // If in QR mode and a scanned car exists, bypass the normal dispatch logic
   if (isQrScanStation && scannedCar) {
-    // Bypass normal dispatch logic
     availableCars = [scannedCar];
   }
   
-  // Container ref
+  // Container ref for CarGrid
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // For controlling data fetch & skeleton
+  
+  // Control initial loading state
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   
-  // Log when available cars change (for debugging)
-  useEffect(() => {
-    console.log("[CarGrid] Available cars updated:", availableCars.length);
-    console.log("[CarGrid] Store available cars:", storeAvailableCars.length);
-  }, [availableCars, storeAvailableCars]);
-  
-  // Fetch cars and dispatch locations when component becomes visible
+  // Fetch cars and dispatch locations when the component becomes visible
   useEffect(() => {
     let mounted = true;
     if (isVisible) {
       console.log("[CarGrid] Fetching cars and dispatch locations...");
       Promise.all([
-        dispatch(fetchCars()), 
+        dispatch(fetchCars()),
         dispatch(fetchDispatchLocations())
       ]).finally(() => {
         if (mounted) {
@@ -66,61 +63,67 @@ export default function CarGrid({
         }
       });
     }
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [dispatch, isVisible]);
-
-  // Warning for QR mode without a car
+  
+  // Warn if in QR mode without a scanned car
   useEffect(() => {
     if (isQrScanStation && !scannedCar) {
       console.warn("[CarGrid] isQrScanStation is true but no scannedCar provided!");
     }
   }, [isQrScanStation, scannedCar]);
-
-  // Auto-select the first car if none selected
+  
+  // Auto-select the first car if none is selected
   useEffect(() => {
     if (isVisible && !selectedCarId && availableCars.length > 0) {
       console.log("[CarGrid] Auto-selecting first car:", availableCars[0].id);
       dispatch(selectCar(availableCars[0].id));
     }
   }, [availableCars, selectedCarId, dispatch, isVisible]);
-
-  // Group cars by model
+  
+  // Group cars by model – this grouping respects the current list from DispatchAdmin
   const groupedByModel: CarGroup[] = useMemo(() => {
     if (!isVisible) return [];
     if (availableCars.length === 0) {
       console.log("[CarGrid] No cars available to group");
       return [];
     }
-
-    // If only 1 car in QR flow, you can skip grouping entirely:
+  
+    // In QR mode with one scanned car, skip grouping
     if (isQrScanStation && scannedCar) {
       return [{
         model: scannedCar.model || "Scanned Car",
         cars: [scannedCar]
       }];
     }
-
-    // Otherwise normal grouping:
+  
     console.log("[CarGrid] Grouping", availableCars.length, "cars by model");
     const dict = availableCars.reduce((acc, car) => {
       const modelKey = car.model || "Unknown Model";
       if (!acc[modelKey]) {
         acc[modelKey] = { model: modelKey, cars: [] };
       }
-      // limit group to 10 cars
+      // Limit each group to 10 cars
       if (acc[modelKey].cars.length < 10) {
         acc[modelKey].cars.push(car);
       }
       return acc;
     }, {} as Record<string, CarGroup>);
-
+  
     const result = Object.values(dict).slice(0, 5);
     console.log("[CarGrid] Created", result.length, "car groups");
     return result;
   }, [availableCars, isVisible, isQrScanStation, scannedCar]);
-
+  
+  // Optionally, render a debug banner showing current dispatch settings
+  const renderDebugInfo = () => {
+    return (
+      <div className="text-xs text-gray-500 mb-2">
+        Dispatch Settings – Radius: {dispatchRadius} m, Mode: {manualSelectionMode ? "Manual" : "Automatic"}
+      </div>
+    );
+  };
+  
   if (isInitialLoad) {
     return (
       <div className="py-4 space-y-4">
@@ -133,12 +136,12 @@ export default function CarGrid({
       </div>
     );
   }
-
-  // Log when rendering (for debugging)
+  
   console.log("[CarGrid] Rendering with", groupedByModel.length, "car groups");
-
+  
   return (
     <div className={`transition-all duration-300 ${className}`} ref={containerRef}>
+      {renderDebugInfo()}
       <div className="px-0 py-2">
         <AnimatePresence>
           {isVisible &&
@@ -164,7 +167,7 @@ export default function CarGrid({
             ))}
         </AnimatePresence>
       </div>
-
+  
       {isVisible && groupedByModel.length === 0 && !isInitialLoad && (
         <motion.div
           initial={{ opacity: 0 }}
