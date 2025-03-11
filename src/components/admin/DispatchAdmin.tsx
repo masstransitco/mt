@@ -304,10 +304,6 @@ export default function DispatchAdmin() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-      </div>
       
       {/* Settings Panel */}
       <div className="mb-6 p-4 bg-gray-800 rounded-lg">
@@ -397,3 +393,130 @@ export default function DispatchAdmin() {
             Refresh Data
           </button>
         </div>
+      </div>
+      
+      {/* Cars Table */}
+      <div className="mt-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold">Cars Available for Dispatch</h2>
+          
+          <div className="flex items-center">
+            <label className="mr-2 text-gray-400">Select All</label>
+            <input
+              type="checkbox"
+              checked={selectAll}
+              onChange={() => setSelectAll(!selectAll)}
+              className="h-5 w-5"
+            />
+          </div>
+        </div>
+        
+        <div className="mb-2 text-sm text-gray-400">
+          Total Cars: {cars.length}, Available for Dispatch: {Object.values(carAvailability).filter(v => v).length}
+        </div>
+        
+        {(isInitialLoad || isLoading) && (
+          <div className="bg-gray-800 rounded-lg p-12 flex items-center justify-center">
+            <div className="flex flex-col items-center">
+              <div className="animate-spin h-8 w-8 border-3 border-blue-500 rounded-full border-t-transparent mb-4"></div>
+              <p className="text-gray-400">Loading car data...</p>
+            </div>
+          </div>
+        )}
+        
+        {!isInitialLoad && !isLoading && cars.length === 0 && (
+          <div className="bg-gray-800 rounded-lg p-12 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-gray-400 mb-2">No cars found. This could be because:</p>
+              <ul className="text-gray-500 list-disc list-inside text-sm">
+                <li>No cars are available in the system</li>
+                <li>The cars API endpoint is not responding</li>
+                <li>There was an error loading car data</li>
+              </ul>
+              <div className="mt-4 text-xs text-gray-600">{debugInfo()}</div>
+              <button
+                onClick={() => {
+                  dispatch(fetchCars());
+                  toast.success("Attempting to reload car data...");
+                }}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Reload Cars
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {!isInitialLoad && !isLoading && cars.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse border border-gray-700">
+              <thead className="bg-gray-800">
+                <tr>
+                  <th className="p-2 border border-gray-700 text-left">ID</th>
+                  <th className="p-2 border border-gray-700 text-left">Name</th>
+                  <th className="p-2 border border-gray-700 text-left">Model</th>
+                  <th className="p-2 border border-gray-700 text-left">Location</th>
+                  <th className="p-2 border border-gray-700 text-left">Distance to Dispatch</th>
+                  <th className="p-2 border border-gray-700 text-left">Available for Dispatch</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cars.map(car => {
+                  // Calculate closest dispatch location
+                  let closestDistance = Number.MAX_SAFE_INTEGER;
+                  let closestDispatchId = null;
+                  
+                  if (dispatchLocations.length > 0) {
+                    dispatchLocations.forEach(dispatchLoc => {
+                      const distance = calculateDistance(
+                        car.lat, car.lng, 
+                        dispatchLoc.lat, dispatchLoc.lng
+                      );
+                      if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestDispatchId = dispatchLoc.id;
+                      }
+                    });
+                  }
+                  
+                  // Is within radius?
+                  const isWithinRadius = closestDistance <= localRadius;
+                  
+                  return (
+                    <tr key={car.id} className="hover:bg-gray-700">
+                      <td className="p-2 border border-gray-700">{car.id}</td>
+                      <td className="p-2 border border-gray-700">{car.name}</td>
+                      <td className="p-2 border border-gray-700">{car.model}</td>
+                      <td className="p-2 border border-gray-700">
+                        {car.lat.toFixed(6)}, {car.lng.toFixed(6)}
+                      </td>
+                      <td className="p-2 border border-gray-700">
+                        {closestDispatchId !== null ? (
+                          <span className={isWithinRadius ? "text-green-400" : "text-red-400"}>
+                            {formatDistance(closestDistance)} to Dispatch #{closestDispatchId}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">No dispatch locations</span>
+                        )}
+                      </td>
+                      <td className="p-2 border border-gray-700">
+                        <label className="flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={!!carAvailability[car.id]}
+                            onChange={() => handleCarAvailabilityToggle(car.id)}
+                            className="h-5 w-5"
+                          />
+                        </label>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
