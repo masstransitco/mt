@@ -13,6 +13,9 @@ import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "mapbox-gl/dist/mapbox-gl.css";
 
+// We can import type only to avoid bundling mapbox in SSR
+import type { LngLatBoundsLike } from "mapbox-gl";
+
 // We'll dynamically import mapbox-gl only after expanding.
 const importMapbox = () => import("mapbox-gl");
 
@@ -83,7 +86,7 @@ const MapCard: React.FC<MapCardProps> = ({
       const mapbox = await importMapbox();
       mapbox.default.accessToken = MAPBOX_TOKEN;
 
-      const bounds = getBoundingBox(coordinates);
+      const bounds = getBoundingBox(coordinates); // typed as LngLatBoundsLike
 
       mapRef.current = new mapbox.default.Map({
         container: mapContainer.current,
@@ -94,7 +97,7 @@ const MapCard: React.FC<MapCardProps> = ({
         bearing: 0,
         interactive: true,
         attributionControl: false,
-        maxBounds: bounds,
+        maxBounds: bounds, // No more TS error
         minZoom: 11,
         maxZoom: 19,
       });
@@ -295,19 +298,26 @@ export default MapCard;
    Helper Functions
 ----------------------------------------- */
 
-function getBoundingBox(center: [number, number], radiusKm = 0.25) {
+/** Return a two-element array representing SW and NE corners. */
+function getBoundingBox(
+  center: [number, number],
+  radiusKm = 0.25
+): LngLatBoundsLike {
   const earthRadiusKm = 6371;
   const latRadian = (center[1] * Math.PI) / 180;
   const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
   const lngDelta =
     (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
 
+  // Return as [[lng1, lat1], [lng2, lat2]]
   return [
-    [center[0] - lngDelta, center[1] - latDelta], // SW
-    [center[0] + lngDelta, center[1] + latDelta], // NE
+    [center[0] - lngDelta, center[1] - latDelta],
+    [center[0] + lngDelta, center[1] + latDelta],
   ];
 }
 
 function easeInOutCubic(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
