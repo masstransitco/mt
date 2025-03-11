@@ -1,6 +1,10 @@
 // src/lib/dispatchManager.ts
 import { selectAllCars, setAvailableForDispatch, selectAvailableForDispatch } from "@/store/carSlice";
-import { selectAllDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice";
+import { 
+  selectAllDispatchLocations, 
+  selectDispatchRadius,
+  selectManualSelectionMode,  // New selector for manual mode
+} from "@/store/dispatchSlice";
 import { useAppSelector, useAppDispatch } from "@/store/store";
 import { useEffect } from "react";
 
@@ -12,13 +16,23 @@ interface DispatchLocation {
 
 export function useAvailableCarsForDispatch() {
   const cars = useAppSelector(selectAllCars);
+  const availableCars = useAppSelector(selectAvailableForDispatch);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
   const dispatch = useAppDispatch();
   
   // Get radius from Redux with fallback
   const radiusMeters = useAppSelector(selectDispatchRadius);
+  
+  // Get manual selection mode flag - if true, we respect manual selections
+  const manualSelectionMode = useAppSelector(selectManualSelectionMode);
 
   useEffect(() => {
+    // Skip automatic filtering if in manual selection mode
+    if (manualSelectionMode) {
+      console.log(`[dispatchManager] In manual selection mode - skipping automatic filtering`);
+      return;
+    }
+    
     // Debug information about received data
     console.log(`[dispatchManager] Cars available: ${cars.length}`);
     console.log(`[dispatchManager] Dispatch locations: ${dispatchLocations.length}`);
@@ -79,8 +93,12 @@ export function useAvailableCarsForDispatch() {
     });
 
     console.log(`[dispatchManager] Filtered ${filteredCount} out of ${cars.length} total cars (radius: ${radiusMeters}m)`);
-    dispatch(setAvailableForDispatch(availableCars));
-  }, [cars, dispatchLocations, radiusMeters, dispatch]); // radiusMeters in dependency array
+    
+    // Only update if not in manual mode
+    if (!manualSelectionMode) {
+      dispatch(setAvailableForDispatch(availableCars));
+    }
+  }, [cars, dispatchLocations, radiusMeters, dispatch, manualSelectionMode]); // Add manualSelectionMode to dependency array
 
   return useAppSelector(selectAvailableForDispatch);
 }
