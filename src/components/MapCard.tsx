@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import mapboxgl from "mapbox-gl";
 import { motion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
 import "mapbox-gl/dist/mapbox-gl.css";
 
 // Set your Mapbox token
@@ -19,9 +19,8 @@ interface MapCardProps {
 }
 
 /**
- * A component that always shows the map by default, with an optional “expand” mode.
- * We’ve removed the “X” close button and any “isOpen” logic,
- * so the map is always rendered. 
+ * A component that always shows the map by default, with an optional “expand” mode
+ * using a React portal to ensure full-screen layout.
  */
 const MapCard: React.FC<MapCardProps> = ({
   coordinates,
@@ -212,11 +211,12 @@ const MapCard: React.FC<MapCardProps> = ({
 
   // Expand or minimize
   const toggleExpanded = () => {
-    setExpanded(!expanded);
+    setExpanded((prev) => !prev);
+    // Wait briefly, then resize the map
     setTimeout(() => {
       if (map.current) {
         map.current.resize();
-        // Recenter marker if needed
+        // Recenter the marker if needed
         if (marker.current) {
           const pos = marker.current.getLngLat();
           marker.current.setLngLat(pos);
@@ -225,7 +225,8 @@ const MapCard: React.FC<MapCardProps> = ({
     }, 300);
   };
 
-  return (
+  // This is our main card UI (for both collapsed & expanded)
+  const cardContent = (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -233,6 +234,7 @@ const MapCard: React.FC<MapCardProps> = ({
       transition={{ duration: 0.3 }}
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700",
+        // When expanded, go “fixed inset-4” to appear near fullscreen
         expanded ? "fixed inset-4 z-50" : "h-52",
         className
       )}
@@ -251,7 +253,7 @@ const MapCard: React.FC<MapCardProps> = ({
         </div>
       )}
 
-      {/* Expand/minimize button in top-right. Removed the Close (X) button. */}
+      {/* Expand/minimize button in top-right */}
       <div className="absolute top-2 right-2 flex space-x-2 z-10">
         <button
           onClick={toggleExpanded}
@@ -275,6 +277,14 @@ const MapCard: React.FC<MapCardProps> = ({
       </div>
     </motion.div>
   );
+
+  // If expanded, portal the cardContent to <div id="portal-root" />
+  if (expanded) {
+    return createPortal(cardContent, document.getElementById("portal-root")!);
+  }
+
+  // If not expanded, just render in place
+  return cardContent;
 };
 
 export default MapCard;
