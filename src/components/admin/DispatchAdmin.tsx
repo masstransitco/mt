@@ -111,10 +111,11 @@ export default function DispatchAdmin() {
     return R * c;
   };
   
-  // Handle radius change - now updates Redux directly with visual feedback
+  // Handle radius change - updates Redux directly and auto-applies change
   const handleRadiusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value)) {
+      // Update Redux
       dispatch(setDispatchRadius(value));
       console.log(`DispatchAdmin: Radius changed to ${value} meters`);
       
@@ -126,6 +127,11 @@ export default function DispatchAdmin() {
       setTimeout(() => {
         setShowRadiusChange(false);
       }, 3000);
+      
+      // Auto-filter cars by new radius - comment this out if you want manual only
+      if (!isLoading) {
+        autoFilterByRadius(value);
+      }
     }
   };
   
@@ -160,10 +166,13 @@ export default function DispatchAdmin() {
     }
   };
   
-  // Auto filter cars by radius
-  const autoFilterByRadius = () => {
+  // Auto filter cars by radius - optional direct radius parameter for immediate use
+  const autoFilterByRadius = (directRadius?: number) => {
+    // Use provided radius or the one from Redux
+    const radiusToUse = directRadius ?? radiusMeters;
+    
     setIsLoading(true);
-    console.log(`DispatchAdmin: Auto-filtering cars by ${radiusMeters} meter radius...`);
+    console.log(`DispatchAdmin: Auto-filtering cars by ${radiusToUse} meter radius...`);
     
     try {
       const newAvailability = {...carAvailability};
@@ -173,7 +182,7 @@ export default function DispatchAdmin() {
         // Check if car is within radius of any dispatch location
         const isWithinRadius = dispatchLocations.some(dispatchLoc => {
           const distance = calculateDistance(car.lat, car.lng, dispatchLoc.lat, dispatchLoc.lng);
-          return distance <= radiusMeters;
+          return distance <= radiusToUse;
         });
         
         newAvailability[car.id] = isWithinRadius;
@@ -181,8 +190,13 @@ export default function DispatchAdmin() {
       });
       
       setCarAvailability(newAvailability);
-      console.log(`DispatchAdmin: Found ${count} cars within ${radiusMeters} meter radius`);
-      toast.success(`${count} cars found within ${radiusMeters} meter radius`);
+      console.log(`DispatchAdmin: Found ${count} cars within ${radiusToUse} meter radius`);
+      
+      // Automatically apply the filtered cars to Redux
+      const filteredCars = cars.filter(car => newAvailability[car.id]);
+      dispatch(setAvailableForDispatch(filteredCars));
+      
+      toast.success(`${count} cars found and set for dispatch within ${radiusToUse} meter radius`);
     } catch (error) {
       console.error("DispatchAdmin: Error filtering cars by radius:", error);
       toast.error("Failed to filter cars");
@@ -261,11 +275,14 @@ export default function DispatchAdmin() {
               <span>100000 m</span>
             </div>
           </div>
+          <p className="text-xs text-blue-300 mt-1 italic">
+            Changes to radius are applied automatically
+          </p>
         </div>
         
         <div className="flex gap-2">
           <button
-            onClick={autoFilterByRadius}
+            onClick={() => autoFilterByRadius()}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center"
             disabled={isLoading}
           >
@@ -290,7 +307,7 @@ export default function DispatchAdmin() {
                 Saving...
               </>
             ) : (
-              "Apply Settings"
+              "Apply Manual Selection"
             )}
           </button>
           
