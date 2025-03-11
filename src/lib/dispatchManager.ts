@@ -1,9 +1,9 @@
+// src/lib/dispatchManager.ts - Updated to use radius from Redux
+
 import { selectAllCars, setAvailableForDispatch, selectAvailableForDispatch } from "@/store/carSlice";
-import { selectAllDispatchLocations } from "@/store/dispatchSlice";
+import { selectAllDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice";
 import { useAppSelector, useAppDispatch } from "@/store/store";
 import { useEffect } from "react";
-
-const RADIUS_METERS = 50000;
 
 interface DispatchLocation {
   id: number;
@@ -15,11 +15,14 @@ export function useAvailableCarsForDispatch() {
   const cars = useAppSelector(selectAllCars);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
   const dispatch = useAppDispatch();
+  // Get radius from Redux instead of hard-coding
+  const RADIUS_METERS = useAppSelector(selectDispatchRadius);
 
   useEffect(() => {
     // Debug information about received data
     console.log(`[dispatchManager] Cars available: ${cars.length}`);
     console.log(`[dispatchManager] Dispatch locations: ${dispatchLocations.length}`);
+    console.log(`[dispatchManager] Using radius: ${RADIUS_METERS} meters`);
 
     // Check if we have valid car coordinates
     const invalidCars = cars.filter(car => typeof car.lat !== 'number' || typeof car.lng !== 'number');
@@ -73,9 +76,9 @@ export function useAvailableCarsForDispatch() {
       return false;
     });
 
-    console.log(`[dispatchManager] Filtered ${filteredCount} out of ${cars.length} total cars`);
+    console.log(`[dispatchManager] Filtered ${filteredCount} out of ${cars.length} total cars (radius: ${RADIUS_METERS}m)`);
     dispatch(setAvailableForDispatch(availableCars));
-  }, [cars, dispatchLocations, dispatch]);
+  }, [cars, dispatchLocations, RADIUS_METERS, dispatch]);
 
   return useAppSelector(selectAvailableForDispatch);
 }
