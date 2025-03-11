@@ -1,4 +1,4 @@
-// src/store/dispatchSlice.ts
+// src/store/dispatchSlice.ts - Updated with radius setting
 
 import {
   createSlice,
@@ -9,7 +9,6 @@ import {
 import type { RootState } from "./store";
 import { DISPATCH_HUB } from "@/constants/map";
 import { StationFeature } from "@/store/stationsSlice";
-import { ensureGoogleMapsLoaded, getDirections } from "@/lib/googleMaps";
 
 /** RouteInfo for the dispatch hub → departure route */
 interface RouteInfo {
@@ -28,6 +27,7 @@ interface DispatchLocation {
  * The overall shape of our dispatch state:
  * - An array of "DispatchLocation" items
  * - A route object (`route2`) for dispatch->departure
+ * - Settings for the dispatch system
  */
 interface DispatchState {
   locations: DispatchLocation[];
@@ -41,6 +41,12 @@ interface DispatchState {
 
   // Sheet state to manage which sheet is open
   openSheet: "none" | "car" | "list" | "detail";
+  
+  // Dispatch system settings
+  settings: {
+    radiusMeters: number;
+    // Add other settings here as needed
+  };
 }
 
 const initialState: DispatchState = {
@@ -55,6 +61,11 @@ const initialState: DispatchState = {
 
   // Default sheet is 'none', meaning no sheet is open
   openSheet: "none",
+  
+  // Initial settings
+  settings: {
+    radiusMeters: 50000, // Default 50km radius
+  },
 };
 
 // 1) Thunk to fetch static dispatch locations
@@ -87,24 +98,26 @@ export const fetchDispatchDirections = createAsyncThunk<
   StationFeature,         // Thunk argument (the chosen station)
   { rejectValue: string } // Rejected payload
 >("dispatch/fetchDispatchDirections", async (station, { rejectWithValue }) => {
+  if (!window.google || !window.google.maps) {
+    return rejectWithValue("Google Maps API not available");
+  }
   try {
-    // Ensure Google Maps is loaded
-    await ensureGoogleMapsLoaded();
-    
+    const directionsService = new google.maps.DirectionsService();
+
     const [stationLng, stationLat] = station.geometry.coordinates;
-    
-    // Get route using our utility function
-    const result = await getDirections(
-      { lat: DISPATCH_HUB.lat, lng: DISPATCH_HUB.lng },
-      { lat: stationLat, lng: stationLng },
-      { travelMode: google.maps.TravelMode.DRIVING }
-    );
-    
-    if (!result.routes?.[0]) {
+
+    const request: google.maps.DirectionsRequest = {
+      origin: { lat: DISPATCH_HUB.lat, lng: DISPATCH_HUB.lng },
+      destination: { lat: stationLat, lng: stationLng },
+      travelMode: google.maps.TravelMode.DRIVING,
+    };
+
+    const response = await directionsService.route(request);
+    if (!response?.routes?.[0]) {
       return rejectWithValue("No route found");
     }
 
-    const route = result.routes[0];
+    const route = response.routes[0];
     const leg = route.legs?.[0];
     if (!leg?.distance?.value || !leg.duration?.value) {
       return rejectWithValue("Incomplete route data");
@@ -116,7 +129,7 @@ export const fetchDispatchDirections = createAsyncThunk<
       polyline: route.overview_polyline ?? "",
     };
   } catch (err) {
-    console.error("Dispatch directions error:", err);
+    console.error(err);
     return rejectWithValue("Directions request failed");
   }
 });
@@ -140,6 +153,11 @@ const dispatchSlice = createSlice({
     /** Closes the currently open sheet */
     closeSheet: (state) => {
       state.openSheet = "none";
+    },
+    
+    /** Update dispatch radius setting */
+    setDispatchRadius: (state, action: PayloadAction<number>) => {
+      state.settings.radiusMeters = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -182,7 +200,7 @@ const dispatchSlice = createSlice({
 export default dispatchSlice.reducer;
 
 // Actions
-export const { clearDispatchRoute, openNewSheet, closeSheet } = dispatchSlice.actions;
+export const { clearDispatchRoute, openNewSheet, closeSheet, setDispatchRadius } = dispatchSlice.actions;
 
 /* --------------------------- Selectors --------------------------- */
 export const selectAllDispatchLocations = (state: RootState) => state.dispatch.locations;
@@ -197,6 +215,9 @@ export const selectDispatchRouteError = (state: RootState) => state.dispatch.rou
 /** The open sheet state */
 export const selectOpenSheet = (state: RootState) => state.dispatch.openSheet;
 
+/** The dispatch radius setting */
+export const selectDispatchRadius = (state: RootState) => state.dispatch.settings.radiusMeters;
+
 /* --------------------------------------------------------------
    Memoized selector to decode the dispatch route polyline (if any)
    -------------------------------------------------------------- */
@@ -210,22 +231,16 @@ export const selectDispatchRouteDecoded = createSelector(
   (route) => {
     if (!route || !route.polyline) return [];
 
-    try {
-      // Safely check if the Google Maps geometry library is available
-      if (!window.google?.maps?.geometry?.encoding) {
-        ensureGoogleMapsLoaded();
-        return [];
-      }
-
-      const decodedPath = window.google.maps.geometry.encoding.decodePath(
-        route.polyline
-      );
-
-      // Map each LatLng to a plain object { lat, lng }
-      return decodedPath.map((latLng) => latLng.toJSON());
-    } catch (error) {
-      console.error("Error decoding polyline:", error);
+    // Make sure the Google Maps geometry library is available
+    if (!window.google?.maps?.geometry?.encoding) {
       return [];
     }
+
+    const decodedPath = window.google.maps.geometry.encoding.decodePath(
+      route.polyline
+    );
+
+    // Map each LatLng to a plain object { lat, lng }
+    return decodedPath.map((latLng) => latLng.toJSON());
   }
 );
