@@ -1,4 +1,4 @@
-// src/store/dispatchSlice.ts - Updated with radius setting
+// src/store/dispatchSlice.ts
 
 import {
   createSlice,
@@ -157,7 +157,15 @@ const dispatchSlice = createSlice({
     
     /** Update dispatch radius setting */
     setDispatchRadius: (state, action: PayloadAction<number>) => {
-      state.settings.radiusMeters = action.payload;
+      // Ensure the value is a number and valid
+      const newRadius = Number(action.payload);
+      if (!isNaN(newRadius) && newRadius > 0) {
+        state.settings.radiusMeters = newRadius;
+        // Log for debugging
+        console.log(`[dispatchSlice] Radius updated in store to: ${newRadius}`);
+      } else {
+        console.warn(`[dispatchSlice] Invalid radius value: ${action.payload}`);
+      }
     },
   },
   extraReducers: (builder) => {
@@ -215,8 +223,14 @@ export const selectDispatchRouteError = (state: RootState) => state.dispatch.rou
 /** The open sheet state */
 export const selectOpenSheet = (state: RootState) => state.dispatch.openSheet;
 
-/** The dispatch radius setting */
-export const selectDispatchRadius = (state: RootState) => state.dispatch.settings.radiusMeters;
+/** 
+ * The dispatch radius setting with a fallback value of 50000 meters
+ * Adding fallback to ensure a reasonable default if the state structure
+ * hasn't been fully initialized yet
+ */
+export const selectDispatchRadius = (state: RootState) => {
+  return state.dispatch?.settings?.radiusMeters || 50000;
+};
 
 /* --------------------------------------------------------------
    Memoized selector to decode the dispatch route polyline (if any)
