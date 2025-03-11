@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCars, selectAvailableForDispatch } from "@/store/carSlice";
-import { fetchDispatchLocations, selectDispatchRadius, selectManualSelectionMode } from "@/store/dispatchSlice";
+import { fetchDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice"; // Removed selectManualSelectionMode
 import { selectCar } from "@/store/userSlice";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
 import CarCardGroup, { CarGroup } from "./CarCardGroup";
@@ -29,12 +29,11 @@ export default function CarGrid({
 
   // Read dispatch settings from Redux:
   const dispatchRadius = useAppSelector(selectDispatchRadius);
-  const manualSelectionMode = useAppSelector(selectManualSelectionMode);
 
-  // Get available cars – this hook auto-filters based on dispatch settings
+  // Get the cars that have been manually selected in DispatchAdmin:
   let availableCars = useAvailableCarsForDispatch();
 
-  // For logging/debugging: also get the available cars from the store directly
+  // (Optional) also get the store's availableCars directly for logging
   const storeAvailableCars = useAppSelector(selectAvailableForDispatch);
 
   // In QR mode, override normal selection if a scanned car is provided.
@@ -55,7 +54,7 @@ export default function CarGrid({
       console.log("[CarGrid] Fetching cars and dispatch locations...");
       Promise.all([
         dispatch(fetchCars()),
-        dispatch(fetchDispatchLocations())
+        dispatch(fetchDispatchLocations()),
       ]).finally(() => {
         if (mounted) {
           setIsInitialLoad(false);
@@ -84,7 +83,6 @@ export default function CarGrid({
   }, [availableCars, selectedCarId, dispatch, isVisible]);
 
   // Group available cars by model.
-  // This grouping respects the list as determined by DispatchAdmin settings (via useAvailableCarsForDispatch)
   const groupedByModel: CarGroup[] = useMemo(() => {
     if (!isVisible) return [];
     if (availableCars.length === 0) {
@@ -94,10 +92,12 @@ export default function CarGrid({
 
     // In QR mode, if one scanned car exists, skip grouping.
     if (isQrScanStation && scannedCar) {
-      return [{
-        model: scannedCar.model || "Scanned Car",
-        cars: [scannedCar]
-      }];
+      return [
+        {
+          model: scannedCar.model || "Scanned Car",
+          cars: [scannedCar],
+        },
+      ];
     }
 
     console.log("[CarGrid] Grouping", availableCars.length, "cars by model");
@@ -106,7 +106,7 @@ export default function CarGrid({
       if (!acc[modelKey]) {
         acc[modelKey] = { model: modelKey, cars: [] };
       }
-      // Limit each group to 10 cars.
+      // Limit each group to 10 cars
       if (acc[modelKey].cars.length < 10) {
         acc[modelKey].cars.push(car);
       }
@@ -118,11 +118,15 @@ export default function CarGrid({
     return result;
   }, [availableCars, isVisible, isQrScanStation, scannedCar]);
 
-  // Debug info to show current global dispatch settings.
+  // Debug info showing radius, plus other store data if you like
   const renderDebugInfo = () => {
     return (
       <div className="text-xs text-gray-500 mb-2">
-        Dispatch Settings – Radius: {dispatchRadius} m, Mode: {manualSelectionMode ? "Manual" : "Automatic"}
+        Dispatch Radius (reference only): {dispatchRadius} m
+        <br />
+        Hook-based availableCars length: {availableCars.length}
+        <br />
+        Store-based availableForDispatch length: {storeAvailableCars.length}
       </div>
     );
   };
@@ -145,6 +149,7 @@ export default function CarGrid({
   return (
     <div className={`transition-all duration-300 ${className}`} ref={containerRef}>
       {renderDebugInfo()}
+
       <div className="px-0 py-2">
         <AnimatePresence>
           {isVisible &&
