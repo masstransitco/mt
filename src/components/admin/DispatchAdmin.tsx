@@ -20,15 +20,16 @@ import { toast } from "react-hot-toast";
 
 /** 
  * Updates the global availability by sending the selected car IDs to Firestore.
+ * We now use POST instead of PATCH to avoid 405 errors.
  */
 async function updateGlobalAvailability(carIds: number[]) {
   try {
     const resp = await fetch("/api/dispatch/availability", {
-      method: "PATCH", // or use "POST" if PATCH is not allowed
+      method: "POST", // Changed from PATCH to POST
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         availableCarIds: carIds,
-        adminPassword: "20230301", // For production, move to env variable
+        adminPassword: "20230301", // For production, use an environment variable
       }),
     });
     const data = await resp.json();
