@@ -95,9 +95,6 @@ export default function DispatchAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Remove the effect that “mirrors” Redux back into carAvailability ---
-  // (No more re-initializing from store, so user toggles won't get reset.)
-
   // Update all car availability based on selectAll toggle
   useEffect(() => {
     if (cars.length > 0) {
@@ -106,6 +103,11 @@ export default function DispatchAdmin() {
         newAvailability[car.id] = selectAll;
       });
       setCarAvailability(newAvailability);
+
+      // If you want toggling “Select All” to immediately update Redux:
+      const selectedCars = cars.filter((car) => newAvailability[car.id]);
+      dispatch(setAvailableForDispatch(selectedCars));
+
       console.log(`DispatchAdmin: Toggle select all to ${selectAll ? "selected" : "unselected"}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,7 +151,7 @@ export default function DispatchAdmin() {
         dispatch(setManualSelectionMode(true));
       }
 
-      // Update Redux
+      // Immediately update Redux
       dispatch(setDispatchRadius(value));
       console.log(`DispatchAdmin: Dispatched setDispatchRadius(${value})`);
 
@@ -162,49 +164,25 @@ export default function DispatchAdmin() {
     }
   };
 
-  // --- Toggle individual car checkboxes ---
+  // --- Toggle individual car checkboxes (IMMEDIATE Redux update) ---
   const handleCarAvailabilityToggle = (carId: number) => {
     // Make sure we're in manual mode
     if (!isManualMode) {
       dispatch(setManualSelectionMode(true));
     }
-    setCarAvailability({
+
+    const newAvailability = {
       ...carAvailability,
       [carId]: !carAvailability[carId],
-    });
+    };
+    setCarAvailability(newAvailability);
     console.log(
       `DispatchAdmin: Toggled car ${carId} to ${!carAvailability[carId] ? "available" : "unavailable"}`
     );
-  };
 
-  // --- Apply all manual settings to Redux ---
-  const applySettings = () => {
-    setIsLoading(true);
-    console.log("DispatchAdmin: Applying settings...");
-
-    try {
-      // Ensure manual mode
-      if (!isManualMode) {
-        dispatch(setManualSelectionMode(true));
-      }
-
-      // Gather all manually selected cars
-      const manuallySelectedCars = cars.filter((car) => carAvailability[car.id]);
-      console.log(
-        `DispatchAdmin: Setting ${manuallySelectedCars.length} cars as available for dispatch`
-      );
-
-      // Update Redux store
-      dispatch(setAvailableForDispatch(manuallySelectedCars));
-      dispatch(setDispatchRadius(localRadius));
-
-      toast.success(`${manuallySelectedCars.length} cars set as available for dispatch`);
-    } catch (error) {
-      console.error("DispatchAdmin: Error applying dispatch settings:", error);
-      toast.error("Failed to update dispatch settings");
-    } finally {
-      setIsLoading(false);
-    }
+    // Immediately update Redux with the new subset
+    const selectedCars = cars.filter((car) => newAvailability[car.id]);
+    dispatch(setAvailableForDispatch(selectedCars));
   };
 
   // --- Auto filter cars by radius, toggling them in local state + Redux immediately ---
@@ -338,13 +316,7 @@ export default function DispatchAdmin() {
             </div>
           </div>
           <p className="text-xs text-blue-300 mt-1 italic">
-            Changes to radius are saved when you click "Apply Manual Selection"
-          </p>
-
-          {/* Debug info */}
-          <p className="text-xs text-gray-500 mt-1">
-            Redux radius: {radiusMeters}m | Local radius: {localRadius}m | Manual mode:{" "}
-            {isManualMode ? "Yes" : "No"}
+            Radius changes are applied immediately
           </p>
         </div>
 
@@ -364,32 +336,8 @@ export default function DispatchAdmin() {
             )}
           </button>
 
-          <button
-            onClick={applySettings}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
-                Saving...
-              </>
-            ) : (
-              "Apply Manual Selection"
-            )}
-          </button>
-
-          <button
-            onClick={() => {
-              dispatch(fetchCars());
-              dispatch(fetchDispatchLocations());
-              toast.success("Refreshing car and dispatch data...");
-            }}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 flex items-center"
-            disabled={isLoading}
-          >
-            Refresh Data
-          </button>
+          {/* “Apply” button is optional now, 
+              since toggles already dispatch updates in handleCarAvailabilityToggle */}
         </div>
       </div>
 
@@ -409,7 +357,7 @@ export default function DispatchAdmin() {
         </div>
 
         <div className="mb-2 text-sm text-gray-400">
-          Total Cars: {cars.length}, Available for Dispatch:{" "}
+          Total Cars: {cars.length}, Currently Checked:{" "}
           {Object.values(carAvailability).filter(Boolean).length}
         </div>
 
