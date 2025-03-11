@@ -1,5 +1,4 @@
-// src/lib/dispatchManager.ts - Updated to react to radius changes
-
+// src/lib/dispatchManager.ts
 import { selectAllCars, setAvailableForDispatch, selectAvailableForDispatch } from "@/store/carSlice";
 import { selectAllDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice";
 import { useAppSelector, useAppDispatch } from "@/store/store";
@@ -16,14 +15,14 @@ export function useAvailableCarsForDispatch() {
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
   const dispatch = useAppDispatch();
   
-  // Get radius from Redux - key part that needs to trigger a re-render and recalculation
-  const RADIUS_METERS = useAppSelector(selectDispatchRadius);
+  // Get radius from Redux with fallback
+  const radiusMeters = useAppSelector(selectDispatchRadius);
 
   useEffect(() => {
     // Debug information about received data
     console.log(`[dispatchManager] Cars available: ${cars.length}`);
     console.log(`[dispatchManager] Dispatch locations: ${dispatchLocations.length}`);
-    console.log(`[dispatchManager] Using radius: ${RADIUS_METERS} meters`);
+    console.log(`[dispatchManager] Using radius: ${radiusMeters} meters`);
 
     // Check if we have valid car coordinates
     const invalidCars = cars.filter(car => typeof car.lat !== 'number' || typeof car.lng !== 'number');
@@ -42,9 +41,6 @@ export function useAvailableCarsForDispatch() {
     if (dispatchLocations.length === 0) {
       console.warn("[dispatchManager] No dispatch locations available - cars won't be filtered correctly");
       
-      // Option 1: Return all cars if no dispatch locations
-      // dispatch(setAvailableForDispatch(cars));
-      
       // Option 2: Return no cars if no dispatch locations (current behavior)
       dispatch(setAvailableForDispatch([]));
       return;
@@ -53,6 +49,11 @@ export function useAvailableCarsForDispatch() {
     // Filter available cars with detailed logging
     let filteredCount = 0;
     const availableCars = cars.filter((car) => {
+      // Safety check for invalid car coordinates
+      if (typeof car.lat !== 'number' || typeof car.lng !== 'number') {
+        return false;
+      }
+      
       // For debugging, collect all distance calculations for this car
       const distances = dispatchLocations.map(dispatchLoc => {
         return {
@@ -66,7 +67,7 @@ export function useAvailableCarsForDispatch() {
       const closestDispatch = distances.find(d => d.distance === minDistance);
       
       // Log detailed info about this car's proximity
-      if (minDistance <= RADIUS_METERS) {
+      if (minDistance <= radiusMeters) {
         console.log(`[dispatchManager] Car ${car.name} (ID: ${car.id}) is within range: ${minDistance.toFixed(2)}m to dispatch ${closestDispatch?.dispatchId}`);
         filteredCount++;
         return true;
@@ -77,9 +78,9 @@ export function useAvailableCarsForDispatch() {
       return false;
     });
 
-    console.log(`[dispatchManager] Filtered ${filteredCount} out of ${cars.length} total cars (radius: ${RADIUS_METERS}m)`);
+    console.log(`[dispatchManager] Filtered ${filteredCount} out of ${cars.length} total cars (radius: ${radiusMeters}m)`);
     dispatch(setAvailableForDispatch(availableCars));
-  }, [cars, dispatchLocations, RADIUS_METERS, dispatch]); // RADIUS_METERS in dependency array
+  }, [cars, dispatchLocations, radiusMeters, dispatch]); // radiusMeters in dependency array
 
   return useAppSelector(selectAvailableForDispatch);
 }
