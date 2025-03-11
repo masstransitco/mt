@@ -10,6 +10,9 @@ import type { RootState } from "./store";
 import { DISPATCH_HUB } from "@/constants/map";
 import { StationFeature } from "@/store/stationsSlice";
 
+// Import from your carSlice:
+import { setAvailableForDispatch } from "@/store/carSlice";
+
 /** RouteInfo for the dispatch hub → departure route */
 interface RouteInfo {
   distance: number;  // meters
@@ -27,7 +30,10 @@ interface DispatchLocation {
  * The overall shape of our dispatch state:
  * - An array of "DispatchLocation" items
  * - A route object (`route2`) for dispatch->departure
- * - Settings for the dispatch system
+ * - Current route fetch status & error
+ * - UI state for "sheets"
+ * - Settings (radius, manual mode, etc.)
+ * - The Firestore-based IDs (fetched from /api/dispatch/availability)
  */
 interface DispatchState {
   locations: DispatchLocation[];
@@ -45,9 +51,11 @@ interface DispatchState {
   // Dispatch system settings
   settings: {
     radiusMeters: number;
-    manualSelectionMode: boolean; // New field to track if we're in manual mode
-    // Add other settings here as needed
+    manualSelectionMode: boolean;
   };
+
+  // NEW: IDs that admin selected in Firestore
+  firestoreAvailableCarIds: number[];
 }
 
 const initialState: DispatchState = {
@@ -68,16 +76,70 @@ const initialState: DispatchState = {
     radiusMeters: 50000, // Default 50km radius
     manualSelectionMode: false, // Default to automatic mode
   },
+
+  // Start empty; we’ll fetch from Firestore
+  firestoreAvailableCarIds: [],
 };
 
-// 1) Thunk to fetch static dispatch locations
+/* ------------------------------------------------------------------
+   1) Thunk: fetchAvailabilityFromFirestore
+   Makes a GET request to /api/dispatch/availability.
+   - If successful, we store the returned IDs in `firestoreAvailableCarIds`
+   - Also, we cross-dispatch setAvailableForDispatch() with the matching cars
+   ------------------------------------------------------------------ */
+export const fetchAvailabilityFromFirestore = createAsyncThunk<
+  number[],               // We return an array of IDs
+  void,                   // No arguments
+  { rejectValue: string; state: RootState }
+>(
+  "dispatch/fetchAvailabilityFromFirestore",
+  async (_, { rejectWithValue, getState, dispatch }) => {
+    try {
+      // 1) Fetch from /api/dispatch/availability
+      const res = await fetch("/api/dispatch/availability");
+      if (!res.ok) {
+        throw new Error(`Failed to fetch availability: ${res.statusText}`);
+      }
+      const data = await res.json() as {
+        success: boolean;
+        availableCarIds: number[];
+        error?: string;
+      };
+
+      if (!data.success) {
+        throw new Error(data.error || "Unknown error fetching availability");
+      }
+
+      // 2) We have a list of car IDs from Firestore
+      const availableIds = data.availableCarIds;
+
+      // 3) Use the current store's `cars` to figure out which Car objects match
+      const state = getState();
+      const allCars = state.car.cars; // from your carSlice
+      const matchedCars = allCars.filter((c) => availableIds.includes(c.id));
+
+      // 4) Set them as the official "availableForDispatch" in the car slice
+      dispatch(setAvailableForDispatch(matchedCars));
+
+      // 5) Return the IDs so we can store them in dispatchSlice too
+      return availableIds;
+    } catch (err: any) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
+/* ------------------------------------------------------------------
+   2) Thunk: fetchDispatchLocations (already existed)
+   Example: returns a single dispatch location anchored at DISPATCH_HUB
+   ------------------------------------------------------------------ */
 export const fetchDispatchLocations = createAsyncThunk<
   DispatchLocation[],
   void,
   { rejectValue: string }
 >("dispatch/fetchDispatchLocations", async (_, { rejectWithValue }) => {
   try {
-    // Example: returns a single dispatch location anchored at DISPATCH_HUB
+    // Example
     const locations = [
       {
         id: 1,
@@ -91,23 +153,20 @@ export const fetchDispatchLocations = createAsyncThunk<
   }
 });
 
-/**
- * 2) Thunk: fetchDispatchDirections
- *    Grabs driving route from DISPATCH_HUB → chosen departure station
- */
+/* ------------------------------------------------------------------
+   3) Thunk: fetchDispatchDirections (already existed)
+   ------------------------------------------------------------------ */
 export const fetchDispatchDirections = createAsyncThunk<
-  RouteInfo,              // Return type
-  StationFeature,         // Thunk argument (the chosen station)
-  { rejectValue: string } // Rejected payload
+  RouteInfo,
+  StationFeature,
+  { rejectValue: string }
 >("dispatch/fetchDispatchDirections", async (station, { rejectWithValue }) => {
   if (!window.google || !window.google.maps) {
     return rejectWithValue("Google Maps API not available");
   }
   try {
     const directionsService = new google.maps.DirectionsService();
-
     const [stationLng, stationLat] = station.geometry.coordinates;
-
     const request: google.maps.DirectionsRequest = {
       origin: { lat: DISPATCH_HUB.lat, lng: DISPATCH_HUB.lng },
       destination: { lat: stationLat, lng: stationLng },
@@ -136,6 +195,9 @@ export const fetchDispatchDirections = createAsyncThunk<
   }
 });
 
+/* ------------------------------------------------------------------
+   The slice itself
+   ------------------------------------------------------------------ */
 const dispatchSlice = createSlice({
   name: "dispatch",
   initialState,
@@ -159,11 +221,9 @@ const dispatchSlice = createSlice({
     
     /** Update dispatch radius setting */
     setDispatchRadius: (state, action: PayloadAction<number>) => {
-      // Ensure the value is a number and valid
       const newRadius = Number(action.payload);
       if (!isNaN(newRadius) && newRadius > 0) {
         state.settings.radiusMeters = newRadius;
-        // Log for debugging
         console.log(`[dispatchSlice] Radius updated in store to: ${newRadius}`);
       } else {
         console.warn(`[dispatchSlice] Invalid radius value: ${action.payload}`);
@@ -183,13 +243,10 @@ const dispatchSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(
-        fetchDispatchLocations.fulfilled,
-        (state, action: PayloadAction<DispatchLocation[]>) => {
-          state.loading = false;
-          state.locations = action.payload;
-        }
-      )
+      .addCase(fetchDispatchLocations.fulfilled, (state, action) => {
+        state.loading = false;
+        state.locations = action.payload;
+      })
       .addCase(fetchDispatchLocations.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
@@ -210,12 +267,30 @@ const dispatchSlice = createSlice({
         state.routeError = action.payload as string;
         state.route2 = null;
       });
+
+    // ------ fetchAvailabilityFromFirestore ------
+    builder
+      .addCase(fetchAvailabilityFromFirestore.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAvailabilityFromFirestore.fulfilled, (state, action) => {
+        state.loading = false;
+        state.firestoreAvailableCarIds = action.payload; // store these IDs
+        console.log("[dispatchSlice] Updated Firestore-based availability in store:", action.payload);
+      })
+      .addCase(fetchAvailabilityFromFirestore.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
   },
 });
 
 export default dispatchSlice.reducer;
 
-// Actions
+/* ------------------------------------------------------------------
+   Actions
+   ------------------------------------------------------------------ */
 export const { 
   clearDispatchRoute, 
   openNewSheet, 
@@ -224,7 +299,9 @@ export const {
   setManualSelectionMode
 } = dispatchSlice.actions;
 
-/* --------------------------- Selectors --------------------------- */
+/* ------------------------------------------------------------------
+   Selectors
+   ------------------------------------------------------------------ */
 export const selectAllDispatchLocations = (state: RootState) => state.dispatch.locations;
 export const selectDispatchLoading = (state: RootState) => state.dispatch.loading;
 export const selectDispatchError = (state: RootState) => state.dispatch.error;
@@ -239,43 +316,35 @@ export const selectOpenSheet = (state: RootState) => state.dispatch.openSheet;
 
 /** 
  * The dispatch radius setting with a fallback value of 50000 meters
- * Adding fallback to ensure a reasonable default if the state structure
- * hasn't been fully initialized yet
  */
-export const selectDispatchRadius = (state: RootState) => {
-  return state.dispatch?.settings?.radiusMeters || 50000;
-};
+export const selectDispatchRadius = (state: RootState) =>
+  state.dispatch?.settings?.radiusMeters || 50000;
 
 /**
  * Selector for the manual selection mode setting
  */
-export const selectManualSelectionMode = (state: RootState) => {
-  return state.dispatch?.settings?.manualSelectionMode || false;
-};
-
-/* --------------------------------------------------------------
-   Memoized selector to decode the dispatch route polyline (if any)
-   -------------------------------------------------------------- */
+export const selectManualSelectionMode = (state: RootState) =>
+  state.dispatch?.settings?.manualSelectionMode || false;
 
 /**
- * Decodes the polyline into an array of { lat, lng } objects
- * only when route2.polyline changes (via Reselect memoization).
+ * NEW: Selector for the Firestore-based IDs
  */
+export const selectFirestoreAvailableCarIds = (state: RootState) =>
+  state.dispatch.firestoreAvailableCarIds;
+
+/* ------------------------------------------------------------------
+   Memoized selector to decode the dispatch route polyline (if any)
+   ------------------------------------------------------------------ */
 export const selectDispatchRouteDecoded = createSelector(
   [selectDispatchRoute],
   (route) => {
     if (!route || !route.polyline) return [];
-
-    // Make sure the Google Maps geometry library is available
     if (!window.google?.maps?.geometry?.encoding) {
       return [];
     }
-
     const decodedPath = window.google.maps.geometry.encoding.decodePath(
       route.polyline
     );
-
-    // Map each LatLng to a plain object { lat, lng }
     return decodedPath.map((latLng) => latLng.toJSON());
   }
 );
