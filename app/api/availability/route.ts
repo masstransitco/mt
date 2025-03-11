@@ -1,15 +1,17 @@
+// app/api/dispatch/availability/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import admin from "@/lib/firebase-admin"; // Ensure your path is correct
 import { z } from "zod";
 
 const db = admin.firestore();
-
-// The document where we'll store "availableCarIds"
 const DISPATCH_DOC_PATH = "dispatch/global";
 
-export async function GET(request: NextRequest) {
+/**
+ * GET /api/dispatch/availability
+ */
+export async function GET(req: NextRequest) {
   try {
-    // Read the "dispatch/global" document
+    // Read "dispatch/global" from Firestore
     const docRef = db.doc(DISPATCH_DOC_PATH);
     const snapshot = await docRef.get();
 
@@ -34,7 +36,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Common function to update availability in Firestore
+/**
+ * A helper function to handle updates.
+ * Validates incoming JSON and updates Firestore.
+ */
 async function updateAvailability(body: unknown) {
   // Validate the body using Zod
   const schema = z.object({
@@ -65,10 +70,12 @@ async function updateAvailability(body: unknown) {
   return NextResponse.json({ success: true });
 }
 
-// Support PATCH method
-export async function PATCH(request: NextRequest) {
+/**
+ * PATCH /api/dispatch/availability
+ */
+export async function PATCH(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
     return await updateAvailability(body);
   } catch (error: any) {
     console.error("PATCH /api/dispatch/availability error:", error);
@@ -79,10 +86,12 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// Also support POST (in case your deployment prefers it)
-export async function POST(request: NextRequest) {
+/**
+ * POST /api/dispatch/availability
+ */
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await req.json();
     return await updateAvailability(body);
   } catch (error: any) {
     console.error("POST /api/dispatch/availability error:", error);
