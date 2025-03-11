@@ -10,6 +10,9 @@ import type { RootState } from "./store";
 import { DISPATCH_HUB } from "@/constants/map";
 import { StationFeature } from "@/store/stationsSlice";
 
+// --- import from carSlice so we can dispatch setAvailableForDispatch
+import { selectAllCars, setAvailableForDispatch } from "./carSlice";
+
 /** RouteInfo for the dispatch hub → departure route */
 interface RouteInfo {
   distance: number;  // meters
@@ -46,7 +49,7 @@ interface DispatchState {
   
   // Dispatch system settings
   settings: {
-    radiusMeters: number;  // For admin or reference
+    radiusMeters: number;
   };
 }
 
@@ -62,13 +65,13 @@ const initialState: DispatchState = {
   openSheet: "none",
   
   settings: {
-    radiusMeters: 50000,  // Default 50km
+    radiusMeters: 50000,
   },
 };
 
-/* ------------------------------------------------
-   1) Thunk to fetch static dispatch locations
-   ------------------------------------------------ */
+/* ------------------------------------------------------------------------
+   1) Thunk to fetch static dispatch locations (example)
+   ------------------------------------------------------------------------*/
 export const fetchDispatchLocations = createAsyncThunk<
   DispatchLocation[],
   void,
@@ -77,11 +80,7 @@ export const fetchDispatchLocations = createAsyncThunk<
   try {
     // Example: returns a single dispatch location anchored at DISPATCH_HUB
     const locations: DispatchLocation[] = [
-      {
-        id: 1,
-        lat: DISPATCH_HUB.lat,
-        lng: DISPATCH_HUB.lng,
-      },
+      { id: 1, lat: DISPATCH_HUB.lat, lng: DISPATCH_HUB.lng },
     ];
     return locations;
   } catch (error: any) {
@@ -89,10 +88,10 @@ export const fetchDispatchLocations = createAsyncThunk<
   }
 });
 
-/* ------------------------------------------------
+/* ------------------------------------------------------------------------
    2) Thunk: fetchDispatchDirections
-   Grabs driving route from DISPATCH_HUB → station
-   ------------------------------------------------ */
+      Grabs driving route from DISPATCH_HUB → station
+   ------------------------------------------------------------------------*/
 export const fetchDispatchDirections = createAsyncThunk<
   RouteInfo,
   StationFeature,
@@ -133,9 +132,54 @@ export const fetchDispatchDirections = createAsyncThunk<
   }
 });
 
-/* ------------------------------------------------
+/* ------------------------------------------------------------------------
+   3) Thunk: fetchAvailabilityFromFirestore
+      - Reads /api/dispatch/availability (GET)
+      - Grabs the admin-chosen 'availableCarIds'
+      - Matches them to your existing cars
+      - Dispatches setAvailableForDispatch(...) with the matched cars
+   ------------------------------------------------------------------------*/
+export const fetchAvailabilityFromFirestore = createAsyncThunk<
+  void,                   // We don't need to return anything to the caller
+  void,                   // No arguments
+  { rejectValue: string; state: RootState }
+>(
+  "dispatch/fetchAvailabilityFromFirestore",
+  async (_, { dispatch, getState, rejectWithValue }) => {
+    try {
+      // 1) Fetch from /api/dispatch/availability
+      const resp = await fetch("/api/dispatch/availability");
+      if (!resp.ok) {
+        throw new Error(`Failed to fetch availability. Status: ${resp.status}`);
+      }
+      const data = await resp.json() as {
+        success: boolean;
+        availableCarIds: number[];
+        error?: string;
+      };
+
+      if (!data.success) {
+        throw new Error(data.error || "Unknown error fetching availability");
+      }
+
+      // 2) Match those IDs to your existing cars in Redux
+      const state = getState();
+      const allCars = selectAllCars(state); // from carSlice
+      const matchedCars = allCars.filter((c) => data.availableCarIds.includes(c.id));
+
+      // 3) Dispatch setAvailableForDispatch(...) with the matched Car objects
+      dispatch(setAvailableForDispatch(matchedCars));
+      console.log("[dispatchSlice] Fetched Firestore availability -> setAvailableForDispatch");
+    } catch (err: any) {
+      console.error("[dispatchSlice] fetchAvailabilityFromFirestore error:", err);
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
+/* ------------------------------------------------------------------------
    The slice
-   ------------------------------------------------ */
+   ------------------------------------------------------------------------*/
 const dispatchSlice = createSlice({
   name: "dispatch",
   initialState,
@@ -198,6 +242,22 @@ const dispatchSlice = createSlice({
         state.routeStatus = "failed";
         state.routeError = action.payload as string;
         state.route2 = null;
+      });
+
+    // fetchAvailabilityFromFirestore
+    builder
+      .addCase(fetchAvailabilityFromFirestore.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAvailabilityFromFirestore.fulfilled, (state) => {
+        state.loading = false;
+        // We don't store `availableCarIds` in dispatch;
+        // the matched cars are set in carSlice by setAvailableForDispatch
+      })
+      .addCase(fetchAvailabilityFromFirestore.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
       });
   },
 });
