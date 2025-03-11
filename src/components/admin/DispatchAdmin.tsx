@@ -18,6 +18,33 @@ import {
 } from "@/store/dispatchSlice";
 import { toast } from "react-hot-toast";
 
+/** 
+ * PATCHes the selected car IDs to Firestore via /api/dispatch/availability. 
+ * Adjust the route/password logic as needed for your environment.
+ */
+async function updateGlobalAvailability(carIds: number[]) {
+  try {
+    const resp = await fetch("/api/dispatch/availability", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        availableCarIds: carIds,
+        adminPassword: "20230301", // Example password. Move to env var for security.
+      }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      throw new Error(data.error || "Failed to update availability");
+    }
+
+    console.log("[DispatchAdmin] Global availability updated successfully in Firestore!");
+  } catch (error) {
+    console.error("[DispatchAdmin] Error updating global availability:", error);
+    toast.error("Could not save global availability");
+  }
+}
+
 export default function DispatchAdmin() {
   const dispatch = useAppDispatch();
   const cars = useAppSelector(selectAllCars);
@@ -104,9 +131,10 @@ export default function DispatchAdmin() {
       });
       setCarAvailability(newAvailability);
 
-      // If you want toggling “Select All” to immediately update Redux:
+      // Immediately update Redux & Firestore
       const selectedCars = cars.filter((car) => newAvailability[car.id]);
       dispatch(setAvailableForDispatch(selectedCars));
+      updateGlobalAvailability(selectedCars.map((c) => c.id));
 
       console.log(`DispatchAdmin: Toggle select all to ${selectAll ? "selected" : "unselected"}`);
     }
@@ -164,7 +192,7 @@ export default function DispatchAdmin() {
     }
   };
 
-  // --- Toggle individual car checkboxes (IMMEDIATE Redux update) ---
+  // --- Toggle individual car checkboxes (IMMEDIATE Redux + Firestore update) ---
   const handleCarAvailabilityToggle = (carId: number) => {
     // Make sure we're in manual mode
     if (!isManualMode) {
@@ -183,9 +211,12 @@ export default function DispatchAdmin() {
     // Immediately update Redux with the new subset
     const selectedCars = cars.filter((car) => newAvailability[car.id]);
     dispatch(setAvailableForDispatch(selectedCars));
+
+    // Also persist in Firestore
+    updateGlobalAvailability(selectedCars.map((c) => c.id));
   };
 
-  // --- Auto filter cars by radius, toggling them in local state + Redux immediately ---
+  // --- Auto filter cars by radius, toggling them in local state + Redux + Firestore ---
   const autoFilterByRadius = (directRadius?: number) => {
     const radiusToUse = directRadius ?? localRadius;
 
@@ -217,6 +248,9 @@ export default function DispatchAdmin() {
       // Immediately update Redux store
       const filteredCars = cars.filter((car) => newAvailability[car.id]);
       dispatch(setAvailableForDispatch(filteredCars));
+
+      // Persist to Firestore
+      updateGlobalAvailability(filteredCars.map((c) => c.id));
 
       // Sync radius if needed
       if (directRadius && directRadius !== radiusMeters) {
@@ -335,9 +369,6 @@ export default function DispatchAdmin() {
               "Auto-Filter by Radius"
             )}
           </button>
-
-          {/* “Apply” button is optional now, 
-              since toggles already dispatch updates in handleCarAvailabilityToggle */}
         </div>
       </div>
 
