@@ -4,7 +4,11 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCars, selectAvailableForDispatch } from "@/store/carSlice";
-import { fetchDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice"; // Removed selectManualSelectionMode
+import {
+  fetchDispatchLocations,
+  selectDispatchRadius,
+  fetchAvailabilityFromFirestore, // <-- import our new thunk
+} from "@/store/dispatchSlice";
 import { selectCar } from "@/store/userSlice";
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
 import CarCardGroup, { CarGroup } from "./CarCardGroup";
@@ -27,16 +31,16 @@ export default function CarGrid({
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
-  // Read dispatch settings from Redux:
+  // Read dispatch settings from Redux (radius is just displayed)
   const dispatchRadius = useAppSelector(selectDispatchRadius);
 
-  // Get the cars that have been manually selected in DispatchAdmin:
+  // This hook simply returns whatever is in availableForDispatch
   let availableCars = useAvailableCarsForDispatch();
 
-  // (Optional) also get the store's availableCars directly for logging
+  // For logging/debugging: also get from the store directly
   const storeAvailableCars = useAppSelector(selectAvailableForDispatch);
 
-  // In QR mode, override normal selection if a scanned car is provided.
+  // If scanning a car's QR code, override the normal selection
   if (isQrScanStation && scannedCar) {
     availableCars = [scannedCar];
   }
@@ -44,37 +48,45 @@ export default function CarGrid({
   // Container ref
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Control initial loading state
+  // Local loading control
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Fetch initial data when component becomes visible.
+  // On mount or when visible, fetch cars, dispatch locations, AND availability from Firestore
   useEffect(() => {
     let mounted = true;
     if (isVisible) {
-      console.log("[CarGrid] Fetching cars and dispatch locations...");
+      console.log("[CarGrid] Fetching cars, dispatch locations, and Firestore availability...");
       Promise.all([
-        dispatch(fetchCars()),
-        dispatch(fetchDispatchLocations()),
-      ]).finally(() => {
-        if (mounted) {
-          setIsInitialLoad(false);
-          console.log("[CarGrid] Initial data load complete");
-        }
-      });
+        dispatch(fetchCars()).unwrap(),
+        dispatch(fetchDispatchLocations()).unwrap(),
+      ])
+        .then(() => {
+          // After cars are loaded, we can map IDs -> Car objects in fetchAvailabilityFromFirestore
+          return dispatch(fetchAvailabilityFromFirestore());
+        })
+        .finally(() => {
+          if (mounted) {
+            setIsInitialLoad(false);
+            console.log("[CarGrid] Initial data load complete");
+          }
+        })
+        .catch((err) => {
+          console.error("[CarGrid] Error fetching data:", err);
+        });
     }
     return () => {
       mounted = false;
     };
   }, [dispatch, isVisible]);
 
-  // Warn if in QR mode without a scanned car.
+  // Warn if we’re in QR mode but no scanned car is provided
   useEffect(() => {
     if (isQrScanStation && !scannedCar) {
-      console.warn("[CarGrid] isQrScanStation is true but no scannedCar provided!");
+      console.warn("[CarGrid] isQrScanStation is true, but no scannedCar provided!");
     }
   }, [isQrScanStation, scannedCar]);
 
-  // Auto-select the first car if none is selected.
+  // Auto-select the first car if none is selected yet
   useEffect(() => {
     if (isVisible && !selectedCarId && availableCars.length > 0) {
       console.log("[CarGrid] Auto-selecting first car:", availableCars[0].id);
@@ -82,7 +94,7 @@ export default function CarGrid({
     }
   }, [availableCars, selectedCarId, dispatch, isVisible]);
 
-  // Group available cars by model.
+  // Group the available cars by model
   const groupedByModel: CarGroup[] = useMemo(() => {
     if (!isVisible) return [];
     if (availableCars.length === 0) {
@@ -90,7 +102,7 @@ export default function CarGrid({
       return [];
     }
 
-    // In QR mode, if one scanned car exists, skip grouping.
+    // If scanning a single car in QR mode, skip grouping
     if (isQrScanStation && scannedCar) {
       return [
         {
@@ -118,18 +130,16 @@ export default function CarGrid({
     return result;
   }, [availableCars, isVisible, isQrScanStation, scannedCar]);
 
-  // Debug info showing radius, plus other store data if you like
-  const renderDebugInfo = () => {
-    return (
-      <div className="text-xs text-gray-500 mb-2">
-        Dispatch Radius (reference only): {dispatchRadius} m
-        <br />
-        Hook-based availableCars length: {availableCars.length}
-        <br />
-        Store-based availableForDispatch length: {storeAvailableCars.length}
-      </div>
-    );
-  };
+  // Basic debug info
+  const renderDebugInfo = () => (
+    <div className="text-xs text-gray-500 mb-2">
+      Dispatch Radius (reference only): {dispatchRadius} m
+      <br />
+      Hook-based availableCars length: {availableCars.length}
+      <br />
+      Store-based availableForDispatch length: {storeAvailableCars.length}
+    </div>
+  );
 
   if (isInitialLoad) {
     return (
@@ -176,7 +186,7 @@ export default function CarGrid({
         </AnimatePresence>
       </div>
 
-      {isVisible && groupedByModel.length === 0 && !isInitialLoad && (
+      {isVisible && groupedByModel.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
