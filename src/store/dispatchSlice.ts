@@ -45,6 +45,7 @@ interface DispatchState {
   // Dispatch system settings
   settings: {
     radiusMeters: number;
+    manualSelectionMode: boolean; // New field to track if we're in manual mode
     // Add other settings here as needed
   };
 }
@@ -65,6 +66,7 @@ const initialState: DispatchState = {
   // Initial settings
   settings: {
     radiusMeters: 50000, // Default 50km radius
+    manualSelectionMode: false, // Default to automatic mode
   },
 };
 
@@ -167,6 +169,12 @@ const dispatchSlice = createSlice({
         console.warn(`[dispatchSlice] Invalid radius value: ${action.payload}`);
       }
     },
+    
+    /** Set manual selection mode */
+    setManualSelectionMode: (state, action: PayloadAction<boolean>) => {
+      state.settings.manualSelectionMode = action.payload;
+      console.log(`[dispatchSlice] Manual selection mode set to: ${action.payload}`);
+    },
   },
   extraReducers: (builder) => {
     // ------ fetchDispatchLocations ------
@@ -208,7 +216,13 @@ const dispatchSlice = createSlice({
 export default dispatchSlice.reducer;
 
 // Actions
-export const { clearDispatchRoute, openNewSheet, closeSheet, setDispatchRadius } = dispatchSlice.actions;
+export const { 
+  clearDispatchRoute, 
+  openNewSheet, 
+  closeSheet, 
+  setDispatchRadius,
+  setManualSelectionMode
+} = dispatchSlice.actions;
 
 /* --------------------------- Selectors --------------------------- */
 export const selectAllDispatchLocations = (state: RootState) => state.dispatch.locations;
@@ -230,6 +244,13 @@ export const selectOpenSheet = (state: RootState) => state.dispatch.openSheet;
  */
 export const selectDispatchRadius = (state: RootState) => {
   return state.dispatch?.settings?.radiusMeters || 50000;
+};
+
+/**
+ * Selector for the manual selection mode setting
+ */
+export const selectManualSelectionMode = (state: RootState) => {
+  return state.dispatch?.settings?.manualSelectionMode || false;
 };
 
 /* --------------------------------------------------------------
