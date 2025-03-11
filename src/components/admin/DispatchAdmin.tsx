@@ -149,15 +149,15 @@ export default function DispatchAdmin() {
         autoFilterByRadius(value);
       }
       
-      // Verify the value was actually applied
-      setTimeout(() => {
-        const currentReduxRadius = selectDispatchRadius(window.__REDUX_STATE__); // Access store directly
-        console.log(`DispatchAdmin: Redux radius value after dispatch: ${currentReduxRadius}`);
-        
-        if (currentReduxRadius !== value) {
-          console.warn(`DispatchAdmin: Radius value mismatch! UI: ${value}, Redux: ${currentReduxRadius}`);
-        }
-      }, 100);
+      // Verify the value was actually applied - comment out if window.__REDUX_STATE__ is not available
+      // setTimeout(() => {
+      //   const currentReduxRadius = selectDispatchRadius(window.__REDUX_STATE__); // Access store directly
+      //   console.log(`DispatchAdmin: Redux radius value after dispatch: ${currentReduxRadius}`);
+      //   
+      //   if (currentReduxRadius !== value) {
+      //     console.warn(`DispatchAdmin: Radius value mismatch! UI: ${value}, Redux: ${currentReduxRadius}`);
+      //   }
+      // }, 100);
     }
   };
   
@@ -488,3 +488,4 @@ export default function DispatchAdmin() {
       </div>
     </div>
   );
+}
