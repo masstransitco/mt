@@ -1,4 +1,4 @@
-// src/lib/dispatchManager.ts - Updated to use radius from Redux
+// src/lib/dispatchManager.ts - Updated to react to radius changes
 
 import { selectAllCars, setAvailableForDispatch, selectAvailableForDispatch } from "@/store/carSlice";
 import { selectAllDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice";
@@ -15,7 +15,8 @@ export function useAvailableCarsForDispatch() {
   const cars = useAppSelector(selectAllCars);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
   const dispatch = useAppDispatch();
-  // Get radius from Redux instead of hard-coding
+  
+  // Get radius from Redux - key part that needs to trigger a re-render and recalculation
   const RADIUS_METERS = useAppSelector(selectDispatchRadius);
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export function useAvailableCarsForDispatch() {
 
     console.log(`[dispatchManager] Filtered ${filteredCount} out of ${cars.length} total cars (radius: ${RADIUS_METERS}m)`);
     dispatch(setAvailableForDispatch(availableCars));
-  }, [cars, dispatchLocations, RADIUS_METERS, dispatch]);
+  }, [cars, dispatchLocations, RADIUS_METERS, dispatch]); // RADIUS_METERS in dependency array
 
   return useAppSelector(selectAvailableForDispatch);
 }
