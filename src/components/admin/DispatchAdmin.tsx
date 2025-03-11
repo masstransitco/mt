@@ -17,8 +17,7 @@ import {
 import { toast } from "react-hot-toast";
 
 /** 
- * Updates the global availability (in Firestore) 
- * by sending the selected car IDs to `/api/availability`.
+ * Writes the selected car IDs to Firestore via /api/availability.
  */
 async function updateGlobalAvailability(carIds: number[]) {
   try {
@@ -44,22 +43,23 @@ async function updateGlobalAvailability(carIds: number[]) {
 export default function DispatchAdmin() {
   const dispatch = useAppDispatch();
 
-  // Redux store data
+  // Grab data from Redux
   const cars = useAppSelector(selectAllCars);
   const availableCars = useAppSelector(selectAvailableForDispatch);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
   const radiusMeters = useAppSelector(selectDispatchRadius);
 
-  // Local states
+  // Local component states
   const [carAvailability, setCarAvailability] = useState<{ [key: number]: boolean }>({});
   const [selectAll, setSelectAll] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   const [showRadiusChange, setShowRadiusChange] = useState(false);
   const [radiusChangeMessage, setRadiusChangeMessage] = useState("");
   const [localRadius, setLocalRadius] = useState(radiusMeters);
 
-  // Keep localRadius in sync with Redux radius
+  // Keep local radius in sync with Redux radius
   useEffect(() => {
     if (radiusMeters !== localRadius) {
       console.log(`DispatchAdmin: Sync radius local(${localRadius}) → store(${radiusMeters})`);
@@ -67,17 +67,45 @@ export default function DispatchAdmin() {
     }
   }, [radiusMeters, localRadius]);
 
-  // 1) Load initial data
+  /**
+   * 1) On mount, load cars & dispatch locations.
+   *    Then fetch the already saved availability from /api/availability
+   *    so we can restore the checkboxes from a previous session.
+   */
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      console.log("[DispatchAdmin] Loading data...");
       try {
+        // Load car + dispatch data if not already loaded
         if (cars.length === 0) {
           await dispatch(fetchCars()).unwrap();
         }
         if (dispatchLocations.length === 0) {
           await dispatch(fetchDispatchLocations()).unwrap();
+        }
+
+        // After we have the cars, fetch the saved "availableCarIds"
+        const resp = await fetch("/api/availability");
+        if (!resp.ok) {
+          throw new Error(`Failed to load saved availability: ${resp.statusText}`);
+        }
+        const data = await resp.json();
+        if (data?.success) {
+          const savedCarIds: number[] = data.availableCarIds || [];
+          console.log("[DispatchAdmin] Restoring savedCarIds from Firestore:", savedCarIds);
+
+          // Build a new carAvailability object from the saved IDs
+          const newAvailability: { [key: number]: boolean } = {};
+          cars.forEach((car) => {
+            newAvailability[car.id] = savedCarIds.includes(car.id);
+          });
+          setCarAvailability(newAvailability);
+
+          // Also reflect in Redux
+          const matchedCars = cars.filter((car) => savedCarIds.includes(car.id));
+          dispatch(setAvailableForDispatch(matchedCars));
+        } else {
+          console.warn("[DispatchAdmin] No success field or no data from /api/availability");
         }
       } catch (error) {
         console.error("[DispatchAdmin] Error loading data:", error);
@@ -90,7 +118,9 @@ export default function DispatchAdmin() {
     loadData();
   }, [dispatch, cars.length, dispatchLocations.length]);
 
-  // 2) When "select all" is toggled, update local + Redux + Firestore
+  /**
+   * 2) If "select all" is toggled, update local + Redux + Firestore
+   */
   useEffect(() => {
     if (cars.length > 0) {
       const newAvailability: { [key: number]: boolean } = {};
@@ -107,18 +137,23 @@ export default function DispatchAdmin() {
     }
   }, [selectAll, cars, dispatch]);
 
-  // 3) Toggle an individual car’s checkbox
+  /**
+   * 3) Toggle an individual car’s checkbox
+   */
   const handleCarAvailabilityToggle = (carId: number) => {
     const newAvailability = { ...carAvailability, [carId]: !carAvailability[carId] };
     setCarAvailability(newAvailability);
-    console.log(`[DispatchAdmin] Toggled car ${carId}: now ${!carAvailability[carId]}`);
 
     const selectedCars = cars.filter((car) => newAvailability[car.id]);
     dispatch(setAvailableForDispatch(selectedCars));
     updateGlobalAvailability(selectedCars.map((c) => c.id));
+
+    console.log(`[DispatchAdmin] Toggled car ${carId}: now ${newAvailability[carId]}`);
   };
 
-  // 4) Helper for distance calculation
+  /**
+   * 4) Helper for distance calculation
+   */
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     if ([lat1, lng1, lat2, lng2].some((val) => typeof val !== "number")) {
       return Number.MAX_SAFE_INTEGER;
@@ -134,7 +169,9 @@ export default function DispatchAdmin() {
     return R * c;
   };
 
-  // 5) Handle radius input
+  /**
+   * 5) Handle radius input changes
+   */
   const handleRadiusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value)) {
@@ -147,7 +184,9 @@ export default function DispatchAdmin() {
     }
   };
 
-  // 6) “Auto-Filter by Radius” button: sets checkboxes for all cars within `localRadius`
+  /**
+   * 6) “Auto-Filter by Radius” button
+   */
   const autoFilterByRadius = (directRadius?: number) => {
     const radiusToUse = directRadius ?? localRadius;
     setIsLoading(true);
@@ -163,18 +202,17 @@ export default function DispatchAdmin() {
         if (withinRadius) count++;
       });
       setCarAvailability(newAvailability);
-      console.log(`[DispatchAdmin] Found ${count} cars within ${radiusToUse}m`);
 
       const filteredCars = cars.filter((car) => newAvailability[car.id]);
       dispatch(setAvailableForDispatch(filteredCars));
       updateGlobalAvailability(filteredCars.map((c) => c.id));
 
-      // If admin typed a radius that differs from store, update the store radius
       if (directRadius && directRadius !== radiusMeters) {
         dispatch(setDispatchRadius(directRadius));
       }
 
       toast.success(`${count} cars set for dispatch (within ${radiusToUse}m)`);
+      console.log(`[DispatchAdmin] Found ${count} cars within ${radiusToUse}m`);
     } catch (error) {
       console.error("[DispatchAdmin] Error filtering by radius:", error);
       toast.error("Failed to filter cars by radius");
@@ -183,7 +221,9 @@ export default function DispatchAdmin() {
     }
   };
 
-  // For display
+  /**
+   * For display
+   */
   const formatDistance = (meters: number) => {
     return meters >= 1000 ? `${(meters / 1000).toFixed(2)} km` : `${Math.round(meters)} m`;
   };
@@ -196,7 +236,6 @@ export default function DispatchAdmin() {
   };
 
   // --- Render ---
-
   return (
     <div className="p-4">
       <h1 className="text-xl font-bold mb-4">Dispatch Management (Single-Mode)</h1>
