@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import admin from "@/lib/firebase-admin"; // Must point to your Admin SDK init
-import { z } from "zod";                  // optional: for input validation
+import { z } from "zod"; // Optional: for input validation
 
 const db = admin.firestore();
 
@@ -9,17 +9,17 @@ const DISPATCH_DOC_PATH = "dispatch/global";
 
 export async function GET(request: NextRequest) {
   try {
-    // Read the "dispatch/global" doc
+    // Read the "dispatch/global" document
     const docRef = db.doc(DISPATCH_DOC_PATH);
     const snapshot = await docRef.get();
 
     if (!snapshot.exists) {
-      // If doc doesn't exist yet, return an empty array or fallback
+      // If the document doesn't exist yet, return an empty array or fallback
       return NextResponse.json({ availableCarIds: [], success: true });
     }
 
-    const data = snapshot.data();
-    const availableCarIds: number[] = data.availableCarIds || [];
+    const data = snapshot.data() ?? {};
+    const availableCarIds: number[] = data.availableCarIds ?? [];
 
     return NextResponse.json({
       success: true,
@@ -38,8 +38,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Optional: validate with Zod or a manual check
-    // For instance, expect "availableCarIds" to be an array of numbers
+    // Validate with Zod: expect "availableCarIds" to be an array of numbers
     const schema = z.object({
       availableCarIds: z.array(z.number()),
       adminPassword: z.string().optional(),
@@ -48,8 +47,7 @@ export async function PATCH(request: NextRequest) {
     const parsed = schema.parse(body);
     const { availableCarIds, adminPassword } = parsed;
 
-    // 1) Check if user is allowed to do this
-    //    If you have an admin password or any auth logic, do it here:
+    // Check if the user is allowed to do this (basic password check)
     if (adminPassword !== "20230301") {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
@@ -57,7 +55,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // 2) Write to Firestore
+    // Write to Firestore
     const docRef = db.doc(DISPATCH_DOC_PATH);
     await docRef.set(
       {
