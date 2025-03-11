@@ -7,19 +7,17 @@ import React, {
   useCallback
 } from "react";
 import { createPortal } from "react-dom";
-import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import "mapbox-gl/dist/mapbox-gl.css";
 
-// We can import type only to avoid bundling mapbox in SSR
+// If you prefer to keep using dynamic import, remove it from the “expanded only” approach:
+import "mapbox-gl/dist/mapbox-gl.css";
 import type { LngLatBoundsLike } from "mapbox-gl";
 
-// We'll dynamically import mapbox-gl only after expanding.
-const importMapbox = () => import("mapbox-gl");
+let mapboxgl: typeof import("mapbox-gl") | null = null;
 
-// In Next.js, you typically read from process.env.NEXT_PUBLIC_...
+// In Next.js, typically read from process.env:
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || "";
 
 interface MapCardProps {
@@ -29,146 +27,146 @@ interface MapCardProps {
   className?: string;
 }
 
-const MapCard: React.FC<MapCardProps> = ({
+export default function MapCard({
   coordinates,
   name,
   address,
   className,
-}) => {
-  // Refs & states
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);     
-  const markerRef = useRef<any>(null);  
-  const animFrameRef = useRef<number | null>(null);
-
+}: MapCardProps) {
+  /**
+   * STATE + REFS
+   */
   const [expanded, setExpanded] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  // We'll store the "map container" DOM node in a ref:
+  const mapContainerRef = useRef<HTMLDivElement>(null);
 
-  // Keep track of the portal element (avoid “null container” errors)
+  // The Mapbox Map instance (one time creation).
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  // We store a separate <div> cardRef that we can move from StationDetail to <body> (portal)
+  const cardRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep track of the portal root element
   const [portalElem, setPortalElem] = useState<HTMLElement | null>(null);
 
+  /**
+   * On first mount, fetch the portal root if it exists.
+   */
   useEffect(() => {
-    // We’re on the client side, so do a check for #portal-root
     if (typeof window !== "undefined") {
       const el = document.getElementById("portal-root");
       setPortalElem(el);
     }
   }, []);
 
-  // === Create/destroy the Map when expanded/collapsed
+  /**
+   * Create the map exactly once on mount (not tied to "expanded" state).
+   */
   useEffect(() => {
-    if (expanded) {
-      createMap();
-    } else {
-      destroyMap();
-    }
-    return () => destroyMap();
-  }, [expanded]);
+    let cancelled = false;
 
-  // === If user resizes window while expanded => resize map
-  useEffect(() => {
-    const handleResize = () => {
-      if (mapRef.current) {
-        mapRef.current.resize();
-      }
-    };
-    if (expanded) {
-      window.addEventListener("resize", handleResize);
-    }
-    return () => window.removeEventListener("resize", handleResize);
-  }, [expanded]);
-
-  // === Create map using dynamic import
-  const createMap = useCallback(async () => {
-    if (!mapContainer.current || mapRef.current) return; // Map already created or container missing
-
-    try {
-      const mapbox = await importMapbox();
-      mapbox.default.accessToken = MAPBOX_TOKEN;
-
-      const bounds = getBoundingBox(coordinates); // typed as LngLatBoundsLike
-
-      mapRef.current = new mapbox.default.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/dark-v11",
-        center: coordinates,
-        zoom: 12.5,
-        pitch: 40,
-        bearing: 0,
-        interactive: true,
-        attributionControl: false,
-        maxBounds: bounds, // No more TS error
-        minZoom: 11,
-        maxZoom: 19,
-      });
-
-      mapRef.current.on("load", () => {
-        setMapLoaded(true);
-        // Attempt 3D buildings
-        try {
-          mapRef.current.addLayer({
-            id: "3d-buildings",
-            source: "composite",
-            "source-layer": "building",
-            type: "fill-extrusion",
-            minzoom: 14,
-            paint: {
-              "fill-extrusion-color": "#aaa",
-              "fill-extrusion-height": ["get", "height"],
-              "fill-extrusion-base": ["get", "min_height"],
-              "fill-extrusion-opacity": 0.6,
-            },
-          });
-        } catch (err) {
-          console.warn("Could not add 3D buildings layer:", err);
+    (async () => {
+      try {
+        if (!mapboxgl) {
+          // Import mapbox-gl once; store it globally so we don't import repeatedly
+          const mod = await import("mapbox-gl");
+          mapboxgl = mod.default;
+          mapboxgl.accessToken = MAPBOX_TOKEN;
         }
 
-        // Add marker & animate
-        markerRef.current = new mapbox.default.Marker({ color: "#3b82f6" })
-          .setLngLat(coordinates)
-          .addTo(mapRef.current);
-        startMarkerAnimation();
+        if (!mapContainerRef.current || cancelled) return;
 
-        // Fly-in effect
-        startEntranceAnimation(mapRef.current);
-      });
+        // Create a single map instance
+        mapRef.current = new mapboxgl.Map({
+          container: mapContainerRef.current,
+          style: "mapbox://styles/mapbox/dark-v11",
+          center: coordinates,
+          zoom: 12.5,
+          pitch: 40,
+          bearing: 0,
+          interactive: true,
+          attributionControl: false,
+          maxBounds: getBoundingBox(coordinates),
+          minZoom: 11,
+          maxZoom: 19,
+        });
 
-      mapRef.current.on("error", (e: any) => {
-        console.error("Mapbox error:", e);
-      });
-    } catch (err) {
-      console.error("Error loading mapbox-gl or creating map:", err);
-    }
+        // On load
+        mapRef.current.on("load", () => {
+          if (cancelled) return;
+          setMapLoaded(true);
+
+          // Attempt 3D building layer
+          try {
+            mapRef.current?.addLayer({
+              id: "3d-buildings",
+              source: "composite",
+              "source-layer": "building",
+              type: "fill-extrusion",
+              minzoom: 14,
+              paint: {
+                "fill-extrusion-color": "#aaa",
+                "fill-extrusion-height": ["get", "height"],
+                "fill-extrusion-base": ["get", "min_height"],
+                "fill-extrusion-opacity": 0.6,
+              },
+            });
+          } catch (err) {
+            console.warn("Could not add 3D buildings layer:", err);
+          }
+
+          // Add marker & animate
+          markerRef.current = new mapboxgl!.Marker({ color: "#3b82f6" })
+            .setLngLat(coordinates)
+            .addTo(mapRef.current!);
+
+          startMarkerAnimation();
+          startEntranceAnimation();
+        });
+
+        mapRef.current.on("error", (e: any) => {
+          console.error("Mapbox error:", e);
+        });
+      } catch (err) {
+        console.error("Failed to initialize Mapbox:", err);
+      }
+    })();
+
+    return () => {
+      // Cleanup in case component unmounts quickly
+      cancelled = true;
+      destroyMap();
+    };
   }, [coordinates]);
 
-  // === Destroy the map
-  const destroyMap = useCallback(() => {
-    // Cancel marker animation
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-    // Remove map
-    if (mapRef.current) {
-      mapRef.current.remove();
-      mapRef.current = null;
-    }
-    markerRef.current = null;
-    setMapLoaded(false);
+  /**
+   * Resize the map whenever the window resizes (only if mapRef is ready).
+   */
+  useEffect(() => {
+    const handleResize = () => {
+      mapRef.current?.resize();
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // === Marker pulsing animation
+  /**
+   * MARKER ANIMATION
+   */
   const startMarkerAnimation = () => {
     if (!markerRef.current) return;
     const markerEl = markerRef.current.getElement();
 
     const scaleFactor = 1.1;
     const duration = 1500;
-    const start = Date.now();
+    const startTime = Date.now();
 
     const animate = () => {
-      if (!markerRef.current) return; // if map removed
-      const elapsed = Date.now() - start;
+      if (!markerRef.current) return; // marker removed => end
+      const elapsed = Date.now() - startTime;
       const progress = (elapsed % duration) / duration;
       const scale = 1 + (Math.sin(progress * Math.PI * 2) * 0.5 + 0.5) * (scaleFactor - 1);
 
@@ -185,8 +183,20 @@ const MapCard: React.FC<MapCardProps> = ({
     animFrameRef.current = requestAnimationFrame(animate);
   };
 
-  // === Entrance camera animation
-  const startEntranceAnimation = (mapInstance: any) => {
+  const destroyMarkerAnimation = () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+  };
+
+  /**
+   * CAMERA "FLY IN" ANIMATION
+   */
+  const startEntranceAnimation = () => {
+    if (!mapRef.current) return;
+    const mapInstance = mapRef.current;
+
     const startZoom = mapInstance.getZoom();
     const startBearing = mapInstance.getBearing();
     const startPitch = mapInstance.getPitch();
@@ -199,6 +209,7 @@ const MapCard: React.FC<MapCardProps> = ({
     const startTime = Date.now();
 
     const animate = () => {
+      if (!mapRef.current) return; // map destroyed => end
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const ease = easeInOutCubic(progress);
@@ -217,9 +228,25 @@ const MapCard: React.FC<MapCardProps> = ({
     requestAnimationFrame(animate);
   };
 
-  // === Toggle expanded
+  /**
+   * DESTROY MAP
+   */
+  const destroyMap = useCallback(() => {
+    destroyMarkerAnimation();
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+    markerRef.current = null;
+    setMapLoaded(false);
+  }, []);
+
+  /**
+   * TOGGLE EXPANDED
+   */
   const toggleExpanded = () => {
     setExpanded((prev) => !prev);
+    // After the card re-renders, forcibly resize & recenter the marker
     setTimeout(() => {
       if (mapRef.current) {
         mapRef.current.resize();
@@ -231,28 +258,31 @@ const MapCard: React.FC<MapCardProps> = ({
     }, 300);
   };
 
-  // === The main card content
-  const cardContent = (
+  /**
+   * THE CARD CONTENT ITSELF
+   * We attach ref to a <div> so we can "move" it if expanded is true.
+   */
+  const card = (
     <motion.div
+      ref={cardRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.3 }}
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700",
-        expanded ? "fixed inset-4 z-50" : "h-52",
+        expanded ? "fixed inset-4 z-[9999]" : "h-52",
         className
       )}
     >
-      {/* Map container (placeholder when collapsed) */}
+      {/* The actual map container (always present) */}
       <div
-        ref={mapContainer}
+        ref={mapContainerRef}
         className="absolute inset-0 bg-gray-800"
         style={{ width: "100%", height: "100%" }}
       />
-
-      {/* Spinner while map is loading in expanded mode */}
-      {!mapLoaded && expanded && (
+      {/* Loading overlay if map not done yet */}
+      {!mapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
         </div>
@@ -282,34 +312,30 @@ const MapCard: React.FC<MapCardProps> = ({
     </motion.div>
   );
 
-  // === If expanded and we have a valid portal element, portal it
+  /**
+   * If expanded & we have a portal root, move the entire `card` to <div id="portal-root" />
+   * This ensures it escapes any parent transform / overflow and can truly go fullscreen.
+   */
   if (expanded && portalElem) {
-    return createPortal(cardContent, portalElem);
+    return createPortal(card, portalElem);
   }
-
-  // Otherwise, render inline (collapsed or no portal root available)
-  return cardContent;
-};
-
-export default MapCard;
-
+  // Otherwise, render inline (in StationDetail)
+  return card;
+}
 
 /* -----------------------------------------
    Helper Functions
 ----------------------------------------- */
 
-/** Return a two-element array representing SW and NE corners. */
-function getBoundingBox(
-  center: [number, number],
-  radiusKm = 0.25
-): LngLatBoundsLike {
+/** Return a bounding box as [ [minLng, minLat], [maxLng, maxLat] ] */
+function getBoundingBox(center: [number, number], radiusKm = 0.25): LngLatBoundsLike {
   const earthRadiusKm = 6371;
   const latRadian = (center[1] * Math.PI) / 180;
   const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
   const lngDelta =
     (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
 
-  // Return as [[lng1, lat1], [lng2, lat2]]
+  // Return SW + NE corners
   return [
     [center[0] - lngDelta, center[1] - latDelta],
     [center[0] + lngDelta, center[1] + latDelta],
