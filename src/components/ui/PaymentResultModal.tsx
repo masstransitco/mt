@@ -232,22 +232,22 @@ export default function PaymentResultModal({
               >
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-400">Amount</span>
-                  <span className="font-medium">{formattedAmount}</span>
+                  <span className="font-medium text-white">{formattedAmount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-400">Date</span>
-                  <span className="font-medium">{currentDate}</span>
+                  <span className="font-medium text-white">{currentDate}</span>
                 </div>
                 {cardLast4 && (
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-400">Card</span>
-                    <span className="font-medium">•••• {cardLast4}</span>
+                    <span className="font-medium text-white">•••• {cardLast4}</span>
                   </div>
                 )}
                 {isSuccess && (
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-400">Reference</span>
-                    <span className="font-medium">{referenceId}</span>
+                    <span className="font-medium text-white">{referenceId}</span>
                   </div>
                 )}
               </motion.div>
