@@ -13,30 +13,28 @@ import {
   selectDispatchRadius,
   setDispatchRadius,
   fetchDispatchLocations,
-  setManualSelectionMode,
-  selectManualSelectionMode,
 } from "@/store/dispatchSlice";
 import { toast } from "react-hot-toast";
 
 /** 
- * Updates the global availability by sending the selected car IDs 
- * to your new /api/availability route in Firestore.
+ * Updates the global availability (in Firestore) 
+ * by sending the selected car IDs to `/api/availability`.
  */
 async function updateGlobalAvailability(carIds: number[]) {
   try {
     const resp = await fetch("/api/availability", {
-      method: "POST", // Changed from PATCH to POST
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         availableCarIds: carIds,
-        adminPassword: "20230301", // For production, use an environment variable
+        adminPassword: "20230301", // For production, use env var
       }),
     });
     const data = await resp.json();
     if (!resp.ok || !data.success) {
       throw new Error(data.error || "Failed to update availability");
     }
-    console.log("[DispatchAdmin] Global availability updated successfully in Firestore!");
+    console.log("[DispatchAdmin] Global availability updated successfully!");
   } catch (error) {
     console.error("[DispatchAdmin] Error updating global availability:", error);
     toast.error("Could not save global availability");
@@ -45,13 +43,14 @@ async function updateGlobalAvailability(carIds: number[]) {
 
 export default function DispatchAdmin() {
   const dispatch = useAppDispatch();
+
+  // Redux store data
   const cars = useAppSelector(selectAllCars);
   const availableCars = useAppSelector(selectAvailableForDispatch);
   const dispatchLocations = useAppSelector(selectAllDispatchLocations);
   const radiusMeters = useAppSelector(selectDispatchRadius);
-  const isManualMode = useAppSelector(selectManualSelectionMode);
 
-  // Local state for managing checkbox toggles, "select all", and loading state.
+  // Local states
   const [carAvailability, setCarAvailability] = useState<{ [key: number]: boolean }>({});
   const [selectAll, setSelectAll] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,52 +59,38 @@ export default function DispatchAdmin() {
   const [radiusChangeMessage, setRadiusChangeMessage] = useState("");
   const [localRadius, setLocalRadius] = useState(radiusMeters);
 
-  // Keep local radius in sync with Redux.
+  // Keep localRadius in sync with Redux radius
   useEffect(() => {
     if (radiusMeters !== localRadius) {
-      console.log(`DispatchAdmin: Syncing local radius (${localRadius}) with Redux radius (${radiusMeters})`);
+      console.log(`DispatchAdmin: Sync radius local(${localRadius}) → store(${radiusMeters})`);
       setLocalRadius(radiusMeters);
     }
   }, [radiusMeters, localRadius]);
 
-  // Load initial data on mount.
+  // 1) Load initial data
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      console.log("DispatchAdmin: Loading initial data...");
+      console.log("[DispatchAdmin] Loading data...");
       try {
         if (cars.length === 0) {
-          console.log("DispatchAdmin: Fetching cars...");
           await dispatch(fetchCars()).unwrap();
         }
         if (dispatchLocations.length === 0) {
-          console.log("DispatchAdmin: Fetching dispatch locations...");
           await dispatch(fetchDispatchLocations()).unwrap();
         }
       } catch (error) {
-        console.error("DispatchAdmin: Error loading initial data:", error);
-        toast.error("Error loading car and dispatch data");
+        console.error("[DispatchAdmin] Error loading data:", error);
+        toast.error("Error loading car & dispatch data");
       } finally {
         setIsLoading(false);
         setIsInitialLoad(false);
       }
     };
-
     loadData();
-    // Enable manual selection mode when admin panel is loaded.
-    dispatch(setManualSelectionMode(true));
-    console.log("DispatchAdmin: Enabled manual selection mode");
-    console.log(`DispatchAdmin: ${cars.length} cars loaded, ${availableCars.length} available for dispatch`);
-    console.log(`DispatchAdmin: ${dispatchLocations.length} dispatch locations loaded`);
+  }, [dispatch, cars.length, dispatchLocations.length]);
 
-    return () => {
-      dispatch(setManualSelectionMode(false));
-      console.log("DispatchAdmin: Disabled manual selection mode on unmount");
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // When "select all" is toggled, update local state, Redux, and Firestore.
+  // 2) When "select all" is toggled, update local + Redux + Firestore
   useEffect(() => {
     if (cars.length > 0) {
       const newAvailability: { [key: number]: boolean } = {};
@@ -113,95 +98,92 @@ export default function DispatchAdmin() {
         newAvailability[car.id] = selectAll;
       });
       setCarAvailability(newAvailability);
+
       const selectedCars = cars.filter((car) => newAvailability[car.id]);
       dispatch(setAvailableForDispatch(selectedCars));
       updateGlobalAvailability(selectedCars.map((c) => c.id));
-      console.log(`DispatchAdmin: Toggle select all to ${selectAll ? "selected" : "unselected"}`);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectAll]);
 
-  // Helper for distance calculation.
+      console.log(`[DispatchAdmin] selectAll → ${selectAll ? "all" : "none"} selected`);
+    }
+  }, [selectAll, cars, dispatch]);
+
+  // 3) Toggle an individual car’s checkbox
+  const handleCarAvailabilityToggle = (carId: number) => {
+    const newAvailability = { ...carAvailability, [carId]: !carAvailability[carId] };
+    setCarAvailability(newAvailability);
+    console.log(`[DispatchAdmin] Toggled car ${carId}: now ${!carAvailability[carId]}`);
+
+    const selectedCars = cars.filter((car) => newAvailability[car.id]);
+    dispatch(setAvailableForDispatch(selectedCars));
+    updateGlobalAvailability(selectedCars.map((c) => c.id));
+  };
+
+  // 4) Helper for distance calculation
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    if (typeof lat1 !== "number" || typeof lng1 !== "number" || typeof lat2 !== "number" || typeof lng2 !== "number") {
+    if ([lat1, lng1, lat2, lng2].some((val) => typeof val !== "number")) {
       return Number.MAX_SAFE_INTEGER;
     }
     const toRad = (val: number) => (val * Math.PI) / 180;
     const R = 6371000;
     const dLat = toRad(lat2 - lat1);
     const dLng = toRad(lng2 - lng1);
-    const a = Math.sin(dLat / 2) ** 2 +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
-  // Handle radius changes.
+  // 5) Handle radius input
   const handleRadiusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value)) {
-      console.log(`DispatchAdmin: Radius change event, new value: ${value}, current Redux value: ${radiusMeters}`);
+      console.log(`[DispatchAdmin] radius changed → ${value}`);
       setLocalRadius(value);
-      if (!isManualMode) {
-        dispatch(setManualSelectionMode(true));
-      }
       dispatch(setDispatchRadius(value));
-      console.log(`DispatchAdmin: Dispatched setDispatchRadius(${value})`);
       setRadiusChangeMessage(`Radius updated to ${value} meters`);
       setShowRadiusChange(true);
       setTimeout(() => setShowRadiusChange(false), 3000);
     }
   };
 
-  // Toggle individual car selection.
-  const handleCarAvailabilityToggle = (carId: number) => {
-    if (!isManualMode) {
-      dispatch(setManualSelectionMode(true));
-    }
-    const newAvailability = { ...carAvailability, [carId]: !carAvailability[carId] };
-    setCarAvailability(newAvailability);
-    console.log(`DispatchAdmin: Toggled car ${carId} to ${!carAvailability[carId] ? "available" : "unavailable"}`);
-    const selectedCars = cars.filter((car) => newAvailability[car.id]);
-    dispatch(setAvailableForDispatch(selectedCars));
-    updateGlobalAvailability(selectedCars.map((c) => c.id));
-  };
-
-  // Auto-filter cars by dispatch radius.
+  // 6) “Auto-Filter by Radius” button: sets checkboxes for all cars within `localRadius`
   const autoFilterByRadius = (directRadius?: number) => {
     const radiusToUse = directRadius ?? localRadius;
     setIsLoading(true);
-    console.log(`DispatchAdmin: Auto-filtering cars by ${radiusToUse} meter radius...`);
     try {
-      if (!isManualMode) {
-        dispatch(setManualSelectionMode(true));
-      }
       const newAvailability: { [key: number]: boolean } = {};
       let count = 0;
       cars.forEach((car) => {
-        const isWithinRadius = dispatchLocations.some((dispatchLoc) => {
-          const distance = calculateDistance(car.lat, car.lng, dispatchLoc.lat, dispatchLoc.lng);
+        const withinRadius = dispatchLocations.some((loc) => {
+          const distance = calculateDistance(car.lat, car.lng, loc.lat, loc.lng);
           return distance <= radiusToUse;
         });
-        newAvailability[car.id] = isWithinRadius;
-        if (isWithinRadius) count++;
+        newAvailability[car.id] = withinRadius;
+        if (withinRadius) count++;
       });
       setCarAvailability(newAvailability);
-      console.log(`DispatchAdmin: Found ${count} cars within ${radiusToUse} meter radius`);
+      console.log(`[DispatchAdmin] Found ${count} cars within ${radiusToUse}m`);
+
       const filteredCars = cars.filter((car) => newAvailability[car.id]);
       dispatch(setAvailableForDispatch(filteredCars));
       updateGlobalAvailability(filteredCars.map((c) => c.id));
+
+      // If admin typed a radius that differs from store, update the store radius
       if (directRadius && directRadius !== radiusMeters) {
         dispatch(setDispatchRadius(directRadius));
       }
-      toast.success(`${count} cars found and set for dispatch within ${radiusToUse} meter radius`);
+
+      toast.success(`${count} cars set for dispatch (within ${radiusToUse}m)`);
     } catch (error) {
-      console.error("DispatchAdmin: Error filtering cars by radius:", error);
-      toast.error("Failed to filter cars");
+      console.error("[DispatchAdmin] Error filtering by radius:", error);
+      toast.error("Failed to filter cars by radius");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // For display
   const formatDistance = (meters: number) => {
     return meters >= 1000 ? `${(meters / 1000).toFixed(2)} km` : `${Math.round(meters)} m`;
   };
@@ -213,17 +195,11 @@ export default function DispatchAdmin() {
     return messages.join(", ");
   };
 
+  // --- Render ---
+
   return (
     <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">Dispatch Management</h1>
-
-      {/* Manual Mode Indicator */}
-      <div className="mb-2">
-        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${isManualMode ? "bg-green-800/30 text-green-400" : "bg-yellow-800/30 text-yellow-400"}`}>
-          <span className={`mr-2 h-2 w-2 rounded-full ${isManualMode ? "bg-green-500" : "bg-yellow-500"}`}></span>
-          {isManualMode ? "Manual Selection Mode Active" : "Automatic Mode Active"}
-        </span>
-      </div>
+      <h1 className="text-xl font-bold mb-4">Dispatch Management (Single-Mode)</h1>
 
       {/* Current Radius Display */}
       <div className="mb-4 flex items-center">
@@ -238,7 +214,7 @@ export default function DispatchAdmin() {
         )}
       </div>
 
-      {/* Settings Panel */}
+      {/* Settings Panel (Radius) */}
       <div className="mb-6 p-4 bg-gray-800 rounded-lg">
         <h2 className="text-lg font-semibold mb-3">Dispatch Settings</h2>
         <div className="mb-4">
@@ -271,7 +247,7 @@ export default function DispatchAdmin() {
             </div>
           </div>
           <p className="text-xs text-blue-300 mt-1 italic">
-            Radius changes are applied immediately
+            This radius is just a reference for the admin to auto-filter
           </p>
         </div>
         <div className="flex gap-2">
@@ -307,8 +283,11 @@ export default function DispatchAdmin() {
           </div>
         </div>
         <div className="mb-2 text-sm text-gray-400">
-          Total Cars: {cars.length}, Currently Checked: {Object.values(carAvailability).filter(Boolean).length}
+          Total Cars: {cars.length}, Currently Checked:{" "}
+          {Object.values(carAvailability).filter(Boolean).length}
         </div>
+
+        {/* Loading / No Cars States */}
         {(isInitialLoad || isLoading) && (
           <div className="bg-gray-800 rounded-lg p-12 flex items-center justify-center">
             <div className="flex flex-col items-center">
@@ -320,17 +299,17 @@ export default function DispatchAdmin() {
         {!isInitialLoad && !isLoading && cars.length === 0 && (
           <div className="bg-gray-800 rounded-lg p-12 flex items-center justify-center">
             <div className="text-center">
-              <p className="text-gray-400 mb-2">No cars found. This could be because:</p>
+              <p className="text-gray-400 mb-2">No cars found. Possible reasons:</p>
               <ul className="text-gray-500 list-disc list-inside text-sm">
-                <li>No cars are available in the system</li>
-                <li>The cars API endpoint is not responding</li>
-                <li>There was an error loading car data</li>
+                <li>No cars in system</li>
+                <li>API error</li>
+                <li>Loading error</li>
               </ul>
               <div className="mt-4 text-xs text-gray-600">{debugInfo()}</div>
               <button
                 onClick={() => {
                   dispatch(fetchCars());
-                  toast.success("Attempting to reload car data...");
+                  toast.success("Reloading car data...");
                 }}
                 className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
@@ -339,6 +318,8 @@ export default function DispatchAdmin() {
             </div>
           </div>
         )}
+
+        {/* The Cars Table */}
         {!isInitialLoad && !isLoading && cars.length > 0 && (
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse border border-gray-700">
@@ -349,23 +330,25 @@ export default function DispatchAdmin() {
                   <th className="p-2 border border-gray-700 text-left">Model</th>
                   <th className="p-2 border border-gray-700 text-left">Location</th>
                   <th className="p-2 border border-gray-700 text-left">Distance to Dispatch</th>
-                  <th className="p-2 border border-gray-700 text-left">Available for Dispatch</th>
+                  <th className="p-2 border border-gray-700 text-left">Available?</th>
                 </tr>
               </thead>
               <tbody>
                 {cars.map((car) => {
+                  // For reference: compute distance to the closest dispatch location
                   let closestDistance = Number.MAX_SAFE_INTEGER;
                   let closestDispatchId: number | null = null;
                   if (dispatchLocations.length > 0) {
-                    dispatchLocations.forEach((dispatchLoc) => {
-                      const distance = calculateDistance(car.lat, car.lng, dispatchLoc.lat, dispatchLoc.lng);
+                    dispatchLocations.forEach((loc) => {
+                      const distance = calculateDistance(car.lat, car.lng, loc.lat, loc.lng);
                       if (distance < closestDistance) {
                         closestDistance = distance;
-                        closestDispatchId = dispatchLoc.id;
+                        closestDispatchId = loc.id;
                       }
                     });
                   }
                   const isWithinRadius = closestDistance <= localRadius;
+
                   return (
                     <tr key={car.id} className="hover:bg-gray-700">
                       <td className="p-2 border border-gray-700">{car.id}</td>
@@ -377,21 +360,19 @@ export default function DispatchAdmin() {
                       <td className="p-2 border border-gray-700">
                         {closestDispatchId !== null ? (
                           <span className={isWithinRadius ? "text-green-400" : "text-red-400"}>
-                            {formatDistance(closestDistance)} to Dispatch #{closestDispatchId}
+                            {formatDistance(closestDistance)} (Dispatch #{closestDispatchId})
                           </span>
                         ) : (
                           <span className="text-gray-500">No dispatch locations</span>
                         )}
                       </td>
                       <td className="p-2 border border-gray-700">
-                        <label className="flex items-center justify-center">
-                          <input
-                            type="checkbox"
-                            checked={!!carAvailability[car.id]}
-                            onChange={() => handleCarAvailabilityToggle(car.id)}
-                            className="h-5 w-5"
-                          />
-                        </label>
+                        <input
+                          type="checkbox"
+                          checked={!!carAvailability[car.id]}
+                          onChange={() => handleCarAvailabilityToggle(car.id)}
+                          className="h-5 w-5"
+                        />
                       </td>
                     </tr>
                   );
