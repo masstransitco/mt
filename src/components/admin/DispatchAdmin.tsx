@@ -33,6 +33,17 @@ export default function DispatchAdmin() {
   const [showRadiusChange, setShowRadiusChange] = useState(false);
   const [radiusChangeMessage, setRadiusChangeMessage] = useState("");
   
+  // For tracking radius changes and potential discrepancies
+  const [localRadius, setLocalRadius] = useState(radiusMeters);
+  
+  // Sync local radius if Redux value changes
+  useEffect(() => {
+    if (radiusMeters !== localRadius) {
+      console.log(`DispatchAdmin: Syncing local radius (${localRadius}) with Redux radius (${radiusMeters})`);
+      setLocalRadius(radiusMeters);
+    }
+  }, [radiusMeters, localRadius]);
+  
   // Load initial data
   useEffect(() => {
     const loadData = async () => {
@@ -115,9 +126,14 @@ export default function DispatchAdmin() {
   const handleRadiusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value);
     if (!isNaN(value)) {
+      console.log(`DispatchAdmin: Radius change event, new value: ${value}, current Redux value: ${radiusMeters}`);
+      
+      // Update local state first
+      setLocalRadius(value);
+      
       // Update Redux
       dispatch(setDispatchRadius(value));
-      console.log(`DispatchAdmin: Radius changed to ${value} meters`);
+      console.log(`DispatchAdmin: Dispatched setDispatchRadius(${value})`);
       
       // Show visual feedback
       setRadiusChangeMessage(`Radius updated to ${value} meters`);
@@ -132,6 +148,16 @@ export default function DispatchAdmin() {
       if (!isLoading) {
         autoFilterByRadius(value);
       }
+      
+      // Verify the value was actually applied
+      setTimeout(() => {
+        const currentReduxRadius = selectDispatchRadius(window.__REDUX_STATE__); // Access store directly
+        console.log(`DispatchAdmin: Redux radius value after dispatch: ${currentReduxRadius}`);
+        
+        if (currentReduxRadius !== value) {
+          console.warn(`DispatchAdmin: Radius value mismatch! UI: ${value}, Redux: ${currentReduxRadius}`);
+        }
+      }, 100);
     }
   };
   
@@ -157,6 +183,9 @@ export default function DispatchAdmin() {
       // Update Redux store with the manually selected cars
       dispatch(setAvailableForDispatch(manuallySelectedCars));
       
+      // Make sure radius setting is synchronized
+      dispatch(setDispatchRadius(localRadius));
+      
       toast.success(`${manuallySelectedCars.length} cars set as available for dispatch`);
     } catch (error) {
       console.error("DispatchAdmin: Error applying dispatch settings:", error);
@@ -168,8 +197,8 @@ export default function DispatchAdmin() {
   
   // Auto filter cars by radius - optional direct radius parameter for immediate use
   const autoFilterByRadius = (directRadius?: number) => {
-    // Use provided radius or the one from Redux
-    const radiusToUse = directRadius ?? radiusMeters;
+    // Use provided radius or the one from local state
+    const radiusToUse = directRadius ?? localRadius;
     
     setIsLoading(true);
     console.log(`DispatchAdmin: Auto-filtering cars by ${radiusToUse} meter radius...`);
@@ -195,6 +224,11 @@ export default function DispatchAdmin() {
       // Automatically apply the filtered cars to Redux
       const filteredCars = cars.filter(car => newAvailability[car.id]);
       dispatch(setAvailableForDispatch(filteredCars));
+      
+      // Also ensure the radius setting is properly synchronized
+      if (directRadius && directRadius !== radiusMeters) {
+        dispatch(setDispatchRadius(directRadius));
+      }
       
       toast.success(`${count} cars found and set for dispatch within ${radiusToUse} meter radius`);
     } catch (error) {
@@ -250,7 +284,7 @@ export default function DispatchAdmin() {
           </label>
           <input
             type="number"
-            value={radiusMeters}
+            value={localRadius}
             onChange={handleRadiusChange}
             min="0"
             max="100000"
@@ -260,7 +294,7 @@ export default function DispatchAdmin() {
           <div className="mt-2">
             <input
               type="range"
-              value={radiusMeters}
+              value={localRadius}
               onChange={handleRadiusChange}
               min="0"
               max="100000"
@@ -277,6 +311,11 @@ export default function DispatchAdmin() {
           </div>
           <p className="text-xs text-blue-300 mt-1 italic">
             Changes to radius are applied automatically
+          </p>
+          
+          {/* Debug info - can be removed in production */}
+          <p className="text-xs text-gray-500 mt-1">
+            Redux radius: {radiusMeters}m | Local radius: {localRadius}m
           </p>
         </div>
         
@@ -410,7 +449,7 @@ export default function DispatchAdmin() {
                   }
                   
                   // Is within radius?
-                  const isWithinRadius = closestDistance <= radiusMeters;
+                  const isWithinRadius = closestDistance <= localRadius;
                   
                   return (
                     <tr key={car.id} className="hover:bg-gray-700">
@@ -449,4 +488,3 @@ export default function DispatchAdmin() {
       </div>
     </div>
   );
-}
