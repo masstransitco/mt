@@ -3,7 +3,7 @@ import { selectAllDispatchLocations } from "@/store/dispatchSlice";
 import { useAppSelector, useAppDispatch } from "@/store/store";
 import { useEffect } from "react";
 
-const RADIUS_METERS = 150;
+const RADIUS_METERS = 50000;
 
 interface DispatchLocation {
   id: number;
