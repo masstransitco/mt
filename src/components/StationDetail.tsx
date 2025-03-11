@@ -35,6 +35,7 @@ import { auth } from "@/lib/firebase";
 import { selectScannedCar } from "@/store/carSlice";
 import TripSheet from "./TripSheet";
 import WalletModal from "@/components/ui/WalletModal";
+import PaymentResultModal from "@/components/ui/PaymentResultModal";
 
 /** 
  * 1) Dynamically import PaymentSummary 
@@ -272,10 +273,24 @@ function StationDetailComponent({
   // Local states
   const [isInitialized, setIsInitialized] = useState(true);
   const [attemptedRender, setAttemptedRender] = useState(true);
-
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
   const [charging, setCharging] = useState(false);
+  
+  // New payment result modal states
+  const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [cardLast4, setCardLast4] = useState("");
+
+  // Get stations by ID for the modal
+  const departureStation = useMemo(() => {
+    return stations.find(s => s.id === departureId) || null;
+  }, [stations, departureId]);
+  
+  const arrivalStation = useMemo(() => {
+    return stations.find(s => s.id === arrivalId) || null;
+  }, [stations, arrivalId]);
 
   // For the "Parking" label
   const parkingValue = useMemo(() => {
@@ -290,7 +305,7 @@ function StationDetailComponent({
     return Math.round(route.duration / 60).toString();
   }, [route, departureId, arrivalId]);
 
-  // Identify if station is a “virtual” car location
+  // Identify if station is a "virtual" car location
   const isVirtualCarLocation = useMemo(
     () => !!activeStation?.properties?.isVirtualCarLocation,
     [activeStation]
@@ -350,6 +365,24 @@ function StationDetailComponent({
     setWalletModalOpen(false);
   }, []);
 
+  // New handlers for payment result modal
+  const handlePaymentContinue = useCallback(() => {
+    // Close the modal
+    setPaymentResultModalOpen(false);
+    
+    if (paymentSuccess) {
+      // For successful payments, advance to step 5
+      dispatch(advanceBookingStep(5));
+      dispatch(saveBookingDetails());
+    }
+    // For failed payments, stay on step 4 and let user try again
+  }, [dispatch, paymentSuccess]);
+
+  const handlePaymentRetry = useCallback(() => {
+    // Close the modal and let user try payment again
+    setPaymentResultModalOpen(false);
+  }, []);
+
   // Confirm button logic
   const handleConfirm = useCallback(async () => {
     // Step 2 => proceed to step 3 (choose arrival)
@@ -372,19 +405,36 @@ function StationDetailComponent({
       }
       if (!hasDefaultPaymentMethod) {
         toast.error("Please add/set a default payment method first.");
+        handleOpenWalletModal();
         return;
       }
+      
       try {
         setCharging(true);
+        
+        // Process payment
         const result = await chargeUserForTrip(auth.currentUser!.uid, 5000); // e.g. $50
-        if (!result.success) throw new Error(result.error || "Charge failed");
-
-        dispatch(advanceBookingStep(5));
-        await dispatch(saveBookingDetails());
-        toast.success("Trip booked! Starting fare of HK$50 charged.");
+        
+        if (!result.success) {
+          throw new Error(result.error || "Charge failed");
+        }
+        
+        // Payment succeeded, prepare for modal display
+        setPaymentSuccess(true);
+        setPaymentReference(result.transactionId || "TXN" + Date.now().toString().slice(-8));
+        
+        // If you have the card info available from the API response, set it here
+        setCardLast4(result.cardLast4 || "4242"); // Default to "4242" if not available
+        
+        // Show payment result modal
+        setPaymentResultModalOpen(true);
+        
       } catch (err) {
         console.error("Failed to charge trip =>", err);
-        toast.error("Payment failed. Please try again or check your card.");
+        
+        // Payment failed, show error modal
+        setPaymentSuccess(false);
+        setPaymentResultModalOpen(true);
       } finally {
         setCharging(false);
       }
@@ -398,6 +448,7 @@ function StationDetailComponent({
     isSignedIn,
     onOpenSignIn,
     hasDefaultPaymentMethod,
+    handleOpenWalletModal,
   ]);
 
   // Possibly show an "estimated pickup time" if we have a dispatch route
@@ -465,80 +516,93 @@ function StationDetailComponent({
 
   // Normal UI
   return (
-    <motion.div
-      className="p-4 space-y-4 relative"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "tween", duration: 0.2 }}
-    >
-      {/* No "X" button – user will rely on gestures or outside triggers */}
+    <>
+      <motion.div
+        className="p-4 space-y-4 relative"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "tween", duration: 0.2 }}
+      >
+        {/* Map preview */}
+        <Suspense fallback={<MapCardFallback />}>
+          <MapCard
+            coordinates={[
+              activeStation.geometry.coordinates[0],
+              activeStation.geometry.coordinates[1],
+            ]}
+            name={activeStation.properties.Place}
+            address={activeStation.properties.Address}
+            className="mt-2 mb-2 h-52 w-full"
+          />
+        </Suspense>
 
-      {/* Map preview */}
-      <Suspense fallback={<MapCardFallback />}>
-        <MapCard
-          coordinates={[
-            activeStation.geometry.coordinates[0],
-            activeStation.geometry.coordinates[1],
-          ]}
-          name={activeStation.properties.Place}
-          address={activeStation.properties.Address}
-          className="mt-2 mb-2 h-52 w-full"
+        {/* If step=2 and not virtual => show an estimated pickup time */}
+        {step === 2 && !isVirtualCarLocation && estimatedPickupTime && (
+          <div className="text-sm text-center bg-blue-600/20 rounded-md p-2 border border-blue-500/30">
+            <span className="text-gray-200">Estimated car arrival: </span>
+            <span className="font-medium text-white">{estimatedPickupTime}</span>
+          </div>
+        )}
+
+        {/* Station Stats */}
+        <StationStats
+          activeStation={activeStation}
+          step={step}
+          driveTimeMin={driveTimeMin}
+          parkingValue={parkingValue}
+          isVirtualCarStation={isVirtualCarLocation}
         />
-      </Suspense>
 
-      {/* If step=2 and not virtual => show an estimated pickup time */}
-      {step === 2 && !isVirtualCarLocation && estimatedPickupTime && (
-        <div className="text-sm text-center bg-blue-600/20 rounded-md p-2 border border-blue-500/30">
-          <span className="text-gray-200">Estimated car arrival: </span>
-          <span className="font-medium text-white">{estimatedPickupTime}</span>
-        </div>
-      )}
+        {/* CarGrid if step=2 (choose your car) */}
+        {isDepartureFlow && step === 2 && (
+          <motion.div
+            className="py-2"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {(shouldLoadCarGrid || isVirtualCarLocation) && (
+              <MemoizedCarGrid
+                isVisible
+                isQrScanStation={isQrScanStation}
+                scannedCar={scannedCarRedux}
+              />
+            )}
+          </motion.div>
+        )}
 
-      {/* Station Stats */}
-      <StationStats
-        activeStation={activeStation}
-        step={step}
-        driveTimeMin={driveTimeMin}
-        parkingValue={parkingValue}
-        isVirtualCarStation={isVirtualCarLocation}
+        {/* PaymentSummary if step=4 and user is signed in */}
+        {step === 4 && isSignedIn && (
+          <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+        )}
+
+        {/* Confirm button (step=2 => "Choose Dropoff" / step=4 => "Confirm Trip") */}
+        <ConfirmButton
+          isDepartureFlow={isDepartureFlow}
+          charging={charging}
+          disabled={charging || !(step === 2 || step === 4)}
+          onClick={handleConfirm}
+          isVirtualCarLocation={isVirtualCarLocation}
+        />
+
+        {/* Wallet/Payment Modal */}
+        <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
+      </motion.div>
+      
+      {/* Payment Result Modal */}
+      <PaymentResultModal
+        isOpen={paymentResultModalOpen}
+        isSuccess={paymentSuccess}
+        amount={5000} // Fixed amount in cents (HK$50.00)
+        referenceId={paymentReference}
+        cardLast4={cardLast4}
+        onContinue={handlePaymentContinue}
+        onRetry={handlePaymentRetry}
+        departureStation={departureStation?.properties.Place}
+        arrivalStation={arrivalStation?.properties.Place}
       />
-
-      {/* CarGrid if step=2 (choose your car) */}
-      {isDepartureFlow && step === 2 && (
-        <motion.div
-          className="py-2"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          {(shouldLoadCarGrid || isVirtualCarLocation) && (
-            <MemoizedCarGrid
-              isVisible
-              isQrScanStation={isQrScanStation}
-              scannedCar={scannedCarRedux}
-            />
-          )}
-        </motion.div>
-      )}
-
-      {/* PaymentSummary if step=4 and user is signed in */}
-      {step === 4 && isSignedIn && (
-        <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
-      )}
-
-      {/* Confirm button (step=2 => "Choose Dropoff" / step=4 => "Confirm Trip") */}
-      <ConfirmButton
-        isDepartureFlow={isDepartureFlow}
-        charging={charging}
-        disabled={charging || !(step === 2 || step === 4)}
-        onClick={handleConfirm}
-        isVirtualCarLocation={isVirtualCarLocation}
-      />
-
-      {/* Wallet/Payment Modal */}
-      <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
-    </motion.div>
+    </>
   );
 }
 
