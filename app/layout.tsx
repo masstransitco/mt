@@ -10,6 +10,7 @@ import { toast } from "react-hot-toast"; // For notifications
 
 import { auth } from "@/lib/firebase";
 import Spinner from "@/components/ui/spinner";
+import PwaMetaTags from '@/components/PwaMetaTags';
 
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
@@ -190,6 +191,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
         />
+        <PwaMetaTags />
       </head>
       <body className={`${inter.className} h-full overflow-x-hidden bg-background`}>
         <DisablePinchZoom />
