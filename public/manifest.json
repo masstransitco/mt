@@ -1,7 +1,7 @@
 {
   "name": "Mass Transit Company",
   "short_name": "MTC",
-  "description": "Book and drive vehicles with ease",
+  "description": "Self-Serve Electric Car Transits",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
