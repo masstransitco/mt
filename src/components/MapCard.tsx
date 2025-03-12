@@ -60,7 +60,7 @@ export default function MapCard({
       container.style.left = '0';
       container.style.width = '100%';
       container.style.height = '100%';
-      container.style.zIndex = '9999';
+      container.style.zIndex = '99999';
       container.style.pointerEvents = 'none';
       document.body.appendChild(container);
       setPortalContainer(container);
@@ -305,7 +305,7 @@ export default function MapCard({
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto",
         expanded 
-          ? "fixed inset-4 z-50 m-4 max-w-none max-h-none" 
+          ? "fixed inset-4 z-50001 m-4 max-w-none max-h-none" 
           : "h-52",
         className
       )}
@@ -364,7 +364,7 @@ export default function MapCard({
       {/* Render portal overlay when expanded */}
       {expanded && portalContainer && createPortal(
         <div 
-          className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center"
+          className="fixed inset-0 bg-black/70 z-50000 flex items-center justify-center"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               toggleExpanded();
