@@ -295,6 +295,17 @@ const MapCard: React.FC<MapCardProps> = ({
       }
     }, 300);
   };
+  
+  // Make sure map resizes when expanded
+  useEffect(() => {
+    if (expanded && map.current) {
+      const resizeTimer = setTimeout(() => {
+        map.current?.resize();
+      }, 50);
+      
+      return () => clearTimeout(resizeTimer);
+    }
+  }, [expanded]);
 
   // The card component renders the actual map with all features
   const mapCard = (
@@ -306,11 +317,20 @@ const MapCard: React.FC<MapCardProps> = ({
       onClick={(e) => e.stopPropagation()} // Prevent clicks from reaching backdrop
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto",
-        expanded 
-          ? "fixed z-[10001] rounded-lg left-[5vw] right-[5vw] top-[5vh] bottom-[5vh] w-[90vw] h-[90vh]" 
-          : "h-52",
+        expanded ? "" : "h-52",
         className
       )}
+      style={expanded ? {
+        position: 'fixed',
+        zIndex: 999999,
+        left: '5%',
+        right: '5%',
+        top: '5%',
+        bottom: '5%',
+        width: '90%',
+        height: '90%',
+        margin: '0 auto',
+      } : {}}
     >
       {/* Map container */}
       <div
@@ -327,9 +347,12 @@ const MapCard: React.FC<MapCardProps> = ({
       )}
 
       {/* Expand/minimize button in top-right */}
-      <div className="absolute top-2 right-2 flex space-x-2 z-[10002]">
+      <div className="absolute top-2 right-2 flex space-x-2 z-50">
         <button
-          onClick={toggleExpanded}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleExpanded(e);
+          }}
           className="bg-gray-800/80 p-1.5 rounded-full text-white hover:bg-gray-700/80 transition-colors"
           aria-label={expanded ? "Minimize map" : "Maximize map"}
         >
@@ -365,9 +388,15 @@ const MapCard: React.FC<MapCardProps> = ({
           {/* Portal the expanded map outside the Sheet component */}
           {createPortal(
             <div 
-              className="fixed inset-0 bg-black/50 z-[10000] pointer-events-auto" 
-              onClick={toggleExpanded}
-              style={{ backdropFilter: 'blur(2px)' }}
+              className="fixed inset-0 bg-black/50 pointer-events-auto" 
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleExpanded(e);
+              }}
+              style={{ 
+                backdropFilter: 'blur(2px)',
+                zIndex: 999998,
+              }}
             >
               {mapCard}
             </div>,
