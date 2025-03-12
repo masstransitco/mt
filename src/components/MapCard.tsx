@@ -163,9 +163,16 @@ export default function MapCard({
     setTimeout(() => {
       if (mapRef.current) {
         mapRef.current.resize();
+        
+        // Re-center the map on our coordinates to ensure proper view
+        mapRef.current.flyTo({
+          center: coordinates,
+          zoom: expanded ? 12.5 : 16.5, // Adjust zoom level based on state
+          duration: 500,
+        });
       }
-    }, 100);
-  }, []);
+    }, 200);
+  }, [coordinates, expanded]);
 
   /**
    * Destroy the map on unmount
@@ -270,7 +277,7 @@ export default function MapCard({
       className={cn(
         "relative overflow-hidden shadow-lg border border-gray-700",
         expanded 
-          ? "fixed inset-0 z-[9999] rounded-none" 
+          ? "fixed z-[9999] rounded-lg left-[5vw] right-[5vw] top-[5vh] bottom-[5vh] w-[90vw] h-[90vh]" 
           : "h-52 rounded-lg",
         className
       )}
@@ -292,12 +299,8 @@ export default function MapCard({
       {/* Backdrop when expanded */}
       {expanded && (
         <div 
-          className="absolute inset-0 bg-black/50 -z-10"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              toggleExpanded();
-            }
-          }}
+          className="fixed inset-0 bg-black/50 z-[9998]"
+          onClick={() => toggleExpanded()}
         />
       )}
 
