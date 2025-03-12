@@ -186,18 +186,27 @@ export default function MapCard({
    * Toggling expanded => move to portal for full screen
    */
   const toggleExpanded = useCallback(() => {
+    // Set expanded state
     setExpanded((prev) => !prev);
     
-    // Give the map time to resize after the animation completes
-    setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.resize();
-        if (markerRef.current) {
-          const pos = markerRef.current.getLngLat();
-          markerRef.current.setLngLat(pos);
+    // Use requestAnimationFrame for smoother transitions
+    // This gives the browser time to handle the DOM changes first
+    requestAnimationFrame(() => {
+      // Then use setTimeout to give time for animation to complete
+      setTimeout(() => {
+        try {
+          if (mapRef.current) {
+            mapRef.current.resize();
+            if (markerRef.current) {
+              const pos = markerRef.current.getLngLat();
+              markerRef.current.setLngLat(pos);
+            }
+          }
+        } catch (err) {
+          console.warn("Error resizing map during toggle:", err);
         }
-      }
-    }, 300);
+      }, 350);
+    });
   }, []);
 
   /**
@@ -356,10 +365,13 @@ export default function MapCard({
   );
 
   // Main render logic with proper handling of expanded state
+  // Use AnimatePresence to handle transition animations properly
   return (
     <>
       {/* Render the card inline when not expanded */}
-      {!expanded && card}
+      <AnimatePresence>
+        {!expanded && card}
+      </AnimatePresence>
       
       {/* Render portal overlay when expanded */}
       {expanded && portalContainer && createPortal(
@@ -371,7 +383,9 @@ export default function MapCard({
             }
           }}
         >
-          {card}
+          <AnimatePresence>
+            {card}
+          </AnimatePresence>
         </div>,
         portalContainer
       )}
