@@ -6,8 +6,7 @@ import React, {
   useState,
   useCallback
 } from "react";
-import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -43,43 +42,13 @@ export default function MapCard({
   const markerRef = useRef<import("mapbox-gl").Marker | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  
-  // Create portal container on demand instead of finding an existing one
-  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
-
-  /**
-   * Create a portal container when component mounts
-   */
-  useEffect(() => {
-    if (typeof window !== "undefined" && !portalContainer) {
-      const container = document.createElement('div');
-      container.id = 'map-portal-container';
-      container.style.position = 'fixed';
-      container.style.top = '0';
-      container.style.left = '0';
-      container.style.width = '100%';
-      container.style.height = '100%';
-      container.style.zIndex = '99999';
-      container.style.pointerEvents = 'none';
-      document.body.appendChild(container);
-      setPortalContainer(container);
-      
-      return () => {
-        if (document.body.contains(container)) {
-          document.body.removeChild(container);
-        }
-      };
-    }
-  }, [portalContainer]);
-
   /**
    * Create the map once on mount
    */
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    const setupMap = async () => {
       try {
         if (!mapboxglLocal) {
           // 1) Import the default export: mapbox-gl
@@ -148,7 +117,9 @@ export default function MapCard({
       } catch (err) {
         console.error("Error loading mapbox-gl or creating map:", err);
       }
-    })();
+    };
+
+    setupMap();
 
     // Cleanup
     return () => {
@@ -162,51 +133,38 @@ export default function MapCard({
    */
   useEffect(() => {
     const handleResize = () => {
-      mapRef.current?.resize();
+      if (mapRef.current) {
+        mapRef.current.resize();
+      }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   /**
-   * Handle escape key to exit fullscreen mode
+   * Handle escape key for exiting fullscreen
    */
   useEffect(() => {
-    const handleEscKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && expanded) {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && expanded) {
         setExpanded(false);
       }
     };
-    
-    window.addEventListener('keydown', handleEscKey);
-    return () => window.removeEventListener('keydown', handleEscKey);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [expanded]);
 
   /**
-   * Toggling expanded => move to portal for full screen
+   * Toggling expanded state
    */
   const toggleExpanded = useCallback(() => {
-    // Set expanded state
     setExpanded((prev) => !prev);
-    
-    // Use requestAnimationFrame for smoother transitions
-    // This gives the browser time to handle the DOM changes first
-    requestAnimationFrame(() => {
-      // Then use setTimeout to give time for animation to complete
-      setTimeout(() => {
-        try {
-          if (mapRef.current) {
-            mapRef.current.resize();
-            if (markerRef.current) {
-              const pos = markerRef.current.getLngLat();
-              markerRef.current.setLngLat(pos);
-            }
-          }
-        } catch (err) {
-          console.warn("Error resizing map during toggle:", err);
-        }
-      }, 350);
-    });
+    // Resize map after state change
+    setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.resize();
+      }
+    }, 100);
   }, []);
 
   /**
@@ -302,28 +260,20 @@ export default function MapCard({
   };
 
   /**
-   * The card UI
+   * The card UI (similar to original)
    */
-  const card = (
+  return (
     <motion.div
-      ref={cardRef}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.3 }}
       className={cn(
-        "relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto",
+        "relative overflow-hidden shadow-lg border border-gray-700",
         expanded 
-          ? "fixed inset-4 z-50001 m-4 max-w-none max-h-none" 
-          : "h-52",
+          ? "fixed inset-0 z-[9999] rounded-none" 
+          : "h-52 rounded-lg",
         className
       )}
-      style={{
-        top: expanded ? '0' : undefined,
-        left: expanded ? '0' : undefined,
-        right: expanded ? '0' : undefined,
-        bottom: expanded ? '0' : undefined,
-      }}
     >
       {/* The map container */}
       <div
@@ -337,6 +287,18 @@ export default function MapCard({
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
         </div>
+      )}
+
+      {/* Backdrop when expanded */}
+      {expanded && (
+        <div 
+          className="absolute inset-0 bg-black/50 -z-10"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              toggleExpanded();
+            }
+          }}
+        />
       )}
 
       {/* Expand/minimize button */}
@@ -362,34 +324,6 @@ export default function MapCard({
         <div className="text-gray-200 text-xs mt-0.5">{address}</div>
       </div>
     </motion.div>
-  );
-
-  // Main render logic with proper handling of expanded state
-  // Use AnimatePresence to handle transition animations properly
-  return (
-    <>
-      {/* Render the card inline when not expanded */}
-      <AnimatePresence>
-        {!expanded && card}
-      </AnimatePresence>
-      
-      {/* Render portal overlay when expanded */}
-      {expanded && portalContainer && createPortal(
-        <div 
-          className="fixed inset-0 bg-black/70 z-50000 flex items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              toggleExpanded();
-            }
-          }}
-        >
-          <AnimatePresence>
-            {card}
-          </AnimatePresence>
-        </div>,
-        portalContainer
-      )}
-    </>
   );
 }
 
