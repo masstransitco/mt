@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import mapboxgl from "mapbox-gl";
 import { motion } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
@@ -25,11 +26,38 @@ const MapCard: React.FC<MapCardProps> = ({
   className,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
+  const portalContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const marker = useRef<mapboxgl.Marker | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
   const animFrameRef = useRef<number | null>(null);
+  const [, setRenderTrigger] = useState(0);
+
+  // Create portal div on mount
+  useEffect(() => {
+    // Create portal container for expanded view
+    if (!portalContainer.current && typeof document !== 'undefined') {
+      const div = document.createElement('div');
+      div.id = 'map-expanded-portal';
+      div.style.position = 'fixed';
+      div.style.left = '0';
+      div.style.top = '0';
+      div.style.width = '100%';
+      div.style.height = '100%';
+      div.style.zIndex = '99999';
+      div.style.pointerEvents = 'none';
+      document.body.appendChild(div);
+      portalContainer.current = div;
+    }
+
+    return () => {
+      if (portalContainer.current && document.body.contains(portalContainer.current)) {
+        document.body.removeChild(portalContainer.current);
+        portalContainer.current = null;
+      }
+    };
+  }, []);
 
   // Basic bounding box logic
   const getBoundingBox = (center: [number, number], radiusKm: number = 0.25) => {
@@ -213,11 +241,8 @@ const MapCard: React.FC<MapCardProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && expanded) {
         setExpanded(false);
-        setTimeout(() => {
-          if (map.current) {
-            map.current.resize();
-          }
-        }, 100);
+        // Force a render to make sure everything updates
+        setRenderTrigger(prev => prev + 1);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -226,8 +251,10 @@ const MapCard: React.FC<MapCardProps> = ({
 
   // Expand or minimize
   const toggleExpanded = () => {
-    setExpanded(!expanded);
+    setExpanded(prev => !prev);
+    // Force a render to make sure everything updates
     setTimeout(() => {
+      setRenderTrigger(prev => prev + 1);
       if (map.current) {
         map.current.resize();
         // Recenter marker if needed
@@ -239,15 +266,18 @@ const MapCard: React.FC<MapCardProps> = ({
     }, 300);
   };
 
-  return (
+  // The card component renders the actual map with all features
+  const mapCard = (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.3 }}
       className={cn(
-        "relative overflow-hidden rounded-lg shadow-lg border border-gray-700",
-        expanded ? "fixed z-[9999] rounded-lg left-[5vw] right-[5vw] top-[5vh] bottom-[5vh] w-[90vw] h-[90vh]" : "h-52",
+        "relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto",
+        expanded 
+          ? "fixed z-10 rounded-lg left-[5vw] right-[5vw] top-[5vh] bottom-[5vh] w-[90vw] h-[90vh]" 
+          : "h-52",
         className
       )}
     >
@@ -263,14 +293,6 @@ const MapCard: React.FC<MapCardProps> = ({
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
         </div>
-      )}
-
-      {/* Backdrop when expanded */}
-      {expanded && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-[9998]"
-          onClick={() => toggleExpanded()}
-        />
       )}
 
       {/* Expand/minimize button in top-right */}
@@ -297,6 +319,27 @@ const MapCard: React.FC<MapCardProps> = ({
       </div>
     </motion.div>
   );
+
+  // If expanded and we have a portal container, render through portal
+  if (expanded && portalContainer.current) {
+    return (
+      <>
+        {/* Render an empty placeholder div in the original position */}
+        <div className={cn("h-52", className)} />
+        
+        {/* Portal the expanded map outside the Sheet component */}
+        {createPortal(
+          <div className="fixed inset-0 bg-black/50 z-[99998] pointer-events-auto" onClick={toggleExpanded}>
+            {mapCard}
+          </div>,
+          portalContainer.current
+        )}
+      </>
+    );
+  }
+
+  // Regular inline rendering when not expanded
+  return mapCard;
 };
 
 export default MapCard;
