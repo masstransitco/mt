@@ -19,6 +19,8 @@ interface MapCardProps {
   className?: string;
 }
 
+const MAP_PORTAL_ID = 'map-expanded-portal';
+
 const MapCard: React.FC<MapCardProps> = ({
   coordinates,
   name,
@@ -34,28 +36,32 @@ const MapCard: React.FC<MapCardProps> = ({
   const animFrameRef = useRef<number | null>(null);
   const [, setRenderTrigger] = useState(0);
 
-  // Create portal div on mount
+  // Ensure portal div exists and persists
   useEffect(() => {
-    // Create portal container for expanded view
-    if (!portalContainer.current && typeof document !== 'undefined') {
+    // Check if portal already exists first
+    let existingPortal = document.getElementById(MAP_PORTAL_ID) as HTMLDivElement | null;
+    
+    if (existingPortal) {
+      portalContainer.current = existingPortal;
+    } else if (typeof document !== 'undefined') {
       const div = document.createElement('div');
-      div.id = 'map-expanded-portal';
+      div.id = MAP_PORTAL_ID;
       div.style.position = 'fixed';
       div.style.left = '0';
       div.style.top = '0';
       div.style.width = '100%';
       div.style.height = '100%';
-      div.style.zIndex = '99999';
+      div.style.zIndex = '10000'; // Higher than Sheet but not interfering with other modals
       div.style.pointerEvents = 'none';
       document.body.appendChild(div);
       portalContainer.current = div;
     }
 
+    // Don't remove the portal container on component unmount
+    // This avoids issues when the component re-renders
     return () => {
-      if (portalContainer.current && document.body.contains(portalContainer.current)) {
-        document.body.removeChild(portalContainer.current);
-        portalContainer.current = null;
-      }
+      // Just clean up our references, don't remove from DOM
+      portalContainer.current = null;
     };
   }, []);
 
@@ -112,16 +118,26 @@ const MapCard: React.FC<MapCardProps> = ({
     }
   };
 
-  // Initialize the map on mount
+  // Initialize or reinitialize the map when needed
   useEffect(() => {
-    if (!mapContainer.current) return;
+    let currentMapContainer = mapContainer.current;
+    if (!currentMapContainer) return;
+
+    // Important: Check if we need to clean up an existing map first
+    if (map.current) {
+      destroyMarkerAnimation();
+      map.current.remove();
+      map.current = null;
+      marker.current = null;
+    }
 
     // Set bounding box for focus
     const bounds = getBoundingBox(coordinates);
 
     try {
+      // Create a new map instance
       map.current = new mapboxgl.Map({
-        container: mapContainer.current,
+        container: currentMapContainer,
         style: "mapbox://styles/mapbox/dark-v11",
         center: coordinates,
         zoom: 12.5,
@@ -135,39 +151,45 @@ const MapCard: React.FC<MapCardProps> = ({
       });
 
       map.current.on("load", () => {
+        if (!map.current) return;
+        
         setMapInitialized(true);
 
         // Attempt to add 3D buildings
         try {
-          map.current?.addLayer({
-            id: "3d-buildings",
-            source: "composite",
-            "source-layer": "building",
-            type: "fill-extrusion",
-            minzoom: 14,
-            paint: {
-              "fill-extrusion-color": "#aaa",
-              "fill-extrusion-height": ["get", "height"],
-              "fill-extrusion-base": ["get", "min_height"],
-              "fill-extrusion-opacity": 0.6,
-            },
-          });
+          if (map.current) {
+            map.current.addLayer({
+              id: "3d-buildings",
+              source: "composite",
+              "source-layer": "building",
+              type: "fill-extrusion",
+              minzoom: 14,
+              paint: {
+                "fill-extrusion-color": "#aaa",
+                "fill-extrusion-height": ["get", "height"],
+                "fill-extrusion-base": ["get", "min_height"],
+                "fill-extrusion-opacity": 0.6,
+              },
+            });
+          }
         } catch (error) {
           console.warn("Could not add 3D buildings layer:", error);
         }
 
         // Add a marker
-        marker.current = new mapboxgl.Marker({
-          color: "#3b82f6",
-        })
-          .setLngLat(coordinates)
-          .addTo(map.current!);
+        if (map.current) {
+          marker.current = new mapboxgl.Marker({
+            color: "#3b82f6",
+          })
+            .setLngLat(coordinates)
+            .addTo(map.current);
 
-        // Kick off marker pulsing
-        animateMarker();
+          // Kick off marker pulsing
+          animateMarker();
 
-        // "Fly in" or "zoom in" effect
-        startEntranceAnimation(map.current!);
+          // "Fly in" or "zoom in" effect
+          startEntranceAnimation(map.current);
+        }
       });
 
       map.current.on("error", (e) => {
@@ -186,7 +208,7 @@ const MapCard: React.FC<MapCardProps> = ({
       }
       marker.current = null;
     };
-  }, [coordinates]);
+  }, [coordinates, expanded]); // Re-initialize when coordinates or expanded state changes
 
   // Entrance camera animation
   const startEntranceAnimation = (mapInstance: mapboxgl.Map) => {
@@ -202,6 +224,8 @@ const MapCard: React.FC<MapCardProps> = ({
     const startTime = Date.now();
 
     const animate = () => {
+      if (!mapInstance || !mapInstance.loaded()) return;
+      
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeProgress = easeInOutCubic(progress);
@@ -249,9 +273,15 @@ const MapCard: React.FC<MapCardProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [expanded]);
 
-  // Expand or minimize
-  const toggleExpanded = () => {
+  // Expand or minimize with proper event handling
+  const toggleExpanded = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    
     setExpanded(prev => !prev);
+    
     // Force a render to make sure everything updates
     setTimeout(() => {
       setRenderTrigger(prev => prev + 1);
@@ -273,10 +303,11 @@ const MapCard: React.FC<MapCardProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.3 }}
+      onClick={(e) => e.stopPropagation()} // Prevent clicks from reaching backdrop
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto",
         expanded 
-          ? "fixed z-10 rounded-lg left-[5vw] right-[5vw] top-[5vh] bottom-[5vh] w-[90vw] h-[90vh]" 
+          ? "fixed z-[10001] rounded-lg left-[5vw] right-[5vw] top-[5vh] bottom-[5vh] w-[90vw] h-[90vh]" 
           : "h-52",
         className
       )}
@@ -296,7 +327,7 @@ const MapCard: React.FC<MapCardProps> = ({
       )}
 
       {/* Expand/minimize button in top-right */}
-      <div className="absolute top-2 right-2 flex space-x-2 z-10">
+      <div className="absolute top-2 right-2 flex space-x-2 z-[10002]">
         <button
           onClick={toggleExpanded}
           className="bg-gray-800/80 p-1.5 rounded-full text-white hover:bg-gray-700/80 transition-colors"
@@ -321,21 +352,30 @@ const MapCard: React.FC<MapCardProps> = ({
   );
 
   // If expanded and we have a portal container, render through portal
-  if (expanded && portalContainer.current) {
-    return (
-      <>
-        {/* Render an empty placeholder div in the original position */}
-        <div className={cn("h-52", className)} />
-        
-        {/* Portal the expanded map outside the Sheet component */}
-        {createPortal(
-          <div className="fixed inset-0 bg-black/50 z-[99998] pointer-events-auto" onClick={toggleExpanded}>
-            {mapCard}
-          </div>,
-          portalContainer.current
-        )}
-      </>
-    );
+  if (expanded) {
+    // Try to get the portal container
+    const portalEl = portalContainer.current || document.getElementById(MAP_PORTAL_ID);
+    
+    if (portalEl) {
+      return (
+        <>
+          {/* Render an empty placeholder div in the original position */}
+          <div className={cn("h-52", className)} />
+          
+          {/* Portal the expanded map outside the Sheet component */}
+          {createPortal(
+            <div 
+              className="fixed inset-0 bg-black/50 z-[10000] pointer-events-auto" 
+              onClick={toggleExpanded}
+              style={{ backdropFilter: 'blur(2px)' }}
+            >
+              {mapCard}
+            </div>,
+            portalEl
+          )}
+        </>
+      );
+    }
   }
 
   // Regular inline rendering when not expanded
