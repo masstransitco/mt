@@ -7,7 +7,7 @@ import React, {
   useCallback
 } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -44,16 +44,34 @@ export default function MapCard({
   const animFrameRef = useRef<number | null>(null);
 
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [portalElem, setPortalElem] = useState<HTMLElement | null>(null);
+  
+  // Create portal container on demand instead of finding an existing one
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   /**
-   * On mount: find #portal-root for expanded full-screen mode
+   * Create a portal container when component mounts
    */
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setPortalElem(document.getElementById("portal-root"));
+    if (typeof window !== "undefined" && !portalContainer) {
+      const container = document.createElement('div');
+      container.id = 'map-portal-container';
+      container.style.position = 'fixed';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.width = '100%';
+      container.style.height = '100%';
+      container.style.zIndex = '9999';
+      container.style.pointerEvents = 'none';
+      document.body.appendChild(container);
+      setPortalContainer(container);
+      
+      return () => {
+        if (document.body.contains(container)) {
+          document.body.removeChild(container);
+        }
+      };
     }
-  }, []);
+  }, [portalContainer]);
 
   /**
    * Create the map once on mount
@@ -151,10 +169,26 @@ export default function MapCard({
   }, []);
 
   /**
+   * Handle escape key to exit fullscreen mode
+   */
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && expanded) {
+        setExpanded(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscKey);
+    return () => window.removeEventListener('keydown', handleEscKey);
+  }, [expanded]);
+
+  /**
    * Toggling expanded => move to portal for full screen
    */
-  const toggleExpanded = () => {
+  const toggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev);
+    
+    // Give the map time to resize after the animation completes
     setTimeout(() => {
       if (mapRef.current) {
         mapRef.current.resize();
@@ -164,7 +198,7 @@ export default function MapCard({
         }
       }
     }, 300);
-  };
+  }, []);
 
   /**
    * Destroy the map on unmount
@@ -269,10 +303,18 @@ export default function MapCard({
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.3 }}
       className={cn(
-        "relative overflow-hidden rounded-lg shadow-lg border border-gray-700",
-        expanded ? "fixed inset-0 m-4 z-[9999]" : "h-52",
+        "relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto",
+        expanded 
+          ? "fixed inset-4 z-50 m-4 max-w-none max-h-none" 
+          : "h-52",
         className
       )}
+      style={{
+        top: expanded ? '0' : undefined,
+        left: expanded ? '0' : undefined,
+        right: expanded ? '0' : undefined,
+        bottom: expanded ? '0' : undefined,
+      }}
     >
       {/* The map container */}
       <div
@@ -280,6 +322,7 @@ export default function MapCard({
         className="absolute inset-0 bg-gray-800"
         style={{ width: "100%", height: "100%" }}
       />
+      
       {/* If the map hasn't loaded yet => show a spinner */}
       {!mapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
@@ -312,11 +355,28 @@ export default function MapCard({
     </motion.div>
   );
 
-  // If expanded => portal it, else inline
-  if (expanded && portalElem) {
-    return createPortal(card, portalElem);
-  }
-  return card;
+  // Main render logic with proper handling of expanded state
+  return (
+    <>
+      {/* Render the card inline when not expanded */}
+      {!expanded && card}
+      
+      {/* Render portal overlay when expanded */}
+      {expanded && portalContainer && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              toggleExpanded();
+            }
+          }}
+        >
+          {card}
+        </div>,
+        portalContainer
+      )}
+    </>
+  );
 }
 
 /** 
