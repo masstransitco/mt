@@ -270,7 +270,7 @@ export default function MapCard({
       transition={{ duration: 0.3 }}
       className={cn(
         "relative overflow-hidden rounded-lg shadow-lg border border-gray-700",
-        expanded ? "fixed inset-4 z-[9999]" : "h-52",
+        expanded ? "fixed inset-0 m-4 z-[9999]" : "h-52",
         className
       )}
     >
