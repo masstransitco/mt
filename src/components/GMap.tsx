@@ -284,102 +284,90 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [openSheet]
   );
 
+  // Process a virtual station and update stations array
+  const processVirtualStation = useCallback((virtualStation: StationFeature, vStationId: number) => {
+    // Insert or replace in station array
+    const existingIndex = stations.findIndex((s) => s.id === vStationId);
+    const updatedStations = [...stations];
+    if (existingIndex >= 0) {
+      updatedStations[existingIndex] = virtualStation;
+    } else {
+      updatedStations.push(virtualStation);
+    }
+
+    // Sort if we have userLocation
+    if (userLocation) {
+      const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
+      setSortedStations(sorted);
+    } else {
+      setSortedStations(updatedStations);
+    }
+  }, [stations, userLocation, sortStationsByDistanceToPoint]);
+
+  // Open the detail sheet and pan map to location
+  const openDetailSheet = useCallback(() => {
+    setDetailKey(Date.now());
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    setIsSheetMinimized(false);
+
+    if (actualMap && scannedCar) {
+      actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
+      actualMap.setZoom(16);
+    }
+  }, [actualMap, scannedCar]);
+
   // QR scan success => create a virtual station
   const handleQrScanSuccess = useCallback(() => {
     if (scannedCar) {
       console.log("QR Scan Success, scannedCar ID:", scannedCar.id);
 
+      // Create virtual station ID and set state
       const vStationId = 1000000 + scannedCar.id;
       setVirtualStationId(vStationId);
       setIsQrScanStation(true);
-
+      
+      // Create and insert the virtual station
       const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-
-      // Insert or replace in station array
-      const existingIndex = stations.findIndex((s) => s.id === vStationId);
-      const updatedStations = [...stations];
-      if (existingIndex >= 0) {
-        updatedStations[existingIndex] = virtualStation;
-      } else {
-        updatedStations.push(virtualStation);
-      }
-
-      // Sort if we have userLocation
-      if (userLocation) {
-        const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
-        setSortedStations(sorted);
-      } else {
-        setSortedStations(updatedStations);
-      }
-
-      setDetailKey(Date.now());
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setIsSheetMinimized(false);
-
-      if (actualMap) {
-        actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
-        actualMap.setZoom(16);
-      }
+      processVirtualStation(virtualStation, vStationId);
+      
+      // Open the detail sheet
+      openDetailSheet();
       console.log("Sheet opening with virtual station:", vStationId);
     }
-  }, [
-    scannedCar,
-    stations,
-    userLocation,
-    sortStationsByDistanceToPoint,
-    actualMap
-  ]);
+  }, [scannedCar, processVirtualStation, openDetailSheet]);
 
   // If user scanned a car in step=2 => open detail automatically
   useEffect(() => {
-    if (scannedCar && bookingStep === 2) {
+    // Use a ref to track if we've processed this specific car already
+    const processedCarIdRef = useRef<number | null>(null);
+    
+    if (scannedCar && bookingStep === 2 && processedCarIdRef.current !== scannedCar.id) {
       console.log("Scanned car in step 2, setting up virtual station...");
-
+      
+      // Mark this car as processed to prevent repeated processing
+      processedCarIdRef.current = scannedCar.id;
+      
+      // Create virtual station ID and set state
       const vStationId = 1000000 + scannedCar.id;
       setVirtualStationId(vStationId);
       setIsQrScanStation(true);
-
+      
+      // Create and insert the virtual station
       const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-
-      const existingIndex = stations.findIndex((s) => s.id === vStationId);
-      const updatedStations = [...stations];
-      if (existingIndex >= 0) {
-        updatedStations[existingIndex] = virtualStation;
-      } else {
-        updatedStations.push(virtualStation);
-      }
-
-      if (userLocation) {
-        const sorted = sortStationsByDistanceToPoint(userLocation, updatedStations);
-        setSortedStations(sorted);
-      } else {
-        setSortedStations(updatedStations);
-      }
-
-      setTimeout(() => {
+      processVirtualStation(virtualStation, vStationId);
+      
+      // Open the detail sheet after a brief delay
+      const timer = setTimeout(() => {
         if (bookingStepRef.current === 2) {
-          setDetailKey(Date.now());
-          setForceSheetOpen(true);
-          setOpenSheet("detail");
-          setIsSheetMinimized(false);
-
-          if (actualMap) {
-            actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
-            actualMap.setZoom(16);
-          }
+          openDetailSheet();
           console.log("Detail sheet opened after short delay for scanned car.");
         }
       }, 300);
+      
+      return () => clearTimeout(timer);
     }
-  }, [
-    scannedCar,
-    stations,
-    userLocation,
-    bookingStep,
-    actualMap,
-    sortStationsByDistanceToPoint
-  ]);
+  }, [scannedCar?.id, bookingStep, processVirtualStation, openDetailSheet]);
 
   // Station selection logic
   const handleStationSelection = useCallback(
