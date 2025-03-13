@@ -349,20 +349,26 @@ function StationDetailComponent({
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
       }
-      routeFetchTimeoutRef.current = setTimeout(() => {
-        const depStation = stations.find((s) => s.id === departureId);
-        const arrStation = stations.find((s) => s.id === arrivalId);
-        if (depStation && arrStation) {
-          dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
-        }
-      }, 300);
+      
+      // Only fetch route if we're in the detail view and the sheet is expanded
+      if (!isMinimized) {
+        routeFetchTimeoutRef.current = setTimeout(() => {
+          console.log("StationDetail fetching route:", departureId, arrivalId);
+          const depStation = stations.find((s) => s.id === departureId);
+          const arrStation = stations.find((s) => s.id === arrivalId);
+          if (depStation && arrStation) {
+            dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
+          }
+        }, 500); // Increased timeout to prevent race conditions
+      }
     }
+    
     return () => {
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
       }
     };
-  }, [step, departureId, arrivalId, stations, dispatch]);
+  }, [step, departureId, arrivalId, stations, dispatch, isMinimized]);
 
   // Show CarGrid in step=2
   useEffect(() => {
