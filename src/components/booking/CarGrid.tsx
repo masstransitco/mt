@@ -121,13 +121,11 @@ export default function CarGrid({
 
   if (isInitialLoad) {
     return (
-      <div className="py-4 space-y-4">
-        {[...Array(2)].map((_, index) => (
-          <div
-            key={index}
-            className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg"
-          />
-        ))}
+      <div className="py-4">
+        {/* Single loading skeleton instead of two */}
+        <div
+          className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg"
+        />
       </div>
     );
   }
