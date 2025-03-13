@@ -59,6 +59,10 @@ import { StationListItem } from "./StationListItem";
 import QrScannerOverlay from "@/components/ui/QrScannerOverlay";
 import SignInModal from "@/components/ui/SignInModal";
 
+// Custom components for sheet headers
+import PickupTime from "@/components/ui/PickupTime";
+import FareDisplay from "@/components/ui/FareDisplay";
+
 // Map / 3D constants & hooks
 import {
   LIBRARIES,
@@ -429,429 +433,395 @@ export default function GMap({ googleApiKey }: GMapProps) {
     if (isLoaded && googleMapsReady && window.google) {
       setMapOptions(createMapOptions());
       setMarkerIcons(createMarkerIcons());
-    }
-  }, [isLoaded, googleMapsReady]);
+    }}, [isLoaded, googleMapsReady]);
 
-  // Fetch data
-  useEffect(() => {
-    (async () => {
-      try {
-        await Promise.all([
-          dispatch(fetchStations()).unwrap(),
-          dispatch(fetchCars()).unwrap(),
-        ]);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        toast.error("Failed to load map data");
-      }
-    })();
-  }, [dispatch]);
-
-  // Once fully loaded, hide spinner
-  useEffect(() => {
-    if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
-      setOverlayVisible(false);
-    }
-  }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
-
-  // Booking route logic
-  useEffect(() => {
-    if (!googleMapsReady) return;
-
-    if (departureStationId && arrivalStationId) {
-      const departureStation = stations.find((s) => s.id === departureStationId);
-      const arrivalStation = stations.find((s) => s.id === arrivalStationId);
-      if (departureStation && arrivalStation) {
-        dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
-      }
-    }
-  }, [departureStationId, arrivalStationId, stations, dispatch, googleMapsReady]);
-
-  // Dispatch route logic
-  useEffect(() => {
-    if (!googleMapsReady) return;
-
-    if (!departureStationId) {
-      dispatch(clearDispatchRoute());
-      return;
-    }
-    const depStation = stations.find((s) => s.id === departureStationId);
-    if (depStation) {
-      dispatch(fetchDispatchDirections(depStation));
-    }
-  }, [departureStationId, stations, dispatch, googleMapsReady]);
-
-  // Handle address search
-  const handleAddressSearch = useCallback(
-    (location: google.maps.LatLngLiteral) => {
-      if (!actualMap) return;
-      actualMap.panTo(location);
-      actualMap.setZoom(15);
-
-      if (googleMapsReady) {
-        const sorted = sortStationsByDistanceToPoint(location, stations);
-        setSearchLocation(location);
-        setSortedStations(sorted);
-      } else {
-        setSearchLocation(location);
-        setSortedStations(stations);
-      }
-
-      if (openSheet !== "list") {
-        setPreviousSheet(openSheet);
-        setOpenSheet("list");
-      }
-    },
-    [
-      actualMap,
-      stations,
-      openSheet,
-      googleMapsReady,
-      sortStationsByDistanceToPoint
-    ]
-  );
-
-  // Clear station logic
-  const handleClearDepartureInSelector = useCallback(() => {
-    dispatch(clearDepartureStation());
-    dispatch(advanceBookingStep(1));
-    dispatch(clearDispatchRoute());
-
-    // If we were in a QR station, reset
-    if (isQrScanStation) {
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-      dispatch(setScannedCar(null));
-    }
-
-    toast.success("Departure station cleared. (Back to selecting departure.)");
-    if (openSheet === "detail") {
-      setOpenSheet("none");
-      setPreviousSheet("none");
-    }
-  }, [dispatch, openSheet, isQrScanStation]);
-
-  const handleClearArrivalInSelector = useCallback(() => {
-    dispatch(clearArrivalStation());
-    dispatch(advanceBookingStep(3));
-    dispatch(clearRoute());
-    toast.success("Arrival station cleared. (Back to selecting arrival.)");
-    if (openSheet === "detail") {
-      setOpenSheet("none");
-      setPreviousSheet("none");
-    }
-  }, [dispatch, openSheet]);
-
-  // Helpers for opening/closing sheets
-  const openNewSheet = (newSheet: OpenSheetType) => {
-    if (newSheet !== "detail") {
-      setForceSheetOpen(false);
-    }
-    if (openSheet !== newSheet) {
-      setPreviousSheet(openSheet);
-      setOpenSheet(newSheet);
-    }
-  };
-
-  const closeCurrentSheet = () => {
-    if (openSheet === "detail") {
-      setOpenSheet("none");
-      setPreviousSheet("none");
-      setForceSheetOpen(false);
-      overlayRef.current?.requestRedraw();
-    } else {
-      setOpenSheet(previousSheet);
-      setPreviousSheet("none");
-    }
-  };
-
-  // Close detail sheet
-  const handleStationDetailClose = useCallback(() => {
-    // If it was a QR station, reset user to step=1 if we haven't locked in
-    if (isQrScanStation) {
-      console.log("Dismissing a QR-scanned station => clearing station + step=1");
-      dispatch(clearDepartureStation());
-      dispatch(setScannedCar(null));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-
-      toast("Scan the car's QR code again if you want to select this vehicle", {
-        duration: 4000,
-        position: "bottom-center",
-        icon: "ℹ️",
-        style: { background: "#3b82f6", color: "#ffffff" },
-      });
-    } else {
-      console.log("Dismissing a normal station => do not discard station");
-    }
-    closeCurrentSheet();
-  }, [isQrScanStation, closeCurrentSheet, dispatch]);
-
-  // QR scanner open
-  const handleOpenQrScanner = useCallback(() => {
-    setIsQrScannerOpen(true);
-  }, []);
-
-  // Geolocation
-  const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not supported.");
-      return;
-    }
-
-    const loadingToast = toast.loading("Finding your location...");
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        dispatch(setUserLocation(loc));
-        if (actualMap) {
-          actualMap.panTo(loc);
-          actualMap.setZoom(15);
+    // Fetch data
+    useEffect(() => {
+      (async () => {
+        try {
+          await Promise.all([
+            dispatch(fetchStations()).unwrap(),
+            dispatch(fetchCars()).unwrap(),
+          ]);
+        } catch (err) {
+          console.error("Error fetching data:", err);
+          toast.error("Failed to load map data");
         }
-
-        toast.dismiss(loadingToast);
-
+      })();
+    }, [dispatch]);
+  
+    // Once fully loaded, hide spinner
+    useEffect(() => {
+      if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
+        setOverlayVisible(false);
+      }
+    }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
+  
+    // Booking route logic
+    useEffect(() => {
+      if (!googleMapsReady) return;
+  
+      if (departureStationId && arrivalStationId) {
+        const departureStation = stations.find((s) => s.id === departureStationId);
+        const arrivalStation = stations.find((s) => s.id === arrivalStationId);
+        if (departureStation && arrivalStation) {
+          dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
+        }
+      }
+    }, [departureStationId, arrivalStationId, stations, dispatch, googleMapsReady]);
+  
+    // Dispatch route logic
+    useEffect(() => {
+      if (!googleMapsReady) return;
+  
+      if (!departureStationId) {
+        dispatch(clearDispatchRoute());
+        return;
+      }
+      const depStation = stations.find((s) => s.id === departureStationId);
+      if (depStation) {
+        dispatch(fetchDispatchDirections(depStation));
+      }
+    }, [departureStationId, stations, dispatch, googleMapsReady]);
+  
+    // Handle address search
+    const handleAddressSearch = useCallback(
+      (location: google.maps.LatLngLiteral) => {
+        if (!actualMap) return;
+        actualMap.panTo(location);
+        actualMap.setZoom(15);
+  
         if (googleMapsReady) {
-          const sorted = sortStationsByDistanceToPoint(loc, stations);
-          setSearchLocation(loc);
+          const sorted = sortStationsByDistanceToPoint(location, stations);
+          setSearchLocation(location);
           setSortedStations(sorted);
         } else {
-          setSearchLocation(loc);
+          setSearchLocation(location);
           setSortedStations(stations);
         }
-
-        openNewSheet("list");
-        toast.success("Location found!");
+  
+        if (openSheet !== "list") {
+          setPreviousSheet(openSheet);
+          setOpenSheet("list");
+        }
       },
-      (err) => {
-        console.error("Geolocation error:", err);
-        toast.dismiss(loadingToast);
-        toast.error("Unable to retrieve location.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      [
+        actualMap,
+        stations,
+        openSheet,
+        googleMapsReady,
+        sortStationsByDistanceToPoint
+      ]
     );
-  }, [
-    dispatch,
-    actualMap,
-    googleMapsReady,
-    stations,
-    sortStationsByDistanceToPoint,
-    openNewSheet
-  ]);
-
-  // Any error?
-  const hasError = stationsError || carsError || loadError;
-
-  // Which station are we focusing on in step≥3 (arrival) or step≤2 (departure)
-  const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
-
-  console.log(
-    "Looking for station with ID:", hasStationSelected,
-    "Step:", bookingStep,
-    "Virtual ID:", virtualStationId,
-    "Is QR Scan:", isQrScanStation
-  );
-
-  // Compute stationToShow
-  let stationToShow: StationFeature | null = null;
-  if (
-    hasStationSelected &&
-    isQrScanStation &&
-    virtualStationId === hasStationSelected
-  ) {
-    console.log("Virtual station match => using scannedCar station");
-    if (scannedCar && virtualStationId !== null) {
-      stationToShow = createVirtualStationFromCar(scannedCar, virtualStationId);
-    }
-  } else {
-    // normal station
-    const stationsToSearch = sortedStations.length > 0 ? sortedStations : stations;
-    stationToShow = stationsToSearch.find((s) => s.id === hasStationSelected) ?? null;
-  }
-
-  console.log(
-    "Station to show:",
-    stationToShow?.id,
-    "Is virtual:",
-    stationToShow?.properties?.isVirtualCarLocation
-  );
-
-  // For sheet titles/subtitles
-  const formatTime = (date: Date) => {
-    let hours = date.getHours();
-    const minutes = date.getMinutes();
-    const ampm = hours >= 12 ? "pm" : "am";
-    hours = hours % 12 || 12;
-    const minutesStr = minutes < 10 ? "0" + minutes : minutes;
-    return `${hours}:${minutesStr}${ampm}`;
-  };
-
-  const getSheetTitle = useCallback(() => {
-    if (!stationToShow) return "";
-    const isVirtualStation =
-      isQrScanStation ||
-      stationToShow.properties?.isVirtualCarLocation === true;
-
-    if (isVirtualStation && bookingStep <= 2) {
-      return "Ready to drive";
-    }
-    if (bookingStep <= 2) {
-      // Possibly show dispatch arrival
-      if (dispatchRoute?.duration) {
-        const now = new Date();
-        const arrivalTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
-        const end = new Date(arrivalTime.getTime() + 15 * 60 * 1000);
-        return `Pickup car at ${formatTime(arrivalTime)}-${formatTime(end)}`;
+  
+    // Clear station logic
+    const handleClearDepartureInSelector = useCallback(() => {
+      dispatch(clearDepartureStation());
+      dispatch(advanceBookingStep(1));
+      dispatch(clearDispatchRoute());
+  
+      // If we were in a QR station, reset
+      if (isQrScanStation) {
+        setIsQrScanStation(false);
+        setVirtualStationId(null);
+        dispatch(setScannedCar(null));
       }
-      return "Pick-up station";
-    }
-    return "Trip details";
-  }, [bookingStep, dispatchRoute, stationToShow, isQrScanStation]);
-
-  const getSheetSubtitle = useCallback(() => {
-    if (!stationToShow) return "";
-    const isVirtualStation =
-      isQrScanStation ||
-      stationToShow.properties?.isVirtualCarLocation === true;
-
-    if (isVirtualStation && bookingStep <= 2) {
-      return "Car is ready at your current location";
-    }
-    if (bookingStep <= 2) {
-      return "Your car will be delivered here";
-    } else if (bookingStep === 4) {
-      return (
-        <span>
-          Starting fare: <strong className="text-white">HKD $50.00</strong> • $1 / min hereafter
-        </span>
+  
+      toast.success("Departure station cleared. (Back to selecting departure.)");
+      if (openSheet === "detail") {
+        setOpenSheet("none");
+        setPreviousSheet("none");
+      }
+    }, [dispatch, openSheet, isQrScanStation]);
+  
+    const handleClearArrivalInSelector = useCallback(() => {
+      dispatch(clearArrivalStation());
+      dispatch(advanceBookingStep(3));
+      dispatch(clearRoute());
+      toast.success("Arrival station cleared. (Back to selecting arrival.)");
+      if (openSheet === "detail") {
+        setOpenSheet("none");
+        setPreviousSheet("none");
+      }
+    }, [dispatch, openSheet]);
+  
+    // Helpers for opening/closing sheets
+    const openNewSheet = (newSheet: OpenSheetType) => {
+      if (newSheet !== "detail") {
+        setForceSheetOpen(false);
+      }
+      if (openSheet !== newSheet) {
+        setPreviousSheet(openSheet);
+        setOpenSheet(newSheet);
+      }
+    };
+  
+    const closeCurrentSheet = () => {
+      if (openSheet === "detail") {
+        setOpenSheet("none");
+        setPreviousSheet("none");
+        setForceSheetOpen(false);
+        overlayRef.current?.requestRedraw();
+      } else {
+        setOpenSheet(previousSheet);
+        setPreviousSheet("none");
+      }
+    };
+  
+    // Close detail sheet
+    const handleStationDetailClose = useCallback(() => {
+      // If it was a QR station, reset user to step=1 if we haven't locked in
+      if (isQrScanStation) {
+        console.log("Dismissing a QR-scanned station => clearing station + step=1");
+        dispatch(clearDepartureStation());
+        dispatch(setScannedCar(null));
+        setIsQrScanStation(false);
+        setVirtualStationId(null);
+  
+        toast("Scan the car's QR code again if you want to select this vehicle", {
+          duration: 4000,
+          position: "bottom-center",
+          icon: "ℹ️",
+          style: { background: "#3b82f6", color: "#ffffff" },
+        });
+      } else {
+        console.log("Dismissing a normal station => do not discard station");
+      }
+      closeCurrentSheet();
+    }, [isQrScanStation, closeCurrentSheet, dispatch]);
+  
+    // QR scanner open
+    const handleOpenQrScanner = useCallback(() => {
+      setIsQrScannerOpen(true);
+    }, []);
+  
+    // Geolocation
+    const handleLocateMe = useCallback(() => {
+      if (!navigator.geolocation) {
+        toast.error("Geolocation not supported.");
+        return;
+      }
+  
+      const loadingToast = toast.loading("Finding your location...");
+  
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          dispatch(setUserLocation(loc));
+          if (actualMap) {
+            actualMap.panTo(loc);
+            actualMap.setZoom(15);
+          }
+  
+          toast.dismiss(loadingToast);
+  
+          if (googleMapsReady) {
+            const sorted = sortStationsByDistanceToPoint(loc, stations);
+            setSearchLocation(loc);
+            setSortedStations(sorted);
+          } else {
+            setSearchLocation(loc);
+            setSortedStations(stations);
+          }
+  
+          openNewSheet("list");
+          toast.success("Location found!");
+        },
+        (err) => {
+          console.error("Geolocation error:", err);
+          toast.dismiss(loadingToast);
+          toast.error("Unable to retrieve location.");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
       );
+    }, [
+      dispatch,
+      actualMap,
+      googleMapsReady,
+      stations,
+      sortStationsByDistanceToPoint,
+      openNewSheet
+    ]);
+  
+    // Any error?
+    const hasError = stationsError || carsError || loadError;
+  
+    // Which station are we focusing on in step≥3 (arrival) or step≤2 (departure)
+    const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
+  
+    // Compute stationToShow
+    let stationToShow: StationFeature | null = null;
+    if (
+      hasStationSelected &&
+      isQrScanStation &&
+      virtualStationId === hasStationSelected
+    ) {
+      console.log("Virtual station match => using scannedCar station");
+      if (scannedCar && virtualStationId !== null) {
+        stationToShow = createVirtualStationFromCar(scannedCar, virtualStationId);
+      }
+    } else {
+      // normal station
+      const stationsToSearch = sortedStations.length > 0 ? sortedStations : stations;
+      stationToShow = stationsToSearch.find((s) => s.id === hasStationSelected) ?? null;
     }
-    return "Return the car at your arrival station";
-  }, [bookingStep, stationToShow, isQrScanStation]);
-
-  // Sign In
-  const handleOpenSignIn = useCallback(() => {
-    setSignInModalOpen(true);
-  }, []);
-
-  return (
-    <div className="relative w-full h-[calc(100vh-64px)]">
-      {hasError && (
-        <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
-          <div className="text-center space-y-2">
-            <p className="font-medium">Error loading map data</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-sm underline hover:text-destructive/80"
-            >
-              Try reloading
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!hasError && overlayVisible && <LoadingSpinner />}
-
-      {!hasError && !overlayVisible && (
-        <>
-          {/* Map container */}
-          <div className="absolute inset-0">
-            <GoogleMap
-              mapContainerStyle={MAP_CONTAINER_STYLE}
-              center={userLocation || DEFAULT_CENTER}
-              zoom={DEFAULT_ZOOM}
-              options={mapOptions || {}}
-              onLoad={(map: google.maps.Map) => {
-                setActualMap(map);
-              }}
-            >
-              {/* 3D overlay handled by useThreeOverlay */}
-            </GoogleMap>
-          </div>
-
-          {/* Station Selector */}
-          <StationSelector
-            onAddressSearch={handleAddressSearch}
-            onClearDeparture={handleClearDepartureInSelector}
-            onClearArrival={handleClearArrivalInSelector}
-            onLocateMe={handleLocateMe}
-            onScan={handleOpenQrScanner}
-            isQrScanStation={isQrScanStation}
-            virtualStationId={virtualStationId}
-            scannedCar={scannedCar}
-          />
-
-          {/* Station List Sheet */}
-          <Sheet
-            isOpen={openSheet === "list"}
-            onDismiss={closeCurrentSheet}
-            title="Nearby Stations"
-            count={sortedStations.length}
-          >
-            <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-              {sortedStations.map((station, idx) => (
-                <StationListItem
-                  key={station.id}
-                  index={idx}
-                  style={{}}
-                  data={{
-                    items: sortedStations,
-                    onStationSelected: handleStationSelectedFromList,
-                    departureId: departureStationId,
-                    arrivalId: arrivalStationId,
-                    dispatchRoute,
-                  }}
-                />
-              ))}
+  
+    // For step 2, we need the pickup time range for the PickupTime component
+    const getPickupTimeRange = useCallback(() => {
+      const now = new Date();
+      let startTime: Date, endTime: Date;
+      
+      if (dispatchRoute?.duration) {
+        // If we have a dispatch route, calculate arrival time based on that
+        startTime = new Date(now.getTime() + dispatchRoute.duration * 1000);
+        endTime = new Date(startTime.getTime() + 15 * 60 * 1000); // 15 min window
+      } else {
+        // Fallback values (now + 15min window)
+        startTime = new Date(now.getTime() + 5 * 60 * 1000);
+        endTime = new Date(startTime.getTime() + 15 * 60 * 1000);
+      }
+      
+      return { startTime, endTime };
+    }, [dispatchRoute]);
+  
+    // Sign In
+    const handleOpenSignIn = useCallback(() => {
+      setSignInModalOpen(true);
+    }, []);
+  
+    // Custom Sheet Content for each step
+    const renderSheetContent = useCallback(() => {
+      // Determine if we need to show custom content in the sheet header
+      if (bookingStep === 2) {
+        // Step 2: Show pickup time
+        const { startTime, endTime } = getPickupTimeRange();
+        return <PickupTime startTime={startTime} endTime={endTime} />;
+      } else if (bookingStep === 4) {
+        // Step 4: Show fare display
+        return <FareDisplay baseFare={50.00} currency="HKD" perMinuteRate={1} />;
+      }
+      
+      // Default: empty (no custom header content)
+      return null;
+    }, [bookingStep, getPickupTimeRange]);
+  
+    return (
+      <div className="relative w-full h-[calc(100vh-64px)]">
+        {hasError && (
+          <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
+            <div className="text-center space-y-2">
+              <p className="font-medium">Error loading map data</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="text-sm underline hover:text-destructive/80"
+              >
+                Try reloading
+              </button>
             </div>
-          </Sheet>
-
-          {/* Station Detail Sheet */}
-          <Sheet
-            key={detailKey}
-            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
-            onDismiss={handleStationDetailClose}
-            title={getSheetTitle()}
-            subtitle={getSheetSubtitle()}
-          >
-            {stationToShow && (
-              <StationDetail
-                key={detailKey}
-                stations={searchLocation ? sortedStations : stations}
-                activeStation={stationToShow}
-                onOpenSignIn={handleOpenSignIn}
-                onDismiss={closeCurrentSheet}
-                isQrScanStation={isQrScanStation}
-                onClose={handleStationDetailClose}
-              />
-            )}
-          </Sheet>
-
-          {/* QR Scanner */}
-          <QrScannerOverlay
-            isOpen={isQrScannerOpen}
-            onClose={() => setIsQrScannerOpen(false)}
-            onScanSuccess={handleQrScanSuccess}
-          />
-
-          {/* Optional GaussianSplatModal */}
-          <Suspense fallback={<div>Loading modal...</div>}>
-            {isSplatModalOpen && (
-              <GaussianSplatModal
-                isOpen={isSplatModalOpen}
-                onClose={() => setIsSplatModalOpen(false)}
-              />
-            )}
-          </Suspense>
-        </>
-      )}
-
-      {/* SignInModal */}
-      <SignInModal
-        isOpen={signInModalOpen}
-        onClose={() => setSignInModalOpen(false)}
-      />
-    </div>
-  );
-}
+          </div>
+        )}
+  
+        {!hasError && overlayVisible && <LoadingSpinner />}
+  
+        {!hasError && !overlayVisible && (
+          <>
+            {/* Map container */}
+            <div className="absolute inset-0">
+              <GoogleMap
+                mapContainerStyle={MAP_CONTAINER_STYLE}
+                center={userLocation || DEFAULT_CENTER}
+                zoom={DEFAULT_ZOOM}
+                options={mapOptions || {}}
+                onLoad={(map: google.maps.Map) => {
+                  setActualMap(map);
+                }}
+              >
+                {/* 3D overlay handled by useThreeOverlay */}
+              </GoogleMap>
+            </div>
+  
+            {/* Station Selector */}
+            <StationSelector
+              onAddressSearch={handleAddressSearch}
+              onClearDeparture={handleClearDepartureInSelector}
+              onClearArrival={handleClearArrivalInSelector}
+              onLocateMe={handleLocateMe}
+              onScan={handleOpenQrScanner}
+              isQrScanStation={isQrScanStation}
+              virtualStationId={virtualStationId}
+              scannedCar={scannedCar}
+            />
+  
+            {/* Station List Sheet */}
+            <Sheet
+              isOpen={openSheet === "list"}
+              onDismiss={closeCurrentSheet}
+              title="Nearby Stations"
+              count={sortedStations.length}
+            >
+              <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+                {sortedStations.map((station, idx) => (
+                  <StationListItem
+                    key={station.id}
+                    index={idx}
+                    style={{}}
+                    data={{
+                      items: sortedStations,
+                      onStationSelected: handleStationSelectedFromList,
+                      departureId: departureStationId,
+                      arrivalId: arrivalStationId,
+                      dispatchRoute,
+                    }}
+                  />
+                ))}
+              </div>
+            </Sheet>
+  
+            {/* Station Detail Sheet with custom header content */}
+            <Sheet
+  key={detailKey}
+  isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
+  onDismiss={handleStationDetailClose}
+  title={bookingStep <= 2 ? "Pickup car" : ""} 
+  headerContent={renderSheetContent()} // Use headerContent prop to place content above pulsating strip
+>
+  {stationToShow && (
+    <StationDetail
+      key={detailKey}
+      stations={searchLocation ? sortedStations : stations}
+      activeStation={stationToShow}
+      onOpenSignIn={handleOpenSignIn}
+      onDismiss={closeCurrentSheet}
+      isQrScanStation={isQrScanStation}
+      onClose={handleStationDetailClose}
+    />
+  )}
+</Sheet>
+  
+            {/* QR Scanner */}
+            <QrScannerOverlay
+              isOpen={isQrScannerOpen}
+              onClose={() => setIsQrScannerOpen(false)}
+              onScanSuccess={handleQrScanSuccess}
+            />
+  
+            {/* Optional GaussianSplatModal */}
+            <Suspense fallback={<div>Loading modal...</div>}>
+              {isSplatModalOpen && (
+                <GaussianSplatModal
+                  isOpen={isSplatModalOpen}
+                  onClose={() => setIsSplatModalOpen(false)}
+                />
+              )}
+            </Suspense>
+          </>
+        )}
+  
+        {/* SignInModal */}
+        <SignInModal
+          isOpen={signInModalOpen}
+          onClose={() => setSignInModalOpen(false)}
+        />
+      </div>
+    );
+  }

@@ -220,7 +220,7 @@ const ConfirmButton = memo(function ConfirmButton({
   isVirtualCarLocation?: boolean;
 }) {
   return (
-    <div className="pt-3">
+    <div className="pt-2">
       <button
         onClick={onClick}
         disabled={disabled}
@@ -236,7 +236,7 @@ const ConfirmButton = memo(function ConfirmButton({
             Processing...
           </>
         ) : isDepartureFlow ? (
-          isVirtualCarLocation ? "Start Driving Now" : "Choose Dropoff Station"
+          isVirtualCarLocation ? "Start Driving Now" : "Choose Dropoff"
         ) : (
           "Confirm Trip"
         )}
@@ -518,7 +518,7 @@ function StationDetailComponent({
   return (
     <>
       <motion.div
-        className="p-4 space-y-4 relative"
+        className="p-4 space-y-3" // Reduced spacing from space-y-4 to space-y-3
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "tween", duration: 0.2 }}
@@ -532,7 +532,7 @@ function StationDetailComponent({
             ]}
             name={activeStation.properties.Place}
             address={activeStation.properties.Address}
-            className="mt-2 mb-2 h-52 w-full"
+            className="mt-0 mb-2 h-52 w-full" // Removed margin-top
           />
         </Suspense>
 
@@ -556,7 +556,7 @@ function StationDetailComponent({
         {/* CarGrid if step=2 (choose your car) */}
         {isDepartureFlow && step === 2 && (
           <motion.div
-            className="py-2"
+            className="py-1" // Reduced from py-2 to py-1
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
