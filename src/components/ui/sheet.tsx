@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, ReactNode } from "react";
+import React, { useState, useEffect, useRef, useCallback, ReactNode, Suspense, memo, lazy } from "react";
 import {
   AnimatePresence,
   motion,
@@ -10,130 +10,25 @@ import {
 } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-/* ------------------------------------------------------------------
-   ANIMATION CONSTANTS & HELPER
-   PulsatingStrip repeatedly scales and changes color/opacity.
-   ------------------------------------------------------------------ */
-type AnimationColor = string;
-type Scale = number;
+// Dynamically import PulsatingStrip
+const PulsatingStrip = lazy(() => import("@/components/ui/PulsatingStrip"));
 
-interface AnimationParams {
-  duration: number;
-  colors: {
-    primary: AnimationColor;
-    secondary: AnimationColor;
-    tertiary: AnimationColor;
-  };
-  scales: {
-    min: Scale;
-    max: Scale;
-    mid: Scale;
-    soft: Scale;
-  };
-}
-
-const ANIMATION_PARAMS: AnimationParams = {
-  duration: 1400,
-  colors: {
-    primary: "#2171ec",
-    secondary: "#4a9fe8",
-    tertiary: "#6abff0",
-  },
-  scales: {
-    min: 0.95,
-    max: 1.05,
-    mid: 0.97,
-    soft: 1.02,
-  },
-};
-
-function lerp(start: number, end: number, progress: number) {
-  return start + (end - start) * progress;
-}
+// Loading fallback for the PulsatingStrip
+const StripFallback = () => (
+  <div className="flex justify-center">
+    <div
+      style={{
+        width: "110%",
+        height: "2px",
+        borderRadius: "1px",
+        backgroundColor: "#2171ec",
+      }}
+    />
+  </div>
+);
 
 /* ------------------------------------------------------------------
-   PULSATING STRIP
-   ------------------------------------------------------------------ */
-function PulsatingStrip({ className }: { className?: string }) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<number>();
-  const startTimeRef = useRef<number>();
-
-  const animate = useCallback((currentTime: number) => {
-    if (!startTimeRef.current) startTimeRef.current = currentTime;
-    if (!stripRef.current) return;
-
-    const elapsed = currentTime - startTimeRef.current;
-    const progress = (elapsed % ANIMATION_PARAMS.duration) / ANIMATION_PARAMS.duration;
-
-    let scale: number = ANIMATION_PARAMS.scales.min;
-    let color: string = ANIMATION_PARAMS.colors.primary;
-    let opacity = 1;
-    let shadowIntensity = 0.3;
-
-    if (progress < 0.1) {
-      scale = lerp(ANIMATION_PARAMS.scales.min, ANIMATION_PARAMS.scales.max, progress * 10);
-      color = ANIMATION_PARAMS.colors.secondary;
-      shadowIntensity = 0.6;
-    } else if (progress < 0.2) {
-      scale = lerp(ANIMATION_PARAMS.scales.max, ANIMATION_PARAMS.scales.mid, (progress - 0.1) * 10);
-      color = ANIMATION_PARAMS.colors.secondary;
-      opacity = 0.9;
-      shadowIntensity = 0.4;
-    } else if (progress < 0.3) {
-      scale = lerp(ANIMATION_PARAMS.scales.mid, ANIMATION_PARAMS.scales.soft, (progress - 0.2) * 10);
-      color = ANIMATION_PARAMS.colors.tertiary;
-      opacity = 0.95;
-      shadowIntensity = 0.5;
-    } else if (progress < 0.4) {
-      scale = lerp(ANIMATION_PARAMS.scales.soft, ANIMATION_PARAMS.scales.min, (progress - 0.3) * 10);
-      color = ANIMATION_PARAMS.colors.secondary;
-      opacity = 0.85;
-      shadowIntensity = 0.4;
-    } else if (progress < 0.7) {
-      scale = ANIMATION_PARAMS.scales.min;
-      color = ANIMATION_PARAMS.colors.primary;
-      opacity = 0.8;
-      shadowIntensity = 0.3;
-    }
-
-    stripRef.current.style.transform = `scale(${scale})`;
-    stripRef.current.style.backgroundColor = color;
-    stripRef.current.style.opacity = opacity.toString();
-    stripRef.current.style.boxShadow = `0px 4px 10px rgba(0,0,0,${shadowIntensity})`;
-
-    animationRef.current = requestAnimationFrame(animate);
-  }, []);
-
-  useEffect(() => {
-    startTimeRef.current = undefined;
-    animationRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [animate]);
-
-  return (
-    <div className={cn("flex justify-center", className)}>
-      <div
-        ref={stripRef}
-        style={{
-          width: "110%",
-          height: "2px",
-          borderRadius: "1px",
-          backgroundColor: ANIMATION_PARAMS.colors.primary,
-          willChange: "transform, opacity, boxShadow",
-          transformOrigin: "center",
-        }}
-      />
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------
-   SHEET PROPS (no onClearSelection)
+   SHEET PROPS with headerContent added
    ------------------------------------------------------------------ */
 export interface SheetProps {
   isOpen: boolean;
@@ -141,6 +36,7 @@ export interface SheetProps {
   className?: string;
   title?: string;
   subtitle?: ReactNode; // You can pass React elements or strings
+  headerContent?: ReactNode; // New prop for custom header content above the pulsating strip
   count?: number;
   countLabel?: string;
   /** 
@@ -151,15 +47,68 @@ export interface SheetProps {
   onDismiss?: () => void;
 }
 
+// Memoize the header component to prevent re-renders
+const SheetHeader = memo(({
+  title,
+  subtitle,
+  headerContent,
+  count,
+  countLabel,
+  headerRef,
+  handlePointerDown,
+  handleHeaderClick
+}: {
+  title?: string;
+  subtitle?: ReactNode;
+  headerContent?: ReactNode;
+  count?: number;
+  countLabel?: string;
+  headerRef: React.RefObject<HTMLDivElement>;
+  handlePointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  handleHeaderClick: (e: React.MouseEvent) => void;
+}) => (
+  <div
+    ref={headerRef}
+    onPointerDown={handlePointerDown}
+    onClick={handleHeaderClick}
+    className="cursor-grab active:cursor-grabbing px-4 pt-4 pb-2 relative"
+  >
+    <div className="flex flex-col items-center justify-between">
+      <div className="text-left w-full">
+        {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
+        {subtitle && <div className="text-sm text-gray-300">{subtitle}</div>}
+        {typeof count === "number" && (
+          <p className="text-sm text-gray-300">
+            {count} {countLabel ?? "items"}
+          </p>
+        )}
+      </div>
+      
+      {/* Added headerContent to render above the pulsating strip */}
+      {headerContent && (
+        <div className="w-full mt-2">
+          {headerContent}
+        </div>
+      )}
+    </div>
+    <Suspense fallback={<StripFallback />}>
+      <PulsatingStrip className="mt-3 mx-auto" />
+    </Suspense>
+  </div>
+));
+
+SheetHeader.displayName = 'SheetHeader';
+
 /* ------------------------------------------------------------------
    SHEET COMPONENT (DRAGGABLE BOTTOM-SHEET)
    ------------------------------------------------------------------ */
-export default function Sheet({
+function Sheet({
   isOpen,
   children,
   className,
   title,
   subtitle,
+  headerContent,
   count,
   countLabel,
   onDismiss,
@@ -198,7 +147,7 @@ export default function Sheet({
       const headerHeight = headerRef.current.offsetHeight + 4;
       minimizedPosition.current = window.innerHeight - headerHeight;
     }
-  }, [isOpen, title, subtitle, count]);
+  }, [isOpen, title, subtitle, count, headerContent]);
 
   // Lock scroll only when fully open (not minimized)
   useEffect(() => {
@@ -381,35 +330,23 @@ export default function Sheet({
     [isMinimized, y]
   );
 
-  // Sheet header
-  const SheetHeader = (
-    <div
-      ref={headerRef}
-      onPointerDown={handlePointerDown}
-      onClick={handleHeaderClick}
-      className="cursor-grab active:cursor-grabbing px-4 pt-4 pb-2 relative"
-    >
-      <div className="flex items-center justify-between">
-        <div className="text-left">
-          {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
-          {subtitle && <div className="text-sm text-gray-300">{subtitle}</div>}
-          {typeof count === "number" && (
-            <p className="text-sm text-gray-300">
-              {count} {countLabel ?? "items"}
-            </p>
-          )}
-        </div>
-        {/* No X button here */}
-      </div>
-      <PulsatingStrip className="mt-3 mx-auto" />
-    </div>
-  );
-
   // Combine transforms for the draggable motion
   const combinedStyle = {
     y,
     opacity: sheetOpacity,
     touchAction: "pan-y",
+  };
+
+  // Memoized header props
+  const headerProps = {
+    title,
+    subtitle,
+    headerContent,
+    count,
+    countLabel,
+    headerRef,
+    handlePointerDown,
+    handleHeaderClick
   };
 
   return (
@@ -456,7 +393,7 @@ export default function Sheet({
                 className
               )}
             >
-              {SheetHeader}
+              <SheetHeader {...headerProps} />
 
               {/* Content area */}
               <motion.div
@@ -483,3 +420,6 @@ export default function Sheet({
     </AnimatePresence>
   );
 }
+
+// Export a memoized version of the Sheet component
+export default memo(Sheet);
