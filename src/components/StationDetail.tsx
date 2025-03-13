@@ -1,5 +1,3 @@
-"use client";
-
 import React, {
   memo,
   useState,
@@ -12,7 +10,7 @@ import React, {
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Clock, Footprints } from "lucide-react";
+import { Clock, Footprints, Info } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   selectBookingStep,
@@ -127,6 +125,61 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
 });
 MemoizedCarGrid.displayName = "MemoizedCarGrid";
 
+/** InfoPopup component for showing tooltip */
+const InfoPopup = memo(function InfoPopup({
+  text = "Parking entry and exits are contactless and requires no further payments.",
+}: {
+  text?: string;
+}) {
+  const [isVisible, setIsVisible] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleShowInfo = useCallback(() => {
+    setIsVisible(true);
+    
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    // Hide after 3 seconds
+    timeoutRef.current = setTimeout(() => {
+      setIsVisible(false);
+    }, 3000);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button 
+        onClick={handleShowInfo}
+        className="text-gray-400 hover:text-gray-300 focus:outline-none"
+        aria-label="More information"
+      >
+        <Info size={16} />
+      </button>
+      
+      {isVisible && (
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-gray-800 text-xs text-white w-48 text-center shadow-lg z-50">
+          <div className="relative">
+            {text}
+            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+InfoPopup.displayName = "InfoPopup";
+
 /** A small stats panel for station info */
 const StationStats = memo(function StationStats({
   activeStation,
@@ -192,14 +245,17 @@ const StationStats = memo(function StationStats({
         </div>
       )}
 
-      {/* Parking info */}
+      {/* Departure Gate info (replaced "Parking") */}
       <div className="flex justify-between items-center text-sm">
         <div className="flex items-center gap-2 text-gray-300">
-          <span>Parking</span>
+          <span>Departure Gate</span>
         </div>
-        <span className="font-medium text-white">
-          {isVirtualCarLocation ? "Current Location" : parkingValue}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-white">
+            {isVirtualCarLocation ? "Current Location" : "Contactless"}
+          </span>
+          {!isVirtualCarLocation && <InfoPopup />}
+        </div>
       </div>
     </div>
   );
@@ -296,10 +352,9 @@ function StationDetailComponent({
     [stations, arrivalId]
   );
 
-  // For the "Parking" label
+  // For the "Departure Gate" label value
   const parkingValue = useMemo(() => {
-    if (step === 2) return "Touchless Exit";
-    if (step === 4) return "Touchless Entry";
+    if (step === 2 || step === 4) return "Contactless";
     return "";
   }, [step]);
 
@@ -375,27 +430,28 @@ function StationDetailComponent({
     };
   }, [step, departureId, arrivalId, stations, dispatch, isMinimized]);
 
-  // Show CarGrid in step=2
+  // Combined useEffect for CarGrid visibility to fix the rendering issue
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (isDepartureFlow && step === 2 && activeStation) {
+    
+    // Combined logic: show CarGrid if:
+    // 1. We're in departure flow (step <= 2)
+    // 2. We're specifically at step 2
+    // 3. We have an active station
+    // 4. OR if it's a QR-scanned station at step 2
+    if ((isDepartureFlow && step === 2 && activeStation) || (isQrScanStation && step === 2)) {
       setShouldLoadCarGrid(true);
     } else {
+      // Use timeout to delay hiding for smooth transitions
       timer = setTimeout(() => {
         setShouldLoadCarGrid(false);
       }, 300);
     }
+    
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [isDepartureFlow, step, activeStation]);
-
-  // For QR station, forcibly load CarGrid at step=2
-  useEffect(() => {
-    if (isQrScanStation && step === 2) {
-      setShouldLoadCarGrid(true);
-    }
-  }, [isQrScanStation, step]);
+  }, [isDepartureFlow, step, activeStation, isQrScanStation]);
 
   // Payment modal open/close
   const handleOpenWalletModal = useCallback(() => {
