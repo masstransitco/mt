@@ -220,28 +220,26 @@ const ConfirmButton = memo(function ConfirmButton({
   isVirtualCarLocation?: boolean;
 }) {
   return (
-    <div className="pt-2">
-      <button
-        onClick={onClick}
-        disabled={disabled}
-        className={cn(
-          "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
-          "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed",
-          isVirtualCarLocation && "bg-green-600 hover:bg-green-700"
-        )}
-      >
-        {charging ? (
-          <>
-            <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
-            Processing...
-          </>
-        ) : isDepartureFlow ? (
-          isVirtualCarLocation ? "Start Driving Now" : "Choose Dropoff"
-        ) : (
-          "Confirm Trip"
-        )}
-      </button>
-    </div>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "w-full py-3 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
+        "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed",
+        isVirtualCarLocation && "bg-green-600 hover:bg-green-700"
+      )}
+    >
+      {charging ? (
+        <>
+          <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
+          Processing...
+        </>
+      ) : isDepartureFlow ? (
+        isVirtualCarLocation ? "Start Driving Now" : "Choose Return"
+      ) : (
+        "Confirm Trip"
+      )}
+    </button>
   );
 });
 ConfirmButton.displayName = "ConfirmButton";
@@ -518,7 +516,7 @@ function StationDetailComponent({
   return (
     <>
       <motion.div
-        className="p-4 space-y-3" // Reduced spacing from space-y-4 to space-y-3
+        className="p-4 space-y-3"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "tween", duration: 0.2 }}
@@ -532,7 +530,7 @@ function StationDetailComponent({
             ]}
             name={activeStation.properties.Place}
             address={activeStation.properties.Address}
-            className="mt-0 mb-2 h-52 w-full" // Removed margin-top
+            className="mt-0 mb-2 h-52 w-full"
           />
         </Suspense>
 
@@ -553,15 +551,9 @@ function StationDetailComponent({
           isVirtualCarStation={isVirtualCarLocation}
         />
 
-        {/* CarGrid if step=2 (choose your car) */}
+        {/* CarGrid + Confirm Button for step=2 with no spacing in between */}
         {isDepartureFlow && step === 2 && (
-          <motion.div
-            className="py-1" // Reduced from py-2 to py-1
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          >
+          <div className="space-y-2">
             {(shouldLoadCarGrid || isVirtualCarLocation) && (
               <MemoizedCarGrid
                 isVisible
@@ -569,22 +561,29 @@ function StationDetailComponent({
                 scannedCar={scannedCarRedux}
               />
             )}
-          </motion.div>
+            <ConfirmButton
+              isDepartureFlow={isDepartureFlow}
+              charging={charging}
+              disabled={charging || !(step === 2 || step === 4)}
+              onClick={handleConfirm}
+              isVirtualCarLocation={isVirtualCarLocation}
+            />
+          </div>
         )}
 
         {/* PaymentSummary if step=4 and user is signed in */}
         {step === 4 && isSignedIn && (
-          <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+          <div className="space-y-2">
+            <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+            <ConfirmButton
+              isDepartureFlow={isDepartureFlow}
+              charging={charging}
+              disabled={charging || !(step === 2 || step === 4)}
+              onClick={handleConfirm}
+              isVirtualCarLocation={isVirtualCarLocation}
+            />
+          </div>
         )}
-
-        {/* Confirm button (step=2 => "Choose Dropoff" / step=4 => "Confirm Trip") */}
-        <ConfirmButton
-          isDepartureFlow={isDepartureFlow}
-          charging={charging}
-          disabled={charging || !(step === 2 || step === 4)}
-          onClick={handleConfirm}
-          isVirtualCarLocation={isVirtualCarLocation}
-        />
 
         {/* Wallet/Payment Modal */}
         <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
