@@ -23,6 +23,7 @@ export interface StationListItemData {
   departureId?: number | null;
   arrivalId?: number | null;
   dispatchRoute?: RouteInfo | null;
+  forceRenderKey?: number; // Added key for forced rerenders
 }
 
 interface StationListItemProps
@@ -37,6 +38,7 @@ function StationListItemComponent(props: StationListItemProps) {
     departureId,
     arrivalId,
     dispatchRoute,
+    forceRenderKey, // This is used to force rerenders but doesn't need to be directly accessed
   } = data;
 
   const station = stations[index];

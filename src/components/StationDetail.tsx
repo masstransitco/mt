@@ -94,6 +94,7 @@ interface StationDetailProps {
   onDismiss?: () => void;
   isQrScanStation?: boolean;
   onClose?: () => void; // We'll keep this if needed for programmatic close
+  isMinimized?: boolean; // New prop to track sheet's minimized state
 }
 
 /** A small wrapper for CarGrid */
@@ -252,6 +253,7 @@ function StationDetailComponent({
   onDismiss = () => {},
   isQrScanStation = false,
   onClose = () => {},
+  isMinimized = false, // Default to false
 }: StationDetailProps) {
   const dispatch = useAppDispatch();
 
@@ -274,6 +276,9 @@ function StationDetailComponent({
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false);
   const [charging, setCharging] = useState(false);
+  
+  // For forcing refresh when sheet expands
+  const [forceRefreshKey, setForceRefreshKey] = useState(0);
   
   // New payment result modal states
   const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false);
@@ -311,6 +316,32 @@ function StationDetailComponent({
 
   // Debounce route fetching
   const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Effect to handle sheet expansion - force a refresh
+  useEffect(() => {
+    // When sheet transitions from minimized to expanded
+    if (isMinimized === false) {
+      // Force a refresh by changing the key
+      setForceRefreshKey(prev => prev + 1);
+      // Re-initialize as needed
+      setIsInitialized(true);
+      setAttemptedRender(true);
+      
+      // Force CarGrid to load if in step 2
+      if (isDepartureFlow && step === 2 && activeStation) {
+        setShouldLoadCarGrid(true);
+      }
+      
+      // Refetch route if needed (in steps 3-4)
+      if (step >= 3 && departureId && arrivalId && stations.length > 0) {
+        const depStation = stations.find((s) => s.id === departureId);
+        const arrStation = stations.find((s) => s.id === arrivalId);
+        if (depStation && arrStation) {
+          dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
+        }
+      }
+    }
+  }, [isMinimized, isDepartureFlow, step, activeStation, departureId, arrivalId, stations, dispatch]);
 
   useEffect(() => {
     if (step >= 3 && departureId && arrivalId && stations.length > 0) {
@@ -512,10 +543,11 @@ function StationDetailComponent({
     );
   }
 
-  // Normal UI
+  // Use forceRefreshKey to force remount of the component
   return (
     <>
       <motion.div
+        key={`station-detail-${forceRefreshKey}`}
         className="p-4 space-y-3"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
