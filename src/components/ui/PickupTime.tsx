@@ -115,8 +115,45 @@ export default function PickupTime({ startTime, endTime }: PickupTimeProps) {
   const end = formatTime(endTime);
   
   return (
-    <div className="flex flex-col items-center space-y-2 pb-1">
-      <div className="flex items-center justify-center">
+    <div className="flex flex-col items-center w-full">
+      {/* Title with blue illumination animation, now centered */}
+      <motion.div
+        variants={{
+          hidden: { opacity: 0, y: -10 },
+          visible: {
+            opacity: 1,
+            y: 0,
+            transition: { delay: 0.3, duration: 0.5 },
+          },
+        }}
+        initial="hidden"
+        animate="visible"
+        className="text-gray-400 text-sm font-medium mb-2 text-center"
+      >
+        <motion.span
+          initial={{ color: "rgb(156 163 175)" }}
+          animate={{
+            color: ["rgb(156 163 175)", "rgb(59 130 246)", "rgb(156 163 175)"],
+            textShadow: [
+              "0 0 0px rgba(59, 130, 246, 0)",
+              "0 0 8px rgba(59, 130, 246, 0.5)",
+              "0 0 0px rgba(59, 130, 246, 0)",
+            ],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Number.POSITIVE_INFINITY,
+            repeatType: "reverse",
+            ease: "easeInOut",
+            times: [0, 0.5, 1],
+          }}
+        >
+          Pickup car
+        </motion.span>
+      </motion.div>
+
+      {/* Flipping clock display */}
+      <div className="w-full flex items-center justify-center">
         <div className="flex items-center bg-[#1D1D1D] px-4 py-3 rounded-xl shadow-xl border border-[#2A2A2A]">
           <FlipDigit value={start.hours.charAt(0)} delay={100} />
           <FlipDigit value={start.hours.charAt(1)} delay={250} />
@@ -142,13 +179,6 @@ export default function PickupTime({ startTime, endTime }: PickupTimeProps) {
           </motion.div>
         </div>
       </div>
-
-      <motion.div
-        initial={{ width: 0, opacity: 0 }}
-        animate={{ width: 48, opacity: 0.8 }}
-        transition={{ delay: 1.6, duration: 0.5 }}
-        className="h-1 bg-blue-500 rounded-full mt-1"
-      />
     </div>
   );
 }

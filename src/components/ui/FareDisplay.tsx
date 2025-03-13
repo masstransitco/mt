@@ -15,7 +15,7 @@ export default function FareDisplay({
   perMinuteRate = 1
 }: FareDisplayProps) {
   return (
-    <div className="flex flex-col items-center justify-center">
+    <div className="flex flex-col items-center justify-center w-full">
       <AnimatedFareHeader 
         baseFare={baseFare} 
         currency={currency} 
@@ -33,18 +33,18 @@ interface AnimatedFareHeaderProps {
 
 function AnimatedFareHeader({ baseFare, currency, perMinuteRate }: AnimatedFareHeaderProps) {
   return (
-    <motion.div initial="hidden" animate="visible" className="flex flex-col items-start w-full max-w-md mx-auto">
-      {/* Starting fare label with blue illumination animation */}
+    <motion.div initial="hidden" animate="visible" className="flex flex-col items-center w-full">
+      {/* Starting fare label with blue illumination animation - now centered */}
       <motion.div
         variants={{
-          hidden: { opacity: 0, x: -10 },
+          hidden: { opacity: 0, y: -10 },
           visible: {
             opacity: 1,
-            x: 0,
+            y: 0,
             transition: { delay: 0.3, duration: 0.5 },
           },
         }}
-        className="text-gray-400 text-sm font-medium relative self-start ml-1 mb-2"
+        className="text-gray-400 text-sm font-medium mb-2 text-center"
       >
         <motion.span
           initial={{ color: "rgb(156 163 175)" }}
@@ -64,35 +64,40 @@ function AnimatedFareHeader({ baseFare, currency, perMinuteRate }: AnimatedFareH
             times: [0, 0.5, 1],
           }}
         >
-          Starting fare:
+          Starting fare
         </motion.span>
       </motion.div>
 
-      {/* Main fare row with HKD $50.00 and $1/minute */}
-      <motion.div
-        variants={{
-          hidden: { opacity: 0 },
-          visible: {
-            opacity: 1,
-            transition: {
-              delay: 0.5,
-              duration: 0.5,
+      {/* Main fare row with HKD $50.00 and $1/minute - restyled to match PickupTime */}
+      <div className="w-full flex items-center justify-center">
+        <motion.div
+          variants={{
+            hidden: { opacity: 0 },
+            visible: {
+              opacity: 1,
+              transition: {
+                delay: 0.5,
+                duration: 0.5,
+              },
             },
-          },
-        }}
-        className="flex items-center justify-between w-full bg-[#1D1D1D] px-5 py-4 rounded-xl shadow-xl border border-[#2A2A2A]"
-      >
-        {/* Left side - HKD $50.00 */}
-        <div className="flex items-center">
-          <span className="text-[#5A5A5A] text-2xl font-medium flex items-center mr-1.5">{currency}</span>
-          <FlippingAmount value={baseFare.toFixed(2)} prefix="$" />
-        </div>
+          }}
+          className="flex items-center justify-between bg-[#1D1D1D] px-4 py-3 rounded-xl shadow-xl border border-[#2A2A2A]"
+        >
+          {/* Left side - HKD $50.00 */}
+          <div className="flex items-center">
+            <span className="text-[#5A5A5A] text-xl font-medium flex items-center mr-1.5">{currency}</span>
+            <FlippingAmount value={baseFare.toFixed(2)} prefix="$" />
+          </div>
 
-        {/* Right side - $1/min here after */}
-        <div className="flex items-center">
-          <TypewriterText text={`$${perMinuteRate} / min here after`} delay={1.5} typingSpeed={50} />
-        </div>
-      </motion.div>
+          {/* Separator similar to PickupTime */}
+          <div className="mx-3 text-gray-400">•</div>
+
+          {/* Right side - $1/min here after */}
+          <div className="flex items-center">
+            <TypewriterText text={`$${perMinuteRate} / min`} delay={1.5} typingSpeed={50} />
+          </div>
+        </motion.div>
+      </div>
     </motion.div>
   )
 }
@@ -132,8 +137,8 @@ function TypewriterText({ text, delay = 0, typingSpeed = 50 }: TypewriterTextPro
 
   return (
     <div className="flex text-sm">
-      <span className="text-gray-400 font-medium">{displayText.startsWith("$1") ? "$1" : ""}</span>
-      <span className="text-gray-500">{displayText.startsWith("$1") ? displayText.substring(2) : displayText}</span>
+      <span className="text-gray-300 font-medium">{displayText.startsWith("$1") ? "$1" : ""}</span>
+      <span className="text-gray-400">{displayText.startsWith("$1") ? displayText.substring(2) : displayText}</span>
       <span className="animate-pulse ml-0.5 opacity-60">|</span>
     </div>
   );
@@ -199,7 +204,7 @@ function FlipDigit({ value, delay }: FlipDigitProps) {
   }
 
   return (
-    <div className="relative h-14 w-9 mx-0.5">
+    <div className="relative h-10 w-7 mx-0.5">
       {/* Shadow element */}
       <div className="absolute inset-0 rounded-md bg-black opacity-30 blur-md transform translate-y-1 scale-95"></div>
 
@@ -210,7 +215,7 @@ function FlipDigit({ value, delay }: FlipDigitProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.6 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 rounded-md bg-[#1FBAD6] blur-md z-0"
+            className="absolute inset-0 rounded-md bg-blue-500 blur-md z-0"
           />
         )}
       </AnimatePresence>
@@ -218,7 +223,7 @@ function FlipDigit({ value, delay }: FlipDigitProps) {
       {/* Top half (static) */}
       <div className="absolute inset-0 bottom-1/2 bg-[#1A1A1A] rounded-t-md border-t border-l border-r border-[#2A2A2A] overflow-hidden">
         <div
-          className="absolute inset-0 flex items-center justify-center text-white font-mono text-2xl font-medium"
+          className="absolute inset-0 flex items-center justify-center text-white font-mono text-xl font-medium"
           style={{ transform: "translateY(50%)" }}
         >
           {value}
@@ -239,14 +244,14 @@ function FlipDigit({ value, delay }: FlipDigitProps) {
         style={{ backfaceVisibility: "hidden" }}
       >
         <div
-          className="absolute inset-0 flex items-center justify-center text-white font-mono text-2xl font-medium"
+          className="absolute inset-0 flex items-center justify-center text-white font-mono text-xl font-medium"
           style={{ transform: "translateY(-50%)" }}
         >
           {value}
         </div>
 
         {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#1FBAD6] to-transparent opacity-5"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-500 to-transparent opacity-5"></div>
       </motion.div>
 
       {/* Divider line */}
