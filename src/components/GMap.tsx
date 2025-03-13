@@ -782,7 +782,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   key={detailKey}
   isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow}
   onDismiss={handleStationDetailClose}
-  title={bookingStep <= 2 ? "Pickup car" : ""} 
   headerContent={renderSheetContent()} // Use headerContent prop to place content above pulsating strip
 >
   {stationToShow && (
