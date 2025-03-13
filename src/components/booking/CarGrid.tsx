@@ -38,7 +38,7 @@ export default function CarGrid({
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   const dispatchRadius = useAppSelector(selectDispatchRadius);
 
-  // Our primary "available cars"
+  // Our primary "available cars" from the store
   let availableCars = useAvailableCarsForDispatch();
 
   // If in QR mode, override the normal list with just the scannedCar
@@ -56,9 +56,8 @@ export default function CarGrid({
     if (isVisible) {
       console.log("[CarGrid] Fetching cars, dispatch locations, and Firestore availability...");
 
-      // Remove all ".unwrap()" calls to prevent unhandled rejections
       Promise.all([
-        dispatch(fetchCars()),             // no .unwrap()
+        dispatch(fetchCars()), // no .unwrap()
         dispatch(fetchDispatchLocations()),
       ])
         .then(() => dispatch(fetchAvailabilityFromFirestore()))
@@ -66,7 +65,7 @@ export default function CarGrid({
           console.log("[CarGrid] All data loaded (or attempted).");
         })
         .catch((err) => {
-          // If any fetch fails (e.g. 500 error), log it but do NOT freeze
+          // If any fetch fails, log but do not freeze
           console.error("[CarGrid] Some data fetch call failed:", err);
         })
         .finally(() => {
@@ -89,11 +88,15 @@ export default function CarGrid({
     }
   }, [isQrScanStation, scannedCar]);
 
-  // Auto-select the first car if none selected
+  // Auto-select the first available car if user has none selected
   useEffect(() => {
-    if (isVisible && !selectedCarId && availableCars.length > 0) {
-      console.log("[CarGrid] Auto-selecting the first available car:", availableCars[0].id);
-      dispatch(selectCar(availableCars[0].id));
+    if (isVisible && availableCars.length > 0) {
+      // Check if user already has a valid car selected
+      const alreadySelected = availableCars.some((car) => car.id === selectedCarId);
+      if (!alreadySelected) {
+        console.log("[CarGrid] Auto-selecting the first available car:", availableCars[0].id);
+        dispatch(selectCar(availableCars[0].id));
+      }
     }
   }, [availableCars, selectedCarId, dispatch, isVisible]);
 
@@ -121,7 +124,7 @@ export default function CarGrid({
       if (!acc[modelKey]) {
         acc[modelKey] = { model: modelKey, cars: [] };
       }
-      // cap each group at 10 cars
+      // cap each group at e.g. 10 cars
       if (acc[modelKey].cars.length < 10) {
         acc[modelKey].cars.push(car);
       }
