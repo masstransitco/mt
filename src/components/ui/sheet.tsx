@@ -14,16 +14,15 @@ import { AnimatePresence, motion, useAnimation, PanInfo } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 
-// Adjust these as desired
-const MINIMIZED_HEIGHT = 64;   // Height when minimized
-const EXPANDED_HEIGHT = 560;  // Fixed expanded height for crisp toggling
+// Default minimized height is auto (will adjust to header content)
+const MINIMIZED_HEIGHT = "auto";
+// Maximum height the sheet can expand to (90vh)
+const MAX_EXPANDED_HEIGHT = "90vh";
 
 /** 
  * The sheet header, which can include:
  *   - A title, subtitle, or count
  *   - custom `headerContent` (like <PickupTime /> or <DisplayFare />)
- * 
- * For minimal spacing at the top, we reduce or remove extra paddings.
  */
 const SheetHeader = memo(function SheetHeader({
   title,
@@ -33,6 +32,7 @@ const SheetHeader = memo(function SheetHeader({
   countLabel,
   isMinimized,
   onToggle,
+  headerRef,
 }: {
   title?: string;
   subtitle?: ReactNode;
@@ -41,11 +41,12 @@ const SheetHeader = memo(function SheetHeader({
   countLabel?: string;
   isMinimized: boolean;
   onToggle: () => void;
+  headerRef: React.RefObject<HTMLDivElement>;
 }) {
   return (
     <div
+      ref={headerRef}
       className="cursor-pointer w-full"
-      style={{ minHeight: MINIMIZED_HEIGHT }}
       onClick={onToggle}
     >
       {/* Container with minimal top/bottom padding */}
@@ -125,8 +126,8 @@ export interface SheetHandle {
 /**
  * A minimal two-position bottom sheet with:
  *  - No overlay blocking the underlying UI (we only render the sheet itself)
- *  - Toggling between expanded (fixed ~560px) or minimized (~64px)
- *  - Tap header to toggle, or drag >80px to snap states
+ *  - Toggling between expanded (dynamic height up to 90vh) or minimized (header height)
+ *  - Tap header to toggle
  *  - Very little padding for a sleek design
  */
 function SheetImpl(
@@ -151,6 +152,14 @@ function SheetImpl(
   const isMinimized =
     externalMinimized !== undefined ? externalMinimized : internalMinimized;
 
+  // Refs for measuring content
+  const headerRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Track header height for minimized state
+  const [headerHeight, setHeaderHeight] = useState<number | null>(null);
+  
   // Framer Motion control for the sheet's Y offset
   const controls = useAnimation();
 
@@ -160,6 +169,33 @@ function SheetImpl(
   // Lock body scroll only if open and not minimized
   // This prevents unwanted scroll locking when sheet is minimized
   useBodyScrollLock(isOpen && !isMinimized);
+
+  // Measure header height when it changes
+  useEffect(() => {
+    if (headerRef.current) {
+      const observer = new ResizeObserver((entries) => {
+        const height = entries[0].contentRect.height;
+        setHeaderHeight(height);
+      });
+      
+      observer.observe(headerRef.current);
+      return () => observer.disconnect();
+    }
+  }, []);
+
+  // Calculate Y position based on minimized state and header height
+  const calculateYPosition = useCallback(() => {
+    if (isMinimized) {
+      // If we know the header height, use container height minus header height
+      if (headerHeight && containerRef.current) {
+        const containerHeight = containerRef.current.offsetHeight;
+        return containerHeight - headerHeight;
+      }
+      // Fallback to a default value
+      return "calc(100% - var(--header-height, 64px))";
+    }
+    return 0;
+  }, [isMinimized, headerHeight]);
 
   /** Let parent forcibly close the sheet. */
   const closeSheet = useCallback(() => {
@@ -181,15 +217,16 @@ function SheetImpl(
     }
   }, [isOpen]);
 
-  // Snap to y=0 if expanded, or y=(EXPANDED_HEIGHT - MINIMIZED_HEIGHT) if minimized
+  // Animate to calculated Y position when expanded/minimized state changes
   useEffect(() => {
     if (!isOpen) return;
-    const targetY = isMinimized ? EXPANDED_HEIGHT - MINIMIZED_HEIGHT : 0;
+    
+    const targetY = calculateYPosition();
     controls.start({
       y: targetY,
       transition: { duration: 0.2, ease: "easeInOut" },
     });
-  }, [isOpen, isMinimized, controls]);
+  }, [isOpen, isMinimized, headerHeight, controls, calculateYPosition]);
 
   // If we open the sheet => default to expanded
   useEffect(() => {
@@ -211,28 +248,6 @@ function SheetImpl(
     }
   }, [isMinimized, onExpand, onMinimize]);
 
-  // If user drags up/down more than ~80px => toggle
-  const handleDragEnd = useCallback(
-    (_: PointerEvent, info: PanInfo) => {
-      const threshold = 80;
-      const dragDistance = info.offset.y;
-      if (isMinimized) {
-        // If minimized => user must drag up enough to expand
-        if (dragDistance < -threshold) {
-          setInternalMinimized(false);
-          onExpand?.();
-        }
-      } else {
-        // If expanded => user must drag down enough to minimize
-        if (dragDistance > threshold) {
-          setInternalMinimized(true);
-          onMinimize?.();
-        }
-      }
-    },
-    [isMinimized, onExpand, onMinimize]
-  );
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -246,14 +261,16 @@ function SheetImpl(
           onAnimationComplete={handleAnimationComplete}
           style={{ height: 'auto' }}
         >
-          {/* The draggable sheet itself - with pointer events enabled */}
+          {/* The sheet container - with pointer events enabled */}
           <motion.div
+            ref={containerRef}
             className="w-full pointer-events-auto"
-            style={{ height: EXPANDED_HEIGHT }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: EXPANDED_HEIGHT - MINIMIZED_HEIGHT }}
-            dragElastic={0}
-            onDragEnd={handleDragEnd}
+            style={{ 
+              height: "auto", 
+              maxHeight: MAX_EXPANDED_HEIGHT,
+              // Set CSS variable for the header height
+              ...(headerHeight ? { '--header-height': `${headerHeight}px` } as React.CSSProperties : {})
+            }}
             animate={controls}
           >
             <div
@@ -270,10 +287,12 @@ function SheetImpl(
                 countLabel={countLabel}
                 isMinimized={isMinimized}
                 onToggle={toggleMinimized}
+                headerRef={headerRef}
               />
 
-              {/* If minimized, we fade out or hide the content area */}
+              {/* Body content - only draggable in the header */}
               <div
+                ref={bodyRef}
                 className="flex-grow overflow-y-auto transition-all duration-200 px-3 pt-2 pb-3"
                 style={{
                   opacity: isMinimized ? 0 : 1,
