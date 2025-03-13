@@ -14,14 +14,20 @@ import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
 import CarCardGroup, { CarGroup } from "./CarCardGroup";
 import type { Car } from "@/types/cars";
 
+/**
+ * CarGrid props.
+ */
 interface CarGridProps {
   className?: string;
   isVisible?: boolean;
-  /** For QR scanning: if a car is scanned, override auto-selection */
+  /** If a car was scanned, we override the normal availableCars logic. */
   isQrScanStation?: boolean;
   scannedCar?: Car | null;
 }
 
+/**
+ * Main CarGrid component that fetches cars & dispatch data, then displays them in groups.
+ */
 export default function CarGrid({
   className = "",
   isVisible = true,
@@ -32,39 +38,45 @@ export default function CarGrid({
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
   const dispatchRadius = useAppSelector(selectDispatchRadius);
 
-  // Our main source of "available cars"
+  // Our primary "available cars"
   let availableCars = useAvailableCarsForDispatch();
-  const storeAvailableCars = useAppSelector(selectAvailableForDispatch);
 
-  // If in QR mode, override the normal list
+  // If in QR mode, override the normal list with just the scannedCar
   if (isQrScanStation && scannedCar) {
     availableCars = [scannedCar];
   }
 
-  // Container ref
   const containerRef = useRef<HTMLDivElement>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // On mount/visibility, fetch all data: cars, dispatch locations, Firestore availability
+  // On mount (or when visible), fetch data: cars, dispatch locations, & Firestore availability
   useEffect(() => {
     let mounted = true;
+
     if (isVisible) {
       console.log("[CarGrid] Fetching cars, dispatch locations, and Firestore availability...");
+
+      // Remove all ".unwrap()" calls to prevent unhandled rejections
       Promise.all([
-        dispatch(fetchCars()).unwrap(),
-        dispatch(fetchDispatchLocations()).unwrap(),
+        dispatch(fetchCars()),             // no .unwrap()
+        dispatch(fetchDispatchLocations()),
       ])
         .then(() => dispatch(fetchAvailabilityFromFirestore()))
+        .then(() => {
+          console.log("[CarGrid] All data loaded (or attempted).");
+        })
+        .catch((err) => {
+          // If any fetch fails (e.g. 500 error), log it but do NOT freeze
+          console.error("[CarGrid] Some data fetch call failed:", err);
+        })
         .finally(() => {
           if (mounted) {
             setIsInitialLoad(false);
-            console.log("[CarGrid] Initial data load complete");
+            console.log("[CarGrid] Initial data load done");
           }
-        })
-        .catch((err) => {
-          console.error("[CarGrid] Error fetching data:", err);
         });
     }
+
     return () => {
       mounted = false;
     };
@@ -73,14 +85,14 @@ export default function CarGrid({
   // Warn if in QR mode but no scanned car
   useEffect(() => {
     if (isQrScanStation && !scannedCar) {
-      console.warn("[CarGrid] isQrScanStation is true, but no scannedCar provided!");
+      console.warn("[CarGrid] isQrScanStation is true, but no scannedCar was provided!");
     }
   }, [isQrScanStation, scannedCar]);
 
   // Auto-select the first car if none selected
   useEffect(() => {
     if (isVisible && !selectedCarId && availableCars.length > 0) {
-      console.log("[CarGrid] Auto-selecting first car:", availableCars[0].id);
+      console.log("[CarGrid] Auto-selecting the first available car:", availableCars[0].id);
       dispatch(selectCar(availableCars[0].id));
     }
   }, [availableCars, selectedCarId, dispatch, isVisible]);
@@ -93,6 +105,7 @@ export default function CarGrid({
       return [];
     }
 
+    // If in QR station mode with a scanned car, just show that single car
     if (isQrScanStation && scannedCar) {
       return [
         {
@@ -108,24 +121,24 @@ export default function CarGrid({
       if (!acc[modelKey]) {
         acc[modelKey] = { model: modelKey, cars: [] };
       }
+      // cap each group at 10 cars
       if (acc[modelKey].cars.length < 10) {
         acc[modelKey].cars.push(car);
       }
       return acc;
     }, {} as Record<string, CarGroup>);
 
+    // Only take the first 5 groups for display
     const result = Object.values(dict).slice(0, 5);
     console.log("[CarGrid] Created", result.length, "car groups");
     return result;
   }, [availableCars, isVisible, isQrScanStation, scannedCar]);
 
+  // If still loading data, show a skeleton
   if (isInitialLoad) {
     return (
       <div className="py-4">
-        {/* Single loading skeleton instead of two */}
-        <div
-          className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg"
-        />
+        <div className="w-full h-48 bg-gray-900/50 border border-gray-800 animate-pulse rounded-lg" />
       </div>
     );
   }
