@@ -94,8 +94,27 @@ export const bookingSlice = createSlice({
       state.departureDate = action.payload;
     },
     advanceBookingStep: (state, action: PayloadAction<number>) => {
-      state.step = action.payload;
-      switch (action.payload) {
+      const newStep = action.payload;
+      
+      // Validate step transition
+      if (newStep < 1 || newStep > 6) {
+        console.warn(`Invalid booking step: ${newStep}, defaulting to step 1`);
+        state.step = 1;
+        state.stepName = "selecting_departure_station";
+        return;
+      }
+      
+      // Don't allow skipping steps (except explicitly going back to step 1)
+      if (newStep !== 1 && newStep > state.step + 1) {
+        console.warn(`Cannot advance from step ${state.step} to ${newStep} - steps can't be skipped`);
+        return;
+      }
+      
+      // Set the step and name
+      state.step = newStep;
+      
+      // Set the step name consistently
+      switch (newStep) {
         case 1:
           state.stepName = "selecting_departure_station";
           break;
@@ -115,9 +134,7 @@ export const bookingSlice = createSlice({
           state.stepName = "finalizing";
           break;
         default:
-          state.step = 1;
           state.stepName = "selecting_departure_station";
-          break;
       }
     },
     selectDepartureStation: (state, action: PayloadAction<number>) => {

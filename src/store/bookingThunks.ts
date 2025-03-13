@@ -17,20 +17,36 @@ import {
 } from "./bookingSlice";
 
 /**
+ * This result shape ensures we never "throw" from the thunk,
+ * thus we won't cause a .reject in RTK if an error occurs.
+ */
+interface BookingThunkResult {
+  success: boolean;
+  message: string;
+  step?: number; 
+}
+
+/**
  * saveBookingDetails:
  * - Reads from Redux store's booking state
  * - Persists it under `users/{uid}/booking: {...}` in Firestore
  * - Only actually saves data if user is in step 5 or explicitly resetting
  */
-export const saveBookingDetails = createAsyncThunk(
+export const saveBookingDetails = createAsyncThunk<
+  BookingThunkResult, // We now always return {success, message}
+  void
+>(
   "booking/saveBookingDetails",
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { getState }) => {
     try {
       const state = getState() as RootState;
       const user = state.user.authUser;
       if (!user) {
         console.warn("User not signed in; cannot save booking details.");
-        return rejectWithValue("User not signed in; cannot save booking details.");
+        return {
+          success: false,
+          message: "User not signed in; cannot save booking details.",
+        };
       }
 
       // The current booking data in Redux
@@ -44,10 +60,10 @@ export const saveBookingDetails = createAsyncThunk(
       } = state.booking;
 
       // Only persist data if user is in step 5 (active booking) 
-      // or if they're at step 1 (which means they just reset - clear data)
+      // or if they're at step 1 (reset => clear data).
       if (step !== 5 && step !== 1) {
-        console.log(`User in step ${step}, not persisting booking state`);
-        return { success: true, message: "Skipped saving (not in step 5)" };
+        console.log(`[saveBookingDetails] Step=${step}, not persisting booking state`);
+        return { success: true, message: "Skipped saving (not in step=5 or step=1)" };
       }
 
       // Convert the Date object to string (if present)
@@ -99,8 +115,12 @@ export const saveBookingDetails = createAsyncThunk(
 
       return { success: true, message: "Booking details saved successfully" };
     } catch (err) {
-      console.error("Error saving booking details:", err);
-      return rejectWithValue("Failed to save booking details.");
+      console.error("[saveBookingDetails] Error saving booking details:", err);
+      // Instead of `rejectWithValue`, we return a success=false shape
+      return {
+        success: false,
+        message: "Failed to save booking details (thunk caught error).",
+      };
     }
   }
 );
@@ -110,24 +130,30 @@ export const saveBookingDetails = createAsyncThunk(
  * - Fetches booking data from `users/{uid}/booking`
  * - Rehydrates Redux ONLY if booking was in step 5
  */
-export const loadBookingDetails = createAsyncThunk(
+export const loadBookingDetails = createAsyncThunk<
+  BookingThunkResult,
+  void
+>(
   "booking/loadBookingDetails",
-  async (_, { getState, dispatch, rejectWithValue }) => {
+  async (_, { getState, dispatch }) => {
     try {
       const state = getState() as RootState;
       const user = state.user.authUser;
       if (!user) {
-        console.warn("User not signed in; cannot load booking details.");
-        return rejectWithValue("User not signed in; cannot load booking details.");
+        console.warn("[loadBookingDetails] User not signed in; cannot load booking details.");
+        return {
+          success: false,
+          message: "User not signed in; cannot load booking details.",
+        };
       }
 
-      console.log("Loading booking details for user:", user.uid);
+      console.log("[loadBookingDetails] Loading booking details for user:", user.uid);
 
       const userDocRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userDocRef);
       
       if (!userSnap.exists()) {
-        console.log("No user document found");
+        console.log("[loadBookingDetails] No user document found");
         return { success: false, message: "No user document found" };
       }
 
@@ -135,33 +161,29 @@ export const loadBookingDetails = createAsyncThunk(
       const booking = data.booking as Partial<BookingState> | undefined;
       
       if (!booking) {
-        console.log("No booking data found in user document");
+        console.log("[loadBookingDetails] No booking data found in user document");
         return { success: false, message: "No booking data found" };
       }
 
-      console.log("Found booking data:", booking);
+      console.log("[loadBookingDetails] Found booking data:", booking);
 
       // ONLY restore state if the saved booking was at step 5
       if (booking.step === 5) {
-        console.log("Restoring step 5 booking...");
+        console.log("[loadBookingDetails] Restoring step 5 booking...");
         
         // Only rehydrate if we found booking data for step 5
-        // departureDate
         if (booking.departureDate) {
           dispatch(setDepartureDate(new Date(booking.departureDate)));
         }
 
-        // ticketPlan
         if (booking.ticketPlan) {
           dispatch(setTicketPlan(booking.ticketPlan));
         }
 
-        // departureStationId
         if (booking.departureStationId) {
           dispatch(selectDepartureStation(booking.departureStationId));
         }
 
-        // arrivalStationId
         if (booking.arrivalStationId) {
           dispatch(selectArrivalStation(booking.arrivalStationId));
         }
@@ -176,15 +198,18 @@ export const loadBookingDetails = createAsyncThunk(
         };
       } else {
         // For all other steps, don't restore anything
-        console.log(`Found booking in step ${booking.step}, not restoring state`);
+        console.log(`[loadBookingDetails] Found booking in step ${booking.step}, not restoring state`);
         return { 
           success: false, 
-          message: "Booking not in step 5, not restoring state"
+          message: `Booking not in step=5 (found step=${booking.step}), not restoring state`
         };
       }
     } catch (err) {
-      console.error("Error loading booking details:", err);
-      return rejectWithValue("Failed to load booking details.");
+      console.error("[loadBookingDetails] Error loading booking details:", err);
+      return {
+        success: false,
+        message: "Failed to load booking details (thunk caught error).",
+      };
     }
   }
 );
