@@ -14,7 +14,7 @@ import storage from "redux-persist/lib/storage";
 
 // Import slices as usual
 import chatReducer from "./chatSlice";
-import uiReducer from "./uiSlice";
+// Removed uiReducer import
 import userReducer from "./userSlice";
 import stationsReducer from "./stationsSlice";
 import carReducer from "./carSlice";
@@ -51,7 +51,7 @@ const bookingPersistConfig = {
 
 const rootReducer = combineReducers({
   chat: chatReducer,
-  ui: uiReducer,
+  // Removed ui: uiReducer,
   user: persistReducer(userPersistConfig, userReducer),
   stations: stationsReducer,
   stations3D: stations3DReducer,
