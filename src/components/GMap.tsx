@@ -51,7 +51,7 @@ import {
 } from "@/store/dispatchSlice";
 
 // UI Components
-import Sheet from "@/components/ui/sheet";
+import Sheet, { SheetHandle } from "@/components/ui/sheet";
 import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import StationDetail from "./StationDetail";
@@ -105,6 +105,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [forceSheetOpen, setForceSheetOpen] = useState(false);
   const [isSheetMinimized, setIsSheetMinimized] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
+  
+  // Sheet refs for programmatic control
+  const detailSheetRef = useRef<SheetHandle>(null);
+  const listSheetRef = useRef<SheetHandle>(null);
 
   // Track if we are mid-transition, to block UI updates
   const [isStepTransitioning, setIsStepTransitioning] = useState(false);
@@ -839,6 +843,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             }}
             title="Nearby Stations"
             count={sortedStations.length}
+            ref={listSheetRef}
           >
             <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
               <StationList
@@ -861,6 +866,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
             onExpand={expandSheet}
             onDismiss={handleStationDetailClose}
             headerContent={renderSheetContent()}
+            ref={detailSheetRef}
           >
             {stationToShow && (
               <StationDetail

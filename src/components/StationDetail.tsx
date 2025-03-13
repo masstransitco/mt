@@ -167,7 +167,7 @@ const StationStats = memo(function StationStats({
         </div>
       ) : null}
 
-      {/* Step=2 => show walking distance */}
+      {/* Step=2 => show walking distance if not a virtual station */}
       {step === 2 &&
         typeof activeStation.distance === "number" &&
         !isVirtualCarLocation && (
@@ -182,7 +182,7 @@ const StationStats = memo(function StationStats({
           </div>
         )}
 
-      {/* Step=4 => show driving time */}
+      {/* Step=4 => driving time */}
       {step === 4 && driveTimeMin && (
         <div className="flex justify-between items-center text-sm">
           <div className="flex items-center gap-2 text-gray-300">
@@ -280,20 +280,21 @@ function StationDetailComponent({
   // For forcing refresh when sheet expands
   const [forceRefreshKey, setForceRefreshKey] = useState(0);
   
-  // New payment result modal states
+  // Payment result modal states
   const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [paymentReference, setPaymentReference] = useState("");
   const [cardLast4, setCardLast4] = useState("");
 
-  // Get stations by ID for the modal
-  const departureStation = useMemo(() => {
-    return stations.find(s => s.id === departureId) || null;
-  }, [stations, departureId]);
-  
-  const arrivalStation = useMemo(() => {
-    return stations.find(s => s.id === arrivalId) || null;
-  }, [stations, arrivalId]);
+  // Get stations by ID for the receipt or display
+  const departureStation = useMemo(
+    () => stations.find((s) => s.id === departureId) || null,
+    [stations, departureId]
+  );
+  const arrivalStation = useMemo(
+    () => stations.find((s) => s.id === arrivalId) || null,
+    [stations, arrivalId]
+  );
 
   // For the "Parking" label
   const parkingValue = useMemo(() => {
@@ -317,22 +318,19 @@ function StationDetailComponent({
   // Debounce route fetching
   const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Effect to handle sheet expansion - force a refresh
+  // Handle sheet expansion => force a content refresh
   useEffect(() => {
-    // When sheet transitions from minimized to expanded
-    if (isMinimized === false) {
-      // Force a refresh by changing the key
-      setForceRefreshKey(prev => prev + 1);
-      // Re-initialize as needed
+    if (!isMinimized) {
+      setForceRefreshKey((prev) => prev + 1);
       setIsInitialized(true);
       setAttemptedRender(true);
-      
+
       // Force CarGrid to load if in step 2
       if (isDepartureFlow && step === 2 && activeStation) {
         setShouldLoadCarGrid(true);
       }
-      
-      // Refetch route if needed (in steps 3-4)
+
+      // If step 3 or 4 => refetch route
       if (step >= 3 && departureId && arrivalId && stations.length > 0) {
         const depStation = stations.find((s) => s.id === departureId);
         const arrStation = stations.find((s) => s.id === arrivalId);
@@ -341,7 +339,16 @@ function StationDetailComponent({
         }
       }
     }
-  }, [isMinimized, isDepartureFlow, step, activeStation, departureId, arrivalId, stations, dispatch]);
+  }, [
+    isMinimized,
+    isDepartureFlow,
+    step,
+    activeStation,
+    departureId,
+    arrivalId,
+    stations,
+    dispatch,
+  ]);
 
   useEffect(() => {
     if (step >= 3 && departureId && arrivalId && stations.length > 0) {
@@ -349,8 +356,7 @@ function StationDetailComponent({
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
       }
-      
-      // Only fetch route if we're in the detail view and the sheet is expanded
+      // Only fetch if the sheet is expanded
       if (!isMinimized) {
         routeFetchTimeoutRef.current = setTimeout(() => {
           console.log("StationDetail fetching route:", departureId, arrivalId);
@@ -359,10 +365,9 @@ function StationDetailComponent({
           if (depStation && arrStation) {
             dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
           }
-        }, 500); // Increased timeout to prevent race conditions
+        }, 500);
       }
     }
-    
     return () => {
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
@@ -400,21 +405,16 @@ function StationDetailComponent({
     setWalletModalOpen(false);
   }, []);
 
-  // New handlers for payment result modal
+  // Payment result modal steps
   const handlePaymentContinue = useCallback(() => {
-    // Close the modal
     setPaymentResultModalOpen(false);
-    
     if (paymentSuccess) {
-      // For successful payments, advance to step 5
       dispatch(advanceBookingStep(5));
       dispatch(saveBookingDetails());
     }
-    // For failed payments, stay on step 4 and let user try again
   }, [dispatch, paymentSuccess]);
 
   const handlePaymentRetry = useCallback(() => {
-    // Close the modal and let user try payment again
     setPaymentResultModalOpen(false);
   }, []);
 
@@ -446,28 +446,21 @@ function StationDetailComponent({
       
       try {
         setCharging(true);
-        
-        // Process payment
-        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000); // e.g. $50
+        // Example charge of $50 => 5000 cents
+        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000);
         
         if (!result.success) {
           throw new Error(result.error || "Charge failed");
         }
-        
-        // Payment succeeded, prepare for modal display
+        // Payment succeeded
         setPaymentSuccess(true);
-        setPaymentReference(result.transactionId || "TXN" + Date.now().toString().slice(-8));
-        
-        // If you have the card info available from the API response, set it here
-        setCardLast4(result.cardLast4 || "4242"); // Default to "4242" if not available
-        
-        // Show payment result modal
+        setPaymentReference(
+          result.transactionId || "TXN" + Date.now().toString().slice(-8)
+        );
+        setCardLast4(result.cardLast4 || "4242");
         setPaymentResultModalOpen(true);
-        
       } catch (err) {
         console.error("Failed to charge trip =>", err);
-        
-        // Payment failed, show error modal
         setPaymentSuccess(false);
         setPaymentResultModalOpen(true);
       } finally {
@@ -589,9 +582,9 @@ function StationDetailComponent({
           isVirtualCarStation={isVirtualCarLocation}
         />
 
-        {/* CarGrid + Confirm Button for step=2 with no spacing in between */}
+        {/* CarGrid + Confirm Button for step=2 with reduced space between */}
         {isDepartureFlow && step === 2 && (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {(shouldLoadCarGrid || isVirtualCarLocation) && (
               <MemoizedCarGrid
                 isVisible
@@ -631,7 +624,7 @@ function StationDetailComponent({
       <PaymentResultModal
         isOpen={paymentResultModalOpen}
         isSuccess={paymentSuccess}
-        amount={5000} // Fixed amount in cents (HK$50.00)
+        amount={5000} // e.g. HK$50.00 in cents
         referenceId={paymentReference}
         cardLast4={cardLast4}
         onContinue={handlePaymentContinue}
