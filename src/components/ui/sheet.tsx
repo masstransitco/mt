@@ -5,86 +5,26 @@ import React, {
   useEffect,
   useCallback,
   ReactNode,
-  Suspense,
-  memo,
-  lazy,
   useRef,
   useImperativeHandle,
   forwardRef,
+  memo,
 } from "react";
-import {
-  AnimatePresence,
-  motion,
-  useAnimation,
-  PanInfo,
-} from "framer-motion";
-import { ChevronUp } from "lucide-react";
+import { AnimatePresence, motion, useAnimation, PanInfo } from "framer-motion";
 import { cn } from "@/lib/utils";
-
-// Dynamically import PulsatingStrip
-const PulsatingStrip = lazy(() => import("@/components/ui/PulsatingStrip"));
-
-// Loading fallback for the PulsatingStrip
-const StripFallback = () => (
-  <div className="flex justify-center">
-    <div
-      style={{
-        width: "110%",
-        height: "2px",
-        borderRadius: "1px",
-        backgroundColor: "#2171ec",
-      }}
-    />
-  </div>
-);
-
-// --- IMPORT YOUR BODY LOCK HOOK ---
 import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 
-export interface SheetProps {
-  /** Whether the sheet is open or closed. */
-  isOpen: boolean;
+// Adjust these as desired
+const MINIMIZED_HEIGHT = 64;   // Height when minimized
+const EXPANDED_HEIGHT = 560;  // Fixed expanded height for crisp toggling
 
-  /** If the sheet is minimized or not. If not controlled externally, 
-      the sheet will manage its own minimized state. */
-  isMinimized?: boolean;
-
-  /** The sheet's content. */
-  children: ReactNode;
-  className?: string;
-
-  /** Optional title, subtitle, or custom header nodes. */
-  title?: string;
-  subtitle?: ReactNode;
-  headerContent?: ReactNode;
-
-  /** Optional count display in the header (e.g. "3 items"). */
-  count?: number;
-  countLabel?: string;
-
-  /** Called when user drags down to minimize. */
-  onMinimize?: () => void;
-
-  /** Called when user drags up to expand from minimized. */
-  onExpand?: () => void;
-
-  /** If you want parent code to handle a full close, you can pass onDismiss. */
-  onDismiss?: () => void;
-}
-
-/**
- * Exposed to parents via ref for programmatic close:
- *   sheetRef.current?.closeSheet();
+/** 
+ * The sheet header, which can include:
+ *   - A title, subtitle, or count
+ *   - custom `headerContent` (like <PickupTime /> or <DisplayFare />)
+ * 
+ * For minimal spacing at the top, we reduce or remove extra paddings.
  */
-export interface SheetHandle {
-  /**
-   * Programmatically closes the sheet, returning a Promise that resolves
-   * only after the exit animation has completed.
-   */
-  closeSheet: () => Promise<void>;
-}
-
-/** The sheet header, tapped to toggle expand/minimize. */
 const SheetHeader = memo(function SheetHeader({
   title,
   subtitle,
@@ -92,7 +32,7 @@ const SheetHeader = memo(function SheetHeader({
   count,
   countLabel,
   isMinimized,
-  toggleExpanded,
+  onToggle,
 }: {
   title?: string;
   subtitle?: ReactNode;
@@ -100,46 +40,95 @@ const SheetHeader = memo(function SheetHeader({
   count?: number;
   countLabel?: string;
   isMinimized: boolean;
-  toggleExpanded: () => void;
+  onToggle: () => void;
 }) {
   return (
     <div
-      onClick={toggleExpanded}
-      className="cursor-grab active:cursor-grabbing relative w-full"
+      className="cursor-pointer w-full"
+      style={{ minHeight: MINIMIZED_HEIGHT }}
+      onClick={onToggle}
     >
-      <div className="flex flex-col items-center justify-between">
-        <div className="flex items-center justify-between w-full text-left">
-          <div>
-            {title && <h2 className="text-lg font-semibold text-white">{title}</h2>}
-            {subtitle && <div className="text-sm text-gray-300">{subtitle}</div>}
+      {/* Container with minimal top/bottom padding */}
+      <div className="px-3 pt-2 pb-1 flex flex-col gap-1">
+        {/* Title / Subtitle / Count in a small vertical space */}
+        {(title || subtitle || typeof count === "number") && (
+          <div className="w-full flex flex-col">
+            {title && <h2 className="text-white font-semibold text-base leading-tight">{title}</h2>}
+            {subtitle && (
+              <div className="text-sm text-gray-300 leading-tight">{subtitle}</div>
+            )}
             {typeof count === "number" && (
-              <p className="text-sm text-gray-300">
+              <div className="text-sm text-gray-300 leading-tight">
                 {count} {countLabel ?? "items"}
-              </p>
+              </div>
             )}
           </div>
-          <ChevronUp
-            className={cn(
-              "h-5 w-5 text-gray-400 transition-transform",
-              isMinimized ? "rotate-180" : "rotate-0"
-            )}
-          />
-        </div>
+        )}
+
+        {/* Insert your custom header content (PickupTime / DisplayFare / etc.) right below */}
         {headerContent && (
-          <div className="w-full mt-2">
+          <div className="mt-1">
             {headerContent}
           </div>
         )}
       </div>
-      <Suspense fallback={<StripFallback />}>
-        <PulsatingStrip className="mt-3 mx-auto" />
-      </Suspense>
+
+      {/* Visual divider to distinguish header from body */}
+      <div className="w-4/5 h-0.5 bg-gray-800 mx-auto mt-1 mb-1 rounded-full" />
     </div>
   );
 });
 
 SheetHeader.displayName = "SheetHeader";
 
+/** 
+ * The main sheet props
+ */
+export interface SheetProps {
+  /** Whether the sheet is open or closed. */
+  isOpen: boolean;
+
+  /** Optionally control whether it's minimized externally. */
+  isMinimized?: boolean;
+
+  /** The main body content of the sheet. */
+  children: ReactNode;
+  className?: string;
+
+  /** Title, subtitle, and custom header nodes. */
+  title?: string;
+  subtitle?: ReactNode;
+  headerContent?: ReactNode;
+
+  /** Optional count & label for the header. */
+  count?: number;
+  countLabel?: string;
+
+  /** Called when user toggles to minimized. */
+  onMinimize?: () => void;
+
+  /** Called when user toggles to expanded. */
+  onExpand?: () => void;
+
+  /** Parent can handle a full close by setting isOpen=false. */
+  onDismiss?: () => void;
+}
+
+/** 
+ * If parent wants to close the sheet programmatically:
+ *   sheetRef.current?.closeSheet();
+ */
+export interface SheetHandle {
+  closeSheet: () => Promise<void>;
+}
+
+/**
+ * A minimal two-position bottom sheet with:
+ *  - No overlay blocking the underlying UI (we only render the sheet itself)
+ *  - Toggling between expanded (fixed ~560px) or minimized (~64px)
+ *  - Tap header to toggle, or drag >80px to snap states
+ *  - Very little padding for a sleek design
+ */
 function SheetImpl(
   {
     isOpen,
@@ -157,54 +146,34 @@ function SheetImpl(
   }: SheetProps,
   ref: React.Ref<SheetHandle>
 ) {
-  // If not externally controlled, track minimized internally
+  // If not externally controlled, manage minimized state locally
   const [internalMinimized, setInternalMinimized] = useState(false);
-  // We treat externalMinimized as a "source of truth" if provided
   const isMinimized =
     externalMinimized !== undefined ? externalMinimized : internalMinimized;
 
-  // Rerender key for the content area when we un-minimize
-  const [contentKey, setContentKey] = useState(0);
-
-  // Framer-motion controls
+  // Framer Motion control for the sheet's Y offset
   const controls = useAnimation();
-  const contentRef = useRef<HTMLDivElement>(null);
 
-  // Let parent code call sheetRef.current?.closeSheet()
+  // For parent's .closeSheet() calls
   const closePromiseResolverRef = useRef<(() => void) | null>(null);
 
-  // If the sheet is open => lock body scroll
-  // (You can refine this to lock only when fully expanded, if you like.)
-  useBodyScrollLock(isOpen);
+  // Lock body scroll only if open and not minimized
+  // This prevents unwanted scroll locking when sheet is minimized
+  useBodyScrollLock(isOpen && !isMinimized);
 
-  /** The function GMap can call if they do sheetRef.current?.closeSheet() */
-  const closeSheet = useCallback((): Promise<void> => {
-    if (!isOpen) {
-      return Promise.resolve();
-    }
+  /** Let parent forcibly close the sheet. */
+  const closeSheet = useCallback(() => {
+    if (!isOpen) return Promise.resolve();
     return new Promise<void>((resolve) => {
       closePromiseResolverRef.current = resolve;
       // Let parent handle toggling isOpen => false
-      if (onDismiss) {
-        onDismiss();
-      }
+      onDismiss?.();
     });
   }, [isOpen, onDismiss]);
 
   useImperativeHandle(ref, () => ({ closeSheet }), [closeSheet]);
 
-  // Constants for sizing
-  const MINIMIZED_HEIGHT = 64;
-  // Bump to near-full screen. 
-  // If you want truly full screen, consider window.innerHeight or 100dvh
-  const MAX_EXPANDED_HEIGHT =
-    typeof window !== "undefined" ? window.innerHeight * 0.98 : 700;
-  const MIN_EXPANDED_HEIGHT = 320;
-
-  // The container ref for drag constraints
-  const constraintsRef = useRef<HTMLDivElement>(null);
-
-  // Called once the exit animation completes
+  // After we animate out, if there's a pending closeSheet() promise, resolve it
   const handleAnimationComplete = useCallback(() => {
     if (!isOpen && closePromiseResolverRef.current) {
       closePromiseResolverRef.current();
@@ -212,185 +181,113 @@ function SheetImpl(
     }
   }, [isOpen]);
 
-  // Recalculate how tall we can expand when open
+  // Snap to y=0 if expanded, or y=(EXPANDED_HEIGHT - MINIMIZED_HEIGHT) if minimized
   useEffect(() => {
-    const updateExpandedHeight = () => {
-      if (!isMinimized && contentRef.current) {
-        const contentHeight = contentRef.current.scrollHeight;
-        const newHeight = Math.min(
-          Math.max(contentHeight + MINIMIZED_HEIGHT + 32, MIN_EXPANDED_HEIGHT),
-          MAX_EXPANDED_HEIGHT
-        );
-        // This ensures the sheet can scroll internally if content is taller
-        setExpandedHeight(newHeight);
-      }
-    };
+    if (!isOpen) return;
+    const targetY = isMinimized ? EXPANDED_HEIGHT - MINIMIZED_HEIGHT : 0;
+    controls.start({
+      y: targetY,
+      transition: { duration: 0.2, ease: "easeInOut" },
+    });
+  }, [isOpen, isMinimized, controls]);
 
-    if (isOpen && !isMinimized) {
-      const timer = setTimeout(updateExpandedHeight, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [
-    isOpen,
-    isMinimized,
-    children,
-    headerContent,
-    MINIMIZED_HEIGHT,
-    MIN_EXPANDED_HEIGHT,
-    MAX_EXPANDED_HEIGHT,
-  ]);
-
-  // Animate up/down based on minimized state
-  const [expandedHeight, setExpandedHeight] = useState(MIN_EXPANDED_HEIGHT);
-  useEffect(() => {
-    if (isOpen) {
-      controls.start({
-        y: isMinimized ? expandedHeight - MINIMIZED_HEIGHT : 0,
-        transition: { type: "spring", stiffness: 300, damping: 30 },
-      });
-    }
-  }, [isOpen, isMinimized, controls, expandedHeight, MINIMIZED_HEIGHT]);
-
-  // If externalMinimized changes, sync it
-  useEffect(() => {
-    if (externalMinimized !== undefined) {
-      setInternalMinimized(externalMinimized);
-    }
-  }, [externalMinimized]);
-
-  // If we open the sheet, default to expanded
+  // If we open the sheet => default to expanded
   useEffect(() => {
     if (isOpen) {
       setInternalMinimized(false);
     }
   }, [isOpen]);
 
-  // Force a content re-render if we go from minimized => expanded
-  useEffect(() => {
-    if (!isMinimized) {
-      setContentKey((prev) => prev + 1);
-      if (onExpand) {
-        onExpand();
-      }
+  // Tapping the header toggles minimized
+  const toggleMinimized = useCallback(() => {
+    if (isMinimized) {
+      // Was minimized => expand
+      setInternalMinimized(false);
+      onExpand?.();
+    } else {
+      // Was expanded => minimize
+      setInternalMinimized(true);
+      onMinimize?.();
     }
-  }, [isMinimized, onExpand]);
+  }, [isMinimized, onExpand, onMinimize]);
 
-  /** Called when user finishes dragging the sheet. */
+  // If user drags up/down more than ~80px => toggle
   const handleDragEnd = useCallback(
-    (_: any, info: PanInfo) => {
-      const threshold = expandedHeight / 3;
-      const offset = info.offset.y;
-      const wasMinimized = isMinimized;
-
-      // If minimized => expand if user drags up enough
-      // If expanded => minimize if user drags down enough
-      const shouldMinimize = wasMinimized
-        ? offset < -threshold
-        : offset > threshold;
-
-      setInternalMinimized(shouldMinimize);
-
-      if (shouldMinimize && !wasMinimized && onMinimize) {
-        onMinimize();
-      } else if (!shouldMinimize && wasMinimized && onExpand) {
-        onExpand();
+    (_: PointerEvent, info: PanInfo) => {
+      const threshold = 80;
+      const dragDistance = info.offset.y;
+      if (isMinimized) {
+        // If minimized => user must drag up enough to expand
+        if (dragDistance < -threshold) {
+          setInternalMinimized(false);
+          onExpand?.();
+        }
+      } else {
+        // If expanded => user must drag down enough to minimize
+        if (dragDistance > threshold) {
+          setInternalMinimized(true);
+          onMinimize?.();
+        }
       }
     },
-    [isMinimized, expandedHeight, onMinimize, onExpand]
+    [isMinimized, onExpand, onMinimize]
   );
-
-  // Tapping the header toggles minimized
-  const toggleExpanded = useCallback(() => {
-    const wasMinimized = isMinimized;
-    const newMinimized = !wasMinimized;
-    setInternalMinimized(newMinimized);
-
-    if (newMinimized && !wasMinimized && onMinimize) {
-      onMinimize();
-    } else if (!newMinimized && wasMinimized && onExpand) {
-      onExpand();
-    }
-  }, [isMinimized, onMinimize, onExpand]);
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div
-          className="fixed inset-0 z-[999] flex flex-col pointer-events-none"
-          ref={constraintsRef}
+        <motion.div 
+          className="fixed bottom-0 left-0 right-0 z-[999] pointer-events-none" 
+          key="sheet-container"
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+          onAnimationComplete={handleAnimationComplete}
+          style={{ height: 'auto' }}
         >
-          {/* Non-interactive backdrop. We rely on GMap or parent to call .closeSheet() */}
-          {!isMinimized && (
-            <motion.div
-              className="absolute inset-0 bg-black pointer-events-none"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              exit={{ opacity: 0 }}
-            />
-          )}
-
-          {/* The actual sheet container at bottom */}
+          {/* The draggable sheet itself - with pointer events enabled */}
           <motion.div
-            className="pointer-events-auto mt-auto w-full"
-            style={{ height: expandedHeight }}
-            initial={{ y: "100%" }}
-            animate={controls}
-            exit={{ y: "100%" }}
-            onAnimationComplete={handleAnimationComplete}
+            className="w-full pointer-events-auto"
+            style={{ height: EXPANDED_HEIGHT }}
             drag="y"
-            dragConstraints={{
-              top: 0,
-              bottom: expandedHeight - MINIMIZED_HEIGHT,
-            }}
-            dragElastic={0.1}
+            dragConstraints={{ top: 0, bottom: EXPANDED_HEIGHT - MINIMIZED_HEIGHT }}
+            dragElastic={0}
             onDragEnd={handleDragEnd}
+            animate={controls}
           >
             <div
               className={cn(
-                "relative bg-black text-white rounded-t-lg shadow-2xl border-t border-gray-800 h-full flex flex-col",
+                "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col h-full",
                 className
               )}
             >
-              {/* Sheet header */}
-              <div
-                className="px-4 pt-4 pb-2 flex-shrink-0"
-                style={{ minHeight: MINIMIZED_HEIGHT }}
-              >
-                <SheetHeader
-                  title={title}
-                  subtitle={subtitle}
-                  headerContent={headerContent}
-                  count={count}
-                  countLabel={countLabel}
-                  isMinimized={isMinimized}
-                  toggleExpanded={toggleExpanded}
-                />
-              </div>
+              <SheetHeader
+                title={title}
+                subtitle={subtitle}
+                headerContent={headerContent}
+                count={count}
+                countLabel={countLabel}
+                isMinimized={isMinimized}
+                onToggle={toggleMinimized}
+              />
 
-              {/* Content area */}
+              {/* If minimized, we fade out or hide the content area */}
               <div
-                ref={contentRef}
-                className="px-4 pt-4 pb-8 overflow-y-auto flex-grow transition-all duration-300"
+                className="flex-grow overflow-y-auto transition-all duration-200 px-3 pt-2 pb-3"
                 style={{
-                  maxHeight: isMinimized
-                    ? 0
-                    : expandedHeight - MINIMIZED_HEIGHT,
                   opacity: isMinimized ? 0 : 1,
-                  overflow: isMinimized ? "hidden" : "auto",
                   pointerEvents: isMinimized ? "none" : "auto",
                 }}
               >
-                {/* Re-mount content if un-minimized */}
-                <div key={`content-${contentKey}`}>{children}</div>
+                {children}
               </div>
             </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );
 }
 
-/** Wrap in forwardRef so GMap can do sheetRef.current?.closeSheet() */
-const Sheet = forwardRef(SheetImpl);
-export default memo(Sheet);
+export default memo(forwardRef(SheetImpl));
