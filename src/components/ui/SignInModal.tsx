@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
+import React, { useState, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, X } from "lucide-react";
 import {
   RecaptchaVerifier,
@@ -11,6 +11,8 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
+import PinInput from "./PinInput";
+import StepIndicator from "./StepIndicator";
 
 interface ExtendedWindow extends Window {
   recaptchaVerifier?: RecaptchaVerifier;
@@ -19,104 +21,11 @@ interface ExtendedWindow extends Window {
 
 declare let window: ExtendedWindow;
 
-// Dynamically import ReactPlayer with a loading fallback
-const ReactPlayer = dynamic(() => import("react-player"), {
-  ssr: false,
-  loading: () => <div className="w-full h-full bg-gray-200 animate-pulse" />,
-});
-
 type AuthStep = "welcome" | "phone" | "verify";
 
 interface SignInModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-function StepIndicator({
-  currentStep,
-  totalSteps,
-}: {
-  currentStep: number;
-  totalSteps: number;
-}) {
-  return (
-    <div className="flex items-center justify-center space-x-2 py-2">
-      {Array.from({ length: totalSteps }, (_, index) => (
-        <div
-          key={index}
-          className={`h-2 w-2 rounded-full transition-colors ${
-            index + 1 === currentStep ? "bg-blue-500 scale-110" : "bg-gray-400"
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PinInput({
-  length,
-  loading,
-  onChange,
-}: {
-  length: number;
-  loading: boolean;
-  onChange: (code: string) => void;
-}) {
-  const [values, setValues] = useState<string[]>(Array(length).fill(""));
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
-  const handleChange = (index: number, value: string) => {
-    // Only allow digits
-    if (!/^\d*$/.test(value)) return;
-    const newValues = [...values];
-    newValues[index] = value;
-    setValues(newValues);
-    onChange(newValues.join(""));
-
-    // Auto-focus next input on successful digit entry
-    if (value && index < length - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    // On backspace at empty input, jump back
-    if (e.key === "Backspace" && !values[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  useEffect(() => {
-    // Reset inputs when loading changes (e.g., after a new send)
-    if (!loading) {
-      setValues(Array(length).fill(""));
-      inputRefs.current[0]?.focus();
-    }
-  }, [loading, length]);
-
-  return (
-    <div className="flex space-x-2">
-      {Array.from({ length }, (_, i) => (
-        <input
-          key={i}
-          type="text"
-          inputMode="numeric"
-          pattern="\d*"
-          maxLength={1}
-          disabled={loading}
-          value={values[i]}
-          onChange={(e) => handleChange(i, e.target.value)}
-          onKeyDown={(e) => handleKeyDown(i, e)}
-          ref={(el) => {
-            inputRefs.current[i] = el;
-          }}
-          className="w-10 h-12 text-center border border-gray-300 bg-white
-                     text-gray-900 text-xl rounded-md focus:outline-none
-                     focus:ring focus:ring-blue-500 disabled:opacity-50"
-        />
-      ))}
-    </div>
-  );
 }
 
 export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
@@ -164,6 +73,12 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     setCanResend(false);
     cleanup();
     onClose();
+  };
+  
+  // Handle back button specifically to ensure clean state
+  const handleBackToWelcome = () => {
+    setStep("welcome");
+    setError(null);
   };
 
   // Count down for resend
@@ -264,167 +179,241 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   if (!isOpen) return null;
 
+  // Step number mapping for the StepIndicator
+  const getStepNumber = () => {
+    switch (step) {
+      case "welcome": return 0;
+      case "phone": return 1;
+      case "verify": return 2;
+      default: return 0;
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-[9999] flex items-start justify-center">
+    <motion.div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
+      <motion.div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         onClick={handleClose}
         aria-hidden="true"
       />
-      {/* Outer Modal Container */}
-      <div
-        className="relative w-11/12 max-w-2xl mx-4 mt-[5px] bg-zinc-200/90 backdrop-blur-sm
-                   shadow-2xl rounded-lg overflow-hidden flex flex-col max-h-[80vh]"
+      
+      {/* Modal Container */}
+      <motion.div
+        className="relative w-11/12 max-w-md mx-auto bg-zinc-900 rounded-2xl overflow-hidden shadow-2xl"
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
       >
-        {/* Single Close Button (perfect circle) */}
-        <button
+        {/* Close button */}
+        <motion.button
           onClick={handleClose}
-          className="absolute top-3 right-3 p-1 rounded-full bg-gray-800
-                     hover:bg-gray-700 z-[100]"
-          aria-label="Close modal"
+          className="absolute right-4 top-4 p-1 rounded-full text-zinc-400 z-[100] hover:bg-zinc-800 hover:text-white transition-colors"
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
         >
-          <X className="w-6 h-6 text-white" />
-        </button>
+          <X className="w-5 h-5" />
+        </motion.button>
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* ---------------- WELCOME STEP ---------------- */}
+        {/* Step indicator - only show on phone and verify steps */}
+        {step !== "welcome" && (
+          <div className="pt-6 px-6">
+            <StepIndicator currentStep={getStepNumber()} totalSteps={3} />
+          </div>
+        )}
+
+        {/* Content area */}
+        <AnimatePresence mode="wait" initial={false}>
+          {/* WELCOME STEP */}
           {step === "welcome" && (
-            <div className="relative flex-1 w-full h-full overflow-hidden">
-
-              {/* Text/CTA container with blur & zinc text */}
-              <div className="relative z-20 flex flex-col justify-end w-full h-full p-6 bg-white/10 backdrop-blur-md text-zinc-800">
-                <h2 className="text-2xl font-bold drop-shadow-md">Sign in</h2>
-                <div className="mt-4 space-y-2 text-sm max-w-md">
-                  <p className="text-xs leading-relaxed">
-                    By clicking "Continue," you confirm you're 18 or older with a valid
-                    driver's license or permit. Trip and driving data may be collected
-                    to improve services. See our{" "}
-                    <a
-                      href="/privacy"
-                      className="text-blue-300 underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Privacy Policy
-                    </a>{" "}
-                    for details.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setStep("phone")}
-                  disabled={loading}
-                  className="w-full py-3 mt-4 rounded-md bg-blue-600 text-zinc-200 font-medium transition-colors z-50"
-                >
-                  Continue
-                </button>
+            <motion.div
+              key="welcome"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="p-6 space-y-4"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-medium tracking-tight text-white">Sign in</h2>
+                <p className="text-sm text-zinc-400">Access your account to start booking rides</p>
               </div>
-            </div>
+              
+              <div className="mt-4 space-y-4 text-sm text-zinc-400">
+                <p className="leading-relaxed">
+                  By clicking "Continue," you confirm you're 18 or older with a valid
+                  driver's license or permit. Trip and driving data may be collected
+                  to improve services.
+                </p>
+              </div>
+              
+              <motion.button
+                onClick={() => setStep("phone")}
+                className="w-full py-3 mt-4 rounded-lg bg-[#276EF1] text-white font-medium transition-colors hover:bg-[#1E54B7]"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Continue
+              </motion.button>
+              
+              <div className="mt-4 text-center">
+                <p className="text-xs text-zinc-500">
+                  By continuing, you agree to our{" "}
+                  <a href="#" className="text-[#276EF1] hover:underline">
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a href="#" className="text-[#276EF1] hover:underline">
+                    Privacy Policy
+                  </a>
+                </p>
+              </div>
+            </motion.div>
           )}
 
-          {/* ---------------- PHONE STEP ---------------- */}
+          {/* PHONE STEP */}
           {step === "phone" && (
-            <div className="flex flex-col h-full">
-              <div className="flex-1 p-6 space-y-4 text-gray-900 text-sm">
-                <h3 className="text-lg font-semibold">Enter Your Phone Number</h3>
-                <StepIndicator currentStep={1} totalSteps={2} />
-                <p>We'll text you a verification code to ensure it's really you.</p>
+            <motion.div
+              key="phone"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="p-6 space-y-4"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-medium tracking-tight text-white">Enter your phone</h2>
+                <p className="text-sm text-zinc-400">We'll text you a verification code</p>
+              </div>
+              
+              <div className="mt-4 space-y-4">
                 <PhoneInput value={phoneNumber} onChange={setPhoneNumber} disabled={loading} />
+                
                 {error && (
-                  <div className="p-3 text-sm text-red-500 bg-red-100 rounded-lg">
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 text-sm text-red-500 bg-red-900/30 rounded-lg"
+                  >
                     {error}
-                  </div>
+                  </motion.div>
                 )}
                 <div id="recaptcha-container" />
               </div>
-
-              <div className="p-6 pt-0 space-y-3">
-                <button
+              
+              <div className="pt-4 space-y-3">
+                <motion.button
                   onClick={handlePhoneSignIn}
                   disabled={loading || !phoneNumber || phoneNumber.length < 8}
-                  className="w-full p-3 rounded-md bg-blue-600 text-white text-sm
-                             font-medium hover:bg-blue-500 disabled:opacity-50
-                             transition-colors"
+                  className="w-full p-3 rounded-lg bg-[#276EF1] text-white font-medium transition-colors hover:bg-[#1E54B7] disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={(!loading && phoneNumber && phoneNumber.length >= 8) ? { scale: 1.02 } : {}}
+                  whileTap={(!loading && phoneNumber && phoneNumber.length >= 8) ? { scale: 0.98 } : {}}
                 >
                   {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
                   ) : (
                     "Send Code"
                   )}
-                </button>
-                <button
-                  onClick={() => setStep("welcome")}
+                </motion.button>
+                
+                <motion.button
+                  onClick={handleBackToWelcome}
                   disabled={loading}
-                  className="w-full p-3 text-sm text-gray-500 hover:text-gray-700
-                             disabled:opacity-50"
+                  className="w-full p-3 text-sm text-zinc-400 hover:text-white disabled:opacity-50"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
                 >
                   Back
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
           )}
 
-          {/* ---------------- VERIFY STEP ---------------- */}
+          {/* VERIFY STEP */}
           {step === "verify" && (
-            <div className="flex flex-col h-full">
-              <div className="flex-1 p-6 space-y-4 text-gray-900 text-sm">
-                <h3 className="text-lg font-semibold">Verify Your Number</h3>
-                <StepIndicator currentStep={2} totalSteps={2} />
-                <p>
-                  Enter the 6-digit code we sent to{" "}
-                  <span className="font-medium">{phoneNumber}</span>
-                </p>
-
-                <PinInput length={6} loading={loading} onChange={setVerificationCode} />
-
-                {error && (
-                  <div className="p-3 text-sm text-red-500 bg-red-100 rounded-lg">
-                    {error}
-                  </div>
-                )}
-                {!canResend && (
-                  <p className="text-xs text-gray-500">
-                    Didn't get the code? You can resend in {resendTimer}s
-                  </p>
-                )}
-                {canResend && (
-                  <button
-                    onClick={handleResendCode}
-                    className="text-sm underline text-blue-500"
-                  >
-                    Resend code
-                  </button>
-                )}
+            <motion.div
+              key="verify"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+              className="p-6 space-y-4"
+            >
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl font-medium tracking-tight text-white">Verification</h2>
+                <p className="text-sm text-zinc-400">Enter the 6-digit code sent to {phoneNumber}</p>
               </div>
-
-              <div className="p-6 pt-0 space-y-3">
-                <button
+              
+              <div className="mt-6 space-y-6">
+                <PinInput length={6} loading={loading} onChange={setVerificationCode} />
+                
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 text-sm text-red-500 bg-red-900/30 rounded-lg"
+                  >
+                    {error}
+                  </motion.div>
+                )}
+                
+                <div className="text-center">
+                  {!canResend && (
+                    <p className="text-sm text-zinc-500">
+                      Resend code in <span className="text-[#276EF1]">{resendTimer}s</span>
+                    </p>
+                  )}
+                  {canResend && (
+                    <motion.button
+                      onClick={handleResendCode}
+                      className="text-sm font-medium text-[#276EF1] transition-colors hover:text-[#1E54B7]"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Resend code
+                    </motion.button>
+                  )}
+                </div>
+              </div>
+              
+              <div className="pt-2 space-y-3">
+                <motion.button
                   onClick={handleVerifyCode}
                   disabled={loading || verificationCode.length !== 6}
-                  className="w-full p-3 rounded-md bg-blue-600 text-white text-sm
-                             font-medium hover:bg-blue-500 disabled:opacity-50
-                             transition-colors"
+                  className="w-full p-3 rounded-lg bg-[#276EF1] text-white font-medium transition-colors hover:bg-[#1E54B7] disabled:opacity-50 disabled:cursor-not-allowed"
+                  whileHover={(!loading && verificationCode.length === 6) ? { scale: 1.02 } : {}}
+                  whileTap={(!loading && verificationCode.length === 6) ? { scale: 0.98 } : {}}
                 >
                   {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto" />
                   ) : (
-                    "Verify Code"
+                    "Verify"
                   )}
-                </button>
-                <button
+                </motion.button>
+                
+                <motion.button
                   onClick={() => setStep("phone")}
                   disabled={loading}
-                  className="w-full p-3 text-sm text-gray-500 hover:text-gray-700
-                             disabled:opacity-50"
+                  className="w-full p-3 text-sm text-zinc-400 hover:text-white disabled:opacity-50"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
                 >
                   Change Phone Number
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
           )}
-        </div>
-      </div>
-    </div>
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 }
