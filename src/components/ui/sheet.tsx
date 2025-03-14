@@ -81,7 +81,11 @@ const SheetHeader = memo(function SheetHeader({
     <div
       ref={headerRef}
       className="cursor-pointer w-full"
-      onClick={onToggle}
+      onClick={(e) => {
+        // Prevent click events from toggling the sheet
+        // We'll rely solely on drag gestures
+        e.preventDefault()
+      }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -148,8 +152,7 @@ export interface SheetHandle {
  * A minimal two-position bottom sheet with:
  *  - No overlay blocking the underlying UI (we only render the sheet itself)
  *  - Toggling between expanded (dynamic height up to 90vh) or minimized (header height)
- *  - Tap header to toggle
- *  - Drag gestures to expand/minimize
+ *  - Drag gestures to expand/minimize (no tap to toggle)
  *  - Very little padding for a sleek design
  */
 function SheetImpl(
@@ -177,6 +180,7 @@ function SheetImpl(
   const headerRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   // Track header height for minimized state - use ref for measurements to avoid re-renders
   const headerHeightRef = useRef<number | null>(null)
@@ -320,18 +324,12 @@ function SheetImpl(
     }
   }, [isOpen])
 
-  // Tapping the header toggles minimized
+  // Tapping the header toggles minimized - DISABLED
+  // We'll rely solely on drag gestures
   const toggleMinimized = useCallback(() => {
-    if (isMinimized) {
-      // Was minimized => expand
-      setInternalMinimized(false)
-      onExpand?.()
-    } else {
-      // Was expanded => minimize
-      setInternalMinimized(true)
-      onMinimize?.()
-    }
-  }, [isMinimized, onExpand, onMinimize])
+    // This function is now a no-op
+    // We're keeping it for compatibility but it won't do anything
+  }, [])
 
   // Memoize the drag handler to prevent recreating on every render
   const handleDragEnd = useCallback(
@@ -406,10 +404,24 @@ function SheetImpl(
           dragMomentum={false} // Disable momentum for more precise control
         >
           <div
+            ref={sheetRef}
             className={cn(
               "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col h-full",
               className,
             )}
+            onTouchStart={(e) => {
+              // Only handle touch events from the header
+              if (headerRef.current?.contains(e.target as Node)) {
+                handleDragStart(e.nativeEvent as unknown as TouchEvent)
+              }
+            }}
+            onTouchMove={(e) => {
+              // Only handle touch events from the header
+              if (headerRef.current?.contains(e.target as Node)) {
+                handleDragMove(e.nativeEvent as unknown as TouchEvent)
+              }
+            }}
+            onTouchEnd={handleTouchEnd}
           >
             <SheetHeader
               title={title}
@@ -420,16 +432,26 @@ function SheetImpl(
               isMinimized={isMinimized}
               onToggle={toggleMinimized}
               headerRef={headerRef}
-              onTouchStart={(e) => handleDragStart(e.nativeEvent as unknown as TouchEvent)}
-              onTouchMove={(e) => handleDragMove(e.nativeEvent as unknown as TouchEvent)}
+              onTouchStart={(e) => {
+                // Let the parent handle this
+                // This ensures we don't double-handle events
+              }}
+              onTouchMove={(e) => {
+                // Let the parent handle this
+                // This ensures we don't double-handle events
+              }}
               onTouchEnd={handleTouchEnd}
             />
 
-            {/* Body content - only draggable in the header */}
+            {/* Body content - not draggable */}
             <div
               ref={bodyRef}
               className="flex-grow overflow-y-auto transition-all duration-200 px-3 pt-2 pb-3"
               style={bodyStyle}
+              onTouchStart={(e) => {
+                // Prevent touch events from propagating to parent for dragging
+                e.stopPropagation()
+              }}
             >
               {children}
             </div>
