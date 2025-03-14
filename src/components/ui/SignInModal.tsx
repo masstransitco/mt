@@ -109,12 +109,14 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       setError(null);
       cleanup();
 
+      console.log("Finding recaptcha-container element");
       const containerElement = document.getElementById("recaptcha-container");
       if (!containerElement) {
         throw new Error("Recaptcha container not found");
       }
 
       // In Firebase v10, the order is auth, containerElement, config
+      console.log("Creating reCAPTCHA verifier");
       const verifier = new RecaptchaVerifier(auth, containerElement, {
         size: "invisible",
         callback: () => {},
@@ -125,15 +127,19 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
       });
 
       window.recaptchaVerifier = verifier;
+      console.log("Rendering reCAPTCHA");
       await verifier.render();
 
+      console.log("Sending verification code to", phoneNumber);
       const confirmationResult = await signInWithPhoneNumber(
         auth,
         phoneNumber,
         verifier
       );
       window.confirmationResult = confirmationResult;
+      console.log("Verification code sent successfully");
 
+      console.log("Setting step to verify");
       setStep("verify");
       setResendTimer(30);
       setCanResend(false);
@@ -192,6 +198,8 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
     }
   };
 
+  console.log("Current step:", step);
+
   return (
     <motion.div 
       className="fixed inset-0 z-[9999] flex items-start justify-center pt-6"
@@ -233,7 +241,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
         </div>
 
         {/* Content area */}
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="wait" initial={false} key={step}>
           {/* WELCOME STEP */}
           {step === "welcome" && (
             <motion.div
@@ -308,7 +316,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
                     {error}
                   </motion.div>
                 )}
-                <div id="recaptcha-container" />
+                <div id="recaptcha-container" className="invisible"></div>
               </div>
               
               <div className="pt-4 space-y-3">
