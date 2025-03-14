@@ -192,7 +192,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   return (
     <motion.div 
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-20" // Changed from "items-center" to "items-start" and added pt-20
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-6" // Changed from "items-center" to "items-start" and added pt-20
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
