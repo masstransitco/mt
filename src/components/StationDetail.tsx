@@ -27,8 +27,7 @@ import WalletModal from "@/components/ui/WalletModal"
 import PaymentResultModal from "@/components/ui/PaymentResultModal"
 
 /**
- * 1) Dynamically import PaymentSummary
- *    so it only loads when step=4.
+ * Dynamically import PaymentSummary
  */
 const PaymentSummary = dynamic(
   () => import("@/components/ui/PaymentComponents").then((mod) => ({ default: mod.PaymentSummary })),
@@ -38,7 +37,7 @@ const PaymentSummary = dynamic(
   },
 )
 
-// --- A small fallback component for <Suspense> around MapCard --- //
+// Map fallback component
 function MapCardFallback() {
   return (
     <div className="h-44 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
@@ -47,7 +46,7 @@ function MapCardFallback() {
   )
 }
 
-// --- Lazy-loaded components & fallbacks --- //
+// Lazy-loaded components
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: ({ error, isLoading, pastDelay }) => {
     if (error) return <div>Error loading vehicles</div>
@@ -82,11 +81,11 @@ interface StationDetailProps {
   onOpenSignIn: () => void
   onDismiss?: () => void
   isQrScanStation?: boolean
-  onClose?: () => void // We'll keep this if needed for programmatic close
-  isMinimized?: boolean // New prop to track sheet's minimized state
+  onClose?: () => void
+  isMinimized?: boolean
 }
 
-/** A small wrapper for CarGrid */
+/** CarGrid wrapper */
 const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
   isVisible,
   isQrScanStation,
@@ -116,7 +115,7 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
 })
 MemoizedCarGrid.displayName = "MemoizedCarGrid"
 
-/** InfoPopup component for showing tooltip */
+/** InfoPopup component */
 const InfoPopup = memo(function InfoPopup({
   text = "Parking entry and exits are contactless and requires no further payments.",
 }: {
@@ -128,18 +127,15 @@ const InfoPopup = memo(function InfoPopup({
   const handleShowInfo = useCallback(() => {
     setIsVisible(true)
 
-    // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
 
-    // Hide after 3 seconds
     timeoutRef.current = setTimeout(() => {
       setIsVisible(false)
     }, 3000)
   }, [])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -171,7 +167,7 @@ const InfoPopup = memo(function InfoPopup({
 })
 InfoPopup.displayName = "InfoPopup"
 
-/** A small stats panel for station info */
+/** StationStats component */
 const StationStats = memo(function StationStats({
   activeStation,
   step,
@@ -189,7 +185,6 @@ const StationStats = memo(function StationStats({
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-3 space-y-2 border border-gray-700">
-      {/* Show "Ready to Drive" if station is virtual */}
       {isVirtualCarLocation ? (
         <div className="flex justify-between items-center text-xs">
           <div className="flex items-center gap-1.5 text-gray-300">
@@ -208,7 +203,6 @@ const StationStats = memo(function StationStats({
         </div>
       ) : null}
 
-      {/* Step=2 => show walking distance if not a virtual station */}
       {step === 2 && typeof activeStation.distance === "number" && !isVirtualCarLocation && (
         <div className="flex justify-between items-center text-xs">
           <div className="flex items-center gap-1.5 text-gray-300">
@@ -219,7 +213,6 @@ const StationStats = memo(function StationStats({
         </div>
       )}
 
-      {/* Step=4 => driving time */}
       {step === 4 && driveTimeMin && (
         <div className="flex justify-between items-center text-xs">
           <div className="flex items-center gap-1.5 text-gray-300">
@@ -229,7 +222,6 @@ const StationStats = memo(function StationStats({
         </div>
       )}
 
-      {/* Departure Gate info (replaced "Parking") */}
       <div className="flex justify-between items-center text-xs">
         <div className="flex items-center gap-1.5 text-gray-300">
           <span>Departure Gate</span>
@@ -244,7 +236,7 @@ const StationStats = memo(function StationStats({
 })
 StationStats.displayName = "StationStats"
 
-/** Confirm button for step 2 or 4 */
+/** Confirm button component */
 const ConfirmButton = memo(function ConfirmButton({
   isDepartureFlow,
   charging,
@@ -287,6 +279,42 @@ const ConfirmButton = memo(function ConfirmButton({
 })
 ConfirmButton.displayName = "ConfirmButton"
 
+// Improved touch handling helper
+function TouchScrollHandler() {
+  function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    const scrollTop = el.scrollTop
+    const scrollHeight = el.scrollHeight
+    const height = el.clientHeight
+    const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0)
+    
+    // Prevent overscroll only at boundaries
+    if ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0)) {
+      e.preventDefault()
+    }
+    
+    // Update current touch position
+    el.dataset.touchY = e.touches[0].clientY.toString()
+  }
+  
+  function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    e.currentTarget.dataset.touchY = e.touches[0].clientY.toString()
+  }
+  
+  function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
+    delete e.currentTarget.dataset.touchY
+  }
+  
+  return {
+    onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
+    onTouchEnd: handleTouchEnd
+  }
+}
+
+/**
+ * Main StationDetail component with improved scroll behavior
+ */
 function StationDetailComponent({
   activeStation,
   stations = [],
@@ -295,7 +323,7 @@ function StationDetailComponent({
   onDismiss = () => {},
   isQrScanStation = false,
   onClose = () => {},
-  isMinimized = false, // Default to false
+  isMinimized = false,
 }: StationDetailProps) {
   const dispatch = useAppDispatch()
 
@@ -318,15 +346,14 @@ function StationDetailComponent({
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false)
   const [charging, setCharging] = useState(false)
-
-  // For forcing refresh when sheet expands
   const [forceRefreshKey, setForceRefreshKey] = useState(0)
-
-  // Payment result modal states
   const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentReference, setPaymentReference] = useState("")
   const [cardLast4, setCardLast4] = useState("")
+
+  // Touch scroll handler
+  const touchScrollHandlers = TouchScrollHandler()
 
   // Get stations by ID for the receipt or display
   const departureStation = useMemo(() => stations.find((s) => s.id === departureId) || null, [stations, departureId])
@@ -382,7 +409,6 @@ function StationDetailComponent({
       // Only fetch if the sheet is expanded
       if (!isMinimized) {
         routeFetchTimeoutRef.current = setTimeout(() => {
-          console.log("StationDetail fetching route:", departureId, arrivalId)
           const depStation = stations.find((s) => s.id === departureId)
           const arrStation = stations.find((s) => s.id === arrivalId)
           if (depStation && arrStation) {
@@ -398,15 +424,10 @@ function StationDetailComponent({
     }
   }, [step, departureId, arrivalId, stations, dispatch, isMinimized])
 
-  // Combined useEffect for CarGrid visibility to fix the rendering issue
+  // Combined useEffect for CarGrid visibility
   useEffect(() => {
     let timer: NodeJS.Timeout
 
-    // Combined logic: show CarGrid if:
-    // 1. We're in departure flow (step <= 2)
-    // 2. We're specifically at step 2
-    // 3. We have an active station
-    // 4. OR if it's a QR-scanned station at step 2
     if ((isDepartureFlow && step === 2 && activeStation) || (isQrScanStation && step === 2)) {
       setShouldLoadCarGrid(true)
     } else {
@@ -572,12 +593,13 @@ function StationDetailComponent({
     <>
       <motion.div
         key={`station-detail-${forceRefreshKey}`}
-        className="p-3 space-y-2 touch-none pointer-events-none"
+        className="p-3 space-y-2 overscroll-contain"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "tween", duration: 0.2 }}
+        {...touchScrollHandlers}
       >
-        {/* Map preview */}
+        {/* Map preview with proper touch handling */}
         <Suspense fallback={<MapCardFallback />}>
           <div className="pointer-events-auto">
             <MapCard
@@ -588,14 +610,6 @@ function StationDetailComponent({
             />
           </div>
         </Suspense>
-
-        {/* If step=2 and not virtual => show an estimated pickup time */}
-        {step === 2 && !isVirtualCarLocation && estimatedPickupTime && (
-          <div className="text-xs text-center bg-blue-600/20 rounded-md p-1.5 border border-blue-500/30">
-            <span className="text-gray-200">Estimated car arrival: </span>
-            <span className="font-medium text-white">{estimatedPickupTime}</span>
-          </div>
-        )}
 
         {/* Station Stats */}
         <div className="pointer-events-auto">
@@ -671,4 +685,3 @@ function StationDetailComponent({
 }
 
 export default memo(StationDetailComponent)
-
