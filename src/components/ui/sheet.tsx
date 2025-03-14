@@ -1,4 +1,3 @@
-// sheet.tsx
 "use client"
 
 import type React from "react"
@@ -128,7 +127,7 @@ export interface SheetHandle {
 }
 
 /**
- * Sheet implementation with proper scroll behavior
+ * Sheet implementation with proper scroll behavior that doesn't cause layout shifts
  */
 function SheetImpl(
   {
@@ -176,43 +175,42 @@ function SheetImpl(
   // Observer ref to properly clean up
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
 
-  // Use effect for body scroll lock
+  // Get window width for calculations
+  const [windowWidth, setWindowWidth] = useState<number>(0)
+  
+  // Track scroll position
+  const scrollYRef = useRef<number>(0)
+
+  // Use effect for body scroll lock - FIXED VERSION
   useEffect(() => {
-    // Only lock scroll when sheet is open and expanded
-    if (isOpen && !isMinimized) {
+    if (!isOpen) return
+
+    // Only lock scroll when sheet is open and expanded (not minimized)
+    if (!isMinimized) {
+      // Save current scroll position
+      scrollYRef.current = window.scrollY
+      
+      // Calculate scrollbar width
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+      
       // Save original styles
-      const originalStyle = {
+      const originalStyles = {
         overflow: document.body.style.overflow,
-        position: document.body.style.position,
-        touchAction: document.body.style.touchAction,
-        height: document.body.style.height,
-        top: document.body.style.top,
-        overscrollBehavior: document.body.style.overscrollBehavior,
+        paddingRight: document.body.style.paddingRight,
       }
-
-      // Calculate current scroll position
-      const scrollY = window.scrollY
-
+      
       // Apply scroll lock
       document.body.style.overflow = 'hidden'
-      document.body.style.position = 'fixed'
-      document.body.style.touchAction = 'none'
-      document.body.style.height = '100%'
-      document.body.style.top = `-${scrollY}px`
-      document.body.style.overscrollBehavior = 'none'
       
-      // Clean up when the component unmounts or when dependencies change
+      // Add padding to prevent layout shift when scrollbar disappears
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`
+      }
+      
       return () => {
         // Restore original styles
-        document.body.style.overflow = originalStyle.overflow
-        document.body.style.position = originalStyle.position
-        document.body.style.touchAction = originalStyle.touchAction
-        document.body.style.height = originalStyle.height
-        document.body.style.top = originalStyle.top
-        document.body.style.overscrollBehavior = originalStyle.overscrollBehavior
-        
-        // Restore scroll position
-        window.scrollTo(0, scrollY)
+        document.body.style.overflow = originalStyles.overflow
+        document.body.style.paddingRight = originalStyles.paddingRight
       }
     }
   }, [isOpen, isMinimized])
@@ -244,6 +242,21 @@ function SheetImpl(
         resizeObserverRef.current.disconnect()
         resizeObserverRef.current = null
       }
+    }
+  }, [])
+
+  // Update window width on resize for layout calculations
+  useEffect(() => {
+    // Initial width
+    setWindowWidth(window.innerWidth)
+    
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
     }
   }, [])
 
@@ -411,7 +424,7 @@ function SheetImpl(
         exit={{ y: "100%" }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
         onAnimationComplete={handleAnimationComplete}
-        style={{ height: "auto" }}
+        style={{ width: '100%' }}
       >
         {/* The sheet container - with pointer events enabled */}
         <motion.div
