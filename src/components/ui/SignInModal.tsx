@@ -78,8 +78,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   
   // Handle back button specifically to ensure clean state
   const handleBackToWelcome = () => {
-    setStep("welcome");
-    setError(null);
+    setPhoneNumber(""); // Clear phone number input
+    setError(null);     // Clear any error messages
+    cleanup();          // Clean up reCAPTCHA if it exists
+    setStep("welcome"); // Set step after clearing data to ensure clean transition
   };
 
   // Count down for resend
@@ -183,16 +185,16 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   // Step number mapping for the StepIndicator
   const getStepNumber = () => {
     switch (step) {
-      case "welcome": return 0;
-      case "phone": return 1;
-      case "verify": return 2;
-      default: return 0;
+      case "welcome": return 1;
+      case "phone": return 2;
+      case "verify": return 3;
+      default: return 1;
     }
   };
 
   return (
     <motion.div 
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-6" // Changed from "items-center" to "items-start" and added pt-20
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -225,12 +227,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
           <X className="w-5 h-5" />
         </motion.button>
 
-        {/* Step indicator - only show on phone and verify steps */}
-        {step !== "welcome" && (
-          <div className="pt-6 px-6">
-            <StepIndicator currentStep={getStepNumber()} totalSteps={3} />
-          </div>
-        )}
+        {/* Step indicator - show on all steps */}
+        <div className="pt-6 px-6">
+          <StepIndicator currentStep={getStepNumber()} totalSteps={3} />
+        </div>
 
         {/* Content area */}
         <AnimatePresence mode="wait" initial={false}>
@@ -287,7 +287,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               key="phone"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
               className="p-6 space-y-4"
             >
