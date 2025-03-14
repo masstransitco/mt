@@ -1,6 +1,6 @@
+// sheet.tsx
 "use client"
 
-// Optimize imports by using named imports for React hooks
 import type React from "react"
 import {
   useState,
@@ -15,19 +15,14 @@ import {
 } from "react"
 import { AnimatePresence, motion, useAnimation, useDragControls, type PanInfo } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { useBodyScrollLock } from "@/lib/useBodyScrollLock"
 
-// Default minimized height is auto (will adjust to header content)
+// Constants
 const MINIMIZED_HEIGHT = "auto"
-// Maximum height the sheet can expand to (90vh)
 const MAX_EXPANDED_HEIGHT = "90vh"
-// Drag threshold - extract as constant for easier tuning
 const DRAG_THRESHOLD = 50
 
 /**
- * The sheet header, which can include:
- *   - A title, subtitle, or count
- *   - custom `headerContent` (like <PickupTime /> or <DisplayFare />)
+ * The sheet header component
  */
 const SheetHeader = memo(function SheetHeader({
   title,
@@ -54,7 +49,7 @@ const SheetHeader = memo(function SheetHeader({
   onDragEnd?: (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => void
   startDrag: (e: React.PointerEvent) => void
 }) {
-  // Memoize the title/subtitle/count section to prevent re-renders
+  // Memoize the title/subtitle/count section
   const titleSection = useMemo(() => {
     if (!(title || subtitle || typeof count === "number")) return null
 
@@ -90,20 +85,16 @@ const SheetHeader = memo(function SheetHeader({
       onPointerDown={handlePointerDown}
       onClick={(e) => {
         // Prevent click events from toggling the sheet
-        // We'll rely solely on drag gestures
         e.preventDefault()
       }}
     >
       {/* Container with minimal top/bottom padding */}
       <div className="px-3 pt-2 pb-1 flex flex-col gap-1">
-        {/* Title / Subtitle / Count in a small vertical space */}
         {titleSection}
-
-        {/* Insert your custom header content (PickupTime / DisplayFare / etc.) right below */}
         {headerContentSection}
       </div>
 
-      {/* Visual divider to distinguish header from body */}
+      {/* Visual divider */}
       <div className="w-4/5 h-0.5 bg-gray-800 mx-auto mt-1 mb-1 rounded-full" />
     </div>
   )
@@ -112,52 +103,32 @@ const SheetHeader = memo(function SheetHeader({
 SheetHeader.displayName = "SheetHeader"
 
 /**
- * The main sheet props
+ * Sheet props interface
  */
 export interface SheetProps {
-  /** Whether the sheet is open or closed. */
   isOpen: boolean
-
-  /** Optionally control whether it's minimized externally. */
   isMinimized?: boolean
-
-  /** The main body content of the sheet. */
   children: ReactNode
   className?: string
-
-  /** Title, subtitle, and custom header nodes. */
   title?: string
   subtitle?: ReactNode
   headerContent?: ReactNode
-
-  /** Optional count & label for the header. */
   count?: number
   countLabel?: string
-
-  /** Called when user toggles to minimized. */
   onMinimize?: () => void
-
-  /** Called when user toggles to expanded. */
   onExpand?: () => void
-
-  /** Parent can handle a full close by setting isOpen=false. */
   onDismiss?: () => void
 }
 
 /**
- * If parent wants to close the sheet programmatically:
- *   sheetRef.current?.closeSheet();
+ * Sheet handle interface for imperative control
  */
 export interface SheetHandle {
   closeSheet: () => Promise<void>
 }
 
 /**
- * A minimal two-position bottom sheet with:
- *  - No overlay blocking the underlying UI (we only render the sheet itself)
- *  - Toggling between expanded (dynamic height up to 90vh) or minimized (header height)
- *  - Drag gestures to expand/minimize (no tap to toggle)
- *  - Very little padding for a sleek design
+ * Sheet implementation with proper scroll behavior
  */
 function SheetImpl(
   {
@@ -186,16 +157,16 @@ function SheetImpl(
   const containerRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
 
-  // Track header height for minimized state - use ref for measurements to avoid re-renders
+  // Track header height for minimized state
   const headerHeightRef = useRef<number | null>(null)
   const [headerHeight, setHeaderHeight] = useState<number | null>(null)
 
-  // For tracking drag gestures - use refs to avoid re-renders during drag
+  // For tracking drag gestures
   const isDraggingRef = useRef(false)
 
   // Framer Motion control for the sheet's Y offset
   const controls = useAnimation()
-  
+
   // Create drag controls
   const dragControls = useDragControls()
 
@@ -205,11 +176,48 @@ function SheetImpl(
   // Observer ref to properly clean up
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
 
-  // Lock body scroll only if open and not minimized
-  // This prevents unwanted scroll locking when sheet is minimized
-  useBodyScrollLock(isOpen && !isMinimized)
+  // Use effect for body scroll lock
+  useEffect(() => {
+    // Only lock scroll when sheet is open and expanded
+    if (isOpen && !isMinimized) {
+      // Save original styles
+      const originalStyle = {
+        overflow: document.body.style.overflow,
+        position: document.body.style.position,
+        touchAction: document.body.style.touchAction,
+        height: document.body.style.height,
+        top: document.body.style.top,
+        overscrollBehavior: document.body.style.overscrollBehavior,
+      }
 
-  // Measure header height when it changes - optimized with refs
+      // Calculate current scroll position
+      const scrollY = window.scrollY
+
+      // Apply scroll lock
+      document.body.style.overflow = 'hidden'
+      document.body.style.position = 'fixed'
+      document.body.style.touchAction = 'none'
+      document.body.style.height = '100%'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.overscrollBehavior = 'none'
+      
+      // Clean up when the component unmounts or when dependencies change
+      return () => {
+        // Restore original styles
+        document.body.style.overflow = originalStyle.overflow
+        document.body.style.position = originalStyle.position
+        document.body.style.touchAction = originalStyle.touchAction
+        document.body.style.height = originalStyle.height
+        document.body.style.top = originalStyle.top
+        document.body.style.overscrollBehavior = originalStyle.overscrollBehavior
+        
+        // Restore scroll position
+        window.scrollTo(0, scrollY)
+      }
+    }
+  }, [isOpen, isMinimized])
+
+  // Measure header height when it changes
   useEffect(() => {
     if (!headerRef.current) return
 
@@ -245,11 +253,14 @@ function SheetImpl(
   }, [])
 
   // Function to start drag - passed to header
-  const startDrag = useCallback((e: React.PointerEvent) => {
-    dragControls.start(e)
-  }, [dragControls])
+  const startDrag = useCallback(
+    (e: React.PointerEvent) => {
+      dragControls.start(e)
+    },
+    [dragControls],
+  )
 
-  // Calculate Y position based on minimized state and header height - memoized
+  // Calculate Y position based on minimized state and header height
   const calculateYPosition = useMemo(() => {
     if (isMinimized) {
       // If we know the header height, use container height minus header height
@@ -257,25 +268,24 @@ function SheetImpl(
         const containerHeight = containerRef.current.offsetHeight
         return containerHeight - headerHeight
       }
-      // Fallback to a default value
+      // Fallback
       return "calc(100% - var(--header-height, 64px))"
     }
     return 0
   }, [isMinimized, headerHeight])
 
-  /** Let parent forcibly close the sheet. */
+  // Let parent forcibly close the sheet
   const closeSheet = useCallback(() => {
     if (!isOpen) return Promise.resolve()
     return new Promise<void>((resolve) => {
       closePromiseResolverRef.current = resolve
-      // Let parent handle toggling isOpen => false
       onDismiss?.()
     })
   }, [isOpen, onDismiss])
 
   useImperativeHandle(ref, () => ({ closeSheet }), [closeSheet])
 
-  // After we animate out, if there's a pending closeSheet() promise, resolve it
+  // After animation, resolve promise if needed
   const handleAnimationComplete = useCallback(() => {
     if (!isOpen && closePromiseResolverRef.current) {
       closePromiseResolverRef.current()
@@ -300,18 +310,16 @@ function SheetImpl(
     }
   }, [isOpen])
 
-  // Tapping the header toggles minimized - DISABLED
-  // We'll rely solely on drag gestures
+  // Placeholder function - we rely solely on drag gestures
   const toggleMinimized = useCallback(() => {
-    // This function is now a no-op
-    // We're keeping it for compatibility but it won't do anything
+    // No-op
   }, [])
 
-  // Memoize the drag handler to prevent recreating on every render
+  // Handle drag end
   const handleDragEnd = useCallback(
     (e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       isDraggingRef.current = false
-      
+
       // If dragged up and currently minimized
       if (info.offset.y < -DRAG_THRESHOLD && isMinimized) {
         // Expand the sheet
@@ -334,7 +342,7 @@ function SheetImpl(
     [isMinimized, onExpand, onMinimize, controls, calculateYPosition],
   )
 
-  // Memoize the container style to prevent recreating on every render
+  // Container style
   const containerStyle = useMemo(
     () => ({
       height: "auto",
@@ -345,7 +353,7 @@ function SheetImpl(
     [headerHeight],
   )
 
-  // Memoize the body style to prevent recreating on every render
+  // Body style
   const bodyStyle = useMemo(
     () => ({
       opacity: isMinimized ? 0 : 1,
@@ -353,6 +361,42 @@ function SheetImpl(
     }),
     [isMinimized],
   )
+
+  // Handle touch in body to prevent unwanted scrolling behavior
+  const handleBodyTouchMove = useCallback((e: React.TouchEvent) => {
+    const target = e.currentTarget as HTMLDivElement
+    const scrollTop = target.scrollTop
+    const scrollHeight = target.scrollHeight
+    const clientHeight = target.clientHeight
+    
+    // Check if we're at the boundaries
+    const isAtTop = scrollTop <= 0
+    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 1
+    
+    // Get touch direction
+    const touch = e.touches[0]
+    const touchStartY = target.dataset.touchStartY ? 
+      parseFloat(target.dataset.touchStartY) : 
+      touch.clientY
+    
+    // Determine scroll direction
+    const isScrollingUp = touch.clientY > touchStartY
+    const isScrollingDown = touch.clientY < touchStartY
+    
+    // Store current touch position for next comparison
+    target.dataset.touchStartY = touch.clientY.toString()
+    
+    // Prevent default only when trying to scroll beyond boundaries
+    if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
+      e.preventDefault()
+    }
+  }, [])
+  
+  // Reset touch tracking on touch end
+  const handleBodyTouchEnd = useCallback((e: React.TouchEvent) => {
+    const target = e.currentTarget as HTMLDivElement
+    delete target.dataset.touchStartY
+  }, [])
 
   // Only render when open
   if (!isOpen) return null
@@ -381,7 +425,7 @@ function SheetImpl(
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={0.2}
           onDragEnd={handleDragEnd}
-          dragMomentum={false} // Disable momentum for more precise control
+          dragMomentum={false}
         >
           <div
             ref={sheetRef}
@@ -407,20 +451,15 @@ function SheetImpl(
             {/* Body content - not draggable */}
             <div
               ref={bodyRef}
-              className="flex-grow overflow-y-auto transition-all duration-200 px-3 pt-2 pb-3"
+              className="flex-grow overflow-y-auto overscroll-contain transition-all duration-200 px-3 pt-2 pb-3"
               style={bodyStyle}
               onTouchStart={(e) => {
-                // Prevent touch events from propagating to parent for dragging
-                e.stopPropagation();
+                // Store initial touch position
+                const target = e.currentTarget as HTMLDivElement
+                target.dataset.touchStartY = e.touches[0].clientY.toString()
               }}
-              onTouchMove={(e) => {
-                // Prevent touch move events from propagating to parent for dragging
-                e.stopPropagation();
-              }}
-              onTouchEnd={(e) => {
-                // Prevent touch end events from propagating to parent for dragging
-                e.stopPropagation();
-              }}
+              onTouchMove={handleBodyTouchMove}
+              onTouchEnd={handleBodyTouchEnd}
             >
               {children}
             </div>
@@ -431,5 +470,5 @@ function SheetImpl(
   )
 }
 
-// Use React.memo to prevent unnecessary re-renders of the entire component
+// Use React.memo to prevent unnecessary re-renders
 export default memo(forwardRef(SheetImpl))
