@@ -572,19 +572,21 @@ function StationDetailComponent({
     <>
       <motion.div
         key={`station-detail-${forceRefreshKey}`}
-        className="p-3 space-y-2 touch-none"
+        className="p-3 space-y-2 touch-none pointer-events-none"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "tween", duration: 0.2 }}
       >
         {/* Map preview */}
         <Suspense fallback={<MapCardFallback />}>
-          <MapCard
-            coordinates={[activeStation.geometry.coordinates[0], activeStation.geometry.coordinates[1]]}
-            name={activeStation.properties.Place}
-            address={activeStation.properties.Address}
-            className="mt-0 mb-1.5 h-44 w-full"
-          />
+          <div className="pointer-events-auto">
+            <MapCard
+              coordinates={[activeStation.geometry.coordinates[0], activeStation.geometry.coordinates[1]]}
+              name={activeStation.properties.Place}
+              address={activeStation.properties.Address}
+              className="mt-0 mb-1.5 h-44 w-full"
+            />
+          </div>
         </Suspense>
 
         {/* If step=2 and not virtual => show an estimated pickup time */}
@@ -596,17 +598,19 @@ function StationDetailComponent({
         )}
 
         {/* Station Stats */}
-        <StationStats
-          activeStation={activeStation}
-          step={step}
-          driveTimeMin={driveTimeMin}
-          parkingValue={parkingValue}
-          isVirtualCarStation={isVirtualCarLocation}
-        />
+        <div className="pointer-events-auto">
+          <StationStats
+            activeStation={activeStation}
+            step={step}
+            driveTimeMin={driveTimeMin}
+            parkingValue={parkingValue}
+            isVirtualCarStation={isVirtualCarLocation}
+          />
+        </div>
 
         {/* CarGrid + Confirm Button for step=2 with reduced space between */}
         {isDepartureFlow && step === 2 && (
-          <div className="space-y-1">
+          <div className="space-y-3 pointer-events-auto">
             {(shouldLoadCarGrid || isVirtualCarLocation) && (
               <MemoizedCarGrid isVisible isQrScanStation={isQrScanStation} scannedCar={scannedCarRedux} />
             )}
@@ -622,7 +626,7 @@ function StationDetailComponent({
 
         {/* PaymentSummary if step=4 and user is signed in */}
         {step === 4 && (
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 pointer-events-auto">
             {isSignedIn ? (
               <>
                 <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
