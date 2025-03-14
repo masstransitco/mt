@@ -13,6 +13,7 @@ import { auth } from "@/lib/firebase";
 import PhoneInput from "./PhoneInput";
 import PinInput from "./PinInput";
 import StepIndicator from "./StepIndicator";
+import { PolicyLink } from "@/components/PolicyLinks"; // Import the PolicyLink component
 
 interface ExtendedWindow extends Window {
   recaptchaVerifier?: RecaptchaVerifier;
@@ -191,7 +192,7 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   return (
     <motion.div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      className="fixed inset-0 z-[9999] flex items-start justify-center pt-20" // Changed from "items-center" to "items-start" and added pt-20
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -268,13 +269,13 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
               <div className="mt-4 text-center">
                 <p className="text-xs text-zinc-500">
                   By continuing, you agree to our{" "}
-                  <a href="#" className="text-[#276EF1] hover:underline">
+                  <PolicyLink type="terms" className="text-[#276EF1] hover:underline">
                     Terms of Service
-                  </a>{" "}
+                  </PolicyLink>{" "}
                   and{" "}
-                  <a href="#" className="text-[#276EF1] hover:underline">
+                  <PolicyLink type="privacy" className="text-[#276EF1] hover:underline">
                     Privacy Policy
-                  </a>
+                  </PolicyLink>
                 </p>
               </div>
             </motion.div>
