@@ -37,12 +37,12 @@ export const saveBookingDetails = createAsyncThunk<
   void
 >(
   "booking/saveBookingDetails",
-  async (_, { getState }) => {
+  async (_, { getState, dispatch }) => {
     try {
       const state = getState() as RootState;
       const user = state.user.authUser;
       if (!user) {
-        console.warn("User not signed in; cannot save booking details.");
+        console.warn("[saveBookingDetails] User not signed in; cannot save booking details.");
         return {
           success: false,
           message: "User not signed in; cannot save booking details.",
@@ -59,10 +59,29 @@ export const saveBookingDetails = createAsyncThunk<
         route,
       } = state.booking;
 
-      // Only persist data if user is in step 5 (active booking) 
-      // or if they're at step 1 (reset => clear data).
+      // IMPORTANT: Only persist data if user is in step 5 (active booking) 
+      // or if they're explicitly at step 1 (which means resetting)
       if (step !== 5 && step !== 1) {
-        console.log(`[saveBookingDetails] Step=${step}, not persisting booking state`);
+        console.log(`[saveBookingDetails] Step=${step}, not persisting booking state (only steps 1 or 5 are saved)`);
+        
+        // For steps 2-4, clear any Firestore data to ensure consistent behavior
+        if (step >= 2 && step <= 4) {
+          console.log(`[saveBookingDetails] Clearing any Firestore data for step ${step}`);
+          const userDocRef = doc(db, "users", user.uid);
+          const userSnap = await getDoc(userDocRef);
+          
+          if (userSnap.exists()) {
+            await updateDoc(userDocRef, {
+              booking: null,
+            });
+          }
+          
+          return { 
+            success: true, 
+            message: `Cleared Firestore data for step ${step} (steps 2-4 should not persist)` 
+          };
+        }
+        
         return { success: true, message: "Skipped saving (not in step=5 or step=1)" };
       }
 
@@ -74,6 +93,8 @@ export const saveBookingDetails = createAsyncThunk<
 
       // When resetting (step 1), clear the booking data entirely
       if (step === 1) {
+        console.log(`[saveBookingDetails] Explicit reset (step=1), clearing booking data in Firestore`);
+        
         if (userSnap.exists()) {
           await updateDoc(userDocRef, {
             booking: null,
@@ -83,6 +104,8 @@ export const saveBookingDetails = createAsyncThunk<
       }
 
       // Otherwise, build the object you want to store for step 5
+      console.log(`[saveBookingDetails] Persisting step 5 data to Firestore`);
+      
       const bookingData = {
         step,
         departureDate: departureDateString,
@@ -129,6 +152,7 @@ export const saveBookingDetails = createAsyncThunk<
  * loadBookingDetails:
  * - Fetches booking data from `users/{uid}/booking`
  * - Rehydrates Redux ONLY if booking was in step 5
+ * - For all other steps, explicitly resets to step 1
  */
 export const loadBookingDetails = createAsyncThunk<
   BookingThunkResult,
@@ -137,6 +161,15 @@ export const loadBookingDetails = createAsyncThunk<
   "booking/loadBookingDetails",
   async (_, { getState, dispatch }) => {
     try {
+      // First, ensure a clean Redux state
+      dispatch(resetBookingFlow());
+      
+      // Then, clear localStorage for safety
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('persist:booking');
+        console.log("[loadBookingDetails] Cleared localStorage booking data for clean start");
+      }
+      
       const state = getState() as RootState;
       const user = state.user.authUser;
       if (!user) {
@@ -153,7 +186,11 @@ export const loadBookingDetails = createAsyncThunk<
       const userSnap = await getDoc(userDocRef);
       
       if (!userSnap.exists()) {
-        console.log("[loadBookingDetails] No user document found");
+        console.log("[loadBookingDetails] No user document found, ensuring clean state");
+        
+        // Ensure we reset to step 1 when no data exists
+        dispatch(resetBookingFlow());
+        
         return { success: false, message: "No user document found" };
       }
 
@@ -161,7 +198,11 @@ export const loadBookingDetails = createAsyncThunk<
       const booking = data.booking as Partial<BookingState> | undefined;
       
       if (!booking) {
-        console.log("[loadBookingDetails] No booking data found in user document");
+        console.log("[loadBookingDetails] No booking data found in user document, ensuring clean state");
+        
+        // Ensure we reset to step 1 when no booking data exists
+        dispatch(resetBookingFlow());
+        
         return { success: false, message: "No booking data found" };
       }
 
@@ -197,15 +238,28 @@ export const loadBookingDetails = createAsyncThunk<
           step: 5
         };
       } else {
-        // For all other steps, don't restore anything
-        console.log(`[loadBookingDetails] Found booking in step ${booking.step}, not restoring state`);
+        // For all other steps, explicitly reset everything
+        console.log(`[loadBookingDetails] Found booking in step ${booking.step}, explicitly resetting to step 1`);
+        
+        dispatch(resetBookingFlow());
+        
+        // Clear any Firestore booking data for non-step 5
+        await updateDoc(userDocRef, {
+          booking: null,
+        });
+        
         return { 
           success: false, 
-          message: `Booking not in step=5 (found step=${booking.step}), not restoring state`
+          message: `Booking not in step=5 (found step=${booking.step}), reset to step 1`,
+          step: 1
         };
       }
     } catch (err) {
       console.error("[loadBookingDetails] Error loading booking details:", err);
+      
+      // On error, also reset to step 1 for safety
+      dispatch(resetBookingFlow());
+      
       return {
         success: false,
         message: "Failed to load booking details (thunk caught error).",
