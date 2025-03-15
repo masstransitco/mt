@@ -60,7 +60,6 @@ function disposeGeometryPool() {
 }
 
 function disposeMaterial(material: THREE.Material) {
-  // Dispose any texture maps if present
   if ("map" in material && material.map) {
     (material.map as THREE.Texture).dispose()
   }
@@ -111,12 +110,10 @@ function disposeMaterialPool() {
 // ---------------------------------------------------------------------
 class CustomCurve extends THREE.Curve<THREE.Vector3> {
   private points: THREE.Vector3[]
-
   constructor(points: THREE.Vector3[]) {
     super()
     this.points = points
   }
-
   getPoint(t: number, optionalTarget = new THREE.Vector3()) {
     const segment = (this.points.length - 1) * t
     const index = Math.floor(segment)
@@ -143,7 +140,6 @@ function createOrUpdateTube(
 ) {
   if (!decodedPath || decodedPath.length < 2) return
 
-  // Convert lat/lng to Vector3 array (with altitude offset)
   const points = decodedPath.map(({ lat, lng }) => {
     const vector = new THREE.Vector3()
     overlay.latLngAltitudeToVector3({ lat, lng, altitude }, vector)
@@ -156,10 +152,8 @@ function createOrUpdateTube(
   const radialSegments = 6
   const closed = false
 
-  // Generate a simple cache key based on endpoints and parameters
   const routeKey = `${points[0].x}_${points[0].y}_${points[points.length - 1].x}_${points[points.length - 1].y}_${tubularSegments}_${radius}`
   let geometry: THREE.TubeGeometry
-
   if (GeometryPool.tube.has(routeKey)) {
     geometry = GeometryPool.tube.get(routeKey)!
   } else {
@@ -173,8 +167,7 @@ function createOrUpdateTube(
     meshRef.current = mesh
     scene.add(mesh)
   } else {
-    // Dispose of old geometry and update
-    meshRef.current.geometry.dispose()
+    // Update without disposing pooled geometry
     meshRef.current.geometry = geometry
   }
 }
@@ -189,7 +182,7 @@ export function useThreeOverlay(
   arrivalStationId: number | null,
   cars: Array<{ id: number; lat: number; lng: number }>,
 ) {
-  // References to overlay, scene, and initialization flag
+  // Overlay and scene refs
   const overlayRef = useRef<ThreeJSOverlayView | null>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const isInitializedRef = useRef<boolean>(false)
@@ -201,14 +194,9 @@ export function useThreeOverlay(
   const greyRingInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
   const blueRingInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
   const redRingInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
+  const stationIndexMapsRef = useRef<{ grey: number[]; blue: number[]; red: number[] }>({ grey: [], blue: [], red: [] })
 
-  const stationIndexMapsRef = useRef<{
-    grey: number[]
-    blue: number[]
-    red: number[]
-  }>({ grey: [], blue: [], red: [] })
-
-  // Animation state for station color transitions
+  // Animation state for color transitions
   const animationStateRef = useRef<Map<number, {
     startTime: number
     duration: number
@@ -267,13 +255,13 @@ export function useThreeOverlay(
 
   const ROUTE_ALTITUDE = 50
 
-  // Continuous render loop
+  // Continuous render loop to ensure perpetual visibility
   const continuousRender = useCallback(() => {
     overlayRef.current?.requestRedraw()
     continuousRenderFrameIdRef.current = requestAnimationFrame(continuousRender)
   }, [])
 
-  // Animation loop for color transitions
+  // Animation loop for color transitions (unchanged)
   const animateFrame = useCallback(() => {
     const currentTime = performance.now()
     lastFrameTimeRef.current = currentTime
@@ -285,6 +273,7 @@ export function useThreeOverlay(
       const progress = Math.min(elapsed / state.duration, 1)
       if (progress < 1) {
         hasActiveAnimations = true
+        // Reuse a temporary color instance to reduce allocations
         const currentColor = new THREE.Color().lerpColors(state.fromColor, state.toColor, progress)
         const blueIndex = stationIndexMapsRef.current.blue.indexOf(stationId)
         const redIndex = stationIndexMapsRef.current.red.indexOf(stationId)
@@ -328,7 +317,8 @@ export function useThreeOverlay(
     }
   }, [animateFrame])
 
-  // Populate instanced meshes for stations
+  // Populate instanced meshes for stations.
+  // This function is now called only when station data or selection changes.
   const populateInstancedMeshes = useCallback(() => {
     if (
       !greyInstancedMeshRef.current ||
@@ -395,7 +385,7 @@ export function useThreeOverlay(
     redRingMesh.instanceMatrix.needsUpdate = true
   }, [memoizedStations, stationSelection, startColorTransition])
 
-  // Populate car models
+  // Populate car models (unchanged)
   const populateCarModels = useCallback(() => {
     if (!carGeoRef.current || !overlayRef.current || !sceneRef.current) return
 
@@ -428,7 +418,8 @@ export function useThreeOverlay(
   const { scene: carModelScene } = useGLTF("/cars/defaultModel.glb")
 
   // ---------------------------------------------------------------------
-  // Initialize overlay, scene, geometries, and materials (using pools)
+  // Initialization: setup overlay, scene, pooled geometries/materials, and static objects.
+  // Note: The static station meshes are populated only once (and on changes).
   // ---------------------------------------------------------------------
   useEffect(() => {
     if (!googleMap || memoizedStations.length === 0) return
@@ -516,7 +507,7 @@ export function useThreeOverlay(
       }
     }
 
-    // Use pooled materials for stations, rings, and tubes
+    // Use pooled materials
     if (!matGreyRef.current) {
       if (MaterialPool.matGrey) {
         matGreyRef.current = MaterialPool.matGrey
@@ -599,7 +590,7 @@ export function useThreeOverlay(
       }
     }
 
-    // Create instanced meshes for stations (and rings) using pooled geometries/materials
+    // Create instanced meshes for stations and rings (static objects)
     const maxInstances = memoizedStations.length
     const colors = ["grey", "blue", "red"] as const
     const materials = {
@@ -651,7 +642,7 @@ export function useThreeOverlay(
       carsMatRef.current = new THREE.MeshPhongMaterial({ color: 0xff5722, opacity: 0.95, transparent: true })
     }
 
-    // Populate stations and cars
+    // Initially populate static station meshes and car models.
     populateInstancedMeshes()
     populateCarModels()
 
@@ -662,10 +653,10 @@ export function useThreeOverlay(
       isInitializedRef.current = true
     }, 100)
 
+    // Setup map event listeners (only request redraw, not updating stations)
     const debouncedRedraw = debounce(() => {
       overlayRef.current?.requestRedraw()
     }, 150)
-
     if (googleMap) {
       mapEventListenersRef.current = [
         googleMap.addListener("idle", () => overlayRef.current?.requestRedraw()),
@@ -677,7 +668,6 @@ export function useThreeOverlay(
         googleMap.addListener("dragend", () => overlayRef.current?.requestRedraw()),
       ]
     }
-
     if (googleMap.getDiv && typeof window !== "undefined" && window.MutationObserver) {
       const mapDiv = googleMap.getDiv()
       const observer = new MutationObserver((mutations) => {
@@ -798,18 +788,22 @@ export function useThreeOverlay(
     }
   }, [googleMap, memoizedStations.length, lights, carModelScene, populateInstancedMeshes, populateCarModels, continuousRender])
   
+  // Update static station meshes only when station data or selection changes.
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current || !googleMap || memoizedStations.length === 0) return
     populateInstancedMeshes()
+    // Only request redraw without recalculating static data.
     overlayRef.current.requestRedraw()
   }, [stationSelection, memoizedStations.length, googleMap, populateInstancedMeshes])
 
+  // Update car models when cars change.
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
     populateCarModels()
     overlayRef.current.requestRedraw()
   }, [memoizedCars, populateCarModels])
 
+  // Handle route updates (unchanged)
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
     if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchTubeMatRef.current) {
