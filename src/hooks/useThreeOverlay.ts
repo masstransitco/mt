@@ -20,7 +20,7 @@ const tempMatrix = new THREE.Matrix4()
 const tempVector = new THREE.Vector3()
 
 // ---------------------------------------------------------------------
-// Geometry & Material Pools
+// Geometry & Material Pools (persist between reinitializations)
 // ---------------------------------------------------------------------
 const GeometryPool = {
   hexagon: null as THREE.ExtrudeGeometry | null,
@@ -41,7 +41,6 @@ const MaterialPool = {
   bookingTubeMat: null as THREE.MeshPhongMaterial | null,
 }
 
-// Helper disposal functions for the pools
 function disposeGeometryPool() {
   if (GeometryPool.hexagon) {
     GeometryPool.hexagon.dispose()
@@ -167,7 +166,7 @@ function createOrUpdateTube(
     meshRef.current = mesh
     scene.add(mesh)
   } else {
-    // Update without disposing pooled geometry
+    // Simply update the geometry reference without disposing cached geometry
     meshRef.current.geometry = geometry
   }
 }
@@ -182,7 +181,7 @@ export function useThreeOverlay(
   arrivalStationId: number | null,
   cars: Array<{ id: number; lat: number; lng: number }>,
 ) {
-  // Overlay and scene refs
+  // Refs for overlay, scene, and a flag to track initialization
   const overlayRef = useRef<ThreeJSOverlayView | null>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const isInitializedRef = useRef<boolean>(false)
@@ -245,7 +244,7 @@ export function useThreeOverlay(
   const memoizedStations = useMemo(() => stations, [stations])
   const stationSelection = useMemo(() => ({ departureStationId, arrivalStationId }), [departureStationId, arrivalStationId])
 
-  // Setup lights
+  // Setup lights (assumed static)
   const lights = useMemo(() => {
     const ambient = new THREE.AmbientLight(0xffffff, 0.75)
     const directional = new THREE.DirectionalLight(0xffffff, 0.25)
@@ -255,7 +254,7 @@ export function useThreeOverlay(
 
   const ROUTE_ALTITUDE = 50
 
-  // Continuous render loop to ensure perpetual visibility
+  // Continuous render loop remains active for overlay visibility
   const continuousRender = useCallback(() => {
     overlayRef.current?.requestRedraw()
     continuousRenderFrameIdRef.current = requestAnimationFrame(continuousRender)
@@ -317,8 +316,12 @@ export function useThreeOverlay(
     }
   }, [animateFrame])
 
-  // Populate instanced meshes for stations.
-  // This function is now called only when station data or selection changes.
+  
+
+  // ----------------------------
+  // Function: populateInstancedMeshes
+  // ----------------------------
+  // Updates station matrices only when station data or selection changes.
   const populateInstancedMeshes = useCallback(() => {
     if (
       !greyInstancedMeshRef.current ||
@@ -385,7 +388,20 @@ export function useThreeOverlay(
     redRingMesh.instanceMatrix.needsUpdate = true
   }, [memoizedStations, stationSelection, startColorTransition])
 
-  // Populate car models (unchanged)
+  // ----------------------------
+  // Update Static Station Meshes
+  // ----------------------------
+  // This effect updates the station instanced meshes only when the underlying station data or selection changes.
+  useEffect(() => {
+    if (!overlayRef.current) return
+    // Call populateInstancedMeshes (see below) to update static station objects.
+    populateInstancedMeshes()
+    overlayRef.current.requestRedraw()
+  }, [stationSelection, memoizedStations.length, populateInstancedMeshes]) 
+
+  // ----------------------------
+  // Populate Car Models (unchanged)
+  // ----------------------------
   const populateCarModels = useCallback(() => {
     if (!carGeoRef.current || !overlayRef.current || !sceneRef.current) return
 
@@ -418,11 +434,12 @@ export function useThreeOverlay(
   const { scene: carModelScene } = useGLTF("/cars/defaultModel.glb")
 
   // ---------------------------------------------------------------------
-  // Initialization: setup overlay, scene, pooled geometries/materials, and static objects.
-  // Note: The static station meshes are populated only once (and on changes).
+  // Initialization: run only when googleMap is available (and only once)
+  // This effect’s dependency is now just [googleMap], reducing reinitializations.
   // ---------------------------------------------------------------------
   useEffect(() => {
-    if (!googleMap || memoizedStations.length === 0) return
+    if (!googleMap) return
+    if (isInitializedRef.current) return // already initialized
 
     console.log("[useThreeOverlay] Initializing Three.js overlay...")
     isInitializedRef.current = false
@@ -443,7 +460,7 @@ export function useThreeOverlay(
     overlayRef.current = overlay
     overlay.setMap(googleMap)
 
-    // Use pooled geometries
+    // Use pooled geometries (only create if not already cached)
     if (!dispatchBoxGeoRef.current) {
       if (GeometryPool.box) {
         dispatchBoxGeoRef.current = GeometryPool.box
@@ -590,7 +607,7 @@ export function useThreeOverlay(
       }
     }
 
-    // Create instanced meshes for stations and rings (static objects)
+    // Create instanced meshes for static station objects
     const maxInstances = memoizedStations.length
     const colors = ["grey", "blue", "red"] as const
     const materials = {
@@ -633,7 +650,7 @@ export function useThreeOverlay(
       ringMeshRefs[color].current = ringMesh
     })
 
-    // Prepare car model
+    // Prepare car model if not already cached
     if (carModelScene && !carGeoRef.current) {
       const clonedScene = carModelScene.clone()
       clonedScene.scale.set(10, 10, 10)
@@ -642,18 +659,14 @@ export function useThreeOverlay(
       carsMatRef.current = new THREE.MeshPhongMaterial({ color: 0xff5722, opacity: 0.95, transparent: true })
     }
 
-    // Initially populate static station meshes and car models.
+    // Update static objects once at initialization
     populateInstancedMeshes()
     populateCarModels()
 
     overlay.requestRedraw()
+    isInitializedRef.current = true
 
-    const initialRenderTimer = setTimeout(() => {
-      overlay.requestRedraw()
-      isInitializedRef.current = true
-    }, 100)
-
-    // Setup map event listeners (only request redraw, not updating stations)
+    // Setup map event listeners (only triggering redraw)
     const debouncedRedraw = debounce(() => {
       overlayRef.current?.requestRedraw()
     }, 150)
@@ -689,7 +702,6 @@ export function useThreeOverlay(
     // Cleanup function
     return () => {
       console.log("[useThreeOverlay] Cleaning up Three.js overlay...")
-      clearTimeout(initialRenderTimer)
       if (observerRef.current) {
         observerRef.current.disconnect()
         observerRef.current = null
@@ -711,6 +723,7 @@ export function useThreeOverlay(
       if (overlayRef.current) {
         (overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
       }
+      // Remove and dispose car models
       carModelsRef.current.forEach((model) => {
         if (sceneRef.current) {
           sceneRef.current.remove(model)
@@ -782,19 +795,11 @@ export function useThreeOverlay(
       overlayRef.current = null
       isInitializedRef.current = false
 
-      // Dispose pooled resources
+      // Dispose pooled resources (if no longer needed elsewhere)
       disposeGeometryPool()
       disposeMaterialPool()
     }
-  }, [googleMap, memoizedStations.length, lights, carModelScene, populateInstancedMeshes, populateCarModels, continuousRender])
-  
-  // Update static station meshes only when station data or selection changes.
-  useEffect(() => {
-    if (!sceneRef.current || !overlayRef.current || !googleMap || memoizedStations.length === 0) return
-    populateInstancedMeshes()
-    // Only request redraw without recalculating static data.
-    overlayRef.current.requestRedraw()
-  }, [stationSelection, memoizedStations.length, googleMap, populateInstancedMeshes])
+  }, [googleMap, populateInstancedMeshes, populateCarModels, continuousRender, memoizedStations.length, carModelScene])
 
   // Update car models when cars change.
   useEffect(() => {
