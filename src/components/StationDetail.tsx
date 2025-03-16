@@ -46,13 +46,13 @@ function MapCardFallback() {
   )
 }
 
-// Lazy-loaded components
+// Lazy-loaded components with improved loading experience
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: ({ error, isLoading, pastDelay }) => {
     if (error) return <div>Error loading vehicles</div>
     if (isLoading && pastDelay) {
       return (
-        <div className="h-36 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
+        <div className="h-32 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
           <div className="text-xs text-gray-400">Loading vehicles...</div>
         </div>
       )
@@ -85,7 +85,12 @@ interface StationDetailProps {
   isMinimized?: boolean
 }
 
-/** CarGrid wrapper */
+/**
+ * Persistent wrapper for CarGrid with optimized loading
+ * - Only renders when visible
+ * - Maintains consistent height during loading
+ * - Preserves previous render while loading new one
+ */
 const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
   isVisible,
   isQrScanStation,
@@ -95,7 +100,37 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
   isQrScanStation?: boolean
   scannedCar?: any
 }) {
-  if (!isVisible) return null
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [shouldRender, setShouldRender] = useState(false)
+  
+  // Delayed rendering for better UI experience
+  useEffect(() => {
+    if (isVisible) {
+      // Small delay before showing the component
+      const timer = setTimeout(() => {
+        setShouldRender(true)
+      }, 100)
+      
+      return () => clearTimeout(timer)
+    } else {
+      // Small delay before hiding to allow for animations
+      const timer = setTimeout(() => {
+        setShouldRender(false)
+        setIsLoaded(false)
+      }, 150)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isVisible])
+  
+  // Track when component is fully loaded
+  const handleLoad = useCallback(() => {
+    setIsLoaded(true)
+  }, [])
+  
+  // If not visible at all, return null
+  if (!isVisible && !shouldRender) return null
+  
   return (
     <Suspense
       fallback={
@@ -104,12 +139,22 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
         </div>
       }
     >
-      <CarGrid
-        className="h-32 w-full"
-        isVisible={isVisible}
-        isQrScanStation={isQrScanStation}
-        scannedCar={scannedCar}
-      />
+      {shouldRender && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="relative"
+          onAnimationComplete={handleLoad}
+        >
+          <CarGrid
+            className="h-32 w-full"
+            isVisible={true}
+            isQrScanStation={isQrScanStation}
+            scannedCar={scannedCar}
+          />
+        </motion.div>
+      )}
     </Suspense>
   )
 })
@@ -313,7 +358,7 @@ function TouchScrollHandler() {
 }
 
 /**
- * Main StationDetail component with improved scroll behavior
+ * Main StationDetail component with improved scroll behavior and optimized CarGrid handling
  */
 function StationDetailComponent({
   activeStation,
@@ -344,13 +389,18 @@ function StationDetailComponent({
   const [isInitialized, setIsInitialized] = useState(true)
   const [attemptedRender, setAttemptedRender] = useState(true)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
-  const [shouldLoadCarGrid, setShouldLoadCarGrid] = useState(false)
   const [charging, setCharging] = useState(false)
   const [forceRefreshKey, setForceRefreshKey] = useState(0)
   const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentReference, setPaymentReference] = useState("")
   const [cardLast4, setCardLast4] = useState("")
+  
+  // Single source of truth for CarGrid visibility
+  const [carGridVisible, setCarGridVisible] = useState(false)
+  
+  // Reference to track last render time to prevent too frequent updates
+  const lastRenderTimeRef = useRef(0)
 
   // Touch scroll handler
   const touchScrollHandlers = TouchScrollHandler()
@@ -376,71 +426,67 @@ function StationDetailComponent({
 
   // Debounce route fetching
   const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Combined logic for CarGrid visibility in one place
+  useEffect(() => {
+    // Determine if CarGrid should be visible based on current state
+    const shouldShowCarGrid = 
+      !isMinimized && 
+      isDepartureFlow && 
+      step === 2 && 
+      (!!activeStation || isQrScanStation);
+      
+    // Apply debounce to prevent flickering during transitions
+    if (shouldShowCarGrid) {
+      // Small delay when showing to ensure smooth transition
+      const timer = setTimeout(() => {
+        setCarGridVisible(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    } else {
+      // Delay hiding slightly to avoid flicker during transitions
+      const timer = setTimeout(() => {
+        setCarGridVisible(false);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation]);
 
-  // Handle sheet expansion => force a content refresh
+  // Handle sheet expansion => force a content refresh, but throttle to avoid excessive renders
   useEffect(() => {
     if (!isMinimized) {
-      setForceRefreshKey((prev) => prev + 1)
-      setIsInitialized(true)
-      setAttemptedRender(true)
-
-      // Force CarGrid to load if in step 2
-      if (isDepartureFlow && step === 2 && activeStation) {
-        setShouldLoadCarGrid(true)
+      const now = Date.now();
+      // Only refresh if more than 300ms since last refresh
+      if (now - lastRenderTimeRef.current > 300) {
+        setForceRefreshKey((prev) => prev + 1);
+        setIsInitialized(true);
+        setAttemptedRender(true);
+        lastRenderTimeRef.current = now;
       }
 
-      // If step 3 or 4 => refetch route
+      // If step 3 or 4 => refetch route, but only if sheet is expanded
       if (step >= 3 && departureId && arrivalId && stations.length > 0) {
-        const depStation = stations.find((s) => s.id === departureId)
-        const arrStation = stations.find((s) => s.id === arrivalId)
-        if (depStation && arrStation) {
-          dispatch(fetchRoute({ departure: depStation, arrival: arrStation }))
+        // Clear previous debounce
+        if (routeFetchTimeoutRef.current) {
+          clearTimeout(routeFetchTimeoutRef.current);
         }
-      }
-    }
-  }, [isMinimized, isDepartureFlow, step, activeStation, departureId, arrivalId, stations, dispatch])
-
-  useEffect(() => {
-    if (step >= 3 && departureId && arrivalId && stations.length > 0) {
-      // Clear previous debounce
-      if (routeFetchTimeoutRef.current) {
-        clearTimeout(routeFetchTimeoutRef.current)
-      }
-      // Only fetch if the sheet is expanded
-      if (!isMinimized) {
+        
         routeFetchTimeoutRef.current = setTimeout(() => {
-          const depStation = stations.find((s) => s.id === departureId)
-          const arrStation = stations.find((s) => s.id === arrivalId)
+          const depStation = stations.find((s) => s.id === departureId);
+          const arrStation = stations.find((s) => s.id === arrivalId);
           if (depStation && arrStation) {
-            dispatch(fetchRoute({ departure: depStation, arrival: arrStation }))
+            dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
           }
-        }, 500)
+        }, 500);
       }
     }
+    
     return () => {
       if (routeFetchTimeoutRef.current) {
-        clearTimeout(routeFetchTimeoutRef.current)
+        clearTimeout(routeFetchTimeoutRef.current);
       }
-    }
-  }, [step, departureId, arrivalId, stations, dispatch, isMinimized])
-
-  // Combined useEffect for CarGrid visibility
-  useEffect(() => {
-    let timer: NodeJS.Timeout
-
-    if ((isDepartureFlow && step === 2 && activeStation) || (isQrScanStation && step === 2)) {
-      setShouldLoadCarGrid(true)
-    } else {
-      // Use timeout to delay hiding for smooth transitions
-      timer = setTimeout(() => {
-        setShouldLoadCarGrid(false)
-      }, 300)
-    }
-
-    return () => {
-      if (timer) clearTimeout(timer)
-    }
-  }, [isDepartureFlow, step, activeStation, isQrScanStation])
+    };
+  }, [isMinimized, step, departureId, arrivalId, stations, dispatch]);
 
   // Payment modal open/close
   const handleOpenWalletModal = useCallback(() => {
@@ -625,9 +671,12 @@ function StationDetailComponent({
         {/* CarGrid + Confirm Button for step=2 with reduced space between */}
         {isDepartureFlow && step === 2 && (
           <div className="space-y-3 pointer-events-auto">
-            {(shouldLoadCarGrid || isVirtualCarLocation) && (
-              <MemoizedCarGrid isVisible isQrScanStation={isQrScanStation} scannedCar={scannedCarRedux} />
-            )}
+            {/* Always render the MemoizedCarGrid component, but let it handle its visibility internally */}
+            <MemoizedCarGrid 
+              isVisible={carGridVisible} 
+              isQrScanStation={isQrScanStation} 
+              scannedCar={scannedCarRedux} 
+            />
             <ConfirmButton
               isDepartureFlow={isDepartureFlow}
               charging={charging}
