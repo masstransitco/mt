@@ -636,22 +636,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const handleStationDetailClose = useCallback(() => {
     // Minimizes the detail sheet
     setIsDetailSheetMinimized(true);
-
-    // If user scanned a car & is discarding it now
-    if (isQrScanStation && virtualStationId !== null) {
-      dispatch(removeStation(virtualStationId));
-      dispatch(clearDepartureStation());
-      dispatch(setScannedCar(null));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-      processedCarIdRef.current = null;
-      toast("Scan the car's QR code again if you want to select this vehicle", {
-        duration: 4000,
-        position: "bottom-center",
-        icon: "ℹ️",
-        style: { background: "#3b82f6", color: "#ffffff" },
-      });
-    }
   }, [isQrScanStation, virtualStationId, dispatch]);
 
   // --------------------------
