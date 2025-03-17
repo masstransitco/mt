@@ -14,8 +14,8 @@ const { db, auth } = initializeFirebaseAdmin();
 
 // Interfaces
 interface PaymentMethod {
-  id?: string;         // The Stripe PaymentMethod ID
-  stripeId?: string;   // Alternative field name for the Stripe PaymentMethod ID
+  id?: string;       // The Stripe PaymentMethod ID
+  stripeId?: string; // Alternative field name for the Stripe PaymentMethod ID
   brand: string;
   last4: string;
   expMonth: number;
@@ -30,11 +30,15 @@ interface CreatePaymentIntentData {
   userId: string;
 }
 
+// ----------------------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------------------
+
 // Helper to create user document if it doesn't exist
 async function ensureUserExists(userId: string) {
-  const userRef = db.collection("users").doc(userId);
+  const userRef = db.collection('users').doc(userId);
   const userSnap = await userRef.get();
-  
+
   if (!userSnap.exists) {
     // Create a new user document with default values
     await userRef.set({
@@ -44,7 +48,7 @@ async function ensureUserExists(userId: string) {
     });
     return { exists: false, data: { balance: 0, uid: userId } };
   }
-  
+
   return { exists: true, data: userSnap.data() || {} };
 }
 
@@ -52,7 +56,7 @@ async function ensureUserExists(userId: string) {
 async function verifyAuth(req: NextRequest) {
   const headersList = headers();
   const authHeader = headersList.get('Authorization');
-  
+
   if (!authHeader?.startsWith('Bearer ')) {
     throw new Error('Missing or invalid authorization token');
   }
@@ -70,14 +74,18 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 });
 
 // Helper for error responses
-const errorResponse = (message: string, status: number = 400) => {
+function errorResponse(message: string, status: number = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
-};
+}
 
 // Helper for success responses
-const successResponse = (data: any) => {
+function successResponse(data: any) {
   return NextResponse.json({ success: true, ...data });
-};
+}
+
+// ----------------------------------------------------------------------------
+// ROUTE HANDLERS
+// ----------------------------------------------------------------------------
 
 // POST /api/stripe
 export async function POST(request: NextRequest) {
@@ -96,7 +104,10 @@ export async function POST(request: NextRequest) {
     // Handle various actions
     switch (action) {
       case 'save-payment-method':
-        return await handleSavePaymentMethod({ userId, paymentMethod: data.paymentMethod });
+        return await handleSavePaymentMethod({
+          userId,
+          paymentMethod: data.paymentMethod,
+        });
 
       case 'delete-payment-method':
         return await handleDeletePaymentMethod(userId, data.paymentMethodId);
@@ -108,10 +119,7 @@ export async function POST(request: NextRequest) {
       case 'create-payment-intent':
         return await handleCreatePaymentIntent({ ...data, userId });
 
-      /**
-       * NEW ACTION: Directly charge the user for a given amount
-       * (e.g., $50 or $N for final usage).
-       */
+      // Example: charging the user for a trip
       case 'charge-user-for-trip':
         return await handleChargeUserForTrip(userId, data.amount);
 
@@ -167,16 +175,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** ------------------------------------------------------------------
- * ACTION HANDLERS
- * ------------------------------------------------------------------*/
+// ----------------------------------------------------------------------------
+// ACTION HANDLERS
+// ----------------------------------------------------------------------------
 
 /**
  * Save a payment method to Firestore for the user.
  * 1) Ensure the user has a Stripe Customer (create if needed).
  * 2) Attach the PaymentMethod to that Customer in Stripe.
- * 3) Create a doc in Firestore subcollection.
- * 4) If it's the first or isDefault, store defaultPaymentMethodId in user doc.
+ * 3) If it's the user's first card or paymentMethod.isDefault === true,
+ *    make it the default and unset default on others.
+ * 4) Otherwise just create the doc as a non-default method.
  */
 async function handleSavePaymentMethod({
   userId,
@@ -190,10 +199,8 @@ async function handleSavePaymentMethod({
   }
 
   try {
-    // Get or create user doc
-    const { exists, data } = await ensureUserExists(userId);
-    const userData = data || {}; // Ensure userData is always an object
-    
+    // 1) Ensure user doc & Stripe customer exist
+    const { data: userData } = await ensureUserExists(userId);
     let stripeCustomerId = userData.stripeCustomerId;
 
     if (!stripeCustomerId) {
@@ -203,72 +210,100 @@ async function handleSavePaymentMethod({
         // optional: email: userData.email,
       });
       stripeCustomerId = newCustomer.id;
-      await db.collection("users").doc(userId).update({ 
-        stripeCustomerId,
-        updatedAt: new Date().toISOString()
-      });
+      await db
+        .collection('users')
+        .doc(userId)
+        .update({
+          stripeCustomerId,
+          updatedAt: new Date().toISOString(),
+        });
     }
 
-    // Get the payment method ID - support both id and stripeId fields
+    // 2) Attach PaymentMethod to Stripe customer
     const paymentMethodId = paymentMethod.stripeId || paymentMethod.id;
     if (!paymentMethodId) {
       return errorResponse('Payment method ID is required', 400);
     }
-
-    // Attach this PaymentMethod to the Stripe customer
-    // This ensures it can be reused for off-session charges
     try {
       await stripe.paymentMethods.attach(paymentMethodId, {
         customer: stripeCustomerId,
       });
     } catch (err: any) {
       if (err.code === 'resource_already_exists') {
-        console.log(`Payment method ${paymentMethodId} already attached to customer ${stripeCustomerId}`);
+        console.log(
+          `Payment method ${paymentMethodId} already attached to customer ${stripeCustomerId}`
+        );
       } else {
         throw err;
       }
     }
 
-    // If it's the user's first card or user set isDefault: true, set as default in Stripe
-    // (optional, but recommended)
+    // 3) Decide if we should make this card default
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.get();
     const isFirst = snapshot.empty;
-    const finalIsDefault = isFirst || paymentMethod.isDefault;
+    const shouldMakeDefault = isFirst || paymentMethod.isDefault === true;
 
-    if (finalIsDefault) {
-      // Make it the default in the customer's invoice settings
+    if (shouldMakeDefault) {
+      // (a) Update Stripe's invoice_settings.default_payment_method
       await stripe.customers.update(stripeCustomerId, {
         invoice_settings: { default_payment_method: paymentMethodId },
       });
-    }
 
-    // Now create the doc in Firestore
-    const newPaymentMethodRef = paymentMethodsRef.doc(paymentMethodId);
-    await newPaymentMethodRef.set({
-      ...paymentMethod,
-      // Ensure we always store the id field in Firestore
-      id: paymentMethodId,
-      isDefault: finalIsDefault,
-      createdAt: new Date().toISOString(),
-    });
+      // (b) Batch unset isDefault on all other docs, create/update the new doc as default,
+      //     and update the user doc's defaultPaymentMethodId
+      const batch = db.batch();
 
-    // If it's the first or isDefault, also update the user doc
-    // so we store defaultPaymentMethodId = Stripe PM ID
-    if (finalIsDefault) {
-      await db.collection("users").doc(userId).update({ 
-        defaultPaymentMethodId: paymentMethodId,
-        updatedAt: new Date().toISOString()
+      snapshot.forEach((docSnap) => {
+        if (docSnap.id !== paymentMethodId) {
+          batch.update(docSnap.ref, { isDefault: false });
+        }
       });
-    }
 
-    return successResponse({
-      paymentMethod: {
+      const newPaymentMethodRef = paymentMethodsRef.doc(paymentMethodId);
+      batch.set(
+        newPaymentMethodRef,
+        {
+          ...paymentMethod,
+          id: paymentMethodId,
+          isDefault: true,
+          createdAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      batch.update(db.collection('users').doc(userId), {
+        defaultPaymentMethodId: paymentMethodId,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await batch.commit();
+
+      return successResponse({
+        paymentMethod: {
+          ...paymentMethod,
+          id: paymentMethodId,
+          isDefault: true,
+        },
+      });
+    } else {
+      // 4) Otherwise, just create it as a non-default doc
+      const newPaymentMethodRef = paymentMethodsRef.doc(paymentMethodId);
+      await newPaymentMethodRef.set({
         ...paymentMethod,
         id: paymentMethodId,
-        isDefault: finalIsDefault,
-      },
-    });
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+      });
+
+      return successResponse({
+        paymentMethod: {
+          ...paymentMethod,
+          id: paymentMethodId,
+          isDefault: false,
+        },
+      });
+    }
   } catch (error: any) {
     console.error('Error saving payment method:', error);
     return errorResponse(error.message || 'Failed to save payment method', 500);
@@ -278,22 +313,24 @@ async function handleSavePaymentMethod({
 /**
  * Delete a payment method doc from Firestore for the user.
  */
-async function handleDeletePaymentMethod(userId: string, paymentMethodId: string) {
+async function handleDeletePaymentMethod(
+  userId: string,
+  paymentMethodId: string
+) {
   if (!paymentMethodId) {
     return errorResponse('Payment method ID is required');
   }
+
   try {
-    // Ensure user exists
     await ensureUserExists(userId);
-    
+
     await db
       .collection(`users/${userId}/paymentMethods`)
       .doc(paymentMethodId)
       .delete();
 
     // OPTIONAL: If this was the default, you might also want to
-    // unset defaultPaymentMethodId in user doc, or choose a new default
-    // but for simplicity, we'll leave that up to the client.
+    // unset defaultPaymentMethodId in user doc, or choose a new default.
 
     return successResponse({ message: 'Payment method deleted successfully' });
   } catch (error) {
@@ -315,12 +352,8 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
   }
 
   try {
-    // Ensure user exists
-    const { data } = await ensureUserExists(userId);
-    const userData = data || {}; // Ensure userData is always an object
-    
-    let stripeCustomerId = userData.stripeCustomerId;
-
+    const { data: userData } = await ensureUserExists(userId);
+    const stripeCustomerId = userData.stripeCustomerId;
     if (!stripeCustomerId) {
       return errorResponse(
         'Cannot set default - user has no stripeCustomerId. Save a method first.',
@@ -334,30 +367,35 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
 
     let newDefaultStripeId: string | null = null;
 
-    allSnap.forEach((doc) => {
-      const data = doc.data() as PaymentMethod;
-      if (doc.id === docId) {
-        batch.update(doc.ref, { isDefault: true });
-        // Fix the type error by extracting the payment method ID safely
-        const pmId = data.id || data.stripeId;
+    allSnap.forEach((docSnap) => {
+      const pmData = docSnap.data() as PaymentMethod;
+      if (docSnap.id === docId) {
+        batch.update(docSnap.ref, { isDefault: true });
+        // The actual Stripe PaymentMethod ID
+        const pmId = pmData.id || pmData.stripeId;
         if (pmId) {
-          newDefaultStripeId = pmId; // The actual Stripe PaymentMethod ID
+          newDefaultStripeId = pmId;
         } else {
-          console.error(`Payment method ${doc.id} is missing both id and stripeId fields`);
+          console.error(
+            `Payment method ${docSnap.id} is missing both id and stripeId fields`
+          );
         }
-      } else if (data.isDefault) {
-        batch.update(doc.ref, { isDefault: false });
+      } else if (pmData.isDefault) {
+        batch.update(docSnap.ref, { isDefault: false });
       }
     });
 
     if (!newDefaultStripeId) {
-      return errorResponse('Unable to find doc or missing PaymentMethod.id in Firestore doc', 404);
+      return errorResponse(
+        'Unable to find doc or missing PaymentMethod.id in Firestore doc',
+        404
+      );
     }
 
     // Update user doc's defaultPaymentMethodId
-    batch.update(db.collection("users").doc(userId), { 
+    batch.update(db.collection('users').doc(userId), {
       defaultPaymentMethodId: newDefaultStripeId,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
 
     // Optionally, set this as default in Stripe
@@ -366,7 +404,6 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
     });
 
     await batch.commit();
-
     return successResponse({ message: 'Default payment method updated.' });
   } catch (error) {
     console.error('Error setting default payment method:', error);
@@ -379,9 +416,8 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
  */
 async function handleGetPaymentMethods(userId: string) {
   try {
-    // Ensure user exists first
     await ensureUserExists(userId);
-    
+
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
     const paymentMethods = snapshot.docs.map((doc) => ({
@@ -397,7 +433,7 @@ async function handleGetPaymentMethods(userId: string) {
 }
 
 /**
- * Create a Payment Intent with Stripe (manual confirmation flow).
+ * Create a PaymentIntent with Stripe (manual confirmation flow).
  */
 async function handleCreatePaymentIntent({
   amount,
@@ -416,22 +452,20 @@ async function handleCreatePaymentIntent({
 
   try {
     // Ensure user exists
-    const { data } = await ensureUserExists(userId);
-    const userData = data || {};
-    
+    const { data: userData } = await ensureUserExists(userId);
     let stripeCustomerId = userData.stripeCustomerId;
-    
+
     if (!stripeCustomerId) {
       // Create a new Stripe customer
       const newCustomer = await stripe.customers.create({
         metadata: { userId },
       });
       stripeCustomerId = newCustomer.id;
-      
-      // Update the user doc
-      await db.collection("users").doc(userId).update({
+
+      // Update user doc
+      await db.collection('users').doc(userId).update({
         stripeCustomerId,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       });
     }
 
@@ -463,11 +497,10 @@ async function handleCreatePaymentIntent({
 }
 
 /**
- * NEW HELPER:
  * Directly charge the user's default PaymentMethod (or provided PM) for an amount.
  *  - If user doesn't have a defaultPaymentMethodId or we can't find it, throw an error.
- *  - We create a PaymentIntent with `confirm: true` so it finalizes immediately (auto-confirm).
- *  - If 3D Secure is needed, it may require_action. You can handle or fail. (Simplified approach)
+ *  - We create a PaymentIntent with confirm: true so it finalizes immediately (auto-confirm).
+ *  - If 3D Secure is needed, it may require_action => you handle or fail in a real scenario.
  */
 async function handleChargeUserForTrip(
   userId: string,
@@ -478,11 +511,9 @@ async function handleChargeUserForTrip(
   }
 
   // Attempt to load user doc & see if they have defaultPaymentMethodId
-  const { data } = await ensureUserExists(userId);
-  const userData = data || {};
-
+  const { data: userData } = await ensureUserExists(userId);
   const stripeCustomerId = userData.stripeCustomerId;
-  const defaultPmId = userData.defaultPaymentMethodId; // the Stripe PaymentMethod ID
+  const defaultPmId = userData.defaultPaymentMethodId;
 
   if (!stripeCustomerId || !defaultPmId) {
     return errorResponse(
@@ -494,28 +525,29 @@ async function handleChargeUserForTrip(
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
-      currency: 'hkd', // or any desired currency
+      currency: 'hkd', // or your desired currency
       customer: stripeCustomerId,
       payment_method: defaultPmId,
       off_session: true, // for off-session usage
-      confirm: true,     // automatically confirm
-      // If the payment requires 3D Secure, this may raise an error or return "requires_action"
-      // For a production scenario, you might handle that differently.
+      confirm: true, // automatically confirm
       metadata: { userId },
     });
 
     // Check if it succeeded or requires action
-    if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_payment_method') {
+    if (
+      paymentIntent.status === 'requires_action' ||
+      paymentIntent.status === 'requires_payment_method'
+    ) {
       // The payment requires 3D Secure or a new payment method
       return errorResponse(
-        'Payment requires additional user action (3D Secure). Please handle next actions.',
+        'Payment requires additional user action (3D Secure).',
         402
       );
     }
 
     // Otherwise, success
     return successResponse({
-      message: `Successfully charged HK$${amount / 100} to user's default payment method.`,
+      message: `Successfully charged HK$${(amount / 100).toFixed(2)} to user’s default payment method.`,
       paymentIntentId: paymentIntent.id,
       status: paymentIntent.status,
     });
