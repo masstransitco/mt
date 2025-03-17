@@ -43,6 +43,7 @@ import {
   clearDepartureStation,
   clearArrivalStation,
   clearRoute,
+  resetBookingFlow,
   selectRouteDecoded,
 } from "@/store/bookingSlice";
 import {
@@ -149,6 +150,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // For debouncing route fetch
   const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedCarIdRef = useRef<number | null>(null);
 
   // If user completes step 5, close sheets
   useEffect(() => {
@@ -338,8 +340,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   // QR / Virtual Station logic
   // --------------------------
-  const processedCarIdRef = useRef<number | null>(null);
-
   const openDetailSheet = useCallback(() => {
     setDetailKey(Date.now());
     setForceSheetOpen(true);
@@ -358,7 +358,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
    * We forcibly reset everything and place user in step=2 with the new station as departure.
    */
   const handleQrScanSuccess = useCallback(() => {
-    if (!scannedCar) return;
+    if (!scannedCar) {
+      console.log("No scanned car found");
+      return;
+    }
+
+    console.log("QR scan success, processing car:", scannedCar.id);
 
     // Clear old departure/arrival stations & routes
     dispatch(clearDepartureStation());
@@ -366,24 +371,29 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(clearDispatchRoute());
     dispatch(clearRoute());
 
-    // Force booking step=2
-    dispatch(advanceBookingStep(2));
-
     // Create a "virtual station" for the scanned car
     const vStationId = 1000000 + scannedCar.id;
     const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-    processedCarIdRef.current = scannedCar.id;
+    // Add the virtual station to Redux
+    console.log("Adding virtual station:", vStationId);
     dispatch(addVirtualStation(virtualStation));
 
     // Select new station as the departure
     dispatch(selectDepartureStation(vStationId));
-
+    
+    // Update local state
     setVirtualStationId(vStationId);
     setIsQrScanStation(true);
+    processedCarIdRef.current = scannedCar.id;
 
-    // Immediately open detail for the new station
-    openDetailSheet();
+    // Force booking step=2 after state updates
+    setTimeout(() => {
+      dispatch(advanceBookingStep(2));
+      // Immediately open detail for the new station
+      openDetailSheet();
+    }, 50);
+
   }, [scannedCar, dispatch, openDetailSheet]);
 
   // --------------------------
@@ -398,7 +408,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
         station.id !== virtualStationId &&
         virtualStationId
       ) {
-        // Remove old “QR” station from the store
+        console.log("Different station selected, removing QR station:", virtualStationId);
+        // Remove old "QR" station from the store
         dispatch(removeStation(virtualStationId));
         dispatch(clearDepartureStation());
         dispatch(setScannedCar(null));
@@ -651,17 +662,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // QR Scanner
   // --------------------------
 
-  const resetBookingFlowForQrScan = () => {
-    // Clear all departure/arrival stations
-    dispatch(clearDepartureStation());
-    dispatch(clearArrivalStation());
+  // Fixed with useCallback and proper dependencies
+  const resetBookingFlowForQrScan = useCallback(() => {
+    console.log("Resetting booking flow for QR scan");
+    // Use dispatch(resetBookingFlow()) from the imported action
+    dispatch(resetBookingFlow());
     
-    // Clear all routes
+    // Clear all routes explicitly
     dispatch(clearDispatchRoute());
     dispatch(clearRoute());
     
     // Remove any existing virtual stations
     if (virtualStationId !== null) {
+      console.log("Removing existing virtual station:", virtualStationId);
       dispatch(removeStation(virtualStationId));
     }
     
@@ -670,16 +683,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setIsQrScanStation(false);
     processedCarIdRef.current = null;
     
-    // Reset to step 1 before proceeding to step 2 with new QR data
-    dispatch(advanceBookingStep(1));
-  };
+  }, [dispatch, virtualStationId]);
 
-
+  // Fixed with proper dependency on resetBookingFlowForQrScan
   const handleOpenQrScanner = useCallback(() => {
-  resetBookingFlowForQrScan(); // Call reset before opening scanner
-  closeSheet();
-  setIsQrScannerOpen(true);
-}, [closeSheet, resetBookingFlowForQrScan]);
+    resetBookingFlowForQrScan();
+    closeSheet();
+    setIsQrScannerOpen(true);
+  }, [closeSheet, resetBookingFlowForQrScan]);
 
   // --------------------------
   // Sign-in modal
@@ -703,18 +714,44 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [bookingStep, dispatch, closeSheet]);
 
+  // Debug effect to log important state changes
+  useEffect(() => {
+    console.log("State changed - bookingStep:", bookingStep, "departureId:", departureStationId, "isQrScanStation:", isQrScanStation, "virtualStationId:", virtualStationId);
+  }, [bookingStep, departureStationId, isQrScanStation, virtualStationId]);
+
   // --------------------------
   // Which station to show in detail?
   // --------------------------
   const hasError = stationsError || carsError || loadError;
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
 
+  // Log stations for debugging
+  useEffect(() => {
+    if (stations.length > 0 && virtualStationId) {
+      const virtualStation = stations.find(s => s.id === virtualStationId);
+      console.log("Virtual station exists:", !!virtualStation);
+    }
+  }, [stations, virtualStationId]);
+
+  // Determine which station to show in detail
   let stationToShow: StationFeature | null = null;
-  if (hasStationSelected && isQrScanStation && virtualStationId === hasStationSelected) {
-    stationToShow = stations.find((s) => s.id === virtualStationId) || null;
-  } else {
-    const stationsForDetail = sortedStations.length > 0 ? sortedStations : stations;
-    stationToShow = stationsForDetail.find((s) => s.id === hasStationSelected) ?? null;
+  
+  // Improved logic to find the correct station to show
+  if (hasStationSelected) {
+    if (isQrScanStation && virtualStationId === hasStationSelected) {
+      // First check for virtual station directly  
+      stationToShow = stations.find((s) => s.id === virtualStationId) || null;
+      if (!stationToShow) {
+        console.warn("Virtual station not found in stations list:", virtualStationId);
+      }
+    } else {
+      // Normal station lookup
+      const stationsForDetail = sortedStations.length > 0 ? sortedStations : stations;
+      stationToShow = stationsForDetail.find((s) => s.id === hasStationSelected) ?? null;
+      if (!stationToShow) {
+        console.warn("Selected station not found:", hasStationSelected);
+      }
+    }
   }
 
   // --------------------------
@@ -744,6 +781,44 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return null;
   }, [bookingStep, getPickupTimeRange]);
 
+  // Extra debugging log before rendering
+  useEffect(() => {
+    const debugSheet = JSON.stringify({
+      openSheet,
+      forceSheetOpen,
+      hasStationSelected,
+      stationToShow: stationToShow?.id,
+      isStepTransitioning,
+      bookingStep,
+      departureStationId,
+      arrivalStationId,
+      isQrScanStation,
+      virtualStationId
+    });
+    console.log("Sheet debug:", debugSheet);
+  }, [openSheet, forceSheetOpen, hasStationSelected, stationToShow, isStepTransitioning, 
+      bookingStep, departureStationId, arrivalStationId, isQrScanStation, virtualStationId]);
+  
+  // Log when detail sheet conditions change
+  useEffect(() => {
+    const shouldShowDetail = (openSheet === "detail" || forceSheetOpen) && !!stationToShow && !isStepTransitioning;
+    console.log("Detail sheet visibility:", shouldShowDetail, "Key:", detailKey);
+  }, [openSheet, forceSheetOpen, stationToShow, isStepTransitioning, detailKey]);
+
+  // --------------------------
+  // Final setup of detail sheet
+  // --------------------------
+  
+  // Force refresh detail sheet when QR scan station changes
+  useEffect(() => {
+    if (isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
+      // Ensure detail sheet opens with new key to force full remount
+      setDetailKey(Date.now());
+      setForceSheetOpen(true);
+      setIsDetailSheetMinimized(false);
+    }
+  }, [isQrScanStation, virtualStationId, departureStationId]);
+  
   // --------------------------
   // Render
   // --------------------------
@@ -767,6 +842,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       {!hasError && !overlayVisible && (
         <>
+          {/* Display state for debugging (remove in production) */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="absolute top-0 right-0 z-50 bg-black/70 text-white text-xs p-2 max-w-xs overflow-auto" style={{ fontSize: '10px' }}>
+              Step: {bookingStep} ({isQrScanStation ? 'QR' : 'Normal'})<br />
+              {virtualStationId && `vStation: ${virtualStationId}`}<br />
+              {departureStationId && `depId: ${departureStationId}`}<br />
+              {arrivalStationId && `arrId: ${arrivalStationId}`}<br />
+              Sheet: {openSheet} {forceSheetOpen ? '(forced)' : ''}<br />
+              {isStepTransitioning && 'Transitioning...'}
+            </div>
+          )}
+          
           <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -814,9 +901,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
             </div>
           </Sheet>
 
-          {/* Station Detail Sheet */}
+          {/* Station Detail Sheet - with key for forcing remount */}
           <Sheet
-            key={detailKey}
+            key={`detail-sheet-${detailKey}`}
             isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow && !isStepTransitioning}
             isMinimized={isDetailSheetMinimized}
             onMinimize={() => setIsDetailSheetMinimized(true)}
@@ -827,7 +914,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           >
             {stationToShow && (
               <StationDetail
-                key={detailKey}
+                key={`station-detail-${detailKey}`}
                 stations={searchLocation ? sortedStations : stations}
                 activeStation={stationToShow}
                 onOpenSignIn={handleOpenSignIn}
@@ -840,22 +927,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
             )}
           </Sheet>
 
-          {/* QR Scanner Overlay */}
+          {/* QR Scanner Overlay with proper props */}
           <QrScannerOverlay
-  isOpen={isQrScannerOpen}
-  onClose={() => {
-    setIsQrScannerOpen(false);
-    if (previousSheet !== "none") {
-      setOpenSheet(previousSheet);
-      setIsDetailSheetMinimized(false);
-    }
-  }}
-  onScanSuccess={handleQrScanSuccess}
-  currentVirtualStationId={virtualStationId} // This should be added
-/>
+            isOpen={isQrScannerOpen}
+            onClose={() => {
+              setIsQrScannerOpen(false);
+              if (previousSheet !== "none") {
+                setOpenSheet(previousSheet);
+                setIsDetailSheetMinimized(false);
+              }
+            }}
+            onScanSuccess={handleQrScanSuccess}
+            currentVirtualStationId={virtualStationId}
+          />
 
           {/* Gaussian Splat Modal (lazy-loaded) */}
-          <Suspense fallback={<div>Loading modal...</div>}>
+          <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+            <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
+          </div>}>
             {isSplatModalOpen && (
               <GaussianSplatModal
                 isOpen={isSplatModalOpen}
