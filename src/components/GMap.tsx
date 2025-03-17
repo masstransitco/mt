@@ -342,35 +342,59 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [openSheet]
   );
 
-  // --------------------------
-  // QR / Virtual Station logic
-  // --------------------------
-  const processedCarIdRef = useRef<number | null>(null);
+ // --------------------------
+// QR / Virtual Station logic
+// --------------------------
+const processedCarIdRef = useRef<number | null>(null);
 
-  const openDetailSheet = useCallback(() => {
-    setDetailKey(Date.now());
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    setIsDetailSheetMinimized(false);
-    if (actualMap && scannedCar) {
-      // Optionally center map on the scanned car location
-      actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
-      actualMap.setZoom(16);
-    }
-  }, [actualMap, scannedCar]);
+const openDetailSheet = useCallback(() => {
+  setDetailKey(Date.now());
+  setForceSheetOpen(true);
+  setOpenSheet("detail");
+  setIsDetailSheetMinimized(false);
+  if (actualMap && scannedCar) {
+    // Optionally center map on the scanned car location
+    actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
+    actualMap.setZoom(16);
+  }
+}, [actualMap, scannedCar]);
 
-  const handleQrScanSuccess = useCallback(() => {
-    if (scannedCar) {
-      const vStationId = 1000000 + scannedCar.id;
-      setVirtualStationId(vStationId);
-      setIsQrScanStation(true);
-      // Build & add the station to Redux
-      const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-      dispatch(addVirtualStation(virtualStation));
-      // Then open its detail sheet
-      openDetailSheet();
-    }
-  }, [scannedCar, dispatch, openDetailSheet]);
+const handleQrScanSuccess = useCallback(() => {
+  if (!scannedCar) return;
+
+  // Clear previous selections and routes
+  dispatch(clearDepartureStation());
+  dispatch(clearArrivalStation());
+  dispatch(clearDispatchRoute());
+  dispatch(clearRoute());
+
+  // Force user back to step 1; next advance will set them to step 2
+  dispatch(advanceBookingStep(1));
+
+  const vStationId = 1000000 + scannedCar.id;
+  const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
+
+  // Prevent re‐processing the same car if scanning multiple times in a row
+  processedCarIdRef.current = scannedCar.id;
+
+  // Add station to the store
+  dispatch(addVirtualStation(virtualStation));
+
+  // Immediately select as departure
+  dispatch(selectDepartureStation(vStationId));
+  dispatch(advanceBookingStep(2)); // Now we are in step 2 with a scanned station
+
+  setVirtualStationId(vStationId);
+  setIsQrScanStation(true);
+
+  // Open the sheet with detail for this newly scanned station
+  openDetailSheet();
+}, [
+  scannedCar,
+  dispatch,
+  openDetailSheet,
+  processedCarIdRef,
+]);
 
   // If user is in step 2 and we have a newly scanned car
   useEffect(() => {
