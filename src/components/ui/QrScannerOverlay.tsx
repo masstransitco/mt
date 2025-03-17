@@ -8,27 +8,28 @@ import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import { selectCar } from "@/store/userSlice";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import {
-  selectDepartureStation,
   advanceBookingStep,
-  clearDepartureStation,
-  clearArrivalStation,
-  clearRoute,
+  selectDepartureStation,
   resetBookingFlow,
+  clearRoute,
 } from "@/store/bookingSlice";
-import { fetchDispatchLocations, clearDispatchRoute } from "@/store/dispatchSlice";
-import { 
-  addVirtualStation, 
-  removeStation, 
-  selectStationsWithDistance 
+import {
+  fetchDispatchLocations,
+  clearDispatchRoute,
+} from "@/store/dispatchSlice";
+import {
+  addVirtualStation,
+  removeStation,
+  selectStationsWithDistance,
 } from "@/store/stationsSlice";
 import { toast } from "react-hot-toast";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called when QR scanning is successful (used to open detail sheet). */
+  /** Called when QR scanning is successful (used to open a detail sheet, for example). */
   onScanSuccess?: () => void;
-  /** Currently active virtual station ID (if any) */
+  /** Currently active virtual station ID (if any). */
   currentVirtualStationId?: number | null;
 }
 
@@ -43,7 +44,7 @@ export default function QrScannerOverlay({
   const [loading, setLoading] = useState(false);
   const stations = useAppSelector(selectStationsWithDistance);
 
-  // Reset scanning state when overlay is opened/closed
+  // Reset scanning state when overlay is toggled
   useEffect(() => {
     if (isOpen) {
       setScanning(true);
@@ -51,28 +52,34 @@ export default function QrScannerOverlay({
     }
   }, [isOpen]);
 
-  // Clear any existing booking state before processing a new scan
+  /**
+   * Clears all booking/dispatch/car data before the new QR scan.
+   */
   const resetBookingState = useCallback(() => {
-    // Reset all booking flow state
+    // Fully reset the booking flow (step=1, no stations, etc.)
     dispatch(resetBookingFlow());
-    
-    // Explicitly clear routes to be safe
+
+    // Clear out any existing route data (booking + dispatch)
     dispatch(clearRoute());
     dispatch(clearDispatchRoute());
-    
-    // Clear any existing virtual station
+
+    // Remove any existing "virtual station" from a previous scan
     if (currentVirtualStationId) {
-      // Check if this station actually exists in our list before trying to remove it
-      const stationExists = stations.some(s => s.id === currentVirtualStationId);
+      const stationExists = stations.some(
+        (s) => s.id === currentVirtualStationId
+      );
       if (stationExists) {
         dispatch(removeStation(currentVirtualStationId));
       }
     }
-    
-    // Reset the scanned car state
+
+    // Clear the "scanned car" from Redux
     dispatch(setScannedCar(null));
   }, [dispatch, currentVirtualStationId, stations]);
 
+  /**
+   * Main handler for successful QR scans.
+   */
   const handleScan = useCallback(
     async (detectedCodes: IDetectedBarcode[]) => {
       if (!detectedCodes.length || !detectedCodes[0].rawValue || loading) return;
@@ -81,14 +88,14 @@ export default function QrScannerOverlay({
       setLoading(true);
 
       try {
-        // Clear any existing booking state first
+        // 1) Reset any in-progress booking/dispatch state
         resetBookingState();
-        
+
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
-        // Example QR: "https://www.masstransitcar.com/zk5419"
-        // Extract car registration from the last part
+        // Example QR format: "https://www.masstransitcar.com/zk5419"
+        // Extract the car registration from the last part
         const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         if (!match) {
           toast.error("Invalid QR code format");
@@ -99,39 +106,40 @@ export default function QrScannerOverlay({
         const registration = match[1].toUpperCase();
         console.log("Car registration:", registration);
 
-        // 1) Fetch car from your backend
-        const carResult = await dispatch(fetchCarByRegistration(registration)).unwrap();
+        // 2) Fetch car details from the backend
+        const carResult = await dispatch(
+          fetchCarByRegistration(registration)
+        ).unwrap();
         if (!carResult) {
           toast.error(`Car ${registration} not found`);
           onClose();
           return;
         }
 
-        // 2) Store scanned car in Redux
+        // 3) Update Redux with the scanned car
         await dispatch(setScannedCar(carResult));
-
-        // 3) Also pick it in user slice (if you have a "selectCar" flow)
         await dispatch(selectCar(carResult.id));
 
-        // 4) Fetch dispatch data (needed for routing to the car)
+        // 4) Load dispatch data (for potential routing)
         await dispatch(fetchDispatchLocations());
 
-        // 5) Create a unique station ID for this "virtual" car station
+        // 5) Make a "virtual station" for this car
         const virtualStationId = 1000000 + carResult.id;
+        const virtualStation = createVirtualStationFromCar(
+          carResult,
+          virtualStationId
+        );
 
-        // Build the "virtual station" object from the car
-        const virtualStation = createVirtualStationFromCar(carResult, virtualStationId);
-
-        // 6) Add the virtual station to Redux
+        // 6) Add that virtual station to the stations list
         dispatch(addVirtualStation(virtualStation));
 
-        // 7) Mark this newly added station as the departure station, then go to step 2
+        // 7) Mark it as the new departure station, then move to step=2
         await dispatch(selectDepartureStation(virtualStationId));
         await dispatch(advanceBookingStep(2));
 
-        console.log("QR scan complete, car selected, station created.");
+        console.log("QR scan complete; car selected, virtual station set.");
 
-        // Optionally notify parent that we scanned successfully
+        // Let the parent know we have a valid scan
         if (onScanSuccess) {
           setTimeout(() => {
             onScanSuccess();
@@ -150,6 +158,9 @@ export default function QrScannerOverlay({
     [dispatch, onClose, onScanSuccess, loading, resetBookingState]
   );
 
+  /**
+   * If the scanner fails (camera not accessible, etc.), handle gracefully.
+   */
   const handleError = useCallback(
     (error: unknown) => {
       console.error("QR Scanner Error:", error);
@@ -159,7 +170,9 @@ export default function QrScannerOverlay({
     [onClose]
   );
 
-  // If the user cancels, we want to clean up
+  /**
+   * When the user closes the overlay manually.
+   */
   const handleClose = useCallback(() => {
     setScanning(false);
     onClose();
@@ -195,14 +208,14 @@ export default function QrScannerOverlay({
                     onScan={handleScan}
                     onError={handleError}
                     constraints={{
-                      facingMode: 'environment' // Prefer back camera
+                      facingMode: "environment", // Prefer back camera
                     }}
                   />
                 )}
 
                 {loading && (
                   <div className="p-8 flex items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
                   </div>
                 )}
               </div>
