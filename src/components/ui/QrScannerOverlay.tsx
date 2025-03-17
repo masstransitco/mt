@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
+import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner"; 
 import { useAppDispatch } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import type { Car } from "@/types/cars";
