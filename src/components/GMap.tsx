@@ -21,7 +21,7 @@ import {
   selectStationsError,
   StationFeature,
   addVirtualStation,
-  removeStation, // <-- new
+  removeStation,
 } from "@/store/stationsSlice";
 import {
   fetchCars,
@@ -93,7 +93,9 @@ interface GMapProps {
 export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
+  // --------------------------
   // Local map & UI states
+  // --------------------------
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
@@ -115,7 +117,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Google Maps script readiness
   const [googleMapsReady, setGoogleMapsReady] = useState(false);
 
-  // QR code states
+  // QR code & virtual station states
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
   const [virtualStationId, setVirtualStationId] = useState<number | null>(null);
   const [isQrScanStation, setIsQrScanStation] = useState(false);
@@ -124,13 +126,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
   const [signInModalOpen, setSignInModalOpen] = useState(false);
 
+  // --------------------------
   // Redux states
+  // --------------------------
   const stations = useAppSelector(selectStationsWithDistance);
   const stationsLoading = useAppSelector(selectStationsLoading);
   const stationsError = useAppSelector(selectStationsError);
+
   const cars = useAppSelector(selectAllCars);
   const carsLoading = useAppSelector(selectCarsLoading);
   const carsError = useAppSelector(selectCarsError);
+
   const userLocation = useAppSelector(selectUserLocation);
   const bookingStep = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
@@ -144,6 +150,23 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // For debouncing route fetch
   const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Keep booking step in a ref so effect callbacks can read it
+  const bookingStepRef = useRef(bookingStep);
+  useEffect(() => {
+    bookingStepRef.current = bookingStep;
+  }, [bookingStep]);
+
+  // If user completes step 5, close sheets
+  useEffect(() => {
+    if (bookingStep === 5) {
+      setOpenSheet("none");
+      setPreviousSheet("none");
+      setForceSheetOpen(false);
+      setIsDetailSheetMinimized(false);
+      setIsListSheetMinimized(false);
+    }
+  }, [bookingStep]);
 
   // Load Google Maps script
   const { isLoaded, loadError } = useJsApiLoader({
@@ -177,24 +200,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     redInstancedMeshRef,
   } = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId, cars);
 
-  // Keep booking step in a ref
-  const bookingStepRef = useRef(bookingStep);
-  useEffect(() => {
-    bookingStepRef.current = bookingStep;
-  }, [bookingStep]);
-
-  // If user completes step 5, close sheets
-  useEffect(() => {
-    if (bookingStep === 5) {
-      setOpenSheet("none");
-      setPreviousSheet("none");
-      setForceSheetOpen(false);
-      setIsDetailSheetMinimized(false);
-      setIsListSheetMinimized(false);
-    }
-  }, [bookingStep]);
-
-  // Basic sorting function to get local “sortedStations”
+  // --------------------------
+  // Local sorted stations
+  // --------------------------
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) {
@@ -223,9 +231,71 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [googleMapsReady]
   );
 
-  // --------------------------------------------------------------------------------
+  // --------------------------
+  // Data loading
+  // --------------------------
+  useEffect(() => {
+    (async () => {
+      try {
+        await Promise.all([
+          dispatch(fetchStations()).unwrap(),
+          dispatch(fetchCars()).unwrap(),
+        ]);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        toast.error("Failed to load map data");
+      }
+    })();
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
+      setOverlayVisible(false);
+    }
+  }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
+
+  // --------------------------
+  // Route fetching (debounced)
+  // --------------------------
+  useEffect(() => {
+    if (!googleMapsReady) return;
+    if (routeFetchTimeoutRef.current) {
+      clearTimeout(routeFetchTimeoutRef.current);
+    }
+    if (departureStationId && arrivalStationId) {
+      routeFetchTimeoutRef.current = setTimeout(() => {
+        const departureStation = stations.find((s) => s.id === departureStationId);
+        const arrivalStation = stations.find((s) => s.id === arrivalStationId);
+        if (departureStation && arrivalStation) {
+          dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
+        }
+      }, 800);
+    }
+    return () => {
+      if (routeFetchTimeoutRef.current) {
+        clearTimeout(routeFetchTimeoutRef.current);
+      }
+    };
+  }, [departureStationId, arrivalStationId, stations, dispatch, googleMapsReady]);
+
+  // --------------------------
+  // Dispatch route for pickup
+  // --------------------------
+  useEffect(() => {
+    if (!googleMapsReady) return;
+    if (!departureStationId) {
+      dispatch(clearDispatchRoute());
+      return;
+    }
+    const depStation = stations.find((s) => s.id === departureStationId);
+    if (depStation) {
+      dispatch(fetchDispatchDirections(depStation));
+    }
+  }, [departureStationId, stations, dispatch, googleMapsReady]);
+
+  // --------------------------
   // Sheet / UI Management
-  // --------------------------------------------------------------------------------
+  // --------------------------
   const closeSheet = useCallback(async () => {
     return new Promise<void>((resolve) => {
       setOpenSheet("none");
@@ -272,9 +342,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [openSheet]
   );
 
-  // ----------------------------------------------------------------------
-  // QR Station Logic — Add or remove station in Redux
-  // ----------------------------------------------------------------------
+  // --------------------------
+  // QR / Virtual Station logic
+  // --------------------------
+  const processedCarIdRef = useRef<number | null>(null);
+
   const openDetailSheet = useCallback(() => {
     setDetailKey(Date.now());
     setForceSheetOpen(true);
@@ -289,22 +361,19 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const handleQrScanSuccess = useCallback(() => {
     if (scannedCar) {
-      console.log("QR Scan Success, scannedCar ID:", scannedCar.id);
       const vStationId = 1000000 + scannedCar.id;
       setVirtualStationId(vStationId);
       setIsQrScanStation(true);
       // Build & add the station to Redux
       const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-      dispatch(addVirtualStation(virtualStation)); // <--
+      dispatch(addVirtualStation(virtualStation));
       // Then open its detail sheet
       openDetailSheet();
     }
   }, [scannedCar, dispatch, openDetailSheet]);
 
-  // For user re-scanning the car if not yet done
-  const processedCarIdRef = useRef<number | null>(null);
+  // If user is in step 2 and we have a newly scanned car
   useEffect(() => {
-    // If user is in step 2 and we have a newly scanned car
     if (scannedCar && bookingStep === 2 && processedCarIdRef.current !== scannedCar.id) {
       processedCarIdRef.current = scannedCar.id;
       const vStationId = 1000000 + scannedCar.id;
@@ -323,9 +392,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [scannedCar, bookingStep, dispatch, openDetailSheet]);
 
-  // ----------------------------------------------------------------------
+  // --------------------------
   // Station selection logic
-  // ----------------------------------------------------------------------
+  // --------------------------
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
       const stepNow = bookingStepRef.current;
@@ -333,12 +402,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       // If user picks a different station while we had a QR station
       if (isSwitchingFromQr && virtualStationId) {
-        // remove that virtual station from Redux so it disappears
         dispatch(removeStation(virtualStationId));
         dispatch(clearDepartureStation());
         dispatch(setScannedCar(null));
         setIsQrScanStation(false);
         setVirtualStationId(null);
+        processedCarIdRef.current = null; // reset so re-scanning works
         dispatch(advanceBookingStep(1));
       }
 
@@ -368,11 +437,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setIsDetailSheetMinimized(false);
       setPreviousSheet("none");
     },
-    [
-      dispatch,
-      isQrScanStation,
-      virtualStationId,
-    ]
+    [dispatch, isQrScanStation, virtualStationId]
   );
 
   const handleStationSelectedFromList = useCallback(
@@ -382,7 +447,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [handleStationSelection]
   );
 
-  // If user taps the 3D station in the overlay:
+  // 3D overlay click → station selection
   useEffect(() => {
     if (!actualMap || !overlayRef.current) return;
     const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
@@ -443,7 +508,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     handleStationSelection
   ]);
 
-  // Setup map options and marker icons once loaded
+  // --------------------------
+  // Map config once loaded
+  // --------------------------
   useEffect(() => {
     if (isLoaded && googleMapsReady && window.google) {
       setMapOptions(createMapOptions());
@@ -451,63 +518,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded, googleMapsReady]);
 
-  // Initial data fetch
-  useEffect(() => {
-    (async () => {
-      try {
-        await Promise.all([dispatch(fetchStations()).unwrap(), dispatch(fetchCars()).unwrap()]);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        toast.error("Failed to load map data");
-      }
-    })();
-  }, [dispatch]);
-
-  // Hide spinner once data loads
-  useEffect(() => {
-    if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
-      setOverlayVisible(false);
-    }
-  }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
-
-  // Debounce route fetch when departure/arrival change
-  useEffect(() => {
-    if (!googleMapsReady) return;
-    if (routeFetchTimeoutRef.current) {
-      clearTimeout(routeFetchTimeoutRef.current);
-    }
-    if (departureStationId && arrivalStationId) {
-      routeFetchTimeoutRef.current = setTimeout(() => {
-        const departureStation = stations.find((s) => s.id === departureStationId);
-        const arrivalStation = stations.find((s) => s.id === arrivalStationId);
-        if (departureStation && arrivalStation) {
-          dispatch(fetchRoute({ departure: departureStation, arrival: arrivalStation }));
-        }
-      }, 800);
-    }
-    return () => {
-      if (routeFetchTimeoutRef.current) {
-        clearTimeout(routeFetchTimeoutRef.current);
-      }
-    };
-  }, [departureStationId, arrivalStationId, stations, dispatch, googleMapsReady]);
-
-  // Dispatch route for pickup path
-  useEffect(() => {
-    if (!googleMapsReady) return;
-    if (!departureStationId) {
-      dispatch(clearDispatchRoute());
-      return;
-    }
-    const depStation = stations.find((s) => s.id === departureStationId);
-    if (depStation) {
-      dispatch(fetchDispatchDirections(depStation));
-    }
-  }, [departureStationId, stations, dispatch, googleMapsReady]);
-
-  // --------------------------------------------------------------------------------
-  // Handlers for the search, location, etc.
-  // --------------------------------------------------------------------------------
+  // --------------------------
+  // Handle location / search
+  // --------------------------
   const handleAddressSearch = useCallback(
     (location: google.maps.LatLngLiteral) => {
       if (!actualMap) return;
@@ -528,7 +541,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
         setIsListSheetMinimized(false);
       }
     },
-    [actualMap, stations, openSheet, googleMapsReady, sortStationsByDistanceToPoint]
+    [
+      actualMap,
+      stations,
+      openSheet,
+      googleMapsReady,
+      sortStationsByDistanceToPoint
+    ]
   );
 
   const handleLocateMe = useCallback(() => {
@@ -573,20 +592,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
     openNewSheet
   ]);
 
-  // --------------------------------------------------------------------------------
-  // Clearing logic for departure/arrival in the station selector
-  // --------------------------------------------------------------------------------
+  // --------------------------
+  // Clearing logic in StationSelector
+  // --------------------------
   const handleClearDepartureInSelector = useCallback(() => {
     dispatch(clearDepartureStation());
     dispatch(advanceBookingStep(1));
     dispatch(clearDispatchRoute());
 
-    // If we had a QR-based station, remove it from Redux
+    // If we had a QR-based station
     if (isQrScanStation && virtualStationId !== null) {
       dispatch(removeStation(virtualStationId));
       setIsQrScanStation(false);
       setVirtualStationId(null);
       dispatch(setScannedCar(null));
+      processedCarIdRef.current = null; // allow re-scan
     }
 
     closeSheet();
@@ -597,25 +617,35 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(clearArrivalStation());
     dispatch(advanceBookingStep(3));
     dispatch(clearRoute());
+
+    // If arrival station was QR-based
+    if (isQrScanStation && virtualStationId !== null) {
+      dispatch(removeStation(virtualStationId));
+      setIsQrScanStation(false);
+      setVirtualStationId(null);
+      dispatch(setScannedCar(null));
+      processedCarIdRef.current = null; // allow re-scan
+    }
+
     closeSheet();
     toast.success("Arrival station cleared. (Back to selecting arrival.)");
-  }, [dispatch, closeSheet]);
+  }, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
 
-  // --------------------------------------------------------------------------------
+  // --------------------------
   // StationDetail close/minimize
-  // --------------------------------------------------------------------------------
+  // --------------------------
   const handleStationDetailClose = useCallback(() => {
     // Minimizes the detail sheet
     setIsDetailSheetMinimized(true);
 
     // If user scanned a car & is discarding it now
     if (isQrScanStation && virtualStationId !== null) {
-      // Remove from Redux
       dispatch(removeStation(virtualStationId));
       dispatch(clearDepartureStation());
       dispatch(setScannedCar(null));
       setIsQrScanStation(false);
       setVirtualStationId(null);
+      processedCarIdRef.current = null; // allow re-scan
       toast("Scan the car's QR code again if you want to select this vehicle", {
         duration: 4000,
         position: "bottom-center",
@@ -625,17 +655,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isQrScanStation, virtualStationId, dispatch]);
 
+  // --------------------------
+  // QR Scanner
+  // --------------------------
   const handleOpenQrScanner = useCallback(() => {
     closeSheet();
     setIsQrScannerOpen(true);
   }, [closeSheet]);
 
+  // --------------------------
   // Sign-in modal
+  // --------------------------
   const handleOpenSignIn = useCallback(() => {
     setSignInModalOpen(true);
   }, []);
 
-  // Booking step transitions
+  // --------------------------
+  // Booking flow transitions
+  // --------------------------
   const handleStationConfirm = useCallback(async () => {
     if (bookingStep === 2) {
       setIsStepTransitioning(true);
@@ -648,23 +685,23 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [bookingStep, dispatch, closeSheet]);
 
-  // Any error from data loading?
+  // --------------------------
+  // Which station to show in detail
+  // --------------------------
   const hasError = stationsError || carsError || loadError;
-
-  // Determine which station to show in the detail sheet
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
-  let stationToShow: StationFeature | null = null;
 
+  let stationToShow: StationFeature | null = null;
   if (hasStationSelected && isQrScanStation && virtualStationId === hasStationSelected) {
-    // If we want real-time updates from the store, we might do:
     stationToShow = stations.find((s) => s.id === virtualStationId) || null;
   } else {
-    // Otherwise, look up the real station or fallback to local sorting
     const stationsForDetail = sortedStations.length > 0 ? sortedStations : stations;
     stationToShow = stationsForDetail.find((s) => s.id === hasStationSelected) ?? null;
   }
 
-  // For the dispatch route (pickup time)
+  // --------------------------
+  // Dispatch route info
+  // --------------------------
   const dispatchRouteObj = useAppSelector(selectDispatchRoute);
   const getPickupTimeRange = useCallback(() => {
     const now = new Date();
@@ -689,6 +726,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     return null;
   }, [bookingStep, getPickupTimeRange]);
 
+  // --------------------------
+  // Render
+  // --------------------------
   return (
     <div className="relative w-full h-[calc(100vh-64px)]">
       {hasError && (
