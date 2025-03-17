@@ -5,21 +5,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
-import { selectCar } from "@/store/userSlice";
-import { createVirtualStationFromCar } from "@/lib/stationUtils";
+import type { Car } from "@/types/cars";
+
 import {
-  advanceBookingStep,
-  selectDepartureStation,
-  clearArrivalStation,
-  clearRoute,
-} from "@/store/bookingSlice";
-import {
-  fetchDispatchLocations,
-  clearDispatchRoute,
-} from "@/store/dispatchSlice";
-import {
-  addVirtualStation,
-  removeStation,
   selectStationsWithDistance,
 } from "@/store/stationsSlice";
 import { toast } from "react-hot-toast";
@@ -28,7 +16,8 @@ interface QrScannerOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   /** Called when QR scanning is successful (used to open a detail sheet, for example). */
-  onScanSuccess?: () => void;
+  /** Called when QR scanning is successful, passing the found car. */
+  onScanSuccess?: (car: Car) => void;
   /** Currently active virtual station ID (if any). */
   currentVirtualStationId?: number | null;
 }
@@ -52,30 +41,6 @@ export default function QrScannerOverlay({
     }
   }, [isOpen]);
 
-  /**
-   * Clears all booking/dispatch/car data before the new QR scan.
-   */
-  const resetBookingState = useCallback(() => {
-    // Clear arrival station so user is forced back to step=2
-    dispatch(clearArrivalStation());
-
-    // Clear out any existing route data (booking + dispatch)
-    dispatch(clearRoute());
-    dispatch(clearDispatchRoute());
-
-    // Remove any existing "virtual station" from a previous scan
-    if (currentVirtualStationId) {
-      const stationExists = stations.some(
-        (s) => s.id === currentVirtualStationId
-      );
-      if (stationExists) {
-        dispatch(removeStation(currentVirtualStationId));
-      }
-    }
-
-    // Clear the "scanned car" from Redux
-    dispatch(setScannedCar(null));
-  }, [dispatch, currentVirtualStationId, stations]);
 
   /**
    * Main handler for successful QR scans.
@@ -88,14 +53,10 @@ export default function QrScannerOverlay({
       setLoading(true);
 
       try {
-        // 1) Reset any in-progress booking/dispatch state
-        resetBookingState();
-
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
-        // Example QR format: "https://www.masstransitcar.com/zk5419"
-        // Extract the car registration from the last part
+        // Extract car registration from QR code
         const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         if (!match) {
           toast.error("Invalid QR code format");
@@ -106,7 +67,7 @@ export default function QrScannerOverlay({
         const registration = match[1].toUpperCase();
         console.log("Car registration:", registration);
 
-        // 2) Fetch car details from the backend
+        // Fetch car details from the backend
         const carResult = await dispatch(
           fetchCarByRegistration(registration)
         ).unwrap();
@@ -116,46 +77,27 @@ export default function QrScannerOverlay({
           return;
         }
 
-        // 3) Update Redux with the scanned car
+        // Update Redux with the scanned car
         await dispatch(setScannedCar(carResult));
-        await dispatch(selectCar(carResult.id));
 
-        // 4) Load dispatch data (for potential routing)
-        await dispatch(fetchDispatchLocations());
-
-        // 5) Make a "virtual station" for this car
-        const virtualStationId = 1000000 + carResult.id;
-        const virtualStation = createVirtualStationFromCar(
-          carResult,
-          virtualStationId
-        );
-
-        // 6) Add that virtual station to the stations list
-        dispatch(addVirtualStation(virtualStation));
-
-        // 7) Mark it as the new departure station, then move to step=2
-        await dispatch(selectDepartureStation(virtualStationId));
-        await dispatch(advanceBookingStep(2));
-
-        console.log("QR scan complete; car selected, virtual station set.");
-
-        // Let the parent know we have a valid scan
+        // Inform parent component with the car result
         if (onScanSuccess) {
           setTimeout(() => {
-            onScanSuccess();
+            onScanSuccess(carResult);
           }, 500);
         }
 
-        toast.success(`Car ${registration} selected and ready to drive`);
+        toast.success(`Car ${registration} found!`);
       } catch (error) {
         console.error("Error processing QR code:", error);
         toast.error("Failed to process the car QR code");
       } finally {
         setLoading(false);
+        console.log("handleScan complete, closing overlay.");
         onClose();
       }
     },
-    [dispatch, onClose, onScanSuccess, loading, resetBookingState]
+    [dispatch, onClose, onScanSuccess, loading]
   );
 
   /**
