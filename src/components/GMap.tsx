@@ -650,10 +650,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   // QR Scanner
   // --------------------------
+
+  const resetBookingFlowForQrScan = () => {
+    // Clear all departure/arrival stations
+    dispatch(clearDepartureStation());
+    dispatch(clearArrivalStation());
+    
+    // Clear all routes
+    dispatch(clearDispatchRoute());
+    dispatch(clearRoute());
+    
+    // Remove any existing virtual stations
+    if (virtualStationId !== null) {
+      dispatch(removeStation(virtualStationId));
+    }
+    
+    // Reset local state
+    setVirtualStationId(null);
+    setIsQrScanStation(false);
+    processedCarIdRef.current = null;
+    
+    // Reset to step 1 before proceeding to step 2 with new QR data
+    dispatch(advanceBookingStep(1));
+  };
+
+
   const handleOpenQrScanner = useCallback(() => {
-    closeSheet();
-    setIsQrScannerOpen(true);
-  }, [closeSheet]);
+  resetBookingFlowForQrScan(); // Call reset before opening scanner
+  closeSheet();
+  setIsQrScannerOpen(true);
+}, [closeSheet, resetBookingFlowForQrScan]);
 
   // --------------------------
   // Sign-in modal
