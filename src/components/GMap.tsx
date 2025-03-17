@@ -842,16 +842,17 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
           {/* QR Scanner Overlay */}
           <QrScannerOverlay
-            isOpen={isQrScannerOpen}
-            onClose={() => {
-              setIsQrScannerOpen(false);
-              if (previousSheet !== "none") {
-                setOpenSheet(previousSheet);
-                setIsDetailSheetMinimized(false);
-              }
-            }}
-            onScanSuccess={handleQrScanSuccess}
-          />
+  isOpen={isQrScannerOpen}
+  onClose={() => {
+    setIsQrScannerOpen(false);
+    if (previousSheet !== "none") {
+      setOpenSheet(previousSheet);
+      setIsDetailSheetMinimized(false);
+    }
+  }}
+  onScanSuccess={handleQrScanSuccess}
+  currentVirtualStationId={virtualStationId} // This should be added
+/>
 
           {/* Gaussian Splat Modal (lazy-loaded) */}
           <Suspense fallback={<div>Loading modal...</div>}>
