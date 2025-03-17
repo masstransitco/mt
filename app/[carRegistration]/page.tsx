@@ -6,13 +6,13 @@ import { useAppDispatch } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import { selectCar } from "@/store/userSlice";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
-import { 
-  selectDepartureStation, 
-  advanceBookingStep, 
-  resetBookingFlow, 
-  clearRoute, 
-  clearArrivalStation, 
-  clearDepartureStation 
+import {
+  advanceBookingStep,
+  resetBookingFlow,
+  clearRoute,
+  clearArrivalStation,
+  clearDepartureStation,
+  selectDepartureStation
 } from "@/store/bookingSlice";
 import { fetchDispatchLocations } from "@/store/dispatchSlice";
 import { addVirtualStation } from "@/store/stationsSlice";
@@ -27,7 +27,7 @@ export default function CarRegistrationPage({
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const { carRegistration } = params;
-  
+
   useEffect(() => {
     const processCarRegistration = async () => {
       try {
@@ -51,7 +51,7 @@ export default function CarRegistrationPage({
           return;
         }
 
-        // 2) Mark this car as scanned
+        // 2) Mark this car as scanned, fetch dispatch data
         await dispatch(setScannedCar(carResult));
         await dispatch(selectCar(carResult.id));
         await dispatch(fetchDispatchLocations());
@@ -62,12 +62,19 @@ export default function CarRegistrationPage({
           carResult,
           virtualStationId
         );
+
+        // IMPORTANT: ensure the station is actually in Redux
+        // before selecting it as departure
         dispatch(addVirtualStation(virtualStation));
 
-        // 4) Select that station as departure → step=2
+        // Wait a short moment so Redux finishes adding the station
+        // (prevents GMap from missing it in the first render)
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // 4) Set that station as departure & move to step=2
         await dispatch(selectDepartureStation(virtualStationId));
         await dispatch(advanceBookingStep(2));
-        
+
         toast.success(`Car ${registration} selected and ready to drive`);
 
         // Finally, go home (where GMap will see us at step=2 with this station)
@@ -80,10 +87,10 @@ export default function CarRegistrationPage({
         setLoading(false);
       }
     };
-    
+
     processCarRegistration();
   }, [carRegistration, dispatch, router]);
-  
+
   // Simple loading UI
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center">
@@ -91,11 +98,11 @@ export default function CarRegistrationPage({
         <h1 className="text-2xl font-bold text-white mb-6 text-center">
           Mass Transit Company
         </h1>
-        
+
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
-        
+
         <p className="text-gray-300 text-center">
           Preparing your vehicle ({carRegistration})...
         </p>
