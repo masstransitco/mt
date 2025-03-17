@@ -1,35 +1,77 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
-import { useAppDispatch } from "@/store/store";
+import { useAppDispatch, useAppSelector } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import { selectCar } from "@/store/userSlice";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import {
   selectDepartureStation,
   advanceBookingStep,
+  clearDepartureStation,
+  clearArrivalStation,
+  clearRoute,
+  resetBookingFlow,
 } from "@/store/bookingSlice";
-import { fetchDispatchLocations } from "@/store/dispatchSlice";
-import { addVirtualStation } from "@/store/stationsSlice"; // <-- new import
+import { fetchDispatchLocations, clearDispatchRoute } from "@/store/dispatchSlice";
+import { 
+  addVirtualStation, 
+  removeStation, 
+  selectStationsWithDistance 
+} from "@/store/stationsSlice";
 import { toast } from "react-hot-toast";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   /** Called when QR scanning is successful (used to open detail sheet). */
-  onScanSuccess?: () => void; 
+  onScanSuccess?: () => void;
+  /** Currently active virtual station ID (if any) */
+  currentVirtualStationId?: number | null;
 }
 
 export default function QrScannerOverlay({
   isOpen,
   onClose,
   onScanSuccess,
+  currentVirtualStationId,
 }: QrScannerOverlayProps) {
   const dispatch = useAppDispatch();
   const [scanning, setScanning] = useState(true);
   const [loading, setLoading] = useState(false);
+  const stations = useAppSelector(selectStationsWithDistance);
+
+  // Reset scanning state when overlay is opened/closed
+  useEffect(() => {
+    if (isOpen) {
+      setScanning(true);
+      setLoading(false);
+    }
+  }, [isOpen]);
+
+  // Clear any existing booking state before processing a new scan
+  const resetBookingState = useCallback(() => {
+    // Reset all booking flow state
+    dispatch(resetBookingFlow());
+    
+    // Explicitly clear routes to be safe
+    dispatch(clearRoute());
+    dispatch(clearDispatchRoute());
+    
+    // Clear any existing virtual station
+    if (currentVirtualStationId) {
+      // Check if this station actually exists in our list before trying to remove it
+      const stationExists = stations.some(s => s.id === currentVirtualStationId);
+      if (stationExists) {
+        dispatch(removeStation(currentVirtualStationId));
+      }
+    }
+    
+    // Reset the scanned car state
+    dispatch(setScannedCar(null));
+  }, [dispatch, currentVirtualStationId, stations]);
 
   const handleScan = useCallback(
     async (detectedCodes: IDetectedBarcode[]) => {
@@ -39,6 +81,9 @@ export default function QrScannerOverlay({
       setLoading(true);
 
       try {
+        // Clear any existing booking state first
+        resetBookingState();
+        
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
@@ -68,7 +113,7 @@ export default function QrScannerOverlay({
         // 3) Also pick it in user slice (if you have a "selectCar" flow)
         await dispatch(selectCar(carResult.id));
 
-        // 4) Possibly fetch dispatch data (if your flow needs it)
+        // 4) Fetch dispatch data (needed for routing to the car)
         await dispatch(fetchDispatchLocations());
 
         // 5) Create a unique station ID for this "virtual" car station
@@ -102,7 +147,7 @@ export default function QrScannerOverlay({
         onClose();
       }
     },
-    [dispatch, onClose, onScanSuccess, loading]
+    [dispatch, onClose, onScanSuccess, loading, resetBookingState]
   );
 
   const handleError = useCallback(
@@ -113,6 +158,12 @@ export default function QrScannerOverlay({
     },
     [onClose]
   );
+
+  // If the user cancels, we want to clean up
+  const handleClose = useCallback(() => {
+    setScanning(false);
+    onClose();
+  }, [onClose]);
 
   return (
     <AnimatePresence>
@@ -125,7 +176,7 @@ export default function QrScannerOverlay({
         >
           <div className="w-full max-w-sm relative m-4">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="absolute top-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
               aria-label="Close QR Scanner"
             >
@@ -143,6 +194,9 @@ export default function QrScannerOverlay({
                   <Scanner
                     onScan={handleScan}
                     onError={handleError}
+                    constraints={{
+                      facingMode: 'environment' // Prefer back camera
+                    }}
                   />
                 )}
 
