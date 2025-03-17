@@ -10,7 +10,7 @@ import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import {
   advanceBookingStep,
   selectDepartureStation,
-  resetBookingFlow,
+  clearArrivalStation,
   clearRoute,
 } from "@/store/bookingSlice";
 import {
@@ -56,8 +56,8 @@ export default function QrScannerOverlay({
    * Clears all booking/dispatch/car data before the new QR scan.
    */
   const resetBookingState = useCallback(() => {
-    // Fully reset the booking flow (step=1, no stations, etc.)
-    dispatch(resetBookingFlow());
+    // Clear arrival station so user is forced back to step=2
+    dispatch(clearArrivalStation());
 
     // Clear out any existing route data (booking + dispatch)
     dispatch(clearRoute());
