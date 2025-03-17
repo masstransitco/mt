@@ -71,6 +71,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [dataFreshness, setDataFreshness] = useState(0);
 
+  // Refs to track fetch attempts and component lifecycle
   const mountedRef = useRef(true);
   const fetchCallRef = useRef(0);
   const lastFetchTimeRef = useRef(0);
@@ -88,17 +89,12 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Optimized fetch function with race-condition safeguards
+  // Updated fetch function (removed internal cooldown check)
   const fetchData = useCallback(async () => {
     if (isQrScanStation && scannedCar) return;
     if (!isVisible) return;
 
     const now = Date.now();
-    const FETCH_COOLDOWN = 10000;
-    if (now - lastFetchTimeRef.current <= FETCH_COOLDOWN) {
-      console.log("[CarGrid] Skipping fetch due to cooldown");
-      return;
-    }
     if (!mountedRef.current) return;
 
     const currentFetchId = ++fetchCallRef.current;
@@ -140,6 +136,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     return Object.values(groups).slice(0, 5);
   }, [availableCars, isVisible, isQrScanStation, scannedCar]);
 
+  // Effect to trigger fetch when component becomes visible or enough time has passed
   useEffect(() => {
     if (visibilityTimeoutRef.current) {
       clearTimeout(visibilityTimeoutRef.current);
@@ -147,9 +144,9 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     }
     if (isVisible) {
       const now = Date.now();
-      const FETCH_COOLDOWN = 30000;
+      const EFFECT_COOLDOWN = 30000; // 30 seconds
       const timeSinceLastFetch = now - lastFetchTimeRef.current;
-      if (componentState === "idle" || timeSinceLastFetch > FETCH_COOLDOWN) {
+      if (componentState === "idle" || timeSinceLastFetch > EFFECT_COOLDOWN) {
         if (isQrScanStation && scannedCar) {
           setComponentState("loaded");
         } else {
@@ -165,6 +162,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     };
   }, [isVisible, componentState, isQrScanStation, scannedCar, fetchData]);
 
+  // Set mounted flag and preload models on mount
   useEffect(() => {
     mountedRef.current = true;
     preloadCommonCarModels();
@@ -175,6 +173,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     };
   }, []);
 
+  // Auto-select first available car if none is selected
   useEffect(() => {
     if (!isVisible || availableCars.length === 0 || selectedCarId || componentState !== "loaded") return;
     const isSelectedCarAvailable = availableCars.some((car) => car.id === selectedCarId);
