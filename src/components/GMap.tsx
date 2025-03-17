@@ -13,6 +13,7 @@ import * as THREE from "three";
 import dynamic from "next/dynamic";
 
 // Redux & store hooks
+import type { Car } from "@/types/cars";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   fetchStations,
@@ -353,17 +354,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [actualMap, scannedCar]);
 
-  /**
-   * Called once a QR code is successfully scanned.
-   * We forcibly reset everything and place user in step=2 with the new station as departure.
-   */
-  const handleQrScanSuccess = useCallback(() => {
-    if (!scannedCar) {
-      console.log("No scanned car found");
+  // Now handleQrScanSuccess accepts the scanned car object from the overlay
+const handleQrScanSuccess = useCallback((car: Car) => {
+    if (!car) {
+      console.log("No scanned car from overlay");
       return;
     }
 
-    console.log("QR scan success, processing car:", scannedCar.id);
+    console.log("handleQrScanSuccess with car ID:", car.id);
 
     // Clear old departure/arrival stations & routes
     dispatch(clearDepartureStation());
@@ -372,29 +370,22 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(clearRoute());
 
     // Create a "virtual station" for the scanned car
-    const vStationId = 1000000 + scannedCar.id;
-    const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
+    const vStationId = 1000000 + car.id;
+    const virtualStation = createVirtualStationFromCar(car, vStationId);
 
-    // Add the virtual station to Redux
-    console.log("Adding virtual station:", vStationId);
     dispatch(addVirtualStation(virtualStation));
-
-    // Select new station as the departure
     dispatch(selectDepartureStation(vStationId));
-    
-    // Update local state
+    dispatch(advanceBookingStep(2));
+
+    // Update local states
     setVirtualStationId(vStationId);
     setIsQrScanStation(true);
-    processedCarIdRef.current = scannedCar.id;
+    processedCarIdRef.current = car.id;
 
-    // Force booking step=2 after state updates
-    setTimeout(() => {
-      dispatch(advanceBookingStep(2));
-      // Immediately open detail for the new station
-      openDetailSheet();
-    }, 50);
-
-  }, [scannedCar, dispatch, openDetailSheet]);
+    // Finally, open the detail sheet for step=2 and notify user
+    openDetailSheet();
+    toast.success(`Car ${car.id} selected as departure`);
+  }, [dispatch, openDetailSheet]);
 
   // --------------------------
   // Station selection logic
@@ -917,7 +908,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
                 setIsDetailSheetMinimized(false);
               }
             }}
-            onScanSuccess={handleQrScanSuccess}
+          onScanSuccess={(car) => handleQrScanSuccess(car)}
             currentVirtualStationId={virtualStationId}
           />
 
