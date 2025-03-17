@@ -38,6 +38,8 @@ import {
   fetchRoute,
   selectDepartureStationId,
   selectArrivalStationId,
+  selectDepartureStation,
+  selectArrivalStation,
   clearDepartureStation,
   clearArrivalStation,
   clearRoute,
@@ -97,7 +99,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
+  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]); // purely for local sorting / UI
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
@@ -340,120 +342,110 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [openSheet]
   );
 
-  // --------------------------
-  // QR / Virtual Station logic
-  // --------------------------
-  const processedCarIdRef = useRef<number | null>(null);
+// --------------------------
+// QR / Virtual Station logic
+// --------------------------
+const processedCarIdRef = useRef<number | null>(null);
 
-  const openDetailSheet = useCallback(() => {
-    setDetailKey(Date.now());
-    setForceSheetOpen(true);
-    setOpenSheet("detail");
-    setIsDetailSheetMinimized(false);
+const openDetailSheet = useCallback(() => {
+  setDetailKey(Date.now());
+  setForceSheetOpen(true);
+  setOpenSheet("detail");
+  setIsDetailSheetMinimized(false);
 
-    if (actualMap && scannedCar) {
-      // Optionally re‐center on the scanned car
-      actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
-      actualMap.setZoom(16);
+  if (actualMap && scannedCar) {
+    // Optionally re‐center on the scanned car
+    actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
+    actualMap.setZoom(16);
+  }
+}, [actualMap, scannedCar]);
+
+const handleQrScanSuccess = useCallback(() => {
+  if (!scannedCar) return;
+
+  // Only handle if we're within steps 1..4
+  if (bookingStepRef.current >= 1 && bookingStepRef.current <= 4) {
+    // 1) Clear any previously selected departure
+    dispatch(clearDepartureStation());
+
+    // If we had a previously scanned virtual station, remove it
+    if (isQrScanStation && virtualStationId) {
+      dispatch(removeStation(virtualStationId));
+      setIsQrScanStation(false);
+      setVirtualStationId(null);
+      dispatch(setScannedCar(null));
+      processedCarIdRef.current = null;
     }
-  }, [actualMap, scannedCar]);
 
-  /**
-   * If user is in steps 1..4, we:
-   * (i) force step 1,
-   * (ii) clear departure & arrival,
-   * (iii) remove any existing scanned station,
-   * (iv) create the new station as departure,
-   * (v) go to step 2,
-   * (vi) open detail sheet.
-   */
-  const handleQrScanSuccess = useCallback(() => {
-    if (!scannedCar) return;
+    // 2) Create a new virtual station from the scanned car
+    const vStationId = 1000000 + scannedCar.id;
+    const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
+    dispatch(addVirtualStation(virtualStation));
+    processedCarIdRef.current = scannedCar.id;
 
-    if (bookingStepRef.current >= 1 && bookingStepRef.current <= 4) {
-      // 1) Reset everything to step 1
-      dispatch(advanceBookingStep(1));
-      dispatch(clearDepartureStation());
-      dispatch(clearArrivalStation());
-      dispatch(clearDispatchRoute());
-      dispatch(clearRoute());
+    // 3) Immediately select it as departure, and force step 2
+    dispatch(selectDepartureStation(vStationId));
+    dispatch(advanceBookingStep(2));
+    setVirtualStationId(vStationId);
+    setIsQrScanStation(true);
 
-      // If user had a previously scanned station
-      if (isQrScanStation && virtualStationId) {
-        dispatch(removeStation(virtualStationId));
-        setIsQrScanStation(false);
-        setVirtualStationId(null);
-        dispatch(setScannedCar(null));
-        processedCarIdRef.current = null;
-      }
-
-      // 2) Create a new virtual station from the scanned car
-      const vStationId = 1000000 + scannedCar.id;
-      const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-      dispatch(addVirtualStation(virtualStation));
-      processedCarIdRef.current = scannedCar.id;
-
-      // 3) Set departure + step 2
-      dispatch(selectDepartureStation(vStationId));
-      dispatch(advanceBookingStep(2));
-      setVirtualStationId(vStationId);
-      setIsQrScanStation(true);
-
-      // 4) Slightly delay opening the detail sheet
-      setTimeout(() => {
-        openDetailSheet();
-      }, 300);
-    }
-  }, [
-    scannedCar,
-    dispatch,
-    openDetailSheet,
-    isQrScanStation,
-    virtualStationId
-  ]);
+    // 4) Open the StationDetail sheet after a small delay
+    setTimeout(() => {
+      openDetailSheet();
+    }, 300);
+  }
+}, [
+  scannedCar,
+  dispatch,
+  openDetailSheet,
+  isQrScanStation,
+  virtualStationId
+]);
 
   // --------------------------
   // Station selection logic
   // --------------------------
-  /**
-   * If user is in steps 1..4 and clicks a station “for departure,”
-   * do the same reset: step 1 → clear → set new station as departure → step 2 → open detail
-   */
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      if (bookingStepRef.current >= 1 && bookingStepRef.current <= 4) {
-        // 1) Reset everything to step 1
-        dispatch(advanceBookingStep(1));
+      const stepNow = bookingStepRef.current;
+      const isSwitchingFromQr = isQrScanStation && station.id !== virtualStationId && stepNow <= 2;
+
+      // If user picks a different station while we had a QR station
+      if (isSwitchingFromQr && virtualStationId) {
+        dispatch(removeStation(virtualStationId));
         dispatch(clearDepartureStation());
-        dispatch(clearArrivalStation());
-        dispatch(clearDispatchRoute());
-        dispatch(clearRoute());
+        dispatch(setScannedCar(null));
+        setIsQrScanStation(false);
+        setVirtualStationId(null);
+        processedCarIdRef.current = null; // reset so re-scanning works
+        dispatch(advanceBookingStep(1));
+      }
 
-        // If we had a QR-based station
-        if (isQrScanStation && virtualStationId) {
-          dispatch(removeStation(virtualStationId));
-          dispatch(setScannedCar(null));
-          setIsQrScanStation(false);
-          setVirtualStationId(null);
-          processedCarIdRef.current = null;
-        }
-
-        // 2) Select new station as departure, step 2
+      // Normal step-based logic
+      if (stepNow === 1) {
         dispatch(selectDepartureStation(station.id));
         dispatch(advanceBookingStep(2));
-
         toast.success("Departure station selected!");
-
-        // 3) Show detail
-        setDetailKey((prev) => prev + 1);
-        setForceSheetOpen(true);
-        setOpenSheet("detail");
-        setIsDetailSheetMinimized(false);
-        setPreviousSheet("none");
+      } else if (stepNow === 2) {
+        dispatch(selectDepartureStation(station.id));
+        toast.success("Departure station re-selected!");
+      } else if (stepNow === 3) {
+        dispatch(selectArrivalStation(station.id));
+        dispatch(advanceBookingStep(4));
+        toast.success("Arrival station selected!");
+      } else if (stepNow === 4) {
+        dispatch(selectArrivalStation(station.id));
+        toast.success("Arrival station re-selected!");
       } else {
-        // If user is beyond step 4 or if you want to handle other logic, do so here
-        toast(`Station tapped, but no action at step ${bookingStepRef.current}`);
+        toast(`Station tapped, but no action at step ${stepNow}`);
       }
+
+      // Show the detail sheet
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+      setIsDetailSheetMinimized(false);
+      setPreviousSheet("none");
     },
     [dispatch, isQrScanStation, virtualStationId]
   );
@@ -611,36 +603,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
   ]);
 
   // --------------------------
-  // Clearing logic in StationSelector
-  // --------------------------
-  const handleClearDepartureInSelector = useCallback(() => {
-    dispatch(clearDepartureStation());
-    dispatch(advanceBookingStep(1));
-    dispatch(clearDispatchRoute());
+// Clearing logic in StationSelector
+// --------------------------
+const handleClearDepartureInSelector = useCallback(() => {
+  dispatch(clearDepartureStation());
+  dispatch(advanceBookingStep(1));
+  dispatch(clearDispatchRoute());
 
-    // If we had a QR-based station for departure
-    if (isQrScanStation && virtualStationId !== null) {
-      dispatch(removeStation(virtualStationId));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-      dispatch(setScannedCar(null));
-      processedCarIdRef.current = null; // allow re-scan
-    }
+  // If we had a QR-based station for departure
+  if (isQrScanStation && virtualStationId !== null) {
+    dispatch(removeStation(virtualStationId));
+    setIsQrScanStation(false);
+    setVirtualStationId(null);
+    dispatch(setScannedCar(null));
+    processedCarIdRef.current = null; // allow re-scan
+  }
 
-    closeSheet();
-    toast.success("Departure station cleared. (Back to selecting departure.)");
-  }, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
+  closeSheet();
+  toast.success("Departure station cleared. (Back to selecting departure.)");
+}, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
 
-  const handleClearArrivalInSelector = useCallback(() => {
-    dispatch(clearArrivalStation());
-    dispatch(advanceBookingStep(3));
-    dispatch(clearRoute());
+const handleClearArrivalInSelector = useCallback(() => {
+  dispatch(clearArrivalStation());
+  dispatch(advanceBookingStep(3));
+  dispatch(clearRoute());
 
-    // DO NOT remove the scanned station here, since QR-based stations are always for departure
+  // DO NOT remove the scanned station here, since QR-based stations are always for departure
 
-    closeSheet();
-    toast.success("Arrival station cleared. (Back to selecting arrival.)");
-  }, [dispatch, closeSheet]);
+  closeSheet();
+  toast.success("Arrival station cleared. (Back to selecting arrival.)");
+}, [dispatch, closeSheet]);
 
   // --------------------------
   // StationDetail close/minimize
@@ -656,7 +648,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(setScannedCar(null));
       setIsQrScanStation(false);
       setVirtualStationId(null);
-      processedCarIdRef.current = null;
+      processedCarIdRef.current = null; // allow re-scan
       toast("Scan the car's QR code again if you want to select this vehicle", {
         duration: 4000,
         position: "bottom-center",
