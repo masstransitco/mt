@@ -1,35 +1,36 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { useAppDispatch, useAppSelector } from "@/store/store"
-import { fetchCars } from "@/store/carSlice"
-import { fetchDispatchLocations, selectDispatchRadius, fetchAvailabilityFromFirestore } from "@/store/dispatchSlice"
-import { selectCar } from "@/store/userSlice"
-import { useAvailableCarsForDispatch } from "@/lib/dispatchManager"
-import CarCardGroup, { type CarGroup } from "./CarCardGroup"
-import type { Car } from "@/types/cars"
+import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAppDispatch, useAppSelector } from "@/store/store";
+import { fetchCars } from "@/store/carSlice";
+import {
+  fetchDispatchLocations,
+  selectDispatchRadius,
+  fetchAvailabilityFromFirestore,
+} from "@/store/dispatchSlice";
+import { selectCar } from "@/store/userSlice";
+import { useAvailableCarsForDispatch } from "@/lib/dispatchManager";
+import CarCardGroup, { type CarGroup } from "./CarCardGroup";
+import type { Car } from "@/types/cars";
 
 /**
  * CarGrid props.
  */
 interface CarGridProps {
-  className?: string
-  isVisible?: boolean
+  className?: string;
+  isVisible?: boolean;
   /** If a car was scanned, we override the normal availableCars logic. */
-  isQrScanStation?: boolean
-  scannedCar?: Car | null
+  isQrScanStation?: boolean;
+  scannedCar?: Car | null;
 }
 
-// State for tracking if models are preloaded to avoid duplicate requests
-const modelPreloadState: Record<string, boolean> = {};
-
 // Preload common car models that we know will be used frequently
+const modelPreloadState: Record<string, boolean> = {};
 export function preloadCommonCarModels() {
   const commonModels = ["/cars/kona.glb", "/cars/defaultModel.glb"];
-  commonModels.forEach(url => {
+  commonModels.forEach((url) => {
     if (!modelPreloadState[url]) {
-      // Load the model
       const image = new Image();
       image.src = url;
       modelPreloadState[url] = true;
@@ -52,176 +53,123 @@ const EmptyState = memo(({ isQrScanStation }: { isQrScanStation: boolean }) => (
       </p>
     </div>
   </motion.div>
-))
-EmptyState.displayName = "EmptyState"
+));
+EmptyState.displayName = "EmptyState";
 
 // Memoized loading skeleton for consistent styling
 const LoadingSkeleton = memo(() => (
   <div className="rounded-lg border border-gray-800 bg-gray-900/50 backdrop-blur-sm h-32 w-full animate-pulse flex items-center justify-center">
     <div className="text-xs text-gray-400">Loading vehicles...</div>
   </div>
-))
-LoadingSkeleton.displayName = "LoadingSkeleton"
+));
+LoadingSkeleton.displayName = "LoadingSkeleton";
 
 /**
- * Main CarGrid component that fetches cars & dispatch data, then displays them in groups.
- * Optimized for performance and memory usage with improved loading states.
+ * Main CarGrid component.
+ * - Fetches cars and dispatch data using a single debounce in a useEffect.
+ * - Auto-selects the first available car if none is selected.
+ * - Groups cars by model with a simple grouping logic.
  */
 function CarGrid({ className = "", isVisible = true, isQrScanStation = false, scannedCar = null }: CarGridProps) {
-  const dispatch = useAppDispatch()
-  const selectedCarId = useAppSelector((state) => state.user.selectedCarId)
-  const dispatchRadius = useAppSelector(selectDispatchRadius)
+  const dispatch = useAppDispatch();
+  const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
+  const dispatchRadius = useAppSelector(selectDispatchRadius);
 
-  // Track render count for debugging
-  const renderCountRef = useRef(0)
-  
-  // Add loading state
-  const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState(false)
-  const [loadingError, setLoadingError] = useState<string | null>(null)
+  // Local loading and initialization state
+  const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
 
-  // Our primary "available cars" from the store - memoized to prevent unnecessary recalculations
-  const availableCarsForDispatch = useAvailableCarsForDispatch()
+  // Get available cars from the store (or override with scannedCar)
+  const availableCarsForDispatch = useAvailableCarsForDispatch();
   const availableCars = useMemo(() => {
-    // If in QR mode, override the normal list with just the scannedCar
-    if (isQrScanStation && scannedCar) {
-      return [scannedCar]
-    }
-    return availableCarsForDispatch
-  }, [isQrScanStation, scannedCar, availableCarsForDispatch])
+    return isQrScanStation && scannedCar ? [scannedCar] : availableCarsForDispatch;
+  }, [isQrScanStation, scannedCar, availableCarsForDispatch]);
 
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastFetchTimeRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const autoSelectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Track the last fetch time to avoid too frequent API calls
-  const lastFetchTimeRef = useRef(0)
-  
-  // Track if component is mounted
-  const isMountedRef = useRef(true)
-  
-  // Skip data fetching for QR scanned cars
-  const shouldSkipFetching = isQrScanStation && scannedCar
+  // Skip fetching if in QR mode with a scanned car
+  const shouldSkipFetching = isQrScanStation && scannedCar;
 
-  // Pre-load common car models on component mount
+  // Preload common models on mount
   useEffect(() => {
-    // Only preload if this is the first time mounting
     if (!initialized) {
       preloadCommonCarModels();
     }
-    
-    // Set mounted flag and cleanup
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (autoSelectTimerRef.current) clearTimeout(autoSelectTimerRef.current);
     };
   }, [initialized]);
 
-  // Memoized fetch function—runs only when needed
+  // Single fetch effect (debounced by 60 seconds)
   const fetchData = useCallback(async () => {
-    if (shouldSkipFetching) return
-
-    const now = Date.now()
-    const FETCH_COOLDOWN = 10000 // 10 seconds
-    if (now - lastFetchTimeRef.current <= FETCH_COOLDOWN) {
-      console.log("[CarGrid] Skipping fetch due to cooldown")
-      return
-    }
-    
-    if (!isMountedRef.current) return
-    
-    setLoading(true)
-    setLoadingError(null)
-    
-    console.log("[CarGrid] Fetching cars and dispatch data...")
-    lastFetchTimeRef.current = now
-    
+    if (shouldSkipFetching) return;
+    setLoading(true);
+    setLoadingError(null);
+    console.log("[CarGrid] Fetching cars and dispatch data...");
+    lastFetchTimeRef.current = Date.now();
     try {
-      await Promise.all([
-        dispatch(fetchCars()), 
-        dispatch(fetchDispatchLocations())
-      ])
-      await dispatch(fetchAvailabilityFromFirestore())
-      
+      // Batch API calls together
+      await Promise.all([dispatch(fetchCars()), dispatch(fetchDispatchLocations())]);
+      await dispatch(fetchAvailabilityFromFirestore());
       if (isMountedRef.current) {
-        setLoading(false)
-        setInitialized(true)
-        console.log("[CarGrid] Data fetched successfully")
+        setLoading(false);
+        setInitialized(true);
+        console.log("[CarGrid] Data fetched successfully");
       }
     } catch (err) {
-      console.error("[CarGrid] Fetch error:", err)
+      console.error("[CarGrid] Fetch error:", err);
       if (isMountedRef.current) {
-        setLoadingError(err instanceof Error ? err.message : "Failed to load vehicles")
-        setLoading(false)
+        setLoadingError(err instanceof Error ? err.message : "Failed to load vehicles");
+        setLoading(false);
       }
     }
-  }, [dispatch, shouldSkipFetching])
-  
-  // Only fetch data when the component becomes visible
+  }, [dispatch, shouldSkipFetching]);
+
   useEffect(() => {
-    if (!isVisible) return
-    
-    // Only fetch if not initialized or it's been a while since last fetch
+    if (!isVisible) return;
+    // If not initialized or data is stale (> 60 seconds), fetch new data.
     if (!initialized || Date.now() - lastFetchTimeRef.current > 60000) {
       fetchData();
     } else {
-      // If already initialized, just turn off loading state
       setLoading(false);
     }
-  }, [isVisible, fetchData, initialized])
+  }, [isVisible, fetchData, initialized]);
 
-  // Auto-select first available car if none selected
+  // Consolidated auto-select effect: auto-select the first available car when data is loaded.
   useEffect(() => {
-    if (!isVisible || availableCars.length === 0 || selectedCarId) return
-    if (!availableCars.some(car => car.id === selectedCarId)) {
-      console.log("[CarGrid] Auto-selecting car:", availableCars[0].id)
-      dispatch(selectCar(availableCars[0].id))
-    }
-  }, [availableCars, selectedCarId, dispatch, isVisible])
+    if (!isVisible || availableCars.length === 0 || selectedCarId) return;
+    console.log("[CarGrid] Auto-selecting car:", availableCars[0].id);
+    dispatch(selectCar(availableCars[0].id));
+  }, [availableCars, selectedCarId, dispatch, isVisible]);
 
-  // Group cars by model – memoize based on availableCars only
+  // Group cars by model.
   const groupedByModel: CarGroup[] = useMemo(() => {
-    // Skip expensive calculations if component isn't visible
-    if (!isVisible) return []
-    
-    if (availableCars.length === 0) {
-      return []
-    }
-    
+    if (!isVisible || availableCars.length === 0) return [];
     if (isQrScanStation && scannedCar) {
-      return [{ model: scannedCar.model || "Scanned Car", cars: [scannedCar] }]
+      return [{ model: scannedCar.model || "Scanned Car", cars: [scannedCar] }];
     }
-    
-    // Group cars by model
     const groups = availableCars.reduce((acc, car) => {
-      const key = car.model || "Unknown Model"
-      if (!acc[key]) {
-        acc[key] = { model: key, cars: [] }
-      }
-      if (acc[key].cars.length < 10) { // Limit to 10 cars per group
-        acc[key].cars.push(car)
-      }
-      return acc
-    }, {} as Record<string, CarGroup>)
-    
-    return Object.values(groups).slice(0, 5) // Limit to 5 groups
-  }, [availableCars, isVisible, isQrScanStation, scannedCar])
-
-  // For debugging: count renders
-  useEffect(() => {
-    renderCountRef.current += 1
-    if (renderCountRef.current > 5) {
-      console.log(`[CarGrid] Render count: ${renderCountRef.current}`)
-    }
-  })
+      const key = car.model || "Unknown Model";
+      if (!acc[key]) acc[key] = { model: key, cars: [] };
+      // (Optional) Remove limit if not necessary.
+      if (acc[key].cars.length < 10) acc[key].cars.push(car);
+      return acc;
+    }, {} as Record<string, CarGroup>);
+    // (Optional) Limit to 5 groups if needed.
+    return Object.values(groups).slice(0, 5);
+  }, [availableCars, isVisible, isQrScanStation, scannedCar]);
 
   // Early return if not visible
-  if (!isVisible) return null
-  
+  if (!isVisible) return null;
   // Show loading skeleton during initial load
-  if (loading && !initialized) {
-    return <LoadingSkeleton />
-  }
-  
-  // Show error state if there was a problem
+  if (loading && !initialized) return <LoadingSkeleton />;
+  // Show error state if fetch failed
   if (loadingError) {
     return (
       <div className="rounded-lg border border-red-800 bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-center h-32">
@@ -229,7 +177,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
           <p className="text-red-400 text-sm">{loadingError}</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -246,7 +194,6 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
                 transition={{ duration: 0.2, delay: index * 0.05 }}
               >
                 <CarCardGroup
-                  key={`group-${group.model}`}
                   group={group}
                   isVisible={true}
                   rootRef={containerRef}
@@ -260,15 +207,13 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
         <EmptyState isQrScanStation={isQrScanStation} />
       )}
     </div>
-  )
+  );
 }
 
-// Use React.memo to prevent unnecessary re-renders when props don't change
 export default memo(CarGrid, (prev, next) => {
-  // Only re-render if these props change
   return (
     prev.isVisible === next.isVisible &&
     prev.isQrScanStation === next.isQrScanStation &&
     prev.scannedCar === next.scannedCar
-  )
-})
+  );
+});
