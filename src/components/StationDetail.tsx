@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect, useMemo, useCallback, Suspense, useRef } from "react"
 import { toast } from "react-hot-toast"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import dynamic from "next/dynamic"
 import { Clock, Footprints, Info } from "lucide-react"
 import { useAppDispatch, useAppSelector } from "@/store/store"
@@ -34,7 +34,7 @@ const PaymentSummary = dynamic(
   {
     loading: () => <div className="text-sm text-gray-400">Loading payment...</div>,
     ssr: false,
-  }
+  },
 )
 
 // Map fallback component
@@ -46,7 +46,7 @@ function MapCardFallback() {
   )
 }
 
-// Lazy-loaded components with progressive loading and caching strategy
+// Lazy-loaded components with improved loading experience
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: ({ error, isLoading, pastDelay }) => {
     if (error) return <div>Error loading vehicles</div>
@@ -86,12 +86,12 @@ interface StationDetailProps {
 }
 
 /**
- * Enhanced persistent CarGrid with smart loading
- * - Maintains loaded state across renders
- * - Uses caching to avoid reloading
- * - Only renders when actually needed
+ * Persistent wrapper for CarGrid with optimized loading
+ * - Only renders when visible
+ * - Maintains consistent height during loading
+ * - Preserves previous render while loading new one
  */
-const PersistentCarGrid = memo(function PersistentCarGrid({
+const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
   isVisible,
   isQrScanStation,
   scannedCar,
@@ -100,78 +100,52 @@ const PersistentCarGrid = memo(function PersistentCarGrid({
   isQrScanStation?: boolean
   scannedCar?: any
 }) {
-  // Track component state
-  const [status, setStatus] = useState<'idle' | 'loading' | 'loaded'>('idle')
-  const mountRef = useRef(false)
-  const visibilityTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [shouldRender, setShouldRender] = useState(false)
   
-  // Use this to prevent flash of loading state when quickly toggling visibility
+  // Delayed rendering for better UI experience
   useEffect(() => {
-    // Component mounted
-    mountRef.current = true
-    
-    // When component becomes visible
     if (isVisible) {
-      // Cancel any pending hide timeout
-      if (visibilityTimeoutRef.current) {
-        clearTimeout(visibilityTimeoutRef.current)
-        visibilityTimeoutRef.current = null
-      }
+      // Small delay before showing the component
+      const timer = setTimeout(() => {
+        setShouldRender(true)
+      }, 100)
       
-      // If not already loading/loaded, start loading
-      if (status === 'idle') {
-        setStatus('loading')
-      }
-    } 
-    // When component becomes invisible
-    else {
-      // Delay hiding to avoid flicker with quick toggles
-      visibilityTimeoutRef.current = setTimeout(() => {
-        if (mountRef.current && status !== 'idle') {
-          // Reset to idle only if not visible for a while
-          setStatus('idle')
-        }
-      }, 300) // Longer delay to keep component alive for a bit
+      return () => clearTimeout(timer)
+    } else {
+      // Small delay before hiding to allow for animations
+      const timer = setTimeout(() => {
+        setShouldRender(false)
+        setIsLoaded(false)
+      }, 150)
+      
+      return () => clearTimeout(timer)
     }
-    
-    // Clean up on unmount
-    return () => {
-      mountRef.current = false
-      if (visibilityTimeoutRef.current) {
-        clearTimeout(visibilityTimeoutRef.current)
-      }
-    }
-  }, [isVisible, status])
+  }, [isVisible])
   
-  // When loading completes
-  const handleLoadComplete = useCallback(() => {
-    if (mountRef.current) {
-      setStatus('loaded')
-    }
+  // Track when component is fully loaded
+  const handleLoad = useCallback(() => {
+    setIsLoaded(true)
   }, [])
   
-  // If the component is idle, render nothing
-  if (status === 'idle') return null
+  // If not visible at all, return null
+  if (!isVisible && !shouldRender) return null
   
-  // Show skeleton during initial load
-  if (status === 'loading') {
-    return (
-      <div className="h-32 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
-        <div className="text-xs text-gray-400">Loading vehicles...</div>
-      </div>
-    )
-  }
-  
-  // Show the actual grid once loaded
   return (
-    <AnimatePresence>
-      {isVisible && (
+    <Suspense
+      fallback={
+        <div className="h-32 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
+          <div className="text-xs text-gray-400">Loading vehicles...</div>
+        </div>
+      }
+    >
+      {shouldRender && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          onAnimationComplete={handleLoadComplete}
+          className="relative"
+          onAnimationComplete={handleLoad}
         >
           <CarGrid
             className="h-32 w-full"
@@ -181,10 +155,10 @@ const PersistentCarGrid = memo(function PersistentCarGrid({
           />
         </motion.div>
       )}
-    </AnimatePresence>
+    </Suspense>
   )
 })
-PersistentCarGrid.displayName = "PersistentCarGrid"
+MemoizedCarGrid.displayName = "MemoizedCarGrid"
 
 /** InfoPopup component */
 const InfoPopup = memo(function InfoPopup({
@@ -195,8 +169,7 @@ const InfoPopup = memo(function InfoPopup({
   const [isVisible, setIsVisible] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  const handleShowInfo = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent click propagation
+  const handleShowInfo = useCallback(() => {
     setIsVisible(true)
 
     if (timeoutRef.current) {
@@ -351,20 +324,14 @@ const ConfirmButton = memo(function ConfirmButton({
 })
 ConfirmButton.displayName = "ConfirmButton"
 
-// Improved touch handling helper with passive support
-function useTouchScrollHandler() {
-  const touchStartHandler = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    e.currentTarget.dataset.touchY = e.touches[0].clientY.toString()
-  }, [])
-  
-  const touchMoveHandler = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+// Improved touch handling helper
+function TouchScrollHandler() {
+  function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
     const el = e.currentTarget
     const scrollTop = el.scrollTop
     const scrollHeight = el.scrollHeight
     const height = el.clientHeight
-    const touchY = el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0
-    const currentY = e.touches[0].clientY
-    const delta = currentY - touchY
+    const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0)
     
     // Prevent overscroll only at boundaries
     if ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0)) {
@@ -372,24 +339,28 @@ function useTouchScrollHandler() {
     }
     
     // Update current touch position
-    el.dataset.touchY = currentY.toString()
-  }, [])
+    el.dataset.touchY = e.touches[0].clientY.toString()
+  }
   
-  const touchEndHandler = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+  function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    e.currentTarget.dataset.touchY = e.touches[0].clientY.toString()
+  }
+  
+  function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
     delete e.currentTarget.dataset.touchY
-  }, [])
+  }
   
   return {
-    onTouchStart: touchStartHandler,
-    onTouchMove: touchMoveHandler,
-    onTouchEnd: touchEndHandler
+    onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
+    onTouchEnd: handleTouchEnd
   }
 }
 
 /**
- * Main StationDetail component with enhanced performance and caching
+ * Main StationDetail component with improved scroll behavior and optimized CarGrid handling
  */
-function StationDetail({
+function StationDetailComponent({
   activeStation,
   stations = [],
   onConfirmDeparture = () => {},
@@ -411,133 +382,105 @@ function StationDetail({
   const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod)
   const scannedCarRedux = useAppSelector(selectScannedCar)
 
-  // Flow booleans - memoized once
+  // Flow booleans
   const isDepartureFlow = useMemo(() => step <= 2, [step])
 
   // Local states
+  const [isInitialized, setIsInitialized] = useState(true)
+  const [attemptedRender, setAttemptedRender] = useState(true)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [charging, setCharging] = useState(false)
+  const [forceRefreshKey, setForceRefreshKey] = useState(0)
   const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentReference, setPaymentReference] = useState("")
   const [cardLast4, setCardLast4] = useState("")
   
-  // State that controls actual CarGrid visibility with debouncing
-  const [shouldShowCarGrid, setShouldShowCarGrid] = useState(false)
+  // Single source of truth for CarGrid visibility
+  const [carGridVisible, setCarGridVisible] = useState(false)
   
-  // Refs for throttling and debouncing
-  const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const lastRenderTimeRef = useRef(Date.now())
-  const lastRouteUpdateRef = useRef(Date.now())
-  const carGridVisibilityTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // Store the render status to prevent unnecessary checks
-  const renderStatusRef = useRef({
-    initialized: true,
-    attempted: true
-  })
+  // Reference to track last render time to prevent too frequent updates
+  const lastRenderTimeRef = useRef(0)
 
-  // Custom touch scroll handler
-  const touchScrollHandlers = useTouchScrollHandler()
+  // Touch scroll handler
+  const touchScrollHandlers = TouchScrollHandler()
 
-  // Get stations by ID for the receipt or display - memoized
-  const departureStation = useMemo(() => 
-    stations.find((s) => s.id === departureId) || null, 
-    [stations, departureId]
-  )
-  
-  const arrivalStation = useMemo(() => 
-    stations.find((s) => s.id === arrivalId) || null, 
-    [stations, arrivalId]
-  )
+  // Get stations by ID for the receipt or display
+  const departureStation = useMemo(() => stations.find((s) => s.id === departureId) || null, [stations, departureId])
+  const arrivalStation = useMemo(() => stations.find((s) => s.id === arrivalId) || null, [stations, arrivalId])
 
-  // For the "Departure Gate" label value - memoized
+  // For the "Departure Gate" label value
   const parkingValue = useMemo(() => {
     if (step === 2 || step === 4) return "Contactless"
     return ""
   }, [step])
 
-  // Convert route duration => minutes - memoized
+  // Convert route duration => minutes
   const driveTimeMin = useMemo(() => {
     if (!route || !departureId || !arrivalId) return null
     return Math.round(route.duration / 60).toString()
   }, [route, departureId, arrivalId])
 
   // Identify if station is a "virtual" car location
-  const isVirtualCarLocation = useMemo(() => 
-    !!activeStation?.properties?.isVirtualCarLocation, 
-    [activeStation]
-  )
+  const isVirtualCarLocation = useMemo(() => !!activeStation?.properties?.isVirtualCarLocation, [activeStation])
+
+  // Debounce route fetching
+  const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Optimized logic for CarGrid visibility with debouncing
+  // Combined logic for CarGrid visibility in one place
   useEffect(() => {
     // Determine if CarGrid should be visible based on current state
-    const shouldShow = 
+    const shouldShowCarGrid = 
       !isMinimized && 
       isDepartureFlow && 
       step === 2 && 
       (!!activeStation || isQrScanStation);
-    
-    // Clear any existing visibility timeout
-    if (carGridVisibilityTimeoutRef.current) {
-      clearTimeout(carGridVisibilityTimeoutRef.current);
-      carGridVisibilityTimeoutRef.current = null;
-    }
-    
-    // Use different timing strategies for showing vs hiding
-    if (shouldShow) {
-      // When showing, use a shorter delay to feel responsive
-      carGridVisibilityTimeoutRef.current = setTimeout(() => {
-        setShouldShowCarGrid(true);
-      }, 50);
+      
+    // Apply debounce to prevent flickering during transitions
+    if (shouldShowCarGrid) {
+      // Small delay when showing to ensure smooth transition
+      const timer = setTimeout(() => {
+        setCarGridVisible(true);
+      }, 100);
+      return () => clearTimeout(timer);
     } else {
-      // When hiding, use a longer delay to avoid flicker
-      carGridVisibilityTimeoutRef.current = setTimeout(() => {
-        setShouldShowCarGrid(false);
-      }, 250);
+      // Delay hiding slightly to avoid flicker during transitions
+      const timer = setTimeout(() => {
+        setCarGridVisible(false);
+      }, 150);
+      return () => clearTimeout(timer);
     }
-    
-    // Clean up on unmount
-    return () => {
-      if (carGridVisibilityTimeoutRef.current) {
-        clearTimeout(carGridVisibilityTimeoutRef.current);
-      }
-    };
   }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation]);
 
-  // Efficient route fetching with throttling - only fetch when needed
+  // Handle sheet expansion => force a content refresh, but throttle to avoid excessive renders
   useEffect(() => {
-    // Only proceed if the sheet is expanded and we have the needed data
-    if (!isMinimized && step >= 3 && departureId && arrivalId && stations.length > 0) {
-      // Get timestamps for throttling
+    if (!isMinimized) {
       const now = Date.now();
-      const timeSinceLastUpdate = now - lastRouteUpdateRef.current;
-      
-      // Skip if we recently updated (throttle to once per second)
-      if (timeSinceLastUpdate < 1000) {
-        return;
+      // Only refresh if more than 300ms since last refresh
+      if (now - lastRenderTimeRef.current > 300) {
+        setForceRefreshKey((prev) => prev + 1);
+        setIsInitialized(true);
+        setAttemptedRender(true);
+        lastRenderTimeRef.current = now;
       }
-      
-      // Clear previous timeout
-      if (routeFetchTimeoutRef.current) {
-        clearTimeout(routeFetchTimeoutRef.current);
-      }
-      
-      // Fetch with a slight delay to avoid excessive API calls during transitions
-      routeFetchTimeoutRef.current = setTimeout(() => {
-        // Find the needed stations
-        const depStation = stations.find((s) => s.id === departureId);
-        const arrStation = stations.find((s) => s.id === arrivalId);
-        
-        if (depStation && arrStation) {
-          // Update the timestamp and dispatch the action
-          lastRouteUpdateRef.current = Date.now();
-          dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
+
+      // If step 3 or 4 => refetch route, but only if sheet is expanded
+      if (step >= 3 && departureId && arrivalId && stations.length > 0) {
+        // Clear previous debounce
+        if (routeFetchTimeoutRef.current) {
+          clearTimeout(routeFetchTimeoutRef.current);
         }
-      }, 250);
+        
+        routeFetchTimeoutRef.current = setTimeout(() => {
+          const depStation = stations.find((s) => s.id === departureId);
+          const arrStation = stations.find((s) => s.id === arrivalId);
+          if (depStation && arrStation) {
+            dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
+          }
+        }, 500);
+      }
     }
     
-    // Clean up on unmount or when dependencies change
     return () => {
       if (routeFetchTimeoutRef.current) {
         clearTimeout(routeFetchTimeoutRef.current);
@@ -545,16 +488,15 @@ function StationDetail({
     };
   }, [isMinimized, step, departureId, arrivalId, stations, dispatch]);
 
-  // Wallet modal handlers
+  // Payment modal open/close
   const handleOpenWalletModal = useCallback(() => {
     setWalletModalOpen(true)
   }, [])
-  
   const handleCloseWalletModal = useCallback(() => {
     setWalletModalOpen(false)
   }, [])
 
-  // Payment result handlers
+  // Payment result modal steps
   const handlePaymentContinue = useCallback(() => {
     setPaymentResultModalOpen(false)
     if (paymentSuccess) {
@@ -567,7 +509,7 @@ function StationDetail({
     setPaymentResultModalOpen(false)
   }, [])
 
-  // Confirm button logic - memoized to prevent recreations
+  // Confirm button logic
   const handleConfirm = useCallback(async () => {
     // Step 2 => proceed to step 3 (choose arrival)
     if (isDepartureFlow && step === 2) {
@@ -626,7 +568,7 @@ function StationDetail({
     handleOpenWalletModal,
   ])
 
-  // Calculate estimated pickup time - memoized
+  // Possibly show an "estimated pickup time" if we have a dispatch route
   const estimatedPickupTime = useMemo(() => {
     if (isVirtualCarLocation || !dispatchRoute?.duration) return null
     const now = new Date()
@@ -649,8 +591,8 @@ function StationDetail({
     )
   }
 
-  // If not initialized yet
-  if (!renderStatusRef.current.initialized) {
+  // If we want a loading spinner until fully loaded
+  if (!isInitialized) {
     return (
       <div className="p-4 flex justify-center items-center">
         <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -658,7 +600,20 @@ function StationDetail({
     )
   }
 
-  // If no active station, show a helpful message
+  // If we attempted to render but have no activeStation
+  if (!activeStation && attemptedRender) {
+    console.error(
+      "StationDetail attempted to render but activeStation is null",
+      "departureId:",
+      departureId,
+      "arrivalId:",
+      arrivalId,
+      "isQrScanStation:",
+      isQrScanStation,
+    )
+  }
+
+  // If truly no station, fallback UI
   if (!activeStation) {
     return (
       <div className="p-4 space-y-3">
@@ -679,13 +634,11 @@ function StationDetail({
     )
   }
 
-  // Calculate a unique key for forcing remount when needed
-  const renderKey = `station-detail-${departureId || 0}-${arrivalId || 0}-${step}`
-
+  // Use forceRefreshKey to force remount of the component
   return (
     <>
       <motion.div
-        key={renderKey}
+        key={`station-detail-${forceRefreshKey}`}
         className="p-3 space-y-2 overscroll-contain"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -718,13 +671,12 @@ function StationDetail({
         {/* CarGrid + Confirm Button for step=2 with reduced space between */}
         {isDepartureFlow && step === 2 && (
           <div className="space-y-3 pointer-events-auto">
-            {/* Enhanced persistent car grid component */}
-            <PersistentCarGrid 
-              isVisible={shouldShowCarGrid} 
+            {/* Always render the MemoizedCarGrid component, but let it handle its visibility internally */}
+            <MemoizedCarGrid 
+              isVisible={carGridVisible} 
               isQrScanStation={isQrScanStation} 
               scannedCar={scannedCarRedux} 
             />
-            
             <ConfirmButton
               isDepartureFlow={isDepartureFlow}
               charging={charging}
@@ -760,11 +712,12 @@ function StationDetail({
             )}
           </div>
         )}
+
+        {/* Wallet/Payment Modal */}
+        <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
       </motion.div>
 
-      {/* Modals - kept outside the motion div */}
-      <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
-      
+      {/* Payment Result Modal */}
       <PaymentResultModal
         isOpen={paymentResultModalOpen}
         isSuccess={paymentSuccess}
@@ -780,4 +733,4 @@ function StationDetail({
   )
 }
 
-export default memo(StationDetail)
+export default memo(StationDetailComponent)
