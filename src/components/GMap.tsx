@@ -593,43 +593,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
   ]);
 
   // --------------------------
-  // Clearing logic in StationSelector
-  // --------------------------
-  const handleClearDepartureInSelector = useCallback(() => {
-    dispatch(clearDepartureStation());
-    dispatch(advanceBookingStep(1));
-    dispatch(clearDispatchRoute());
+// Clearing logic in StationSelector
+// --------------------------
+const handleClearDepartureInSelector = useCallback(() => {
+  dispatch(clearDepartureStation());
+  dispatch(advanceBookingStep(1));
+  dispatch(clearDispatchRoute());
 
-    // If we had a QR-based station
-    if (isQrScanStation && virtualStationId !== null) {
-      dispatch(removeStation(virtualStationId));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-      dispatch(setScannedCar(null));
-      processedCarIdRef.current = null; // allow re-scan
-    }
+  // If we had a QR-based station for departure
+  if (isQrScanStation && virtualStationId !== null) {
+    dispatch(removeStation(virtualStationId));
+    setIsQrScanStation(false);
+    setVirtualStationId(null);
+    dispatch(setScannedCar(null));
+    processedCarIdRef.current = null; // allow re-scan
+  }
 
-    closeSheet();
-    toast.success("Departure station cleared. (Back to selecting departure.)");
-  }, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
+  closeSheet();
+  toast.success("Departure station cleared. (Back to selecting departure.)");
+}, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
 
-  const handleClearArrivalInSelector = useCallback(() => {
-    dispatch(clearArrivalStation());
-    dispatch(advanceBookingStep(3));
-    dispatch(clearRoute());
+const handleClearArrivalInSelector = useCallback(() => {
+  dispatch(clearArrivalStation());
+  dispatch(advanceBookingStep(3));
+  dispatch(clearRoute());
 
-    // If arrival station was QR-based
-    if (isQrScanStation && virtualStationId !== null) {
-      dispatch(removeStation(virtualStationId));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-      dispatch(setScannedCar(null));
-      processedCarIdRef.current = null; // allow re-scan
-    }
+  // DO NOT remove the scanned station here, since QR-based stations are always for departure
 
-    closeSheet();
-    toast.success("Arrival station cleared. (Back to selecting arrival.)");
-  }, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
+  closeSheet();
+  toast.success("Arrival station cleared. (Back to selecting arrival.)");
+}, [dispatch, closeSheet]);
 
   // --------------------------
   // StationDetail close/minimize
