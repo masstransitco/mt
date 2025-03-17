@@ -108,7 +108,13 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
 
   // Single fetch effect (debounced by 60 seconds)
   const fetchData = useCallback(async () => {
-    if (shouldSkipFetching) return;
+    if (shouldSkipFetching) {
+      if (isMountedRef.current) {
+        setLoading(false);
+        setInitialized(true);
+      }
+      return;
+    }
     setLoading(true);
     setLoadingError(null);
     console.log("[CarGrid] Fetching cars and dispatch data...");
