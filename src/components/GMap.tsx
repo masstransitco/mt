@@ -98,7 +98,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]); // purely for UI
+  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
@@ -199,7 +199,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
   useEffect(() => {
     (async () => {
       try {
-        await Promise.all([dispatch(fetchStations()).unwrap(), dispatch(fetchCars()).unwrap()]);
+        await Promise.all([
+          dispatch(fetchStations()).unwrap(),
+          dispatch(fetchCars()).unwrap(),
+        ]);
       } catch (err) {
         console.error("Error fetching data:", err);
         toast.error("Failed to load map data");
@@ -343,7 +346,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     setOpenSheet("detail");
     setIsDetailSheetMinimized(false);
 
-    // Optionally re‐center on the scanned car
+    // Optionally center on the scanned car
     if (actualMap && scannedCar) {
       actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
       actualMap.setZoom(16);
@@ -352,18 +355,18 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   /**
    * Called once a QR code is successfully scanned.
-   * We forcibly reset to "step=2" (skipping step=1) and clear out old stations/routes.
+   * We forcibly reset everything and place user in step=2 with the new station as departure.
    */
   const handleQrScanSuccess = useCallback(() => {
     if (!scannedCar) return;
 
-    // Clear any old departure/arrival stations & dispatch routes
+    // Clear old departure/arrival stations & routes
     dispatch(clearDepartureStation());
     dispatch(clearArrivalStation());
     dispatch(clearDispatchRoute());
     dispatch(clearRoute());
 
-    // Force booking step to 2 (no step=1 in between)
+    // Force booking step=2
     dispatch(advanceBookingStep(2));
 
     // Create a "virtual station" for the scanned car
@@ -373,13 +376,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     processedCarIdRef.current = scannedCar.id;
     dispatch(addVirtualStation(virtualStation));
 
-    // Select this new station as the departure
+    // Select new station as the departure
     dispatch(selectDepartureStation(vStationId));
 
     setVirtualStationId(vStationId);
     setIsQrScanStation(true);
 
-    // Immediately open the detail sheet for the new station
+    // Immediately open detail for the new station
     openDetailSheet();
   }, [scannedCar, dispatch, openDetailSheet]);
 
@@ -388,22 +391,20 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      // If user picks a different station while we had a QR-based departure,
-      // and we are still in step <= 2
+      // If user picks a different station while we had a QR station,
+      // remove that old station from the store, but do NOT revert to step=1.
       if (
         isQrScanStation &&
         station.id !== virtualStationId &&
-        bookingStep <= 2 &&
         virtualStationId
       ) {
-        // Remove the old virtual station
+        // Remove old “QR” station from the store
         dispatch(removeStation(virtualStationId));
         dispatch(clearDepartureStation());
         dispatch(setScannedCar(null));
         setIsQrScanStation(false);
         setVirtualStationId(null);
         processedCarIdRef.current = null;
-        dispatch(advanceBookingStep(1));
       }
 
       // Normal step-based logic
@@ -441,13 +442,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   const handleStationSelectedFromList = useCallback(
-    (station: StationFeature) => {
-      handleStationSelection(station);
-    },
+    (station: StationFeature) => handleStationSelection(station),
     [handleStationSelection]
   );
 
-  // 3D overlay click → station selection
+  // 3D overlay → station selection
   useEffect(() => {
     if (!actualMap || !overlayRef.current) return;
     const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
@@ -600,13 +599,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(advanceBookingStep(1));
     dispatch(clearDispatchRoute());
 
-    // If we had a QR-based station for departure
+    // If we had a QR-based station
     if (isQrScanStation && virtualStationId !== null) {
       dispatch(removeStation(virtualStationId));
       setIsQrScanStation(false);
       setVirtualStationId(null);
       dispatch(setScannedCar(null));
-      processedCarIdRef.current = null; // allow re-scan
+      processedCarIdRef.current = null;
     }
 
     closeSheet();
@@ -618,7 +617,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(advanceBookingStep(3));
     dispatch(clearRoute());
 
-    // DO NOT remove the scanned station here, since QR-based stations are always for departure
+    // Do not remove the scanned station here, since it's always the departure station
 
     closeSheet();
     toast.success("Arrival station cleared. (Back to selecting arrival.)");
@@ -638,7 +637,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(setScannedCar(null));
       setIsQrScanStation(false);
       setVirtualStationId(null);
-      processedCarIdRef.current = null; // allow re-scan
+      processedCarIdRef.current = null;
       toast("Scan the car's QR code again if you want to select this vehicle", {
         duration: 4000,
         position: "bottom-center",
@@ -679,7 +678,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [bookingStep, dispatch, closeSheet]);
 
   // --------------------------
-  // Which station to show in detail
+  // Which station to show in detail?
   // --------------------------
   const hasError = stationsError || carsError || loadError;
   const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
@@ -792,11 +791,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           {/* Station Detail Sheet */}
           <Sheet
             key={detailKey}
-            isOpen={
-              (openSheet === "detail" || forceSheetOpen) &&
-              !!stationToShow &&
-              !isStepTransitioning
-            }
+            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow && !isStepTransitioning}
             isMinimized={isDetailSheetMinimized}
             onMinimize={() => setIsDetailSheetMinimized(true)}
             onExpand={() => setIsDetailSheetMinimized(false)}
