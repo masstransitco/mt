@@ -183,6 +183,17 @@ function Car3DViewer({
   interactive = false,
 }: Car3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
   const [frameloop, setFrameloop] = useState<"always" | "demand">("demand");
   const [isRendered, setIsRendered] = useState(false);
 
