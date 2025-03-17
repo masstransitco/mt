@@ -138,13 +138,9 @@ export const bookingSlice = createSlice({
       }
     },
     selectDepartureStation: (state, action: PayloadAction<number>) => {
-      if (state.step <= 2) {
-        state.departureStationId = action.payload;
-        if (state.step === 1) {
-          state.step = 2;
-          state.stepName = "selected_departure_station";
-        }
-      }
+      state.departureStationId = action.payload;
+      state.step = 2;
+      state.stepName = "selected_departure_station";
     },
     clearDepartureStation: (state) => {
       state.departureStationId = null;
