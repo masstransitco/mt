@@ -410,11 +410,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       ) {
         console.log("Different station selected, removing QR station:", virtualStationId);
         // Remove old "QR" station from the store
-        dispatch(removeStation(virtualStationId));
         dispatch(clearDepartureStation());
-        dispatch(setScannedCar(null));
-        setIsQrScanStation(false);
-        setVirtualStationId(null);
         processedCarIdRef.current = null;
       }
 
