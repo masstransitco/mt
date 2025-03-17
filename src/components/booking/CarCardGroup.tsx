@@ -46,15 +46,46 @@ function useIntersectionObserver(
       entries.forEach((entry) => setIsIntersecting(entry.isIntersecting));
     }, options);
     observer.observe(ref.current);
-    return () => {
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, [ref, options]);
   
   return isIntersecting;
 }
 
-// Dynamically load your Car3DViewer with a consistent loading state
+/**
+ * Custom hook for touch scroll handling.
+ * Checks if the event is cancelable before calling preventDefault.
+ */
+function useTouchScrollHandler() {
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    e.currentTarget.dataset.touchY = e.touches[0].clientY.toString();
+  }, []);
+  
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const scrollTop = el.scrollTop;
+    const scrollHeight = el.scrollHeight;
+    const height = el.clientHeight;
+    const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0);
+    // Only call preventDefault if the event is cancelable
+    if (e.cancelable && ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0))) {
+      e.preventDefault();
+    }
+    el.dataset.touchY = e.touches[0].clientY.toString();
+  }, []);
+  
+  const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    delete e.currentTarget.dataset.touchY;
+  }, []);
+  
+  return {
+    onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
+    onTouchEnd: handleTouchEnd,
+  };
+}
+
+// Dynamically load Car3DViewer with a consistent loading state.
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => <ViewerSkeleton />,
@@ -64,21 +95,20 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
   const dispatch = useAppDispatch();
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId);
 
-  // State for odometer popup
+  // Odometer popup state and timer ref
   const [showOdometerPopup, setShowOdometerPopup] = useState(false);
   const popupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Ref for the card element; used by our custom intersection hook.
+  // Card ref for intersection observer
   const cardRef = useRef<HTMLDivElement>(null);
-  // Use our custom hook to detect visibility
   const isInView = useIntersectionObserver(cardRef, { threshold: 0.1 });
 
-  // Decide which car to display; simple inline computation is sufficient
+  // Decide which car to display. For groups with one car, just use that.
   const displayedCar = group.cars.length === 1
     ? group.cars[0]
     : group.cars.find((c) => c.id === selectedCarId) || group.cars[0];
 
-  // Battery and range computation (kept memoized since it's nontrivial)
+  // Battery and range calculation
   const { batteryPercentage, batteryIconColor, BatteryIcon } = (() => {
     const rawBattery = displayedCar.electric_battery_percentage_left;
     const parsed = rawBattery != null ? Number(rawBattery) : NaN;
@@ -98,10 +128,9 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     return { batteryPercentage: percentage, batteryIconColor: color, BatteryIcon: Icon };
   })();
 
-  // Model URL with fallback
   const modelUrl = displayedCar?.modelUrl || "/cars/defaultModel.glb";
 
-  // Handler for car selection
+  // Handler to select a car
   const handleSelectCar = useCallback(
     (carId: number) => {
       dispatch(selectCar(carId));
@@ -110,25 +139,24 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     [dispatch]
   );
 
-  // Odometer popup handler
+  // Odometer popup handler with timer cleanup
   const handleOdometerClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setShowOdometerPopup((prev) => !prev);
     if (popupTimeoutRef.current) clearTimeout(popupTimeoutRef.current);
-    popupTimeoutRef.current = setTimeout(() => {
-      setShowOdometerPopup(false);
-    }, 3000);
+    popupTimeoutRef.current = setTimeout(() => setShowOdometerPopup(false), 3000);
   }, []);
 
-  // Cleanup popup timer on unmount
   useEffect(() => {
     return () => {
       if (popupTimeoutRef.current) clearTimeout(popupTimeoutRef.current);
     };
   }, []);
 
-  // Determine if any car in the group is selected (inline, as groups are small)
+  // Determine if any car in the group is selected
   const isGroupSelected = group.cars.some((c) => c.id === selectedCarId);
+
+  const touchScrollHandlers = useTouchScrollHandler();
 
   return (
     <motion.div
@@ -147,8 +175,8 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
       transition={{ type: "tween", duration: 0.2 }}
       className="relative overflow-hidden rounded-lg bg-gray-900/50 text-white border border-gray-800 backdrop-blur-sm shadow-md transition-colors cursor-pointer mb-2 w-full h-32"
       style={{ contain: "content" }}
+      {...touchScrollHandlers}
     >
-      {/* "Selected" badge */}
       {isGroupSelected && (
         <div className="absolute top-2 right-2 z-10">
           <div className="px-1.5 py-0.5 rounded-full bg-blue-500/80 text-white text-xs backdrop-blur-sm">
@@ -156,11 +184,8 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
           </div>
         </div>
       )}
-
       <div className="flex flex-row h-full">
-        {/* Left: 3D viewer container */}
         <div className="relative w-1/2 h-full overflow-hidden">
-          {/* Render dropdown only if more than one car and not in QR mode */}
           {!isQrScanStation && group.cars.length > 1 && (
             <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
               <select
@@ -176,8 +201,6 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
               </select>
             </div>
           )}
-
-          {/* Render the 3D viewer only when the card is in view */}
           {isInView && isVisible ? (
             <Car3DViewer
               modelUrl={modelUrl}
@@ -191,8 +214,6 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
             <ViewerSkeleton />
           )}
         </div>
-
-        {/* Right: Information panel */}
         <div className="w-1/2 h-full p-3 flex flex-col justify-between">
           <div>
             <div className="flex items-start justify-between">
