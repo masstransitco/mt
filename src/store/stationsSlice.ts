@@ -78,7 +78,8 @@ export const fetchStations = createAsyncThunk<
   { rejectValue: string }
 >("stations/fetchStations", async (_, { rejectWithValue }) => {
   try {
-    const cached = typeof window !== "undefined" && localStorage.getItem("stations");
+    const cached =
+      typeof window !== "undefined" && localStorage.getItem("stations");
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
       // Cache valid for 1 hour
@@ -125,8 +126,8 @@ function createBoundingBox(lat: number, lng: number, delta = 0.1) {
    Thunk #2: fetchStationVacancy (example)
    ------------------------------------------------------ */
 export const fetchStationVacancy = createAsyncThunk<
-  { stationId: number; newAvailable: number }, 
-  number,                                     // stationId
+  { stationId: number; newAvailable: number },
+  number, // stationId
   { rejectValue: string }
 >(
   "stations/fetchStationVacancy",
@@ -203,8 +204,18 @@ const stationsSlice = createSlice({
       if (!existing) {
         state.items.push(action.payload);
       }
-      // If you want to also show it in the listStations, you can push it there too,
-      // or let it appear next time you fetch/paginate, depending on your logic.
+      // If you want to also show it in the listStations, push it here if desired:
+      // state.listStations.push(action.payload);
+      // Or let it appear next pagination cycle, depending on your design.
+    },
+
+    /**
+     * Remove a station by ID (often used for removing virtual stations)
+     */
+    removeStation(state, action: PayloadAction<number>) {
+      const stationId = action.payload;
+      state.items = state.items.filter((s) => s.id !== stationId);
+      state.listStations = state.listStations.filter((s) => s.id !== stationId);
     },
   },
   extraReducers: (builder) => {
@@ -216,7 +227,10 @@ const stationsSlice = createSlice({
       })
       .addCase(
         fetchStations.fulfilled,
-        (state, action: PayloadAction<{ data: StationFeature[]; timestamp: number }>) => {
+        (
+          state,
+          action: PayloadAction<{ data: StationFeature[]; timestamp: number }>
+        ) => {
           state.loading = false;
           state.error = null;
           state.lastFetched = action.payload.timestamp;
@@ -226,7 +240,7 @@ const stationsSlice = createSlice({
 
           // Initialize paging
           state.page = 1;
-          const end = state.pageSize; // 12
+          const end = state.pageSize; // e.g. 12
           state.listStations = state.items.slice(0, end);
           // if still more left, set hasMore=true
           state.hasMore = end < state.items.length;
@@ -258,7 +272,11 @@ const stationsSlice = createSlice({
   },
 });
 
-export const { loadNextStationsPage, addVirtualStation } = stationsSlice.actions;
+export const {
+  loadNextStationsPage,
+  addVirtualStation,
+  removeStation,
+} = stationsSlice.actions;
 export default stationsSlice.reducer;
 
 /* --------------------------- Selectors --------------------------- */
@@ -301,8 +319,8 @@ export const selectStationsWithDistance = createSelector(
     const MIN_PER_KM = 12;
     return stations
       .map((station) => {
-        const [lng, lat] = station.geometry.coordinates;
-        const dist = calculateDistance(userLat, userLng, lat, lng);
+        const [sLng, sLat] = station.geometry.coordinates;
+        const dist = calculateDistance(userLat, userLng, sLat, sLng);
         const walkTime = Math.round(dist * MIN_PER_KM);
         return { ...station, distance: dist, walkTime };
       })
@@ -322,8 +340,8 @@ export const selectListStationsWithDistance = createSelector(
     const MIN_PER_KM = 12;
     return stations
       .map((station) => {
-        const [lng, lat] = station.geometry.coordinates;
-        const dist = calculateDistance(userLat, userLng, lat, lng);
+        const [sLng, sLat] = station.geometry.coordinates;
+        const dist = calculateDistance(userLat, userLng, sLat, sLng);
         const walkTime = Math.round(dist * MIN_PER_KM);
         return { ...station, distance: dist, walkTime };
       })
