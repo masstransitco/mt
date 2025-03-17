@@ -46,6 +46,9 @@ import {
   clearRoute,
   resetBookingFlow,
   selectRouteDecoded,
+  selectIsQrScanStation,
+  selectQrVirtualStationId,
+  clearQrStationData,
 } from "@/store/bookingSlice";
 import {
   fetchDispatchDirections,
@@ -118,10 +121,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Google Maps script readiness
   const [googleMapsReady, setGoogleMapsReady] = useState(false);
 
-  // QR code & virtual station states
+  // QR scanner overlay open/closed
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-  const [virtualStationId, setVirtualStationId] = useState<number | null>(null);
-  const [isQrScanStation, setIsQrScanStation] = useState(false);
 
   // Optional modals
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
@@ -144,6 +145,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const arrivalStationId = useAppSelector(selectArrivalStationId);
   const scannedCar = useAppSelector(selectScannedCar);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
+
+  // ---------- New: read QR station from Redux -----------
+  const isQrScanStation = useAppSelector(selectIsQrScanStation);
+  const virtualStationId = useAppSelector(selectQrVirtualStationId);
 
   // Decoded routes
   const decodedPath = useAppSelector(selectRouteDecoded);
@@ -354,54 +359,49 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [actualMap, scannedCar]);
 
-  // Now handleQrScanSuccess accepts the scanned car object from the overlay
-const handleQrScanSuccess = useCallback((car: Car) => {
-    if (!car) {
-      console.log("No scanned car from overlay");
-      return;
-    }
+  const handleQrScanSuccess = useCallback(
+    (car: Car) => {
+      if (!car) {
+        console.log("No scanned car from overlay");
+        return;
+      }
 
-    console.log("handleQrScanSuccess with car ID:", car.id);
+      console.log("handleQrScanSuccess with car ID:", car.id);
 
-    // Clear old departure/arrival stations & routes
-    dispatch(clearDepartureStation());
-    dispatch(clearArrivalStation());
-    dispatch(clearDispatchRoute());
-    dispatch(clearRoute());
+      // Clear old departure/arrival stations & routes
+      dispatch(clearDepartureStation());
+      dispatch(clearArrivalStation());
+      dispatch(clearDispatchRoute());
+      dispatch(clearRoute());
 
-    // Create a "virtual station" for the scanned car
-    const vStationId = 1000000 + car.id;
-    const virtualStation = createVirtualStationFromCar(car, vStationId);
+      // Create a "virtual station" for the scanned car
+      const vStationId = 1000000 + car.id;
+      const virtualStation = createVirtualStationFromCar(car, vStationId);
 
-    dispatch(addVirtualStation(virtualStation));
-    dispatch(selectDepartureStation(vStationId));
-    dispatch(advanceBookingStep(2));
+      dispatch(addVirtualStation(virtualStation));
+      dispatch(selectDepartureStation(vStationId));
+      dispatch(advanceBookingStep(2));
 
-    // Update local states
-    setVirtualStationId(vStationId);
-    setIsQrScanStation(true);
-    processedCarIdRef.current = car.id;
+      processedCarIdRef.current = car.id;
 
-    // Finally, open the detail sheet for step=2 and notify user
-    openDetailSheet();
-    toast.success(`Car ${car.id} selected as departure`);
-  }, [dispatch, openDetailSheet]);
+      // Finally, open the detail sheet for step=2 and notify user
+      openDetailSheet();
+      toast.success(`Car ${car.id} selected as departure`);
+    },
+    [dispatch, openDetailSheet]
+  );
 
   // --------------------------
   // Station selection logic
   // --------------------------
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      // If user picks a different station while we had a QR station,
-      // remove that old station from the store, but do NOT revert to step=1.
-      if (
-        isQrScanStation &&
-        station.id !== virtualStationId &&
-        virtualStationId
-      ) {
+      // If user picks a different station while a QR station is active
+      if (isQrScanStation && virtualStationId && station.id !== virtualStationId) {
         console.log("Different station selected, removing QR station:", virtualStationId);
-        // Remove old "QR" station from the store
         dispatch(clearDepartureStation());
+        dispatch(removeStation(virtualStationId));
+        dispatch(clearQrStationData());
         processedCarIdRef.current = null;
       }
 
@@ -600,8 +600,7 @@ const handleQrScanSuccess = useCallback((car: Car) => {
     // If we had a QR-based station
     if (isQrScanStation && virtualStationId !== null) {
       dispatch(removeStation(virtualStationId));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
+      dispatch(clearQrStationData());
       dispatch(setScannedCar(null));
       processedCarIdRef.current = null;
     }
@@ -615,8 +614,6 @@ const handleQrScanSuccess = useCallback((car: Car) => {
     dispatch(advanceBookingStep(3));
     dispatch(clearRoute());
 
-    // Do not remove the scanned station here, since it's always the departure station
-
     closeSheet();
     toast.success("Arrival station cleared. (Back to selecting arrival.)");
   }, [dispatch, closeSheet]);
@@ -627,36 +624,27 @@ const handleQrScanSuccess = useCallback((car: Car) => {
   const handleStationDetailClose = useCallback(() => {
     // Minimizes the detail sheet
     setIsDetailSheetMinimized(true);
-  }, [isQrScanStation, virtualStationId, dispatch]);
+  }, []);
 
   // --------------------------
   // QR Scanner
   // --------------------------
-
-  // Fixed with useCallback and proper dependencies
   const resetBookingFlowForQrScan = useCallback(() => {
     console.log("Resetting booking flow for QR scan");
-    // Use dispatch(resetBookingFlow()) from the imported action
     dispatch(resetBookingFlow());
-    
-    // Clear all routes explicitly
     dispatch(clearDispatchRoute());
     dispatch(clearRoute());
-    
-    // Remove any existing virtual stations
+
+    // Remove any existing virtual station
     if (virtualStationId !== null) {
       console.log("Removing existing virtual station:", virtualStationId);
       dispatch(removeStation(virtualStationId));
+      dispatch(clearQrStationData());
     }
-    
-    // Reset local state
-    setVirtualStationId(null);
-    setIsQrScanStation(false);
+    dispatch(setScannedCar(null));
     processedCarIdRef.current = null;
-    
   }, [dispatch, virtualStationId]);
 
-  // Fixed with proper dependency on resetBookingFlowForQrScan
   const handleOpenQrScanner = useCallback(() => {
     resetBookingFlowForQrScan();
     closeSheet();
@@ -687,7 +675,16 @@ const handleQrScanSuccess = useCallback((car: Car) => {
 
   // Debug effect to log important state changes
   useEffect(() => {
-    console.log("State changed - bookingStep:", bookingStep, "departureId:", departureStationId, "isQrScanStation:", isQrScanStation, "virtualStationId:", virtualStationId);
+    console.log(
+      "State changed - bookingStep:",
+      bookingStep,
+      "departureId:",
+      departureStationId,
+      "isQrScanStation:",
+      isQrScanStation,
+      "virtualStationId:",
+      virtualStationId
+    );
   }, [bookingStep, departureStationId, isQrScanStation, virtualStationId]);
 
   // --------------------------
@@ -699,24 +696,23 @@ const handleQrScanSuccess = useCallback((car: Car) => {
   // Log stations for debugging
   useEffect(() => {
     if (stations.length > 0 && virtualStationId) {
-      const virtualStation = stations.find(s => s.id === virtualStationId);
+      const virtualStation = stations.find((s) => s.id === virtualStationId);
       console.log("Virtual station exists:", !!virtualStation);
     }
   }, [stations, virtualStationId]);
 
   // Determine which station to show in detail
   let stationToShow: StationFeature | null = null;
-  
-  // Improved logic to find the correct station to show
+
   if (hasStationSelected) {
     if (isQrScanStation && virtualStationId === hasStationSelected) {
-      // First check for virtual station directly  
+      // The new QR-based station
       stationToShow = stations.find((s) => s.id === virtualStationId) || null;
       if (!stationToShow) {
         console.warn("Virtual station not found in stations list:", virtualStationId);
       }
     } else {
-      // Normal station lookup
+      // Normal station
       const stationsForDetail = sortedStations.length > 0 ? sortedStations : stations;
       stationToShow = stationsForDetail.find((s) => s.id === hasStationSelected) ?? null;
       if (!stationToShow) {
@@ -767,29 +763,40 @@ const handleQrScanSuccess = useCallback((car: Car) => {
       virtualStationId
     });
     console.log("Sheet debug:", debugSheet);
-  }, [openSheet, forceSheetOpen, hasStationSelected, stationToShow, isStepTransitioning, 
-      bookingStep, departureStationId, arrivalStationId, isQrScanStation, virtualStationId]);
-  
+  }, [
+    openSheet,
+    forceSheetOpen,
+    hasStationSelected,
+    stationToShow,
+    isStepTransitioning,
+    bookingStep,
+    departureStationId,
+    arrivalStationId,
+    isQrScanStation,
+    virtualStationId
+  ]);
+
   // Log when detail sheet conditions change
   useEffect(() => {
-    const shouldShowDetail = (openSheet === "detail" || forceSheetOpen) && !!stationToShow && !isStepTransitioning;
+    const shouldShowDetail =
+      (openSheet === "detail" || forceSheetOpen) &&
+      !!stationToShow &&
+      !isStepTransitioning;
     console.log("Detail sheet visibility:", shouldShowDetail, "Key:", detailKey);
   }, [openSheet, forceSheetOpen, stationToShow, isStepTransitioning, detailKey]);
 
   // --------------------------
   // Final setup of detail sheet
   // --------------------------
-  
-  // Force refresh detail sheet when QR scan station changes
   useEffect(() => {
     if (isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
-      // Ensure detail sheet opens with new key to force full remount
+      // Force detail sheet open with a fresh key
       setDetailKey(Date.now());
       setForceSheetOpen(true);
       setIsDetailSheetMinimized(false);
     }
   }, [isQrScanStation, virtualStationId, departureStationId]);
-  
+
   // --------------------------
   // Render
   // --------------------------
@@ -813,7 +820,7 @@ const handleQrScanSuccess = useCallback((car: Car) => {
 
       {!hasError && !overlayVisible && (
         <>
-          {/* Display state for debugging (remove in production) */}
+          {/* Debug overlay (remove in production) */}
           {process.env.NODE_ENV === 'development' && (
             <div className="absolute top-0 right-0 z-50 bg-black/70 text-white text-xs p-2 max-w-xs overflow-auto" style={{ fontSize: '10px' }}>
               Step: {bookingStep} ({isQrScanStation ? 'QR' : 'Normal'})<br />
@@ -824,7 +831,7 @@ const handleQrScanSuccess = useCallback((car: Car) => {
               {isStepTransitioning && 'Transitioning...'}
             </div>
           )}
-          
+
           <div className="absolute inset-0">
             <GoogleMap
               mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -872,7 +879,7 @@ const handleQrScanSuccess = useCallback((car: Car) => {
             </div>
           </Sheet>
 
-          {/* Station Detail Sheet - with key for forcing remount */}
+          {/* Station Detail Sheet */}
           <Sheet
             key={`detail-sheet-${detailKey}`}
             isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow && !isStepTransitioning}
@@ -898,7 +905,7 @@ const handleQrScanSuccess = useCallback((car: Car) => {
             )}
           </Sheet>
 
-          {/* QR Scanner Overlay with proper props */}
+          {/* QR Scanner Overlay */}
           <QrScannerOverlay
             isOpen={isQrScannerOpen}
             onClose={() => {
@@ -908,14 +915,16 @@ const handleQrScanSuccess = useCallback((car: Car) => {
                 setIsDetailSheetMinimized(false);
               }
             }}
-          onScanSuccess={(car) => handleQrScanSuccess(car)}
+            onScanSuccess={(car) => handleQrScanSuccess(car)}
             currentVirtualStationId={virtualStationId}
           />
 
           {/* Gaussian Splat Modal (lazy-loaded) */}
-          <Suspense fallback={<div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-            <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
-          </div>}>
+          <Suspense fallback={
+            <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+              <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
+            </div>
+          }>
             {isSplatModalOpen && (
               <GaussianSplatModal
                 isOpen={isSplatModalOpen}
