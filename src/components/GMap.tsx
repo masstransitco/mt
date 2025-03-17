@@ -342,7 +342,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [openSheet]
   );
 
- // --------------------------
+// --------------------------
 // QR / Virtual Station logic
 // --------------------------
 const processedCarIdRef = useRef<number | null>(null);
@@ -352,8 +352,9 @@ const openDetailSheet = useCallback(() => {
   setForceSheetOpen(true);
   setOpenSheet("detail");
   setIsDetailSheetMinimized(false);
+
   if (actualMap && scannedCar) {
-    // Optionally center map on the scanned car location
+    // Optionally re‐center on the scanned car
     actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
     actualMap.setZoom(16);
   }
@@ -362,40 +363,38 @@ const openDetailSheet = useCallback(() => {
 const handleQrScanSuccess = useCallback(() => {
   if (!scannedCar) return;
 
-  // Clear previous selections and routes
+  // Clear any old departure/arrival stations & dispatch routes
   dispatch(clearDepartureStation());
   dispatch(clearArrivalStation());
   dispatch(clearDispatchRoute());
   dispatch(clearRoute());
 
-  // Force user back to step 1; next advance moves them to step 2
+  // Back to step 1, so that the next 'advanceBookingStep()' sets step 2
   dispatch(advanceBookingStep(1));
 
-  // Build a unique "virtual station" ID for this scanned car
   const vStationId = 1000000 + scannedCar.id;
   const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-  // Prevent re‐processing the same car if scanning multiple times
   processedCarIdRef.current = scannedCar.id;
-
-  // Add the new virtual station
   dispatch(addVirtualStation(virtualStation));
 
-  // Immediately select it as departure and set booking step 2
+  // Select new station as departure; set step 2
   dispatch(selectDepartureStation(vStationId));
   dispatch(advanceBookingStep(2));
 
-  // Mark that we have a QR‐based station
   setVirtualStationId(vStationId);
   setIsQrScanStation(true);
 
-  // Finally, open the detail sheet for this newly scanned station
-  openDetailSheet();
+  // Defer opening the detail sheet slightly,
+  // giving Redux a moment to update the store
+  setTimeout(() => {
+    openDetailSheet();
+  }, 300);
 }, [scannedCar, dispatch, openDetailSheet]);
 
 /*
-  🚨 Remove the old effect that only runs if bookingStep === 2, 
-  because the handleQrScanSuccess now fully handles all scenarios.
+  🚨 Remove any old effect that only runs if bookingStep === 2,
+  because this handleQrScanSuccess now covers all scenarios.
 */
 
   // --------------------------
