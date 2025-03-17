@@ -58,7 +58,6 @@ import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
 import StationDetail from "./StationDetail";
 import StationList from "./StationList";
-import { StationListItem } from "./StationListItem";
 import QrScannerOverlay from "@/components/ui/QrScannerOverlay";
 import SignInModal from "@/components/ui/SignInModal";
 
@@ -99,7 +98,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]); // purely for local sorting / UI
+  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]); // purely for UI
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
 
@@ -151,12 +150,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // For debouncing route fetch
   const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep booking step in a ref so effect callbacks can read it
-  const bookingStepRef = useRef(bookingStep);
-  useEffect(() => {
-    bookingStepRef.current = bookingStep;
-  }, [bookingStep]);
-
   // If user completes step 5, close sheets
   useEffect(() => {
     if (bookingStep === 5) {
@@ -201,7 +194,27 @@ export default function GMap({ googleApiKey }: GMapProps) {
   } = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId, cars);
 
   // --------------------------
-  // Local sorted stations
+  // Data loading
+  // --------------------------
+  useEffect(() => {
+    (async () => {
+      try {
+        await Promise.all([dispatch(fetchStations()).unwrap(), dispatch(fetchCars()).unwrap()]);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        toast.error("Failed to load map data");
+      }
+    })();
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
+      setOverlayVisible(false);
+    }
+  }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
+
+  // --------------------------
+  // Local station sorting
   // --------------------------
   const sortStationsByDistanceToPoint = useCallback(
     (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
@@ -230,29 +243,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     },
     [googleMapsReady]
   );
-
-  // --------------------------
-  // Data loading
-  // --------------------------
-  useEffect(() => {
-    (async () => {
-      try {
-        await Promise.all([
-          dispatch(fetchStations()).unwrap(),
-          dispatch(fetchCars()).unwrap(),
-        ]);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        toast.error("Failed to load map data");
-      }
-    })();
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
-      setOverlayVisible(false);
-    }
-  }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
 
   // --------------------------
   // Route fetching (debounced)
@@ -342,97 +332,97 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [openSheet]
   );
 
-// --------------------------
-// QR / Virtual Station logic
-// --------------------------
-const processedCarIdRef = useRef<number | null>(null);
+  // --------------------------
+  // QR / Virtual Station logic
+  // --------------------------
+  const processedCarIdRef = useRef<number | null>(null);
 
-const openDetailSheet = useCallback(() => {
-  setDetailKey(Date.now());
-  setForceSheetOpen(true);
-  setOpenSheet("detail");
-  setIsDetailSheetMinimized(false);
+  const openDetailSheet = useCallback(() => {
+    setDetailKey(Date.now());
+    setForceSheetOpen(true);
+    setOpenSheet("detail");
+    setIsDetailSheetMinimized(false);
 
-  if (actualMap && scannedCar) {
     // Optionally re‐center on the scanned car
-    actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
-    actualMap.setZoom(16);
-  }
-}, [actualMap, scannedCar]);
+    if (actualMap && scannedCar) {
+      actualMap.panTo({ lat: scannedCar.lat, lng: scannedCar.lng });
+      actualMap.setZoom(16);
+    }
+  }, [actualMap, scannedCar]);
 
-const handleQrScanSuccess = useCallback(() => {
-  if (!scannedCar) return;
+  /**
+   * Called once a QR code is successfully scanned.
+   * We forcibly reset to "step=2" (skipping step=1) and clear out old stations/routes.
+   */
+  const handleQrScanSuccess = useCallback(() => {
+    if (!scannedCar) return;
 
-  // Clear any old departure/arrival stations & dispatch routes
-  dispatch(clearDepartureStation());
-  dispatch(clearArrivalStation());
-  dispatch(clearDispatchRoute());
-  dispatch(clearRoute());
+    // Clear any old departure/arrival stations & dispatch routes
+    dispatch(clearDepartureStation());
+    dispatch(clearArrivalStation());
+    dispatch(clearDispatchRoute());
+    dispatch(clearRoute());
 
-  // Back to step 1, so that the next 'advanceBookingStep()' sets step 2
-  dispatch(advanceBookingStep(1));
+    // Force booking step to 2 (no step=1 in between)
+    dispatch(advanceBookingStep(2));
 
-  const vStationId = 1000000 + scannedCar.id;
-  const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
+    // Create a "virtual station" for the scanned car
+    const vStationId = 1000000 + scannedCar.id;
+    const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-  processedCarIdRef.current = scannedCar.id;
-  dispatch(addVirtualStation(virtualStation));
+    processedCarIdRef.current = scannedCar.id;
+    dispatch(addVirtualStation(virtualStation));
 
-  // Select new station as departure; set step 2
-  dispatch(selectDepartureStation(vStationId));
-  dispatch(advanceBookingStep(2));
+    // Select this new station as the departure
+    dispatch(selectDepartureStation(vStationId));
 
-  setVirtualStationId(vStationId);
-  setIsQrScanStation(true);
+    setVirtualStationId(vStationId);
+    setIsQrScanStation(true);
 
-  // Defer opening the detail sheet slightly,
-  // giving Redux a moment to update the store
-  setTimeout(() => {
+    // Immediately open the detail sheet for the new station
     openDetailSheet();
-  }, 300);
-}, [scannedCar, dispatch, openDetailSheet]);
-
-/*
-  🚨 Remove any old effect that only runs if bookingStep === 2,
-  because this handleQrScanSuccess now covers all scenarios.
-*/
+  }, [scannedCar, dispatch, openDetailSheet]);
 
   // --------------------------
   // Station selection logic
   // --------------------------
   const handleStationSelection = useCallback(
     (station: StationFeature) => {
-      const stepNow = bookingStepRef.current;
-      const isSwitchingFromQr = isQrScanStation && station.id !== virtualStationId && stepNow <= 2;
-
-      // If user picks a different station while we had a QR station
-      if (isSwitchingFromQr && virtualStationId) {
+      // If user picks a different station while we had a QR-based departure,
+      // and we are still in step <= 2
+      if (
+        isQrScanStation &&
+        station.id !== virtualStationId &&
+        bookingStep <= 2 &&
+        virtualStationId
+      ) {
+        // Remove the old virtual station
         dispatch(removeStation(virtualStationId));
         dispatch(clearDepartureStation());
         dispatch(setScannedCar(null));
         setIsQrScanStation(false);
         setVirtualStationId(null);
-        processedCarIdRef.current = null; // reset so re-scanning works
+        processedCarIdRef.current = null;
         dispatch(advanceBookingStep(1));
       }
 
       // Normal step-based logic
-      if (stepNow === 1) {
+      if (bookingStep === 1) {
         dispatch(selectDepartureStation(station.id));
         dispatch(advanceBookingStep(2));
         toast.success("Departure station selected!");
-      } else if (stepNow === 2) {
+      } else if (bookingStep === 2) {
         dispatch(selectDepartureStation(station.id));
         toast.success("Departure station re-selected!");
-      } else if (stepNow === 3) {
+      } else if (bookingStep === 3) {
         dispatch(selectArrivalStation(station.id));
         dispatch(advanceBookingStep(4));
         toast.success("Arrival station selected!");
-      } else if (stepNow === 4) {
+      } else if (bookingStep === 4) {
         dispatch(selectArrivalStation(station.id));
         toast.success("Arrival station re-selected!");
       } else {
-        toast(`Station tapped, but no action at step ${stepNow}`);
+        toast(`Station tapped, but no action at step ${bookingStep}`);
       }
 
       // Show the detail sheet
@@ -442,7 +432,12 @@ const handleQrScanSuccess = useCallback(() => {
       setIsDetailSheetMinimized(false);
       setPreviousSheet("none");
     },
-    [dispatch, isQrScanStation, virtualStationId]
+    [
+      dispatch,
+      isQrScanStation,
+      virtualStationId,
+      bookingStep,
+    ]
   );
 
   const handleStationSelectedFromList = useCallback(
@@ -598,36 +593,36 @@ const handleQrScanSuccess = useCallback(() => {
   ]);
 
   // --------------------------
-// Clearing logic in StationSelector
-// --------------------------
-const handleClearDepartureInSelector = useCallback(() => {
-  dispatch(clearDepartureStation());
-  dispatch(advanceBookingStep(1));
-  dispatch(clearDispatchRoute());
+  // Clearing logic in StationSelector
+  // --------------------------
+  const handleClearDepartureInSelector = useCallback(() => {
+    dispatch(clearDepartureStation());
+    dispatch(advanceBookingStep(1));
+    dispatch(clearDispatchRoute());
 
-  // If we had a QR-based station for departure
-  if (isQrScanStation && virtualStationId !== null) {
-    dispatch(removeStation(virtualStationId));
-    setIsQrScanStation(false);
-    setVirtualStationId(null);
-    dispatch(setScannedCar(null));
-    processedCarIdRef.current = null; // allow re-scan
-  }
+    // If we had a QR-based station for departure
+    if (isQrScanStation && virtualStationId !== null) {
+      dispatch(removeStation(virtualStationId));
+      setIsQrScanStation(false);
+      setVirtualStationId(null);
+      dispatch(setScannedCar(null));
+      processedCarIdRef.current = null; // allow re-scan
+    }
 
-  closeSheet();
-  toast.success("Departure station cleared. (Back to selecting departure.)");
-}, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
+    closeSheet();
+    toast.success("Departure station cleared. (Back to selecting departure.)");
+  }, [dispatch, isQrScanStation, virtualStationId, closeSheet]);
 
-const handleClearArrivalInSelector = useCallback(() => {
-  dispatch(clearArrivalStation());
-  dispatch(advanceBookingStep(3));
-  dispatch(clearRoute());
+  const handleClearArrivalInSelector = useCallback(() => {
+    dispatch(clearArrivalStation());
+    dispatch(advanceBookingStep(3));
+    dispatch(clearRoute());
 
-  // DO NOT remove the scanned station here, since QR-based stations are always for departure
+    // DO NOT remove the scanned station here, since QR-based stations are always for departure
 
-  closeSheet();
-  toast.success("Arrival station cleared. (Back to selecting arrival.)");
-}, [dispatch, closeSheet]);
+    closeSheet();
+    toast.success("Arrival station cleared. (Back to selecting arrival.)");
+  }, [dispatch, closeSheet]);
 
   // --------------------------
   // StationDetail close/minimize
