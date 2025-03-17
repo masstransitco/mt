@@ -368,53 +368,35 @@ const handleQrScanSuccess = useCallback(() => {
   dispatch(clearDispatchRoute());
   dispatch(clearRoute());
 
-  // Force user back to step 1; next advance will set them to step 2
+  // Force user back to step 1; next advance moves them to step 2
   dispatch(advanceBookingStep(1));
 
+  // Build a unique "virtual station" ID for this scanned car
   const vStationId = 1000000 + scannedCar.id;
   const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-  // Prevent re‐processing the same car if scanning multiple times in a row
+  // Prevent re‐processing the same car if scanning multiple times
   processedCarIdRef.current = scannedCar.id;
 
-  // Add station to the store
+  // Add the new virtual station
   dispatch(addVirtualStation(virtualStation));
 
-  // Immediately select as departure
+  // Immediately select it as departure and set booking step 2
   dispatch(selectDepartureStation(vStationId));
-  dispatch(advanceBookingStep(2)); // Now we are in step 2 with a scanned station
+  dispatch(advanceBookingStep(2));
 
+  // Mark that we have a QR‐based station
   setVirtualStationId(vStationId);
   setIsQrScanStation(true);
 
-  // Open the sheet with detail for this newly scanned station
+  // Finally, open the detail sheet for this newly scanned station
   openDetailSheet();
-}, [
-  scannedCar,
-  dispatch,
-  openDetailSheet,
-  processedCarIdRef,
-]);
+}, [scannedCar, dispatch, openDetailSheet]);
 
-  // If user is in step 2 and we have a newly scanned car
-  useEffect(() => {
-    if (scannedCar && bookingStep === 2 && processedCarIdRef.current !== scannedCar.id) {
-      processedCarIdRef.current = scannedCar.id;
-      const vStationId = 1000000 + scannedCar.id;
-      setVirtualStationId(vStationId);
-      setIsQrScanStation(true);
-
-      const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-      dispatch(addVirtualStation(virtualStation));
-
-      const timer = setTimeout(() => {
-        if (bookingStepRef.current === 2) {
-          openDetailSheet();
-        }
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [scannedCar, bookingStep, dispatch, openDetailSheet]);
+/*
+  🚨 Remove the old effect that only runs if bookingStep === 2, 
+  because the handleQrScanSuccess now fully handles all scenarios.
+*/
 
   // --------------------------
   // Station selection logic
