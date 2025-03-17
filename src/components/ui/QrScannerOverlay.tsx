@@ -3,19 +3,15 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
-import { useAppDispatch, useAppSelector } from "@/store/store";
+import { useAppDispatch } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import type { Car } from "@/types/cars";
-
-import {
-  selectStationsWithDistance,
-} from "@/store/stationsSlice";
 import { toast } from "react-hot-toast";
+import { setQrStationData } from "@/store/bookingSlice";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Called when QR scanning is successful (used to open a detail sheet, for example). */
   /** Called when QR scanning is successful, passing the found car. */
   onScanSuccess?: (car: Car) => void;
   /** Currently active virtual station ID (if any). */
@@ -31,7 +27,6 @@ export default function QrScannerOverlay({
   const dispatch = useAppDispatch();
   const [scanning, setScanning] = useState(true);
   const [loading, setLoading] = useState(false);
-  const stations = useAppSelector(selectStationsWithDistance);
 
   // Reset scanning state when overlay is toggled
   useEffect(() => {
@@ -41,10 +36,6 @@ export default function QrScannerOverlay({
     }
   }, [isOpen]);
 
-
-  /**
-   * Main handler for successful QR scans.
-   */
   const handleScan = useCallback(
     async (detectedCodes: IDetectedBarcode[]) => {
       if (!detectedCodes.length || !detectedCodes[0].rawValue || loading) return;
@@ -56,8 +47,9 @@ export default function QrScannerOverlay({
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
-        // Extract car registration from QR code
-        const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
+        // Extract the car registration from the code
+        // capture everything after the slash until next slash or end of string
+const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         if (!match) {
           toast.error("Invalid QR code format");
           onClose();
@@ -67,10 +59,8 @@ export default function QrScannerOverlay({
         const registration = match[1].toUpperCase();
         console.log("Car registration:", registration);
 
-        // Fetch car details from the backend
-        const carResult = await dispatch(
-          fetchCarByRegistration(registration)
-        ).unwrap();
+        // Fetch the car from the backend
+        const carResult = await dispatch(fetchCarByRegistration(registration)).unwrap();
         if (!carResult) {
           toast.error(`Car ${registration} not found`);
           onClose();
@@ -80,7 +70,16 @@ export default function QrScannerOverlay({
         // Update Redux with the scanned car
         await dispatch(setScannedCar(carResult));
 
-        // Inform parent component with the car result
+        // Mark in Redux that we have a QR-based station
+        const virtualStationId = 1000000 + carResult.id;
+        dispatch(
+          setQrStationData({
+            isQrScanStation: true,
+            qrVirtualStationId: virtualStationId,
+          })
+        );
+
+        // Notify parent to do further station logic
         if (onScanSuccess) {
           setTimeout(() => {
             onScanSuccess(carResult);
@@ -100,9 +99,6 @@ export default function QrScannerOverlay({
     [dispatch, onClose, onScanSuccess, loading]
   );
 
-  /**
-   * If the scanner fails (camera not accessible, etc.), handle gracefully.
-   */
   const handleError = useCallback(
     (error: unknown) => {
       console.error("QR Scanner Error:", error);
@@ -112,9 +108,6 @@ export default function QrScannerOverlay({
     [onClose]
   );
 
-  /**
-   * When the user closes the overlay manually.
-   */
   const handleClose = useCallback(() => {
     setScanning(false);
     onClose();
@@ -150,7 +143,7 @@ export default function QrScannerOverlay({
                     onScan={handleScan}
                     onError={handleError}
                     constraints={{
-                      facingMode: "environment", // Prefer back camera
+                      facingMode: "environment",
                     }}
                   />
                 )}
