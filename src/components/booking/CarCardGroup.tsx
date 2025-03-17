@@ -30,47 +30,74 @@ interface CarCardGroupProps {
   isQrScanStation?: boolean
 }
 
-// Dynamically load your Car3DViewer with a consistent loading state
+// Dynamically load Car3DViewer for better code splitting
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => <ViewerSkeleton />,
 })
 
+/**
+ * Optimized CarCardGroup component
+ * - Uses IntersectionObserver to only load 3D models when visible
+ * - Implements better memory management
+ * - Reduces re-renders with memoization
+ */
 function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = false }: CarCardGroupProps) {
   const dispatch = useAppDispatch()
   const selectedCarId = useAppSelector((state) => state.user.selectedCarId)
 
+  // State for UI interactions
   const [showOdometerPopup, setShowOdometerPopup] = useState(false)
   const [shouldRender3D, setShouldRender3D] = useState(false)
-
+  
+  // Refs for tracking lifecycle and timeouts
   const popupTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+  const intersectionObserverRef = useRef<IntersectionObserver | null>(null)
 
   // IntersectionObserver to load the 3D model only when visible
+  // This significantly reduces memory usage by loading models on demand
   useEffect(() => {
     if (!isVisible) {
       setShouldRender3D(false)
       return
     }
+    
+    // Skip intersection handling if card element doesn't exist
     if (!cardRef.current) return
 
+    // Clean up existing observer if any
+    if (intersectionObserverRef.current) {
+      intersectionObserverRef.current.disconnect()
+      intersectionObserverRef.current = null
+    }
+
     const options: IntersectionObserverInit = {
-      threshold: 0.1,
+      threshold: 0.1, // 10% visibility is enough to trigger loading
       root: rootRef?.current ?? null,
     }
 
-    const observer = new IntersectionObserver((entries) => {
+    // Create new observer
+    intersectionObserverRef.current = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           setShouldRender3D(true)
+          // Once triggered, no need to keep observing
+          if (intersectionObserverRef.current) {
+            intersectionObserverRef.current.disconnect()
+          }
         }
       })
     }, options)
 
-    observer.observe(cardRef.current)
+    // Start observing
+    intersectionObserverRef.current.observe(cardRef.current)
 
+    // Clean up
     return () => {
-      observer.disconnect()
+      if (intersectionObserverRef.current) {
+        intersectionObserverRef.current.disconnect()
+      }
     }
   }, [isVisible, rootRef])
 
@@ -83,21 +110,26 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     }
   }, [])
 
-  // If the user has selected any car in this group
+  // Detect if the user has selected any car in this group
   const isGroupSelected = useMemo(() => {
-    return group.cars.some((c) => c.id === selectedCarId)
+    return selectedCarId && group.cars.some((c) => c.id === selectedCarId)
   }, [group.cars, selectedCarId])
 
-  // Decide which car is displayed
+  // Decide which car should be displayed
   const displayedCar = useMemo(() => {
+    // For single car groups
     if (group.cars.length === 1) {
       return group.cars[0]
     }
+    
+    // If a car in this group is selected, show it
     const foundSelected = group.cars.find((c) => c.id === selectedCarId)
+    
+    // Fallback to first car if none selected
     return foundSelected || group.cars[0]
   }, [group.cars, selectedCarId])
 
-  // Example battery logic
+  // Calculate battery indicators - memoized to prevent recalculation
   const { batteryPercentage, batteryIconColor, BatteryIcon } = useMemo(() => {
     const rawBattery = displayedCar.electric_battery_percentage_left
     const parsed = rawBattery != null ? Number(rawBattery) : Number.NaN
@@ -122,21 +154,22 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
       batteryIconColor: color,
       BatteryIcon: Icon,
     }
-  }, [displayedCar])
+  }, [displayedCar.electric_battery_percentage_left])
 
-  // 3D model
+  // Get 3D model URL with fallback
   const modelUrl = displayedCar?.modelUrl || "/cars/defaultModel.glb"
 
-  // Switch the selected car - memoized to prevent recreation on every render
+  // Handle car selection - memoized callback
   const handleSelectCar = useCallback(
-    (carId: number) => {
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const carId = Number.parseInt(e.target.value, 10)
       dispatch(selectCar(carId))
       setShowOdometerPopup(false)
     },
     [dispatch],
   )
 
-  // Example odometer popup - memoized to prevent recreation on every render
+  // Handle odometer info click
   const handleOdometerClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     setShowOdometerPopup((prev) => !prev)
@@ -150,14 +183,17 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     }, 3000)
   }, [])
 
+  // Handle clicking on the card to select car
+  const handleCardClick = useCallback(() => {
+    if (!isGroupSelected && displayedCar) {
+      dispatch(selectCar(displayedCar.id))
+    }
+  }, [isGroupSelected, displayedCar, dispatch])
+
   return (
     <motion.div
       ref={cardRef}
-      onClick={() => {
-        if (!isGroupSelected) {
-          dispatch(selectCar(displayedCar.id))
-        }
-      }}
+      onClick={handleCardClick}
       initial={{ opacity: 0, y: 5 }}
       animate={{
         opacity: 1,
@@ -200,7 +236,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
             <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
               <select
                 className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs backdrop-blur-sm"
-                onChange={(e) => handleSelectCar(Number.parseInt(e.target.value, 10))}
+                onChange={handleSelectCar}
                 value={displayedCar.id}
               >
                 {group.cars.map((c) => (
@@ -212,12 +248,12 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
             </div>
           )}
 
-          {/* Decide whether to render 3D or skeleton */}
+          {/* Conditionally render 3D or skeleton based on visibility/intersection */}
           {shouldRender3D && isVisible ? (
             <Car3DViewer
               modelUrl={modelUrl}
               imageUrl={displayedCar?.image}
-              interactive={isGroupSelected}
+              interactive={!!isGroupSelected}
               height="100%"
               width="100%"
               isVisible={true}
@@ -264,17 +300,20 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
             </div>
           </div>
 
-          {/* Bottom: extra info */}
-          <div className="mt-2 text-xs text-gray-400">Last updated: {String(displayedCar.location_updated || "")}</div>
+          {/* Bottom: last update info */}
+          <div className="mt-2 text-xs text-gray-400">Last updated: {displayedCar.location_updated 
+            ? new Date(displayedCar.location_updated).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})
+            : "Unknown"}
+          </div>
         </div>
       </div>
     </motion.div>
   )
 }
 
-// Use React.memo to prevent unnecessary re-renders
+// Use React.memo with custom comparison function to prevent unnecessary re-renders
 export default memo(CarCardGroup, (prevProps, nextProps) => {
-  // Only re-render if these props change
+  // Check if crucial props have changed
   return (
     prevProps.isVisible === nextProps.isVisible &&
     prevProps.isQrScanStation === nextProps.isQrScanStation &&
@@ -282,4 +321,3 @@ export default memo(CarCardGroup, (prevProps, nextProps) => {
     prevProps.group.cars.length === nextProps.group.cars.length
   )
 })
-
