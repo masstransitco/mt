@@ -10,12 +10,9 @@ type TicketPlan = "single" | "paygo" | null;
 
 /** Defines the route information between two stations. */
 interface RouteInfo {
-  /** Distance in meters. */
-  distance: number;
-  /** Duration in seconds. */
-  duration: number;
-  /** The encoded polyline for the route. */
-  polyline: string;
+  distance: number; // in meters
+  duration: number; // in seconds
+  polyline: string; // encoded polyline
 }
 
 /** The overall state for booking. */
@@ -30,15 +27,19 @@ export interface BookingState {
 
   departureStationId: number | null;
   arrivalStationId: number | null;
+
+  /** NEW fields to unify QR-based station usage. */
+  isQrScanStation: boolean;
+  qrVirtualStationId: number | null;
 }
 
 /**
- * Thunk to fetch a route between two stations using the Google Maps API.
- * On success, returns { distance, duration, polyline }.
+ * Thunk to fetch a route between two stations.
+ * (unchanged)
  */
 export const fetchRoute = createAsyncThunk<
-  RouteInfo, 
-  { departure: StationFeature; arrival: StationFeature }, 
+  RouteInfo,
+  { departure: StationFeature; arrival: StationFeature },
   { rejectValue: string }
 >(
   "booking/fetchRoute",
@@ -84,6 +85,10 @@ const initialState: BookingState = {
   ticketPlan: null,
   departureStationId: null,
   arrivalStationId: null,
+
+  // NEW: default for QR fields
+  isQrScanStation: false,
+  qrVirtualStationId: null,
 };
 
 export const bookingSlice = createSlice({
@@ -95,25 +100,18 @@ export const bookingSlice = createSlice({
     },
     advanceBookingStep: (state, action: PayloadAction<number>) => {
       const newStep = action.payload;
-      
-      // Validate step transition
       if (newStep < 1 || newStep > 6) {
         console.warn(`Invalid booking step: ${newStep}, defaulting to step 1`);
         state.step = 1;
         state.stepName = "selecting_departure_station";
         return;
       }
-      
-      // Don't allow skipping steps (except explicitly going back to step 1)
+      // Don’t allow skipping steps unless going back to 1
       if (newStep !== 1 && newStep > state.step + 1) {
         console.warn(`Cannot advance from step ${state.step} to ${newStep} - steps can't be skipped`);
         return;
       }
-      
-      // Set the step and name
       state.step = newStep;
-      
-      // Set the step name consistently
       switch (newStep) {
         case 1:
           state.stepName = "selecting_departure_station";
@@ -151,7 +149,6 @@ export const bookingSlice = createSlice({
       state.routeError = null;
     },
     selectArrivalStation: (state, action: PayloadAction<number>) => {
-      // Only allow if step in [3, 4]
       if (state.step >= 3 && state.step <= 4) {
         state.arrivalStationId = action.payload;
         if (state.step === 3) {
@@ -180,6 +177,9 @@ export const bookingSlice = createSlice({
       state.ticketPlan = null;
       state.departureStationId = null;
       state.arrivalStationId = null;
+      // Also reset new QR fields
+      state.isQrScanStation = false;
+      state.qrVirtualStationId = null;
     },
     setTicketPlan: (state, action: PayloadAction<TicketPlan>) => {
       state.ticketPlan = action.payload;
@@ -188,6 +188,29 @@ export const bookingSlice = createSlice({
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
+    },
+
+    /**
+     * Mark that we have a 'QR-based' station in use,
+     * storing the station ID in Redux
+     */
+    setQrStationData: (
+      state,
+      action: PayloadAction<{
+        isQrScanStation: boolean;
+        qrVirtualStationId: number | null;
+      }>
+    ) => {
+      state.isQrScanStation = action.payload.isQrScanStation;
+      state.qrVirtualStationId = action.payload.qrVirtualStationId;
+    },
+
+    /**
+     * Clears out any existing QR station data
+     */
+    clearQrStationData: (state) => {
+      state.isQrScanStation = false;
+      state.qrVirtualStationId = null;
     },
   },
   extraReducers: (builder) => {
@@ -219,44 +242,41 @@ export const {
   resetBookingFlow,
   setTicketPlan,
   clearRoute,
+  setQrStationData,
+  clearQrStationData,
 } = bookingSlice.actions;
 
 export default bookingSlice.reducer;
 
-/** Step & stepName */
+/** Basic selectors */
 export const selectBookingStep = (state: RootState) => state.booking.step;
 export const selectBookingStepName = (state: RootState) => state.booking.stepName;
-
-/** Departure date/time */
 export const selectDepartureDate = (state: RootState) => state.booking.departureDate;
-
-/** Route object (encoded polyline, distance, etc.) */
 export const selectRoute = (state: RootState) => state.booking.route;
 export const selectRouteStatus = (state: RootState) => state.booking.routeStatus;
 export const selectRouteError = (state: RootState) => state.booking.routeError;
-
-/** Ticket plan */
 export const selectTicketPlan = (state: RootState) => state.booking.ticketPlan;
 
 /** Station IDs */
 export const selectDepartureStationId = (state: RootState) => state.booking.departureStationId;
 export const selectArrivalStationId = (state: RootState) => state.booking.arrivalStationId;
 
+/** QR fields */
+export const selectIsQrScanStation = (state: RootState) => state.booking.isQrScanStation;
+export const selectQrVirtualStationId = (state: RootState) => state.booking.qrVirtualStationId;
+
 /** If you need a memoized decode of the polyline, etc. */
-export const selectRouteDecoded = createSelector(
-  [selectRoute],
-  (route) => {
-    if (!route || !route.polyline) return [];
-    try {
-      if (!window.google?.maps?.geometry?.encoding) {
-        ensureGoogleMapsLoaded();
-        return [];
-      }
-      const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline);
-      return decodedPath.map((latLng) => latLng.toJSON());
-    } catch (error) {
-      console.error("Error decoding polyline:", error);
+export const selectRouteDecoded = createSelector([selectRoute], (route) => {
+  if (!route || !route.polyline) return [];
+  try {
+    if (!window.google?.maps?.geometry?.encoding) {
+      ensureGoogleMapsLoaded();
       return [];
     }
+    const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline);
+    return decodedPath.map((latLng) => latLng.toJSON());
+  } catch (error) {
+    console.error("Error decoding polyline:", error);
+    return [];
   }
-);
+});
