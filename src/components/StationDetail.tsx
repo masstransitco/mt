@@ -268,7 +268,7 @@ function TouchScrollHandler() {
     const scrollHeight = el.scrollHeight;
     const height = el.clientHeight;
     const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0);
-    if ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0)) {
+    if (e.cancelable && ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0))) {
       e.preventDefault();
     }
     el.dataset.touchY = e.touches[0].clientY.toString();
