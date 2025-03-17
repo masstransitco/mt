@@ -56,6 +56,9 @@ export default function CarRegistrationPage({
       } catch (error) {
         console.error("Error processing car registration:", error);
         toast.error("Failed to process the car registration");
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem("skipEphemeralReset", "true");
+        }
         router.push("/");
       } finally {
         setLoading(false);
