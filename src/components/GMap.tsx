@@ -363,44 +363,39 @@ const openDetailSheet = useCallback(() => {
 const handleQrScanSuccess = useCallback(() => {
   if (!scannedCar) return;
 
-  // Only handle if we're within steps 1..4
-  if (bookingStepRef.current >= 1 && bookingStepRef.current <= 4) {
-    // 1) Clear any previously selected departure
-    dispatch(clearDepartureStation());
+  // Clear any old departure/arrival stations & dispatch routes
+  dispatch(clearDepartureStation());
+  dispatch(clearArrivalStation());
+  dispatch(clearDispatchRoute());
+  dispatch(clearRoute());
 
-    // If we had a previously scanned virtual station, remove it
-    if (isQrScanStation && virtualStationId) {
-      dispatch(removeStation(virtualStationId));
-      setIsQrScanStation(false);
-      setVirtualStationId(null);
-      dispatch(setScannedCar(null));
-      processedCarIdRef.current = null;
-    }
+  // Back to step 1, so that the next 'advanceBookingStep()' sets step 2
+  dispatch(advanceBookingStep(1));
 
-    // 2) Create a new virtual station from the scanned car
-    const vStationId = 1000000 + scannedCar.id;
-    const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
-    dispatch(addVirtualStation(virtualStation));
-    processedCarIdRef.current = scannedCar.id;
+  const vStationId = 1000000 + scannedCar.id;
+  const virtualStation = createVirtualStationFromCar(scannedCar, vStationId);
 
-    // 3) Immediately select it as departure, and force step 2
-    dispatch(selectDepartureStation(vStationId));
-    dispatch(advanceBookingStep(2));
-    setVirtualStationId(vStationId);
-    setIsQrScanStation(true);
+  processedCarIdRef.current = scannedCar.id;
+  dispatch(addVirtualStation(virtualStation));
 
-    // 4) Open the StationDetail sheet after a small delay
-    setTimeout(() => {
-      openDetailSheet();
-    }, 300);
-  }
-}, [
-  scannedCar,
-  dispatch,
-  openDetailSheet,
-  isQrScanStation,
-  virtualStationId
-]);
+  // Select new station as departure; set step 2
+  dispatch(selectDepartureStation(vStationId));
+  dispatch(advanceBookingStep(2));
+
+  setVirtualStationId(vStationId);
+  setIsQrScanStation(true);
+
+  // Defer opening the detail sheet slightly,
+  // giving Redux a moment to update the store
+  setTimeout(() => {
+    openDetailSheet();
+  }, 300);
+}, [scannedCar, dispatch, openDetailSheet]);
+
+/*
+  🚨 Remove any old effect that only runs if bookingStep === 2,
+  because this handleQrScanSuccess now covers all scenarios.
+*/
 
   // --------------------------
   // Station selection logic
