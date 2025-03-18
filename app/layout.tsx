@@ -78,6 +78,8 @@ function BookingStateRecovery() {
     if (bookingStep === 6) {
       console.log(`[BookingStateRecovery] Detected step=6, resetting to step 1`);
       dispatch(resetBookingFlow());
+      localStorage.removeItem('persist:booking');
+      localStorage.removeItem('persist:root');
       dispatch(saveBookingDetails())
         .then(() => {
           // after reset is saved, refresh data
