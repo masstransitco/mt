@@ -18,7 +18,7 @@ import chatReducer from "./chatSlice";
 import userReducer from "./userSlice";
 import stationsReducer from "./stationsSlice";
 import carReducer from "./carSlice";
-import bookingReducer, { BookingState } from "./bookingSlice"; 
+import bookingReducer, { BookingState } from "./bookingSlice";
 import stations3DReducer from "./stations3DSlice";
 import dispatchReducer from "./dispatchSlice";
 import verificationReducer from "./verificationSlice";
@@ -29,18 +29,17 @@ import bookingStep5Transform from "./bookingStep5Transform";
 /**
  * 1) We define a "preTransform" that clears ephemeral steps
  *    so they never get written to localStorage.
- * 
- *    - If step is less than 5, it returns an empty booking state
- *      (similar to your initial booking state).
- *    - If step is 5 or 6, or anything else, it lets the data pass through.
+ *
+ *    - If step is 2, 3, or 4, it returns an empty booking state.
+ *    - Step 1, 5, or 6 (or anything else) is allowed to pass through.
  */
 const ephemeralStepsTransform: Transform<BookingState, BookingState> = {
   in: (inboundState) => {
     if (!inboundState) return inboundState;
 
-    // If user is on steps 1-4, do NOT persist anything
-    if (inboundState.step < 5) {
-      console.log("[ephemeralStepsTransform] Stripping ephemeral step data from localStorage inbound");
+    // Only treat steps 2-4 as ephemeral
+    if (inboundState.step >= 2 && inboundState.step < 5) {
+      console.log("[ephemeralStepsTransform] Stripping ephemeral step data (steps 2-4) from localStorage inbound");
       return {
         step: 1,
         stepName: "selecting_departure_station",
@@ -56,11 +55,12 @@ const ephemeralStepsTransform: Transform<BookingState, BookingState> = {
       };
     }
 
-    // For step 5 or 6, pass the data along as-is
+    // For step 1, 5, 6 (or anything else not in 2-4), pass the data
     return inboundState;
   },
+
+  // Outbound transform is optional here; just return unchanged
   out: (outboundState) => {
-    // Outbound transform is optional in this case, we can just return it.
     return outboundState;
   },
 };
@@ -76,10 +76,10 @@ const userPersistConfig = {
 
 /**
  * 3) The booking persist config:
- *    - We add ephemeralStepsTransform first,
- *      and THEN bookingStep5Transform in the array.
- *    - ephemeralStepsTransform ensures ephemeral steps never get stored,
- *      while bookingStep5Transform ensures step <5 won't rehydrate if it sneaks through.
+ *    - ephemeralStepsTransform first,
+ *    - then bookingStep5Transform.
+ *    ephemeralStepsTransform ensures steps 2-4 never persist,
+ *    bookingStep5Transform ensures only steps 5 or 6 rehydrate from storage.
  */
 const bookingPersistConfig = {
   key: "booking",
@@ -106,10 +106,7 @@ const rootReducer = combineReducers({
   stations: stationsReducer,
   stations3D: stations3DReducer,
   car: carReducer,
-
-  // Booking is persist-wrapped:
   booking: persistReducer(bookingPersistConfig, bookingReducer),
-
   dispatch: dispatchReducer,
   verification: verificationReducer,
 });
