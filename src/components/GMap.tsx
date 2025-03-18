@@ -359,6 +359,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [actualMap, scannedCar]);
 
+  // The fix: create a new virtual station, add to Redux, select it
   const handleQrScanSuccess = useCallback(
     (car: Car) => {
       if (!car) {
@@ -375,10 +376,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(clearRoute());
 
       // Create a "virtual station" for the scanned car
+      // Could be any unique ID. We'll use Date.now() for example:
       const vStationId = Date.now();
       const virtualStation = createVirtualStationFromCar(car, vStationId);
 
+      // Add to stations Redux
       dispatch(addVirtualStation(virtualStation));
+      // Mark it as new departure
       dispatch(selectDepartureStation(vStationId));
       dispatch(advanceBookingStep(2));
 
@@ -692,8 +696,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // --------------------------
   const hasError = stationsError || carsError || loadError;
   const hasStationSelected = bookingStep < 3 
-  ? (typeof departureStationId === 'number' ? departureStationId : null) 
-  : (typeof arrivalStationId === 'number' ? arrivalStationId : null);
+    ? (typeof departureStationId === 'number' ? departureStationId : null) 
+    : (typeof arrivalStationId === 'number' ? arrivalStationId : null);
 
   // Log stations for debugging
   useEffect(() => {
