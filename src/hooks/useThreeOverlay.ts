@@ -10,7 +10,6 @@ import { useGLTF } from "@react-three/drei"
 import { useAppSelector } from "@/store/store"
 import type { StationFeature } from "@/store/stationsSlice"
 import { selectRouteDecoded } from "@/store/bookingSlice"
-import { selectDispatchRouteDecoded } from "@/store/dispatchSlice"
 
 // Constants
 import { DISPATCH_HUB } from "@/constants/map"
@@ -26,18 +25,17 @@ const GeometryPool = {
   hexagon: null as THREE.ExtrudeGeometry | null,
   hexagonRing: null as THREE.ExtrudeGeometry | null,
   tube: new Map<string, THREE.TubeGeometry>(),
-  box: null as THREE.BoxGeometry | null,
+  box: null as THREE.BoxGeometry | null, // If not used anymore, we can leave or remove it
 }
 
 const MaterialPool = {
   matGrey: null as THREE.MeshPhongMaterial | null,
   matBlue: null as THREE.MeshPhongMaterial | null,
   matRed: null as THREE.MeshPhongMaterial | null,
-  dispatchMat: null as THREE.MeshPhongMaterial | null,
   ringMatGrey: null as THREE.MeshPhongMaterial | null,
   ringMatBlue: null as THREE.MeshPhongMaterial | null,
   ringMatRed: null as THREE.MeshPhongMaterial | null,
-  dispatchTubeMat: null as THREE.MeshPhongMaterial | null,
+  // Removed dispatch-related materials
   bookingTubeMat: null as THREE.MeshPhongMaterial | null,
 }
 
@@ -60,7 +58,7 @@ function disposeGeometryPool() {
 
 function disposeMaterial(material: THREE.Material) {
   if ("map" in material && material.map) {
-    ;(material.map as THREE.Texture).dispose()
+    (material.map as THREE.Texture).dispose()
   }
   material.dispose()
 }
@@ -78,10 +76,6 @@ function disposeMaterialPool() {
     disposeMaterial(MaterialPool.matRed)
     MaterialPool.matRed = null
   }
-  if (MaterialPool.dispatchMat) {
-    disposeMaterial(MaterialPool.dispatchMat)
-    MaterialPool.dispatchMat = null
-  }
   if (MaterialPool.ringMatGrey) {
     disposeMaterial(MaterialPool.ringMatGrey)
     MaterialPool.ringMatGrey = null
@@ -93,10 +87,6 @@ function disposeMaterialPool() {
   if (MaterialPool.ringMatRed) {
     disposeMaterial(MaterialPool.ringMatRed)
     MaterialPool.ringMatRed = null
-  }
-  if (MaterialPool.dispatchTubeMat) {
-    disposeMaterial(MaterialPool.dispatchTubeMat)
-    MaterialPool.dispatchTubeMat = null
   }
   if (MaterialPool.bookingTubeMat) {
     disposeMaterial(MaterialPool.bookingTubeMat)
@@ -165,9 +155,6 @@ function createOrUpdateTube(
   let geometry: THREE.TubeGeometry
 
   if (GeometryPool.tube.has(routeKey)) {
-    // Geometry exists, but we want to ensure the curve is updated
-    // In many cases, if the route is truly the same, no changes are needed
-    // If you truly need to re-generate geometry, you can do:
     geometry = GeometryPool.tube.get(routeKey)!
   } else {
     // Create new geometry and store it
@@ -237,21 +224,21 @@ export function useThreeOverlay(
   // Shared geometry/material refs (for pooling)
   const stationGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
   const stationRingGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
-  const dispatchBoxGeoRef = useRef<THREE.BoxGeometry | null>(null)
 
-  // Tube mesh refs
-  const dispatchRouteMeshRef = useRef<THREE.Mesh | null>(null)
+  // **Removed dispatch route references** 
+  // (no dispatchBoxGeoRef, no dispatchRouteMeshRef, no dispatchMatRef, etc.)
+
+  // Tube mesh ref for the booking route only
   const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null)
 
   // Material refs (using pooling)
   const matGreyRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const matBlueRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const dispatchMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const ringMatGreyRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const ringMatBlueRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const ringMatRedRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const dispatchTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
+  // Booking route material
   const bookingTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
 
   // Car-related refs
@@ -263,8 +250,7 @@ export function useThreeOverlay(
   const mapEventListenersRef = useRef<google.maps.MapsEventListener[]>([])
   const observerRef = useRef<MutationObserver | null>(null)
 
-  // Redux selectors for routes
-  const dispatchRouteDecoded = useAppSelector(selectDispatchRouteDecoded)
+  // Redux selector for the booking route
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded)
 
   // Memoize input arrays so we don't recalc them every render
@@ -488,17 +474,6 @@ export function useThreeOverlay(
     overlayRef.current = overlay
     overlay.setMap(googleMap)
 
-    // Use pooled geometries/materials if available, else create once
-    if (!dispatchBoxGeoRef.current) {
-      if (GeometryPool.box) {
-        dispatchBoxGeoRef.current = GeometryPool.box
-      } else {
-        const boxGeom = new THREE.BoxGeometry(50, 50, 50)
-        GeometryPool.box = boxGeom
-        dispatchBoxGeoRef.current = boxGeom
-      }
-    }
-
     if (!stationGeoRef.current) {
       if (GeometryPool.hexagon) {
         stationGeoRef.current = GeometryPool.hexagon
@@ -590,19 +565,6 @@ export function useThreeOverlay(
         matRedRef.current = material
       }
     }
-    if (!dispatchMatRef.current) {
-      if (MaterialPool.dispatchMat) {
-        dispatchMatRef.current = MaterialPool.dispatchMat
-      } else {
-        const material = new THREE.MeshPhongMaterial({
-          color: 0x00ff00,
-          opacity: 0.8,
-          transparent: true,
-        })
-        MaterialPool.dispatchMat = material
-        dispatchMatRef.current = material
-      }
-    }
     if (!ringMatGreyRef.current) {
       if (MaterialPool.ringMatGrey) {
         ringMatGreyRef.current = MaterialPool.ringMatGrey
@@ -646,19 +608,6 @@ export function useThreeOverlay(
         ringMatRedRef.current = material
       }
     }
-    if (!dispatchTubeMatRef.current) {
-      if (MaterialPool.dispatchTubeMat) {
-        dispatchTubeMatRef.current = MaterialPool.dispatchTubeMat
-      } else {
-        const material = new THREE.MeshPhongMaterial({
-          color: 0xf5f5f5,
-          opacity: 0.5,
-          transparent: true,
-        })
-        MaterialPool.dispatchTubeMat = material
-        dispatchTubeMatRef.current = material
-      }
-    }
     if (!bookingTubeMatRef.current) {
       if (MaterialPool.bookingTubeMat) {
         bookingTubeMatRef.current = MaterialPool.bookingTubeMat
@@ -700,8 +649,8 @@ export function useThreeOverlay(
     colors.forEach((color) => {
       const mainMesh = new THREE.InstancedMesh(stationGeoRef.current!, materials[color], maxInstances)
       mainMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      // Optionally keep them always visible
       if (color === "blue" || color === "red") {
-        // Keep them always visible
         mainMesh.frustumCulled = false
       }
       scene.add(mainMesh)
@@ -803,7 +752,7 @@ export function useThreeOverlay(
         continuousRenderFrameIdRef.current = null
       }
       if (overlayRef.current) {
-        ;(overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
+        (overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
       }
 
       // Remove and dispose car models
@@ -826,8 +775,6 @@ export function useThreeOverlay(
       carModelsRef.current.clear()
 
       // Dispose geometry references we created (if not from pool)
-      dispatchBoxGeoRef.current?.dispose()
-      dispatchBoxGeoRef.current = null
       stationGeoRef.current?.dispose()
       stationGeoRef.current = null
       stationRingGeoRef.current?.dispose()
@@ -840,16 +787,12 @@ export function useThreeOverlay(
       matBlueRef.current = null
       matRedRef.current?.dispose()
       matRedRef.current = null
-      dispatchMatRef.current?.dispose()
-      dispatchMatRef.current = null
       ringMatGreyRef.current?.dispose()
       ringMatGreyRef.current = null
       ringMatBlueRef.current?.dispose()
       ringMatBlueRef.current = null
       ringMatRedRef.current?.dispose()
       ringMatRedRef.current = null
-      dispatchTubeMatRef.current?.dispose()
-      dispatchTubeMatRef.current = null
       bookingTubeMatRef.current?.dispose()
       bookingTubeMatRef.current = null
 
@@ -870,14 +813,7 @@ export function useThreeOverlay(
       carsMatRef.current?.dispose()
       carsMatRef.current = null
 
-      // Clean up any route meshes. If the geometry is not from the pool, dispose it.
-      if (dispatchRouteMeshRef.current) {
-        if (!GeometryPool.tube.has((dispatchRouteMeshRef.current.geometry as any).uuid)) {
-          dispatchRouteMeshRef.current.geometry.dispose()
-        }
-        sceneRef.current?.remove(dispatchRouteMeshRef.current)
-        dispatchRouteMeshRef.current = null
-      }
+      // Clean up the booking route mesh. If the geometry is not from the pool, dispose it.
       if (bookingRouteMeshRef.current) {
         if (!GeometryPool.tube.has((bookingRouteMeshRef.current.geometry as any).uuid)) {
           bookingRouteMeshRef.current.geometry.dispose()
@@ -905,25 +841,10 @@ export function useThreeOverlay(
   }, [memoizedCars, populateCarModels])
 
   // ---------------------------------------------------------------------
-  // Handle route updates using the new createOrUpdateTube
+  // Handle route updates for booking route only
   // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
-
-    // Dispatch route
-    if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchTubeMatRef.current) {
-      createOrUpdateTube(
-        dispatchRouteDecoded,
-        dispatchRouteMeshRef,
-        dispatchTubeMatRef.current,
-        sceneRef.current,
-        overlayRef.current,
-        ROUTE_ALTITUDE
-      )
-    } else if (dispatchRouteMeshRef.current) {
-      // Hide the mesh if no valid path
-      dispatchRouteMeshRef.current.visible = false
-    }
 
     // Booking route
     if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingTubeMatRef.current) {
@@ -941,7 +862,7 @@ export function useThreeOverlay(
     }
 
     overlayRef.current.requestRedraw()
-  }, [dispatchRouteDecoded, bookingRouteDecoded])
+  }, [bookingRouteDecoded])
 
   return {
     overlayRef,
