@@ -7,9 +7,17 @@ import { useAppDispatch } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import type { Car } from "@/types/cars";
 import { toast } from "react-hot-toast";
-import { setQrStationData } from "@/store/bookingSlice";
-import { addVirtualStation } from "@/store/stationsSlice";    // <-- Import here
-import { createVirtualStationFromCar } from "@/lib/stationUtils"; // <-- Import here
+import {
+  clearDepartureStation,
+  clearArrivalStation,
+  clearRoute,
+  advanceBookingStep,
+  selectDepartureStation,
+  setQrStationData,
+} from "@/store/bookingSlice";
+import { clearDispatchRoute } from "@/store/dispatchSlice";
+import { addVirtualStation } from "@/store/stationsSlice";
+import { createVirtualStationFromCar } from "@/lib/stationUtils";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
@@ -71,20 +79,30 @@ export default function QrScannerOverlay({
         // Update Redux with the scanned car
         await dispatch(setScannedCar(carResult));
 
-        // 1) Create a station from this car
+        // 1) Clear any existing departure/arrival stations & routes
+        dispatch(clearDepartureStation());
+        dispatch(clearArrivalStation());
+        dispatch(clearRoute());
+        dispatch(clearDispatchRoute());
+
+        // 2) Create a station from this car
         const virtualStationId = 1000000 + carResult.id;
         const virtualStation = createVirtualStationFromCar(carResult, virtualStationId);
 
-        // 2) Add that station to Redux so we actually see it in stations[]
+        // 3) Add that station to Redux so we actually see it in stations[]
         dispatch(addVirtualStation(virtualStation));
 
-        // 3) Mark in Redux that we have a QR-based station
+        // 4) Mark in Redux that we have a QR-based station
         dispatch(
           setQrStationData({
             isQrScanStation: true,
             qrVirtualStationId: virtualStationId,
           })
         );
+
+        // 5) Force this station to be departure & user at step=2
+        dispatch(selectDepartureStation(virtualStationId));
+        dispatch(advanceBookingStep(2));
 
         // Notify parent to do further station logic
         if (onScanSuccess) {
@@ -99,7 +117,7 @@ export default function QrScannerOverlay({
       } catch (error) {
         console.error("Error processing QR code:", error);
         toast.error("Failed to process the car QR code");
-        // Intentionally not closing so user can re-try if camera or network error
+        // Intentionally not closing so user can re-try if there's a camera/network glitch
       } finally {
         setLoading(false);
       }
