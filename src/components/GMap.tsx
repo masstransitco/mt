@@ -375,7 +375,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(clearRoute());
 
       // Create a "virtual station" for the scanned car
-      const vStationId = 1000000 + car.id;
+      const vStationId = Date.now();
       const virtualStation = createVirtualStationFromCar(car, vStationId);
 
       dispatch(addVirtualStation(virtualStation));
