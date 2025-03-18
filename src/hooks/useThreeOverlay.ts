@@ -60,7 +60,7 @@ function disposeGeometryPool() {
 
 function disposeMaterial(material: THREE.Material) {
   if ("map" in material && material.map) {
-    (material.map as THREE.Texture).dispose()
+    ;(material.map as THREE.Texture).dispose()
   }
   material.dispose()
 }
@@ -137,38 +137,59 @@ function createOrUpdateTube(
   overlay: ThreeJSOverlayView,
   altitude: number,
 ) {
-  if (!decodedPath || decodedPath.length < 2) return
+  // If there's no valid path, just hide the mesh
+  if (!decodedPath || decodedPath.length < 2) {
+    if (meshRef.current) {
+      meshRef.current.visible = false
+    }
+    return
+  }
 
+  // Convert route points to Vector3
   const points = decodedPath.map(({ lat, lng }) => {
     const vector = new THREE.Vector3()
     overlay.latLngAltitudeToVector3({ lat, lng, altitude }, vector)
     return vector
   })
 
+  // Build or retrieve geometry
   const curve = new CustomCurve(points)
-  const tubularSegments = Math.min(Math.max(points.length * 2, 30), 150)
+  const tubularSegments = Math.min(Math.max(points.length, 20), 80) // example detail
   const radius = 8
-  const radialSegments = 6
+  const radialSegments = 4
   const closed = false
 
-  // Generate a stable key so we don't recreate geometry for the same route
-  const routeKey = `${points[0].x}_${points[0].y}_${points[points.length - 1].x}_${points[points.length - 1].y}_${tubularSegments}_${radius}`
+  // Generate a stable key; for example, based on endpoint coords + point count
+  const routeKey = `tube_${points[0].x}_${points[0].y}_${points[points.length - 1].x}_${points[points.length - 1].y}_${points.length}`
+
   let geometry: THREE.TubeGeometry
+
   if (GeometryPool.tube.has(routeKey)) {
+    // Geometry exists, but we want to ensure the curve is updated
+    // In many cases, if the route is truly the same, no changes are needed
+    // If you truly need to re-generate geometry, you can do:
     geometry = GeometryPool.tube.get(routeKey)!
   } else {
+    // Create new geometry and store it
     geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, closed)
     GeometryPool.tube.set(routeKey, geometry)
   }
 
   if (!meshRef.current) {
+    // No mesh yet => create a new one and add to scene
     const mesh = new THREE.Mesh(geometry, material)
     mesh.renderOrder = 999
     meshRef.current = mesh
     scene.add(mesh)
   } else {
-    // Simply update the geometry reference without disposing cached geometry
+    // Reuse the existing mesh; show it and update geometry
+    meshRef.current.visible = true
     meshRef.current.geometry = geometry
+
+    // Ensure the material reference is the same (in case it changed)
+    if (meshRef.current.material !== material) {
+      meshRef.current.material = material
+    }
   }
 }
 
@@ -197,13 +218,18 @@ export function useThreeOverlay(
   const stationIndexMapsRef = useRef<{ grey: number[]; blue: number[]; red: number[] }>({ grey: [], blue: [], red: [] })
 
   // Animation state for color transitions
-  const animationStateRef = useRef<Map<number, {
-    startTime: number
-    duration: number
-    fromColor: THREE.Color
-    toColor: THREE.Color
-    isAnimating: boolean
-  }>>(new Map())
+  const animationStateRef = useRef<
+    Map<
+      number,
+      {
+        startTime: number
+        duration: number
+        fromColor: THREE.Color
+        toColor: THREE.Color
+        isAnimating: boolean
+      }
+    >
+  >(new Map())
   const lastFrameTimeRef = useRef<number>(0)
   const animationFrameIdRef = useRef<number | null>(null)
   const continuousRenderFrameIdRef = useRef<number | null>(null)
@@ -303,20 +329,23 @@ export function useThreeOverlay(
     }
   }, [])
 
-  const startColorTransition = useCallback((stationId: number, fromColor: THREE.Color, toColor: THREE.Color) => {
-    const state = {
-      startTime: performance.now(),
-      duration: 800,
-      fromColor,
-      toColor,
-      isAnimating: true,
-    }
-    animationStateRef.current.set(stationId, state)
-    if (animationFrameIdRef.current === null) {
-      lastFrameTimeRef.current = performance.now()
-      animationFrameIdRef.current = requestAnimationFrame(animateFrame)
-    }
-  }, [animateFrame])
+  const startColorTransition = useCallback(
+    (stationId: number, fromColor: THREE.Color, toColor: THREE.Color) => {
+      const state = {
+        startTime: performance.now(),
+        duration: 800,
+        fromColor,
+        toColor,
+        isAnimating: true,
+      }
+      animationStateRef.current.set(stationId, state)
+      if (animationFrameIdRef.current === null) {
+        lastFrameTimeRef.current = performance.now()
+        animationFrameIdRef.current = requestAnimationFrame(animateFrame)
+      }
+    },
+    [animateFrame],
+  )
 
   // ----------------------------
   // Populate Station InstancedMeshes
@@ -709,11 +738,22 @@ export function useThreeOverlay(
     // Start continuous rendering
     continuousRender()
 
-    // Map event listeners (only requestRedraw)
+    // Debounce helper for map events
+    function debounce(func: Function, wait: number) {
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      return (...args: any[]) => {
+        if (timeout) clearTimeout(timeout)
+        timeout = setTimeout(() => {
+          func(...args)
+          timeout = null
+        }, wait)
+      }
+    }
     const debouncedRedraw = debounce(() => {
       overlayRef.current?.requestRedraw()
     }, 150)
 
+    // Map event listeners
     if (googleMap) {
       mapEventListenersRef.current = [
         googleMap.addListener("idle", () => overlayRef.current?.requestRedraw()),
@@ -763,8 +803,9 @@ export function useThreeOverlay(
         continuousRenderFrameIdRef.current = null
       }
       if (overlayRef.current) {
-        (overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
+        ;(overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
       }
+
       // Remove and dispose car models
       carModelsRef.current.forEach((model) => {
         if (sceneRef.current) {
@@ -784,6 +825,7 @@ export function useThreeOverlay(
       })
       carModelsRef.current.clear()
 
+      // Dispose geometry references we created (if not from pool)
       dispatchBoxGeoRef.current?.dispose()
       dispatchBoxGeoRef.current = null
       stationGeoRef.current?.dispose()
@@ -791,6 +833,7 @@ export function useThreeOverlay(
       stationRingGeoRef.current?.dispose()
       stationRingGeoRef.current = null
 
+      // Dispose materials
       matGreyRef.current?.dispose()
       matGreyRef.current = null
       matBlueRef.current?.dispose()
@@ -810,6 +853,7 @@ export function useThreeOverlay(
       bookingTubeMatRef.current?.dispose()
       bookingTubeMatRef.current = null
 
+      // Dispose the car model geometry/material
       if (carGeoRef.current) {
         carGeoRef.current.traverse((obj: any) => {
           if (obj.isMesh) {
@@ -826,23 +870,28 @@ export function useThreeOverlay(
       carsMatRef.current?.dispose()
       carsMatRef.current = null
 
+      // Clean up any route meshes. If the geometry is not from the pool, dispose it.
       if (dispatchRouteMeshRef.current) {
-        dispatchRouteMeshRef.current.geometry.dispose()
+        if (!GeometryPool.tube.has((dispatchRouteMeshRef.current.geometry as any).uuid)) {
+          dispatchRouteMeshRef.current.geometry.dispose()
+        }
         sceneRef.current?.remove(dispatchRouteMeshRef.current)
         dispatchRouteMeshRef.current = null
       }
       if (bookingRouteMeshRef.current) {
-        bookingRouteMeshRef.current.geometry.dispose()
+        if (!GeometryPool.tube.has((bookingRouteMeshRef.current.geometry as any).uuid)) {
+          bookingRouteMeshRef.current.geometry.dispose()
+        }
         sceneRef.current?.remove(bookingRouteMeshRef.current)
         bookingRouteMeshRef.current = null
-
       }
+
       sceneRef.current?.clear()
       sceneRef.current = null
       overlayRef.current = null
       isInitializedRef.current = false
 
-      // Dispose any pooled resources if truly done
+      // Finally, dispose any pooled resources if truly done
       disposeGeometryPool()
       disposeMaterialPool()
     }
@@ -855,21 +904,25 @@ export function useThreeOverlay(
     overlayRef.current.requestRedraw()
   }, [memoizedCars, populateCarModels])
 
-  // Handle route updates (unchanged)
+  // ---------------------------------------------------------------------
+  // Handle route updates using the new createOrUpdateTube
+  // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
 
-    // Clear old dispatch route if any
+    // Dispatch route
     if (dispatchRouteDecoded && dispatchRouteDecoded.length >= 2 && dispatchTubeMatRef.current) {
-      if (dispatchRouteMeshRef.current) {
-        sceneRef.current.remove(dispatchRouteMeshRef.current)
-        dispatchRouteMeshRef.current.geometry.dispose()
-        dispatchRouteMeshRef.current = null
-      }
+      createOrUpdateTube(
+        dispatchRouteDecoded,
+        dispatchRouteMeshRef,
+        dispatchTubeMatRef.current,
+        sceneRef.current,
+        overlayRef.current,
+        ROUTE_ALTITUDE
+      )
     } else if (dispatchRouteMeshRef.current) {
-      sceneRef.current.remove(dispatchRouteMeshRef.current)
-      dispatchRouteMeshRef.current.geometry.dispose()
-      dispatchRouteMeshRef.current = null
+      // Hide the mesh if no valid path
+      dispatchRouteMeshRef.current.visible = false
     }
 
     // Booking route
@@ -880,12 +933,11 @@ export function useThreeOverlay(
         bookingTubeMatRef.current,
         sceneRef.current,
         overlayRef.current,
-        ROUTE_ALTITUDE,
+        ROUTE_ALTITUDE
       )
     } else if (bookingRouteMeshRef.current) {
-      sceneRef.current.remove(bookingRouteMeshRef.current)
-      bookingRouteMeshRef.current.geometry.dispose()
-      bookingRouteMeshRef.current = null
+      // Hide the mesh if no valid path
+      bookingRouteMeshRef.current.visible = false
     }
 
     overlayRef.current.requestRedraw()
@@ -898,17 +950,5 @@ export function useThreeOverlay(
     blueInstancedMeshRef,
     redInstancedMeshRef,
     stationIndexMapsRef,
-  }
-}
-
-// Debounce helper
-function debounce(func: Function, wait: number) {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-  return (...args: any[]) => {
-    if (timeout) clearTimeout(timeout)
-    timeout = setTimeout(() => {
-      func(...args)
-      timeout = null
-    }, wait)
   }
 }
