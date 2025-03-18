@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch } from "@/store/store";
+import { setQrStationData } from "@/store/bookingSlice";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import { selectCar } from "@/store/userSlice";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
@@ -74,6 +75,14 @@ export default function CarRegistrationPage({
         // 4) Set that station as departure & move to step=2
         await dispatch(selectDepartureStation(virtualStationId));
         await dispatch(advanceBookingStep(2));
+
+        // Also mark it as a "QR" station in Redux, so GMap sees it the same as scanning
+        dispatch(
+          setQrStationData({
+            isQrScanStation: true,
+            qrVirtualStationId: virtualStationId,
+          })
+        );
 
         toast.success(`Car ${registration} selected and ready to drive`);
 
