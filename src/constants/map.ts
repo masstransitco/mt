@@ -14,7 +14,7 @@ export const DEFAULT_CENTER = {
   lng: 114.175,
 };
 
-export const DEFAULT_ZOOM = 13;
+export const DEFAULT_ZOOM = 12;
 
 export const LIBRARIES: Libraries = ['geometry', 'places'];
 
@@ -26,15 +26,6 @@ export const HK_BOUNDS = {
   west: 113.8,
 };
 
-// Dark minimalist map styling
-export const MAP_STYLES = [
-  {
-    featureType: 'all',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#EAEAEA' }],
-  },
-
-];
 
 // Create map options with a dark theme
 export const createMapOptions = (): google.maps.MapOptions => ({
@@ -45,16 +36,15 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   // @ts-ignore
   tiltControl: false,
   backgroundColor: '#212121',
-  maxZoom: 19,
-  minZoom: 6,
+  maxZoom: 20,
+  minZoom: 3,
   clickableIcons: false,
-  styles: MAP_STYLES,
-  mapId: '3b537d3007b67ac',
+  mapId: 'd094c1caeb8f9683',
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
   },
-  tilt: 45,
+  tilt: 0,
 });
 
 /**
