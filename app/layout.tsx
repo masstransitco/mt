@@ -114,6 +114,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     console.log("[LayoutInner] Removed ephemeral booking data from localStorage");
   }, []);
 
+  dispatch(resetBookingFlow());
+    console.log("[LayoutInner] Initialized booking state for all users");
+  
+
   useEffect(() => {
     const db = getFirestore();
 
