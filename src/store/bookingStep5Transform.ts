@@ -1,5 +1,3 @@
-// bookingStep5Transform.ts
-
 import { createTransform } from "redux-persist";
 import { BookingState } from "./bookingSlice";
 
@@ -36,9 +34,10 @@ const bookingStep5Transform = createTransform<BookingState, BookingState>(
       return inboundState;
     }
 
-    // Else, clear it out (in practice ephemeralStepsTransform already handled steps <5, so this is extra safety)
-    console.log(`[bookingStep5Transform] Clearing step ${inboundState.step} data (not persisting)`);
-    return { ...defaultBooking };
+    // If ephemeralStepsTransform is handling step <5, you could simply return inboundState here
+    // Or you can keep clearing for safety; up to you. For clarity:
+    console.log(`[bookingStep5Transform] Not step 5 or 6 -> ignoring for this transform`);
+    return inboundState;
   },
 
   // 2) Transform outbound (localStorage => Redux on rehydrate)

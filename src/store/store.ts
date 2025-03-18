@@ -1,4 +1,3 @@
-// store.ts
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
 import {
   persistStore,
@@ -50,16 +49,9 @@ const defaultBooking: BookingState = {
  *    - Steps 5 or 6 pass through and get stored.
  */
 const ephemeralStepsTransform: Transform<BookingState, BookingState> = {
+  // (Redux => localStorage)
   in: (inboundState) => {
-    if (!inboundState) return inboundState;
-
-    // If user is on step < 5, do NOT persist anything
-    if (inboundState.step < 5) {
-      console.log("[ephemeralStepsTransform] Stripping ephemeral step data (steps <5) from localStorage inbound");
-      return { ...defaultBooking };
-    }
-
-    // For step 5 or 6, pass the data along as-is
+    // No ephemeral logic here—pass state as-is so we don't overwrite step <5 mid-session.
     return inboundState;
   },
 
