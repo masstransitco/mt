@@ -26,41 +26,54 @@ import verificationReducer from "./verificationSlice";
 // The transform you already have
 import bookingStep5Transform from "./bookingStep5Transform";
 
+// A reusable default booking object for clearing ephemeral steps
+const defaultBooking: BookingState = {
+  step: 1,
+  stepName: "selecting_departure_station",
+  departureDate: null,
+  route: null,
+  routeStatus: "idle",
+  routeError: null,
+  ticketPlan: null,
+  departureStationId: null,
+  arrivalStationId: null,
+  isQrScanStation: false,
+  qrVirtualStationId: null,
+};
+
 /**
  * 1) We define a "preTransform" that clears ephemeral steps
  *    so they never get written to localStorage.
  *
- *    - If step is 2, 3, or 4, it returns an empty booking state.
- *    - Step 1, 5, or 6 (or anything else) is allowed to pass through.
+ *    - We want *all* steps < 5 (including step 1) to be ephemeral.
+ *    - This means if the user is at step 1..4, it never persists to localStorage.
+ *    - Steps 5 or 6 pass through and get stored.
  */
 const ephemeralStepsTransform: Transform<BookingState, BookingState> = {
   in: (inboundState) => {
     if (!inboundState) return inboundState;
 
-    // Only treat steps 2-4 as ephemeral
-    if (inboundState.step >= 2 && inboundState.step < 5) {
-      console.log("[ephemeralStepsTransform] Stripping ephemeral step data (steps 2-4) from localStorage inbound");
-      return {
-        step: 1,
-        stepName: "selecting_departure_station",
-        departureDate: null,
-        route: null,
-        routeStatus: "idle",
-        routeError: null,
-        ticketPlan: null,
-        departureStationId: null,
-        arrivalStationId: null,
-        isQrScanStation: false,
-        qrVirtualStationId: null,
-      };
+    // If user is on step < 5, do NOT persist anything
+    if (inboundState.step < 5) {
+      console.log("[ephemeralStepsTransform] Stripping ephemeral step data (steps <5) from localStorage inbound");
+      return { ...defaultBooking };
     }
 
-    // For step 1, 5, 6 (or anything else not in 2-4), pass the data
+    // For step 5 or 6, pass the data along as-is
     return inboundState;
   },
 
-  // Outbound transform is optional here; just return unchanged
+  // Outbound transform (from localStorage to Redux state on rehydration)
   out: (outboundState) => {
+    if (!outboundState) return outboundState;
+
+    // If the stored data was step < 5, we do not rehydrate it (returns default)
+    if (outboundState.step < 5) {
+      console.log("[ephemeralStepsTransform] Preventing rehydration of steps <5");
+      return { ...defaultBooking };
+    }
+
+    // Otherwise, pass it through
     return outboundState;
   },
 };
@@ -77,9 +90,9 @@ const userPersistConfig = {
 /**
  * 3) The booking persist config:
  *    - ephemeralStepsTransform first,
- *    - then bookingStep5Transform.
- *    ephemeralStepsTransform ensures steps 2-4 never persist,
- *    bookingStep5Transform ensures only steps 5 or 6 rehydrate from storage.
+ *    - then bookingStep5Transform
+ *    ephemeralStepsTransform ensures steps <5 never get stored,
+ *    bookingStep5Transform ensures only steps 5 or 6 rehydrate if it sneaks through.
  */
 const bookingPersistConfig = {
   key: "booking",
@@ -106,7 +119,10 @@ const rootReducer = combineReducers({
   stations: stationsReducer,
   stations3D: stations3DReducer,
   car: carReducer,
+
+  // Booking is persist-wrapped:
   booking: persistReducer(bookingPersistConfig, bookingReducer),
+
   dispatch: dispatchReducer,
   verification: verificationReducer,
 });
