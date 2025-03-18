@@ -1,184 +1,313 @@
+// src/components/PickupTime.tsx
 "use client"
 
-import React, { useEffect, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-
-type FlipDigitProps = {
-  value: string
-  delay: number
-}
-
-// Component for individual flipping digits
-const FlipDigit = ({ value, delay }: FlipDigitProps) => {
-  const [flipped, setFlipped] = useState(false)
-  const [glowing, setGlowing] = useState(false)
-
-  useEffect(() => {
-    const flipTimer = setTimeout(() => {
-      setFlipped(true)
-
-      // Add glow effect after flip completes
-      setTimeout(() => {
-        setGlowing(true)
-
-        // Remove glow effect after a short duration
-        setTimeout(() => {
-          setGlowing(false)
-        }, 600)
-      }, 300)
-    }, delay)
-
-    return () => clearTimeout(flipTimer)
-  }, [delay])
-
-  return (
-    <div className="relative h-10 w-7 mx-0.5">
-      {/* Shadow element */}
-      <div className="absolute inset-0 rounded-md bg-black opacity-30 blur-md transform translate-y-1 scale-95"></div>
-
-      {/* Glow effect */}
-      <AnimatePresence>
-        {glowing && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 rounded-md bg-blue-500 blur-md z-0"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Top half (static) */}
-      <div className="absolute inset-0 bottom-1/2 bg-[#1A1A1A] rounded-t-md border-t border-l border-r border-[#2A2A2A] overflow-hidden">
-        <div
-          className="absolute inset-0 flex items-center justify-center text-white font-mono text-xl font-medium"
-          style={{ transform: "translateY(50%)" }}
-        >
-          {value}
-        </div>
-      </div>
-
-      {/* Bottom half (animated) */}
-      <motion.div
-        initial={{ rotateX: -90 }}
-        animate={flipped ? { rotateX: 0 } : {}}
-        transition={{
-          type: "spring",
-          stiffness: 300,
-          damping: 30,
-          delay: delay / 1000,
-        }}
-        className="absolute inset-0 top-1/2 bg-[#1A1A1A] rounded-b-md border-b border-l border-r border-[#2A2A2A] overflow-hidden origin-top"
-        style={{ backfaceVisibility: "hidden" }}
-      >
-        <div
-          className="absolute inset-0 flex items-center justify-center text-white font-mono text-xl font-medium"
-          style={{ transform: "translateY(-50%)" }}
-        >
-          {value}
-        </div>
-
-        {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-500 to-transparent opacity-5"></div>
-      </motion.div>
-
-      {/* Divider line */}
-      <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-[#2A2A2A] z-10"></div>
-    </div>
-  )
-}
-
-const Separator = ({ children }: { children: React.ReactNode }) => (
-  <div className="flex items-center justify-center mx-1 text-gray-300 font-mono text-xl">{children}</div>
-)
+import { useEffect, useState, memo, useCallback, useMemo, useRef } from "react"
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 
 interface PickupTimeProps {
-  startTime: Date;
-  endTime: Date;
+  startTime: Date
+  endTime: Date
 }
 
-export default function PickupTime({ startTime, endTime }: PickupTimeProps) {
-  // Format the start and end times
-  const formatTime = (date: Date) => {
-    const hours = date.getHours() % 12 || 12;
-    const minutes = date.getMinutes();
-    const ampm = date.getHours() >= 12 ? "pm" : "am";
-    
+const PickupTime = memo(function PickupTime({ startTime, endTime }: PickupTimeProps) {
+  const [isPressed, setIsPressed] = useState(false)
+  const [use24HourFormat, setUse24HourFormat] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
+
+  // Use refs to store timers for proper cleanup
+  const animationTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const formatChangeTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Check if user prefers reduced motion
+  const prefersReducedMotion = useReducedMotion()
+
+  // Memoize the time formatting function to avoid recalculations
+  const formatTime = useCallback((date: Date, use24Hour: boolean) => {
+    if (use24Hour) {
+      // 24-hour format
+      const hours = date.getHours().toString().padStart(2, "0")
+      const minutes = date.getMinutes().toString().padStart(2, "0")
+      return {
+        hours,
+        minutes,
+        ampm: "",
+      }
+    } else {
+      // 12-hour format with am/pm
+      const hours = (date.getHours() % 12 || 12).toString().padStart(2, "0")
+      const minutes = date.getMinutes().toString().padStart(2, "0")
+      const ampm = date.getHours() >= 12 ? "pm" : "am"
+      return {
+        hours,
+        minutes,
+        ampm,
+      }
+    }
+  }, [])
+
+  // Memoize the formatted times to prevent recalculation on every render
+  const { start, end } = useMemo(() => {
     return {
-      hours: hours.toString().padStart(2, '0'),
-      minutes: minutes.toString().padStart(2, '0'),
-      ampm
-    };
-  };
-  
-  const start = formatTime(startTime);
-  const end = formatTime(endTime);
-  
-  return (
-    <div className="flex flex-col items-center w-full">
-      {/* Title with blue illumination animation, now centered */}
-      <motion.div
-        variants={{
-          hidden: { opacity: 0, y: -10 },
-          visible: {
-            opacity: 1,
-            y: 0,
-            transition: { delay: 0.3, duration: 0.5 },
+      start: formatTime(startTime, use24HourFormat),
+      end: formatTime(endTime, use24HourFormat),
+    }
+  }, [startTime, endTime, use24HourFormat, formatTime])
+
+  // Memoize the press handler to prevent recreation on each render
+  const handlePress = useCallback(() => {
+    if (isAnimating) return // Prevent multiple presses during animation
+
+    setIsPressed(true)
+    setIsAnimating(true)
+
+    // Clear any existing timers
+    if (formatChangeTimerRef.current) clearTimeout(formatChangeTimerRef.current)
+    if (animationTimerRef.current) clearTimeout(animationTimerRef.current)
+
+    // Delay the format change to allow for animation
+    formatChangeTimerRef.current = setTimeout(
+      () => {
+        setUse24HourFormat((prev) => !prev)
+
+        // Reset animation state after a delay
+        animationTimerRef.current = setTimeout(
+          () => {
+            setIsAnimating(false)
+            setIsPressed(false)
           },
-        }}
-        initial="hidden"
-        animate="visible"
-        className="text-gray-400 text-sm font-medium mb-2 text-center"
+          prefersReducedMotion ? 100 : 300,
+        )
+      },
+      prefersReducedMotion ? 100 : 300,
+    )
+  }, [isAnimating, prefersReducedMotion])
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      if (formatChangeTimerRef.current) clearTimeout(formatChangeTimerRef.current)
+      if (animationTimerRef.current) clearTimeout(animationTimerRef.current)
+    }
+  }, [])
+
+  // Animation variants for consistent animations
+  const containerVariants = useMemo(
+    () => ({
+      pressed: {
+        scale: 0.98,
+        backgroundColor: "#0a0a0a",
+      },
+      normal: {
+        scale: 1,
+        backgroundColor: "#111111",
+      },
+    }),
+    [],
+  )
+
+  const contentVariants = useMemo(
+    () => ({
+      initial: {
+        opacity: 0,
+        y: isAnimating ? 20 : 10,
+      },
+      animate: {
+        opacity: 1,
+        y: 0,
+        transition: {
+          duration: prefersReducedMotion ? 0.2 : 0.4,
+          ease: [0.16, 1, 0.3, 1],
+        },
+      },
+      exit: {
+        opacity: 0,
+        y: -20,
+        transition: {
+          duration: prefersReducedMotion ? 0.2 : 0.3,
+        },
+      },
+    }),
+    [isAnimating, prefersReducedMotion],
+  )
+
+  return (
+    <div className="flex flex-col w-full select-none">
+      {/* Title centered horizontally */}
+      <motion.div
+        initial={{ opacity: 0, y: -5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="text-gray-400 text-xs uppercase tracking-wider font-normal mb-3 text-center w-full"
       >
-        <motion.span
-          initial={{ color: "rgb(156 163 175)" }}
-          animate={{
-            color: ["rgb(156 163 175)", "rgb(59 130 246)", "rgb(156 163 175)"],
-            textShadow: [
-              "0 0 0px rgba(59, 130, 246, 0)",
-              "0 0 8px rgba(59, 130, 246, 0.5)",
-              "0 0 0px rgba(59, 130, 246, 0)",
-            ],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Number.POSITIVE_INFINITY,
-            repeatType: "reverse",
-            ease: "easeInOut",
-            times: [0, 0.5, 1],
-          }}
-        >
-          Pickup car
-        </motion.span>
+        Pickup Time
       </motion.div>
 
-      {/* Flipping clock display */}
-      <div className="w-full flex items-center justify-center">
-        <div className="flex items-center bg-[#1D1D1D] px-4 py-3 rounded-xl shadow-xl border border-[#2A2A2A]">
-          <FlipDigit value={start.hours.charAt(0)} delay={100} />
-          <FlipDigit value={start.hours.charAt(1)} delay={250} />
-          <Separator>:</Separator>
-          <FlipDigit value={start.minutes.charAt(0)} delay={400} />
-          <FlipDigit value={start.minutes.charAt(1)} delay={550} />
+      {/* Time display with toggle functionality */}
+      <div
+        className="w-full flex items-center justify-center"
+        onMouseDown={handlePress}
+        onTouchStart={handlePress}
+        style={{
+          cursor: "pointer",
+        }}
+      >
+        <motion.div
+          className="flex items-center bg-[#111111] px-6 py-4 rounded-2xl shadow-lg"
+          animate={isPressed ? "pressed" : "normal"}
+          variants={containerVariants}
+          transition={{
+            duration: prefersReducedMotion ? 0.1 : 0.2,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+          initial="normal"
+          whileTap="pressed"
+          layout
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`time-${use24HourFormat ? "24h" : "12h"}`}
+              variants={contentVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex items-center"
+              layout
+            >
+              <TimeDisplay
+                value={`${start.hours}:${start.minutes}`}
+                isPressed={isPressed}
+              />
 
-          <Separator>-</Separator>
+              <div className="mx-3 text-gray-400">—</div>
 
-          <FlipDigit value={end.hours.charAt(0)} delay={700} />
-          <FlipDigit value={end.hours.charAt(1)} delay={850} />
-          <Separator>:</Separator>
-          <FlipDigit value={end.minutes.charAt(0)} delay={1000} />
-          <FlipDigit value={end.minutes.charAt(1)} delay={1150} />
+              <TimeDisplay
+                value={`${end.hours}:${end.minutes}`}
+                isPressed={isPressed}
+              />
 
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.4, duration: 0.5 }}
-            className="ml-2 text-sm font-medium text-blue-400 self-start mt-1"
-          >
-            {start.ampm}
-          </motion.div>
-        </div>
+              {!use24HourFormat && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.8 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: prefersReducedMotion ? 0.2 : 0.3 }}
+                  className="ml-2 text-sm font-medium text-gray-400 self-start mt-1"
+                >
+                  {start.ampm}
+                </motion.div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
       </div>
     </div>
-  );
+  )
+})
+
+interface TimeDisplayProps {
+  value: string
+  isPressed?: boolean
+  prefersReducedMotion?: boolean
 }
+
+const TimeDisplay = memo(function TimeDisplay({
+  value,
+  isPressed = false,
+  prefersReducedMotion = false,
+}: TimeDisplayProps) {
+  // Use a ref to track if component is mounted
+  const isMounted = useRef(true)
+  const [displayed, setDisplayed] = useState(false)
+
+  // Animation variants for consistent animations
+  const charVariants = useMemo(
+    () => ({
+      initial: { opacity: 0, y: 10 },
+      animate: (index: number) => ({
+        opacity: displayed ? 1 : 0,
+        y: displayed ? 0 : 10,
+        scale: isPressed ? 0.97 : 1,
+        color: isPressed ? "rgb(219, 234, 254)" : "rgb(255, 255, 255)",
+        transition: {
+          duration: prefersReducedMotion ? 0.2 : 0.5,
+          delay: prefersReducedMotion ? 0.1 : 0.3 + index * 0.1,
+          ease: [0.16, 1, 0.3, 1],
+          scale: { duration: prefersReducedMotion ? 0.1 : 0.2 },
+          color: { duration: prefersReducedMotion ? 0.1 : 0.2 },
+        },
+      }),
+    }),
+    [displayed, isPressed, prefersReducedMotion],
+  )
+
+  const glowVariants = useMemo(
+    () => ({
+      initial: { opacity: 0 },
+      animate: (index: number) => ({
+        opacity: isPressed ? [0, 0.9, 0.4] : [0, 0.7, 0],
+        scale: isPressed ? 1.2 : 1,
+        transition: {
+          delay: isPressed ? 0 : prefersReducedMotion ? 0.2 : 0.5 + index * 0.1,
+          duration: isPressed ? (prefersReducedMotion ? 0.2 : 0.3) : prefersReducedMotion ? 0.5 : 1.5,
+          times: isPressed ? [0, 0.3, 1] : [0, 0.1, 1],
+        },
+      }),
+    }),
+    [isPressed, prefersReducedMotion],
+  )
+
+  useEffect(() => {
+    // Set mounted flag
+    isMounted.current = true
+
+    const timer = setTimeout(
+      () => {
+        if (isMounted.current) {
+          setDisplayed(true)
+        }
+      },
+      prefersReducedMotion ? 100 : 300,
+    )
+
+    // Cleanup function
+    return () => {
+      isMounted.current = false
+      clearTimeout(timer)
+    }
+  }, [prefersReducedMotion])
+
+  // Memoize the character array to prevent recreation on each render
+  const characters = useMemo(() => value.split(""), [value])
+
+  return (
+    <div className="flex">
+      {characters.map((char, index) => (
+        <motion.div
+          key={`${char}-${index}-${value}`}
+          custom={index}
+          variants={charVariants}
+          initial="initial"
+          animate="animate"
+          className="relative mx-0.5"
+          style={{ willChange: "transform, opacity, color" }}
+        >
+          <span className="text-white font-['SF_Pro_Display'] text-3xl font-light tracking-tight">{char}</span>
+
+          {/* Subtle highlight effect - only render for non-colon characters */}
+          {char !== ":" && (
+            <motion.div
+              custom={index}
+              variants={glowVariants}
+              initial="initial"
+              animate="animate"
+              className="absolute inset-0 bg-blue-500 rounded-full filter blur-md -z-10"
+              style={{ willChange: "transform, opacity" }}
+            />
+          )}
+        </motion.div>
+      ))}
+    </div>
+  )
+})
+
+export default PickupTime
