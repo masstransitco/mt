@@ -35,7 +35,6 @@ export interface BookingState {
 
 /**
  * Thunk to fetch a route between two stations.
- * (unchanged)
  */
 export const fetchRoute = createAsyncThunk<
   RouteInfo,
@@ -85,8 +84,6 @@ const initialState: BookingState = {
   ticketPlan: null,
   departureStationId: null,
   arrivalStationId: null,
-
-  // NEW: default for QR fields
   isQrScanStation: false,
   qrVirtualStationId: null,
 };
@@ -106,7 +103,7 @@ export const bookingSlice = createSlice({
         state.stepName = "selecting_departure_station";
         return;
       }
-      // Don’t allow skipping steps unless going back to 1
+      // Don't allow skipping steps unless going back to 1
       if (newStep !== 1 && newStep > state.step + 1) {
         console.warn(`Cannot advance from step ${state.step} to ${newStep} - steps can't be skipped`);
         return;
@@ -248,22 +245,125 @@ export const {
 
 export default bookingSlice.reducer;
 
-/** Basic selectors */
-export const selectBookingStep = (state: RootState) => state.booking.step;
-export const selectBookingStepName = (state: RootState) => state.booking.stepName;
-export const selectDepartureDate = (state: RootState) => state.booking.departureDate;
-export const selectRoute = (state: RootState) => state.booking.route;
-export const selectRouteStatus = (state: RootState) => state.booking.routeStatus;
-export const selectRouteError = (state: RootState) => state.booking.routeError;
-export const selectTicketPlan = (state: RootState) => state.booking.ticketPlan;
+/** Type-safe selectors that handle potentially malformed state */
+export const selectBookingStep = (state: RootState): number => {
+  try {
+    if (!state?.booking) return 1;
+    return typeof state.booking.step === 'number' ? state.booking.step : 1;
+  } catch (e) {
+    return 1; // Fallback to step 1 if error
+  }
+};
 
-/** Station IDs */
-export const selectDepartureStationId = (state: RootState) => state.booking.departureStationId;
-export const selectArrivalStationId = (state: RootState) => state.booking.arrivalStationId;
+export const selectBookingStepName = (state: RootState): string => {
+  try {
+    if (!state?.booking) return "selecting_departure_station";
+    return typeof state.booking.stepName === 'string' 
+      ? state.booking.stepName 
+      : "selecting_departure_station";
+  } catch (e) {
+    return "selecting_departure_station"; // Fallback
+  }
+};
 
-/** QR fields */
-export const selectIsQrScanStation = (state: RootState) => state.booking.isQrScanStation;
-export const selectQrVirtualStationId = (state: RootState) => state.booking.qrVirtualStationId;
+export const selectDepartureDate = (state: RootState): Date | null => {
+  try {
+    if (!state?.booking) return null;
+    return state.booking.departureDate instanceof Date 
+      ? state.booking.departureDate 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectRoute = (state: RootState): RouteInfo | null => {
+  try {
+    if (!state?.booking) return null;
+    return state.booking.route;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectRouteStatus = (state: RootState): string => {
+  try {
+    if (!state?.booking) return "idle";
+    return typeof state.booking.routeStatus === 'string' 
+      ? state.booking.routeStatus 
+      : "idle";
+  } catch (e) {
+    return "idle"; // Fallback
+  }
+};
+
+export const selectRouteError = (state: RootState): string | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.routeError === 'string' 
+      ? state.booking.routeError 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectTicketPlan = (state: RootState): TicketPlan => {
+  try {
+    if (!state?.booking) return null;
+    const plan = state.booking.ticketPlan;
+    if (plan === "single" || plan === "paygo" || plan === null) {
+      return plan;
+    }
+    return null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+/** Station IDs with improved type safety */
+export const selectDepartureStationId = (state: RootState): number | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.departureStationId === 'number' 
+      ? state.booking.departureStationId 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectArrivalStationId = (state: RootState): number | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.arrivalStationId === 'number' 
+      ? state.booking.arrivalStationId 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+/** QR fields with improved type safety */
+export const selectIsQrScanStation = (state: RootState): boolean => {
+  try {
+    if (!state?.booking) return false;
+    return !!state.booking.isQrScanStation;
+  } catch (e) {
+    return false; // Fallback
+  }
+};
+
+export const selectQrVirtualStationId = (state: RootState): number | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.qrVirtualStationId === 'number' 
+      ? state.booking.qrVirtualStationId 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
 
 /** If you need a memoized decode of the polyline, etc. */
 export const selectRouteDecoded = createSelector([selectRoute], (route) => {
