@@ -114,10 +114,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     console.log("[LayoutInner] Removed ephemeral booking data from localStorage");
   }, []);
 
-  dispatch(resetBookingFlow());
-    console.log("[LayoutInner] Initialized booking state for all users");
-  
-
   useEffect(() => {
     const db = getFirestore();
 
@@ -165,8 +161,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // but that is now handled by bookingStep5Transform. We no longer do it here.
   useEffect(() => {
     console.log("[LayoutInner] App mount - no forced ephemeral clearing here anymore.");
+    
+    // Initialize booking state for all users, regardless of auth status
+    dispatch(resetBookingFlow());
+    console.log("[LayoutInner] Initialized booking state for all users");
+    
     setLoading(false);
-  }, []);
+  }, [dispatch]);
 
   // If user is signed in, load booking details from Firestore
   useEffect(() => {
