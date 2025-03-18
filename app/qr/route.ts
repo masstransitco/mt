@@ -1,4 +1,4 @@
-// src/app/api/qr/route.ts
+// /app/api/qr/route.ts
 
 import { NextResponse } from 'next/server';
 import QRCode from 'qrcode';
