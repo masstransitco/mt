@@ -107,6 +107,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const isSignedIn = useAppSelector(selectIsSignedIn);
 
   useEffect(() => {
+    // This effect runs once when the app first mounts
+    localStorage.removeItem("persist:booking");
+    console.log("[LayoutInner] Removed ephemeral booking data from localStorage");
+  }, []);
+
+  useEffect(() => {
     const db = getFirestore();
 
     // Listen for Firebase Auth changes
