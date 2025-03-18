@@ -691,7 +691,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Which station to show in detail?
   // --------------------------
   const hasError = stationsError || carsError || loadError;
-  const hasStationSelected = bookingStep < 3 ? departureStationId : arrivalStationId;
+  const hasStationSelected = bookingStep < 3 
+  ? (typeof departureStationId === 'number' ? departureStationId : null) 
+  : (typeof arrivalStationId === 'number' ? arrivalStationId : null);
 
   // Log stations for debugging
   useEffect(() => {
