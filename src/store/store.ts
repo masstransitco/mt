@@ -22,10 +22,7 @@ import stations3DReducer from "./stations3DSlice";
 import dispatchReducer from "./dispatchSlice";
 import verificationReducer from "./verificationSlice";
 
-// The transform you already have
-import bookingStep5Transform from "./bookingStep5Transform";
-
-// A reusable default booking object for clearing ephemeral steps
+// Default booking state for resets
 const defaultBooking: BookingState = {
   step: 1,
   stepName: "selecting_departure_station",
@@ -41,37 +38,94 @@ const defaultBooking: BookingState = {
 };
 
 /**
- * 1) We define a "preTransform" that clears ephemeral steps
- *    so they never get written to localStorage.
- *
- *    - We want *all* steps < 5 (including step 1) to be ephemeral.
- *    - This means if the user is at step 1..4, it never persists to localStorage.
- *    - Steps 5 or 6 pass through and get stored.
+ * SIMPLIFIED TRANSFORM - Single transform that:
+ * 1. Only persists step 5
+ * 2. Only rehydrates step 5
+ * 3. Ensures type safety with deep cloning
+ * 4. Guards against malformed state
  */
-const ephemeralStepsTransform: Transform<BookingState, BookingState> = {
-  // (Redux => localStorage)
+const bookingPersistTransform: Transform<BookingState, BookingState> = {
+  // Redux State => localStorage
   in: (inboundState) => {
-    // No ephemeral logic here—pass state as-is so we don't overwrite step <5 mid-session.
-    return inboundState;
-  },
-
-  // Outbound transform (from localStorage to Redux state on rehydration)
-  out: (outboundState) => {
-    if (!outboundState) return outboundState;
-
-    // If the stored data was step < 5, we do not rehydrate it (returns default)
-    if (outboundState.step < 5) {
-      console.log("[ephemeralStepsTransform] Preventing rehydration of steps <5");
-      return { ...defaultBooking };
+    // Guard against null/undefined state
+    if (!inboundState) {
+      console.log("[bookingPersistTransform] inboundState is null/undefined");
+      return defaultBooking;
     }
 
-    // Otherwise, pass it through
-    return outboundState;
+    // Deep clone to prevent reference issues (simple but effective)
+    try {
+      const stateCopy = JSON.parse(JSON.stringify(inboundState));
+      
+      // Only persist step 5 to localStorage, ignore all other steps
+      if (typeof stateCopy.step === 'number' && stateCopy.step === 5) {
+        console.log("[bookingPersistTransform] Persisting step 5 data to localStorage");
+        
+        // Type-safety checks for critical fields
+        if (typeof stateCopy.departureStationId !== 'number') {
+          stateCopy.departureStationId = null;
+        }
+        
+        if (typeof stateCopy.arrivalStationId !== 'number') {
+          stateCopy.arrivalStationId = null;
+        }
+        
+        stateCopy.isQrScanStation = !!stateCopy.isQrScanStation;
+        
+        return stateCopy;
+      }
+      
+      // For all other steps, don't persist to localStorage
+      console.log(`[bookingPersistTransform] Not persisting step ${stateCopy.step || 'unknown'}`);
+      return undefined; // Skip persisting non-step 5 data
+    } catch (error) {
+      console.error("[bookingPersistTransform] Error processing state:", error);
+      return defaultBooking;
+    }
   },
+
+  // localStorage => Redux State
+  out: (outboundState) => {
+    // Guard against null/undefined state
+    if (!outboundState) {
+      console.log("[bookingPersistTransform] outboundState is null/undefined");
+      return defaultBooking;
+    }
+
+    // Deep clone to prevent reference issues
+    try {
+      const stateCopy = JSON.parse(JSON.stringify(outboundState));
+      
+      // Only rehydrate step 5, reset for all other steps
+      if (typeof stateCopy.step === 'number' && stateCopy.step === 5) {
+        console.log("[bookingPersistTransform] Rehydrating step 5 data from localStorage");
+        
+        // Type-safety checks for critical fields
+        if (typeof stateCopy.departureStationId !== 'number') {
+          stateCopy.departureStationId = null;
+        }
+        
+        if (typeof stateCopy.arrivalStationId !== 'number') {
+          stateCopy.arrivalStationId = null;
+        }
+        
+        stateCopy.isQrScanStation = !!stateCopy.isQrScanStation;
+        
+        return stateCopy;
+      }
+      
+      // For all other steps, reset to default
+      console.log(`[bookingPersistTransform] Not rehydrating step ${stateCopy.step || 'unknown'}`);
+      return defaultBooking;
+    } catch (error) {
+      console.error("[bookingPersistTransform] Error processing state:", error);
+      return defaultBooking;
+    }
+  }
 };
 
 /**
- * 2) Here is your user persist config, unchanged
+ * User persist config remains unchanged
  */
 const userPersistConfig = {
   key: "user",
@@ -80,11 +134,7 @@ const userPersistConfig = {
 };
 
 /**
- * 3) The booking persist config:
- *    - ephemeralStepsTransform first,
- *    - then bookingStep5Transform
- *    ephemeralStepsTransform ensures steps <5 never get stored,
- *    bookingStep5Transform ensures only steps 5 or 6 rehydrate if it sneaks through.
+ * Simplified booking persist config with a single transform
  */
 const bookingPersistConfig = {
   key: "booking",
@@ -92,18 +142,19 @@ const bookingPersistConfig = {
   whitelist: [
     "step",
     "stepName",
-    "departureDate",
+    "departureDate", 
     "ticketPlan",
     "departureStationId",
     "arrivalStationId",
     "route",
+    "isQrScanStation",
+    "qrVirtualStationId" // Include QR fields in persistence
   ],
-  transforms: [ephemeralStepsTransform, bookingStep5Transform],
+  transforms: [bookingPersistTransform]
 };
 
 /**
- * 4) Combine your reducers as usual,
- *    using persistReducer on user and booking.
+ * Root reducer configuration remains unchanged
  */
 const rootReducer = combineReducers({
   chat: chatReducer,
@@ -111,18 +162,13 @@ const rootReducer = combineReducers({
   stations: stationsReducer,
   stations3D: stations3DReducer,
   car: carReducer,
-
-  // Booking is persist-wrapped:
   booking: persistReducer(bookingPersistConfig, bookingReducer),
-
   dispatch: dispatchReducer,
   verification: verificationReducer,
 });
 
 /**
- * 5) Create the store, telling Redux Toolkit
- *    to ignore the usual redux-persist warnings
- *    about serialization checks for the special persist actions.
+ * Store configuration remains unchanged
  */
 export const store = configureStore({
   reducer: rootReducer,
@@ -136,12 +182,8 @@ export const store = configureStore({
     }),
 });
 
-/**
- * 6) Export persistor for your Next.js or React usage
- */
 export const persistor = persistStore(store);
 
-// Typed hooks
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
