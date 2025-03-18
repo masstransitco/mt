@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner"; 
+import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
 import { useAppDispatch } from "@/store/store";
 import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import type { Car } from "@/types/cars";
@@ -28,7 +28,7 @@ export default function QrScannerOverlay({
   const [scanning, setScanning] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  // Reset scanning state when overlay is toggled
+  // Reset scanning state when the overlay is toggled
   useEffect(() => {
     if (isOpen) {
       setScanning(true);
@@ -48,11 +48,10 @@ export default function QrScannerOverlay({
         console.log("QR Code Scanned:", scannedValue);
 
         // Extract the car registration from the code
-        // capture everything after the slash until next slash or end of string
-const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
+        const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         if (!match) {
           toast.error("Invalid QR code format");
-          onClose();
+          onClose(); // closes overlay on error
           return;
         }
 
@@ -63,7 +62,7 @@ const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         const carResult = await dispatch(fetchCarByRegistration(registration)).unwrap();
         if (!carResult) {
           toast.error(`Car ${registration} not found`);
-          onClose();
+          onClose(); // closes overlay if no car found
           return;
         }
 
@@ -87,13 +86,15 @@ const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
         }
 
         toast.success(`Car ${registration} found!`);
+        // Close the scanner on successful scan
+        onClose();
       } catch (error) {
         console.error("Error processing QR code:", error);
         toast.error("Failed to process the car QR code");
+        // Intentionally *not* closing here unless you want the user
+        // to re-scan again; add `onClose()` if you prefer to close on error.
       } finally {
         setLoading(false);
-        console.log("handleScan complete, closing overlay.");
-        onClose();
       }
     },
     [dispatch, onClose, onScanSuccess, loading]
