@@ -886,30 +886,28 @@ export default function GMap({ googleApiKey }: GMapProps) {
           </Sheet>
 
           {/* Station Detail Sheet */}
-          <Sheet
-            key={`detail-sheet-${detailKey}`}
-            isOpen={(openSheet === "detail" || forceSheetOpen) && !!stationToShow && !isStepTransitioning}
-            isMinimized={isDetailSheetMinimized}
-            onMinimize={() => setIsDetailSheetMinimized(true)}
-            onExpand={() => setIsDetailSheetMinimized(false)}
-            onDismiss={handleStationDetailClose}
-            headerContent={renderSheetContent()}
-            ref={detailSheetRef}
-          >
-            {stationToShow && (
-              <StationDetail
-                key={`station-detail-${detailKey}`}
-                stations={searchLocation ? sortedStations : stations}
-                activeStation={stationToShow}
-                onOpenSignIn={handleOpenSignIn}
-                onConfirmDeparture={handleStationConfirm}
-                onDismiss={() => setIsDetailSheetMinimized(true)}
-                isQrScanStation={isQrScanStation}
-                onClose={handleStationDetailClose}
-                isMinimized={isDetailSheetMinimized}
-              />
-            )}
-          </Sheet>
+<Sheet
+  // No key prop
+  isOpen={(openSheet === "detail" || forceSheetOpen) && !isStepTransitioning}
+  isMinimized={isDetailSheetMinimized}
+  onMinimize={() => setIsDetailSheetMinimized(true)}
+  onExpand={() => setIsDetailSheetMinimized(false)}
+  onDismiss={handleStationDetailClose}
+  headerContent={renderSheetContent()}
+  ref={detailSheetRef}
+>
+  <StationDetail
+    // No key prop
+    stations={searchLocation ? sortedStations : stations}
+    activeStation={stationToShow}
+    onOpenSignIn={handleOpenSignIn}
+    onConfirmDeparture={handleStationConfirm}
+    onDismiss={() => setIsDetailSheetMinimized(true)}
+    isQrScanStation={isQrScanStation}
+    onClose={handleStationDetailClose}
+    isMinimized={isDetailSheetMinimized}
+  />
+</Sheet>
 
           {/* QR Scanner Overlay */}
           <QrScannerOverlay
