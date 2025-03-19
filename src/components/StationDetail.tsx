@@ -632,7 +632,7 @@ function StationDetailComponent({
   return (
     <>
       <motion.div
-        className="p-3 space-y-2 overscroll-contain"
+        className="p-3 space-y-2 overscroll-contain touchaction-none"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "tween", duration: 0.2 }}
