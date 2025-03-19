@@ -863,29 +863,30 @@ export default function GMap({ googleApiKey }: GMapProps) {
           />
 
           {/* Station List Sheet */}
-          <Sheet
-            isOpen={openSheet === "list" && !isStepTransitioning}
-            isMinimized={isListSheetMinimized}
-            onMinimize={() => setIsListSheetMinimized(true)}
-            onExpand={() => setIsListSheetMinimized(false)}
-            onDismiss={() => setIsListSheetMinimized(true)}
-            title="Nearby Stations"
-            count={sortedStations.length}
-            ref={listSheetRef}
-          >
-            <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-              <StationList
-                stations={sortedStations}
-                height={350}
-                showLegend={true}
-                userLocation={userLocation}
-                isVisible={!isListSheetMinimized}
-                onStationClick={handleStationSelectedFromList}
-              />
-            </div>
-          </Sheet>
-
-          {/* Station Detail Sheet */}
+          {openSheet === "list" && !isStepTransitioning && (
+  <Sheet
+    isOpen={true}
+    isMinimized={isListSheetMinimized}
+    onMinimize={() => setIsListSheetMinimized(true)}
+    onExpand={() => setIsListSheetMinimized(false)}
+    onDismiss={() => setIsListSheetMinimized(true)}
+    title="Nearby Stations"
+    count={sortedStations.length}
+    ref={listSheetRef}
+  >
+    <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+      <StationList
+        stations={sortedStations}
+        height={350}
+        showLegend={true}
+        userLocation={userLocation}
+        isVisible={!isListSheetMinimized}
+        onStationClick={handleStationSelectedFromList}
+      />
+    </div>
+  </Sheet>
+)}
+         {/* Station Detail Sheet */}
 <Sheet
   // No key prop
   isOpen={(openSheet === "detail" || forceSheetOpen) && !isStepTransitioning}
