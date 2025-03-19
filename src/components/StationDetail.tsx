@@ -619,8 +619,8 @@ function StationDetailComponent({
       <div className="p-4 space-y-3">
         <div className="text-xs text-gray-300">
           {isDepartureFlow
-            ? "Select a departure station from the map or list below."
-            : "Select an arrival station from the map or list below."}
+            ? "Choose pickup from map, or scan a car."
+            : "Choose dropoff from map."}
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
         </div>
