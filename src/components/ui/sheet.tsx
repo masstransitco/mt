@@ -16,7 +16,6 @@ import { AnimatePresence, motion, useAnimation, useDragControls, type PanInfo } 
 import { cn } from "@/lib/utils"
 
 // Constants
-const MINIMIZED_HEIGHT = "auto"
 const MAX_EXPANDED_HEIGHT = "90vh"
 const DRAG_THRESHOLD = 50
 
@@ -29,11 +28,8 @@ const SheetHeader = memo(function SheetHeader({
   headerContent,
   count,
   countLabel,
-  isMinimized,
-  onToggle,
   headerRef,
   onDragStart,
-  onDragEnd,
   startDrag,
 }: {
   title?: string
@@ -338,6 +334,7 @@ function SheetImpl(
             ref={sheetRef}
             className={cn(
               "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col h-full",
+              "select-none",
               className
             )}
           >
