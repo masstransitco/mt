@@ -632,7 +632,6 @@ function StationDetailComponent({
   return (
     <>
       <motion.div
-        key={`station-detail-${forceRefreshKey}`}
         className="p-3 space-y-2 overscroll-contain"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
