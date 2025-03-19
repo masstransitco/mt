@@ -863,7 +863,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           />
 
           {/* Station List Sheet */}
-          {openSheet === "list" && !isStepTransitioning && (
+{openSheet === "list" && !isStepTransitioning && (
   <Sheet
     isOpen={true}
     isMinimized={isListSheetMinimized}
@@ -886,9 +886,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     </div>
   </Sheet>
 )}
-         {/* Station Detail Sheet */}
+
+{/* Station Detail Sheet */}
 <Sheet
-  // No key prop
   isOpen={(openSheet === "detail" || forceSheetOpen) && !isStepTransitioning}
   isMinimized={isDetailSheetMinimized}
   onMinimize={() => setIsDetailSheetMinimized(true)}
@@ -898,7 +898,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   ref={detailSheetRef}
 >
   <StationDetail
-    // No key prop
     stations={searchLocation ? sortedStations : stations}
     activeStation={stationToShow}
     onOpenSignIn={handleOpenSignIn}
