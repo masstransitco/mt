@@ -310,8 +310,6 @@ function SheetImpl(
     delete target.dataset.touchStartY;
   }, []);
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
       <motion.div
