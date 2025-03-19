@@ -1,3 +1,4 @@
+// src/components/ui/sheet.tsx
 "use client"
 
 import type React from "react"
@@ -100,6 +101,8 @@ export interface SheetProps {
   onMinimize?: () => void
   onExpand?: () => void
   onDismiss?: () => void
+  /** Higher z-index for sheets containing StationList */
+  highPriority?: boolean
 }
 
 export interface SheetHandle {
@@ -120,6 +123,7 @@ function SheetImpl(
     onMinimize,
     onExpand,
     onDismiss,
+    highPriority = false,
   }: SheetProps,
   ref: React.Ref<SheetHandle>,
 ) {
@@ -216,7 +220,7 @@ function SheetImpl(
       closePromiseResolverRef.current = resolve
       onDismiss?.()
     })
-  }, [isOpen, onDismiss])
+  }, [isOpen, onDismiss]);
 
   useImperativeHandle(ref, () => ({ closeSheet }), [closeSheet]);
 
@@ -302,11 +306,13 @@ function SheetImpl(
     delete target.dataset.touchStartY;
   }, []);
 
+  // Determine z-index based on priority
+  const zIndexClass = highPriority ? "z-[1000]" : "z-[999]";
 
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed bottom-0 left-0 right-0 z-[999] pointer-events-none"
+        className={`fixed bottom-0 left-0 right-0 ${zIndexClass} pointer-events-none`}
         key="sheet-container"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
