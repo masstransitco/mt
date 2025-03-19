@@ -209,11 +209,9 @@ function SheetImpl(
   const calculateYPosition = useMemo(() => {
     if (isMinimized) {
       if (headerHeight) {
-        // When minimized, only move the sheet down enough to hide the body,
-        // but keep the header visible
-        return `calc(100% - ${headerHeight}px)`;
+        return `calc(100% - ${headerHeight}px - env(safe-area-inset-bottom, 0px))`;
       }
-      return "calc(100% - var(--header-height, 64px))";
+      return `calc(100% - var(--header-height, 64px) - env(safe-area-inset-bottom, 0px))`;
     }
     return 0;
   }, [isMinimized, headerHeight]);
@@ -309,6 +307,7 @@ function SheetImpl(
     const target = e.currentTarget as HTMLDivElement;
     delete target.dataset.touchStartY;
   }, []);
+
 
   return (
     <AnimatePresence>
