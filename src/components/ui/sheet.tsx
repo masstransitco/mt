@@ -351,7 +351,7 @@ function SheetImpl(
             />
             <div
               ref={bodyRef}
-              className="flex-grow overflow-y-auto overscroll-contain transition-all duration-200 px-3 pt-2 pb-3"
+              className="flex-grow overflow-y-auto overscroll-contain touchaction-none transition-all duration-200 px-3 pt-2 pb-3"
               style={bodyStyle}
               onTouchStart={(e) => {
                 const target = e.currentTarget as HTMLDivElement;
