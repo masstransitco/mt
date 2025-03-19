@@ -322,7 +322,7 @@ function SheetImpl(
         exit={{ y: "100%" }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
         onAnimationComplete={handleAnimationComplete}
-        style={{ width: "100%" }}
+        style={{ width: "100%", maxHeight: "100%" }}
       >
         <motion.div
           ref={containerRef}
