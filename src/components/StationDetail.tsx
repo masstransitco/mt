@@ -613,7 +613,7 @@ function StationDetailComponent({
     )
   }
 
-  // If truly no station, fallback UI
+  // Default UI, without active / selected station
   if (!activeStation) {
     return (
       <div className="p-4 space-y-3">
@@ -623,12 +623,6 @@ function StationDetailComponent({
             : "Select an arrival station from the map or list below."}
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="p-2 rounded-lg bg-gray-800/50 flex items-center gap-1.5 text-gray-300">
-            <span>View parking</span>
-          </div>
-          <div className="p-2 rounded-lg bg-gray-800/50 flex items-center gap-1.5 text-gray-300">
-            <span>Check availability</span>
-          </div>
         </div>
       </div>
     )
