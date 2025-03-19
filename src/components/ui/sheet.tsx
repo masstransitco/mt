@@ -143,11 +143,10 @@ function SheetImpl(
 
   useEffect(() => {
     if (!isOpen) return
-    if (!isMinimized) {
       scrollYRef.current = window.scrollY
       const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
       const originalStyles = {
-        overflow: document.body.style.overflow = "hidden",
+        overflow: document.body.style.overflow,
         paddingRight: document.body.style.paddingRight,
       }
       document.body.style.overflow = 'hidden'
@@ -158,7 +157,6 @@ function SheetImpl(
         document.body.style.overflow = originalStyles.overflow
         document.body.style.paddingRight = originalStyles.paddingRight
       }
-    }
   }, [isOpen, isMinimized])
 
   useEffect(() => {
