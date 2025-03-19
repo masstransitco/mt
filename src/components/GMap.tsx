@@ -69,6 +69,9 @@ import SignInModal from "@/components/ui/SignInModal";
 // Custom components for sheet headers
 import PickupTime from "@/components/ui/PickupTime";
 import FareDisplay from "@/components/ui/FareDisplay";
+import PickupGuide from "@/components/ui/PickupGuide";
+import StationsDisplay from "@/components/ui/StationsDisplay";
+import CarPlate from "@/components/ui/CarPlate";
 
 // Map / 3D constants & hooks
 import {
@@ -745,14 +748,32 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [dispatchRouteObj]);
 
   const renderSheetContent = useCallback(() => {
-    if (bookingStep === 2) {
+    // Special case for QR-scanned car
+    if (isQrScanStation && scannedCar && bookingStep === 2) {
+      return <CarPlate 
+        plateNumber={scannedCar.name} 
+        vehicleModel={scannedCar.model || "Electric Vehicle"} 
+      />;
+    }
+    
+    if (bookingStep === 1) {
+      return <PickupGuide isDepartureFlow={true} />;
+    } else if (bookingStep === 2) {
       const { startTime, endTime } = getPickupTimeRange();
       return <PickupTime startTime={startTime} endTime={endTime} />;
+    } else if (bookingStep === 3) {
+      return <PickupGuide 
+        isDepartureFlow={false} 
+        primaryText="Choose dropoff station" 
+        secondaryText="Return to any station"
+        primaryDescription="Select destination on map"
+        secondaryDescription="All stations accept returns"
+      />;
     } else if (bookingStep === 4) {
       return <FareDisplay baseFare={50.0} currency="HKD" perMinuteRate={1} />;
     }
     return null;
-  }, [bookingStep, getPickupTimeRange]);
+  }, [bookingStep, getPickupTimeRange, isQrScanStation, scannedCar]);
 
   // Extra debugging log before rendering
   useEffect(() => {
@@ -870,8 +891,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
     onMinimize={() => setIsListSheetMinimized(true)}
     onExpand={() => setIsListSheetMinimized(false)}
     onDismiss={() => setIsListSheetMinimized(true)}
-    title="Nearby Stations"
-    count={sortedStations.length}
+    headerContent={<StationsDisplay stationsCount={sortedStations.length} totalStations={stations.length} />}
+    highPriority={true} // Set to true for station list sheet to appear on top
     ref={listSheetRef}
   >
     <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
@@ -879,6 +900,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         stations={sortedStations}
         height={350}
         showLegend={true}
+        hideStationCount={true} // Hide the count in the StationList since it's in the header
         userLocation={userLocation}
         isVisible={!isListSheetMinimized}
         onStationClick={handleStationSelectedFromList}

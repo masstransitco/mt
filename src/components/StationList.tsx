@@ -1,3 +1,4 @@
+// src/components/StationList.tsx
 "use client";
 
 import React, { memo, useCallback, useEffect, useMemo, useState, useRef } from "react";
@@ -31,6 +32,8 @@ interface StationListProps {
   userLocation?: google.maps.LatLngLiteral | null; // Possibly undefined or null
   /** Whether this list is currently visible (un-minimized). */
   isVisible?: boolean;
+  /** Whether to hide the station count (if it's already shown in the header) */
+  hideStationCount?: boolean;
 
   /**
    * Optional callback for station clicks.
@@ -82,6 +85,7 @@ function StationList({
   showLegend = true,
   userLocation,
   isVisible = true,
+  hideStationCount = false,
   onStationClick,
 }: StationListProps) {
   const dispatch = useAppDispatch();
@@ -229,10 +233,9 @@ function StationList({
     >
       {showLegend && (
         <div className="px-4 py-2 bg-gray-900/60 border-b border-gray-800 flex justify-between items-center">
-          <div className="text-xs text-gray-400">
-            {stations.length} stations found
-          </div>
-          <div className="flex gap-3">
+          
+          {/* Always show legend icons, even when count is hidden */}
+          <div className={`flex gap-3 ${hideStationCount ? "w-full justify-end" : ""}`}>
             {/* Example legend icons */}
             <div className="flex items-center gap-1.5">
               <div className="p-1 rounded-full bg-blue-600">

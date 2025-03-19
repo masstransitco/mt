@@ -616,17 +616,7 @@ function StationDetailComponent({
 
   // Default UI, without active / selected station
   if (!activeStation) {
-    return (
-      <div className="p-4 space-y-3">
-        <div className="text-xs text-gray-300">
-          {isDepartureFlow
-            ? "Choose pickup from map, or scan a car."
-            : "Choose dropoff from map."}
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-        </div>
-      </div>
-    )
+    return null; // Guidance now comes from the sheet header
   }
 
   // Use forceRefreshKey to force remount of the component
