@@ -807,7 +807,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Render
   // --------------------------
   return (
-    <div className="relative w-full h-[calc(100vh-64px)]">
+    <div className="relative w-full h-[calc(100dvh)]">
       {hasError && (
         <div className="flex items-center justify-center w-full h-full bg-background text-destructive p-4">
           <div className="text-center space-y-2">
