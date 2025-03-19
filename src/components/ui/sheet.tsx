@@ -147,7 +147,7 @@ function SheetImpl(
       scrollYRef.current = window.scrollY
       const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
       const originalStyles = {
-        overflow: document.body.style.overflow,
+        overflow: document.body.style.overflow = "hidden",
         paddingRight: document.body.style.paddingRight,
       }
       document.body.style.overflow = 'hidden'
