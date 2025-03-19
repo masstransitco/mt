@@ -56,7 +56,8 @@
   html {
     font-family: "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
     overscroll-behavior: none;
-    height: 100%;
+    height: 100dvh;
+    height: -webkit-fill-available;
   }
 
   body {
@@ -67,6 +68,7 @@
     text-rendering: optimizeLegibility;
     overscroll-behavior: none;
     height: 100%;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
