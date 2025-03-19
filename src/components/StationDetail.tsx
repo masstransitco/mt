@@ -615,31 +615,19 @@ function StationDetailComponent({
   }
 
   // Default UI, without active / selected station
-if (!activeStation) {
-  // Lock browser scroll whenever this fallback UI is shown
-  useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      // Restore the original overflow
-      document.body.style.overflow = originalOverflow;
-    };
-  }, []);
-
-  return (
-    <div className="p-4 space-y-3">
-      <div className="text-xs text-gray-300">
-        {isDepartureFlow
-          ? "Choose pickup from map, or scan a car."
-          : "Choose dropoff from map."}
+  if (!activeStation) {
+    return (
+      <div className="p-4 space-y-3">
+        <div className="text-xs text-gray-300">
+          {isDepartureFlow
+            ? "Choose pickup from map, or scan a car."
+            : "Choose dropoff from map."}
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        {/* Additional content */}
-      </div>
-    </div>
-  );
-}
+    )
+  }
 
   // Use forceRefreshKey to force remount of the component
   return (
