@@ -209,13 +209,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
       }}
       {...touchScrollHandlers}
     >
-      {isGroupSelected && (
-        <div className="absolute top-1 right-1.5 z-10">
-          <div className="px-1.5 py-0.5 rounded-full bg-blue-500/80 text-white text-xs backdrop-blur-sm">
-            Selected
-          </div>
-        </div>
-      )}
+      {/* Selected indicator removed as requested */}
       <div className="flex flex-col h-full">
         <div className="flex flex-row flex-1">
           <div className="relative w-1/2 h-full overflow-hidden">
@@ -247,14 +241,14 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
               <ViewerSkeleton />
             )}
           </div>
-          <div className="w-1/2 h-full p-2 flex flex-col justify-between">
+          <div className="w-1/2 h-full p-3 flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between">
                 <p className="font-medium text-sm leading-tight text-white">
                   {displayedCar.model || "Unknown Model"}
                 </p>
               </div>
-              <div className="flex items-center mt-1 gap-1 flex-wrap">
+              <div className="flex items-center mt-1.5 gap-1.5 flex-wrap">
                 <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
                   <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
                   <span className="text-xs font-medium">{batteryPercentage}%</span>
@@ -273,8 +267,8 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         </div>
         
         {/* Footer Component - Reduced size */}
-        <div className="w-full h-5 bg-gray-800/50 px-2 flex items-center justify-between text-xs border-t border-gray-700/30">
-          <div className="flex items-center gap-1 relative">
+        <div className="w-full h-5 bg-gray-800/50 px-3 flex items-center justify-between text-xs border-t border-gray-700/30">
+          <div className="flex items-center gap-1.5 relative">
             <Info
               className="w-3.5 h-3.5 text-gray-400 cursor-pointer hover:text-white transition-colors"
               onClick={handleOdometerClick}
