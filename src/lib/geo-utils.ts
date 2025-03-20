@@ -1,5 +1,8 @@
 import {MathUtils, Vector3} from 'three';
-import type {LatLngAltitudeLiteral} from './types';
+import type {
+  LatLngAltitudeLiteral,
+  RaycastOptions
+} from "../types/webgl"
 
 // shorthands for math-functions, makes equations more readable
 const {sin, cos, pow, sqrt, atan2, asin, sign} = Math;
