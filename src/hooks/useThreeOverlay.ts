@@ -3,16 +3,12 @@
 import type React from "react"
 import { useEffect, useRef, useMemo, useCallback } from "react"
 import * as THREE from "three"
-// ----------------------------------------------------------------------------
-// Using google.maps.WebGLOverlayView (via ThreeJSOverlayView)
-// ----------------------------------------------------------------------------
 import { ThreeJSOverlayView } from "@googlemaps/three"
-import { useGLTF } from "@react-three/drei"
-
 // If you want to specifically load Draco-compressed GLBs imperatively:
 // import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
 // import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
-// etc.
+
+import { useGLTF } from "@react-three/drei"
 
 // Redux + slices
 import { useAppSelector } from "@/store/store"
@@ -180,6 +176,8 @@ function createOrUpdateTube(
 
 // ---------------------------------------------------------------------
 // Hook: useThreeOverlay
+//    Adopts the snippet approach with overlay.update = () => {...}
+//    for per-frame logic, removing the separate continuousRender() loop
 // ---------------------------------------------------------------------
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -191,10 +189,7 @@ export function useThreeOverlay(
   // Scene & Overlay references
   const overlayRef = useRef<ThreeJSOverlayView | null>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
-  const isInitializedRef = useRef<boolean>(false)
-
-  // For continuous rendering
-  const continuousRenderFrameIdRef = useRef<number | null>(null)
+  const isInitializedRef = useRef(false)
 
   // InstancedMesh refs for stations
   const greyInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
@@ -211,11 +206,9 @@ export function useThreeOverlay(
     red: [],
   })
 
-  // Shared geometry/material references (from pool)
+  // Geometry & materials
   const stationGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
   const stationRingGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
-
-  // Material refs
   const matGreyRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const matBlueRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null)
@@ -224,21 +217,19 @@ export function useThreeOverlay(
   const ringMatRedRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const bookingTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
 
-  // Booking route tube mesh
+  // Booking route mesh
   const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null)
 
-  // Car-related
+  // Car references
   const carGeoRef = useRef<THREE.Group | null>(null)
   const carsMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const carModelsRef = useRef<Map<number, THREE.Object3D>>(new Map())
-
-  // **Optional**: a reference to your pinned GLTF model
   const pinnedModelRef = useRef<THREE.Object3D | null>(null)
 
-  // Redux selector for the booking route
+  // Redux route
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded)
 
-  // For convenience, re-memo cars/stations/selection
+  // Memo
   const memoizedCars = useMemo(() => cars.map((c) => ({ ...c })), [cars])
   const memoizedStations = useMemo(() => stations, [stations])
   const stationSelection = useMemo(() => ({ departureStationId, arrivalStationId }), [
@@ -246,9 +237,7 @@ export function useThreeOverlay(
     arrivalStationId,
   ])
 
-  // -- If you want to do a minimal React-based Draco load, we keep the below. --
-  // But from the snippet, you're likely using an imperative GLTFLoader in onAdd
-  // So you can remove or keep useGLTF depending on your approach:
+  // Optionally load a default Car model in React:
   const { scene: carModelScene } = useGLTF("/cars/defaultModel.glb")
 
   // Basic lights
@@ -260,11 +249,25 @@ export function useThreeOverlay(
   }, [])
 
   // ---------------------------------------------------------------------
-  // Continuous render loop: forces Google Maps to call onDraw every frame
+  // `overlay.update` style approach:
+  // We'll animate or do per-frame tasks here
   // ---------------------------------------------------------------------
-  const continuousRender = useCallback(() => {
-    overlayRef.current?.requestRedraw()
-    continuousRenderFrameIdRef.current = requestAnimationFrame(continuousRender)
+  const handleOverlayUpdate = useCallback(() => {
+    if (!overlayRef.current) return
+
+    // For example, animate color with time:
+    const time = performance.now() * 0.001
+    // Some simple color shift logic:
+    const hue = (time / 30) % 1
+    if (blueInstancedMeshRef.current && ringMatBlueRef.current) {
+      // shift from 0x0000ff => different hue
+      ringMatBlueRef.current.color.setHSL(hue, 1, 0.5)
+      ringMatBlueRef.current.emissive.setHSL(hue, 0.5, 0.2)
+      // We could also do the same for matBlueRef, etc.
+      // matBlueRef.current?.color.setHSL(hue, 1, 0.5)
+    }
+
+    overlayRef.current.requestRedraw()
   }, [])
 
   // ---------------------------------------------------------------------
@@ -380,11 +383,10 @@ export function useThreeOverlay(
   // Main Effect: Initialize the Overlay (runs once)
   // ---------------------------------------------------------------------
   useEffect(() => {
-    if (!googleMap) return
-    if (isInitializedRef.current) return
-
+    if (!googleMap || isInitializedRef.current) return
     isInitializedRef.current = true
-    console.log("[useThreeOverlay] Initializing Three.js overlay...")
+
+    console.log("[useThreeOverlay] Initializing...")
 
     // Create a Three.js scene
     const scene = new THREE.Scene()
@@ -406,30 +408,24 @@ export function useThreeOverlay(
     overlay.setMap(googleMap)
     overlayRef.current = overlay
 
-    // ------------------------------------------
-    // (A) Imperative glTF loading from snippet
-    // ------------------------------------------
-    // If you want to load a single pinned glTF model (Draco or otherwise),
-    // you can do so imperatively using GLTFLoader.
-    // The code below is an example. Adjust file path, scale, rotation, etc.
+    // #region Imperative glTF loading (like snippet's "onAdd" approach)
     /*
     const gltfLoader = new GLTFLoader()
-    // If Draco-compressed, you also configure the DRACOLoader:
+    // If Draco:
     // const dracoLoader = new DRACOLoader()
-    // dracoLoader.setDecoderPath('/path/to/draco/')
+    // dracoLoader.setDecoderPath('/draco/')
     // gltfLoader.setDRACOLoader(dracoLoader)
-
     gltfLoader.load('/pin.gltf', (gltf) => {
-      // e.g. gltf.scene.scale.set(25, 25, 25)
-      // gltf.scene.rotation.x = Math.PI
+      gltf.scene.scale.set(25,25,25)
+      gltf.scene.rotation.x = Math.PI
       pinnedModelRef.current = gltf.scene
       scene.add(gltf.scene)
+      overlay.requestRedraw()
     })
     */
+    // #endregion
 
-    // ---------------------------------------------------------------------
-    // Prepare geometry & materials from pool (Stations, etc.)
-    // ---------------------------------------------------------------------
+    // #region Prepare geometry & materials from pool
     if (!stationGeoRef.current) {
       if (GeometryPool.hexagon) {
         stationGeoRef.current = GeometryPool.hexagon
@@ -579,6 +575,7 @@ export function useThreeOverlay(
         bookingTubeMatRef.current = mat
       }
     }
+    // #endregion
 
     // ---------------------------------------------------------------------
     // Create InstancedMeshes for stations
@@ -623,7 +620,7 @@ export function useThreeOverlay(
     })
 
     // ---------------------------------------------------------------------
-    // Create or Clone Car Model
+    // Create/Clone Car Model from R3F
     // ---------------------------------------------------------------------
     if (carModelScene && !carGeoRef.current) {
       const clonedScene = carModelScene.clone()
@@ -638,24 +635,21 @@ export function useThreeOverlay(
     }
 
     // Place stations and cars initially
-    populateInstancedMeshes()
-    populateCarModels()
+populateInstancedMeshes();
+populateCarModels();
 
-    // *** Start continuous rendering ***
-    continuousRender()
+// #region The Key: overlay.update for per-frame logic
+(overlay as any).update = () => {
+  // Do any per-frame animations or updates here
+  handleOverlayUpdate();
+};
+// #endregion
 
     // Cleanup
     return () => {
-      console.log("[useThreeOverlay] Cleaning up Three.js overlay...")
+      console.log("[useThreeOverlay] Cleanup...")
 
-      // Stop continuous rendering
-      if (continuousRenderFrameIdRef.current !== null) {
-        cancelAnimationFrame(continuousRenderFrameIdRef.current)
-        continuousRenderFrameIdRef.current = null
-      }
-
-      // Safely remove overlay from map (TypeScript fix)
-      ;(overlay.setMap as unknown as (map: google.maps.Map | null) => void)(null)
+      overlay.setMap(null as any) // or (overlay.setMap as unknown as (map: google.maps.Map|null)=>void)(null)
       overlayRef.current = null
 
       // Remove all cars
@@ -675,7 +669,7 @@ export function useThreeOverlay(
       })
       carModelsRef.current.clear()
 
-      // Remove pinned model if you loaded one
+      // Remove pinned model if loaded
       if (pinnedModelRef.current) {
         scene.remove(pinnedModelRef.current)
         pinnedModelRef.current.traverse((obj) => {
@@ -692,11 +686,10 @@ export function useThreeOverlay(
         pinnedModelRef.current = null
       }
 
-      // Dispose station geometry if not keeping in the pool
+      // Dispose station geometry
       stationGeoRef.current = null
       stationRingGeoRef.current = null
 
-      // Dispose materials if not pooling
       matGreyRef.current = null
       matBlueRef.current = null
       matRedRef.current = null
@@ -709,13 +702,10 @@ export function useThreeOverlay(
       if (carGeoRef.current) {
         carGeoRef.current.traverse((obj) => {
           const mesh = obj as THREE.Mesh
-          if (mesh && mesh.geometry) mesh.geometry.dispose()
-          if (mesh && mesh.material) {
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((mat) => mat.dispose())
-            } else {
-              mesh.material.dispose()
-            }
+          if (mesh.geometry) mesh.geometry.dispose()
+          if (mesh.material) {
+            if (Array.isArray(mesh.material)) mesh.material.forEach((mat) => mat.dispose())
+            else mesh.material.dispose()
           }
         })
         carGeoRef.current = null
@@ -723,12 +713,10 @@ export function useThreeOverlay(
       carsMatRef.current?.dispose()
       carsMatRef.current = null
 
-      // Clear scene
       scene.clear()
       sceneRef.current = null
       isInitializedRef.current = false
 
-      // Finally, dispose any pooled resources if desired
       disposeGeometryPool()
       disposeMaterialPool()
     }
@@ -736,7 +724,7 @@ export function useThreeOverlay(
   }, [googleMap])
 
   // ---------------------------------------------------------------------
-  // Re-populate station instanced meshes when data or selection changes
+  // Re-populate station meshes when data or selection changes
   // ---------------------------------------------------------------------
   useEffect(() => {
     if (!overlayRef.current) return
@@ -758,6 +746,7 @@ export function useThreeOverlay(
   // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
+
     if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingTubeMatRef.current) {
       createOrUpdateTube(
         bookingRouteDecoded,
@@ -770,17 +759,17 @@ export function useThreeOverlay(
     } else if (bookingRouteMeshRef.current) {
       bookingRouteMeshRef.current.visible = false
     }
+
     overlayRef.current.requestRedraw()
   }, [bookingRouteDecoded])
 
   return {
-    // Expose whatever references or methods you need
     overlayRef,
     sceneRef,
     greyInstancedMeshRef,
     blueInstancedMeshRef,
     redInstancedMeshRef,
     stationIndexMapsRef,
-    pinnedModelRef, // If you want direct access to the pinned glTF model
+    pinnedModelRef,
   }
 }
