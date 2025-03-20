@@ -22,10 +22,13 @@ interface CarCardProps {
 }
 
 // Helper function to format "Last driven" time
-const formatLastDriven = (timestamp: string | null): string => {
+const formatLastDriven = (timestamp: string | number | Date | null | undefined): string => {
   if (!timestamp) return "Unknown";
   
   const lastDriven = new Date(timestamp);
+  // Check if the date is valid
+  if (isNaN(lastDriven.getTime())) return "Unknown";
+  
   const now = new Date();
   const diffMs = now.getTime() - lastDriven.getTime();
   
