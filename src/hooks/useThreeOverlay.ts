@@ -9,6 +9,11 @@ import * as THREE from "three"
 import { ThreeJSOverlayView } from "@googlemaps/three"
 import { useGLTF } from "@react-three/drei"
 
+// If you want to specifically load Draco-compressed GLBs imperatively:
+// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
+// import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
+// etc.
+
 // Redux + slices
 import { useAppSelector } from "@/store/store"
 import type { StationFeature } from "@/store/stationsSlice"
@@ -227,6 +232,9 @@ export function useThreeOverlay(
   const carsMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
   const carModelsRef = useRef<Map<number, THREE.Object3D>>(new Map())
 
+  // **Optional**: a reference to your pinned GLTF model
+  const pinnedModelRef = useRef<THREE.Object3D | null>(null)
+
   // Redux selector for the booking route
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded)
 
@@ -238,7 +246,9 @@ export function useThreeOverlay(
     arrivalStationId,
   ])
 
-  // Load car model (draco or glb)
+  // -- If you want to do a minimal React-based Draco load, we keep the below. --
+  // But from the snippet, you're likely using an imperative GLTFLoader in onAdd
+  // So you can remove or keep useGLTF depending on your approach:
   const { scene: carModelScene } = useGLTF("/cars/defaultModel.glb")
 
   // Basic lights
@@ -396,8 +406,29 @@ export function useThreeOverlay(
     overlay.setMap(googleMap)
     overlayRef.current = overlay
 
+    // ------------------------------------------
+    // (A) Imperative glTF loading from snippet
+    // ------------------------------------------
+    // If you want to load a single pinned glTF model (Draco or otherwise),
+    // you can do so imperatively using GLTFLoader.
+    // The code below is an example. Adjust file path, scale, rotation, etc.
+    /*
+    const gltfLoader = new GLTFLoader()
+    // If Draco-compressed, you also configure the DRACOLoader:
+    // const dracoLoader = new DRACOLoader()
+    // dracoLoader.setDecoderPath('/path/to/draco/')
+    // gltfLoader.setDRACOLoader(dracoLoader)
+
+    gltfLoader.load('/pin.gltf', (gltf) => {
+      // e.g. gltf.scene.scale.set(25, 25, 25)
+      // gltf.scene.rotation.x = Math.PI
+      pinnedModelRef.current = gltf.scene
+      scene.add(gltf.scene)
+    })
+    */
+
     // ---------------------------------------------------------------------
-    // Prepare geometry & materials from pool
+    // Prepare geometry & materials from pool (Stations, etc.)
     // ---------------------------------------------------------------------
     if (!stationGeoRef.current) {
       if (GeometryPool.hexagon) {
@@ -447,7 +478,6 @@ export function useThreeOverlay(
         innerShape.closePath()
 
         outerShape.holes.push(innerShape)
-
         const ringGeom = new THREE.ExtrudeGeometry(outerShape, {
           depth: 3,
           bevelEnabled: false,
@@ -645,6 +675,23 @@ export function useThreeOverlay(
       })
       carModelsRef.current.clear()
 
+      // Remove pinned model if you loaded one
+      if (pinnedModelRef.current) {
+        scene.remove(pinnedModelRef.current)
+        pinnedModelRef.current.traverse((obj) => {
+          if ((obj as THREE.Mesh).isMesh) {
+            const mesh = obj as THREE.Mesh
+            mesh.geometry.dispose()
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((m) => m.dispose())
+            } else {
+              mesh.material.dispose()
+            }
+          }
+        })
+        pinnedModelRef.current = null
+      }
+
       // Dispose station geometry if not keeping in the pool
       stationGeoRef.current = null
       stationRingGeoRef.current = null
@@ -727,11 +774,13 @@ export function useThreeOverlay(
   }, [bookingRouteDecoded])
 
   return {
+    // Expose whatever references or methods you need
     overlayRef,
     sceneRef,
     greyInstancedMeshRef,
     blueInstancedMeshRef,
     redInstancedMeshRef,
     stationIndexMapsRef,
+    pinnedModelRef, // If you want direct access to the pinned glTF model
   }
 }
