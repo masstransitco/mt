@@ -195,16 +195,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
- // 3D overlay with updated return values
- const {
-  overlayRef,
-  sceneRef,
-  stationInstancedMeshRef,
-  ringInstancedMeshRef,
-  instanceIndexToStationIdMap,
-  triggerRedraw,
-} = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId, cars)
-
+  // 3D overlay
+  const {
+    overlayRef,
+    stationIndexMapsRef,
+    greyInstancedMeshRef,
+    blueInstancedMeshRef,
+    redInstancedMeshRef,
+  } = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId, cars);
 
   // --------------------------
   // Data loading
@@ -453,82 +451,65 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [handleStationSelection]
   );
 
-  // Add this useEffect to force redraw when map becomes visible
+  // 3D overlay → station selection
   useEffect(() => {
-    if (actualMap && overlayRef.current && !overlayVisible) {
-      console.log("Map became visible, forcing overlay redraw")
-      // Use setTimeout to ensure the map has fully rendered
-      const timer = setTimeout(() => {
-        try {
-          if (overlayRef.current) {
-            // Add this null check
-            overlayRef.current.requestRedraw()
-            console.log("Forced redraw after map visibility change")
-          }
-        } catch (err) {
-          console.error("Error in forced redraw:", err)
-        }
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [actualMap, overlayRef, overlayVisible])
-
-  useEffect(() => {
-    if (!actualMap || !overlayRef.current) return
-
+    if (!actualMap || !overlayRef.current) return;
     const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
-      // The ThreeJSOverlayView extends some internal methods...
-      const overlayAny = overlayRef.current as any
-      if (!overlayAny?.raycast || !overlayAny?.camera) return
+      const overlayAny = overlayRef.current as any;
+      if (!overlayAny?.raycast || !overlayAny?.camera) return;
+      const domEvent = ev.domEvent;
+      if (!domEvent || !(domEvent instanceof MouseEvent)) return;
 
-      const domEvent = ev.domEvent
-      if (!domEvent || !(domEvent instanceof MouseEvent)) return
+      const mapDiv = actualMap.getDiv();
+      const { left, top, width, height } = mapDiv.getBoundingClientRect();
+      const mouseX = domEvent.clientX - left;
+      const mouseY = domEvent.clientY - top;
+      const mouseVec = new THREE.Vector2(
+        (2 * mouseX) / width - 1,
+        1 - (2 * mouseY) / height
+      );
 
-      const mapDiv = actualMap.getDiv()
-      const { left, top, width, height } = mapDiv.getBoundingClientRect()
-      const mouseX = domEvent.clientX - left
-      const mouseY = domEvent.clientY - top
+      const objectsToTest: THREE.Object3D[] = [];
+      if (greyInstancedMeshRef.current) objectsToTest.push(greyInstancedMeshRef.current);
+      if (blueInstancedMeshRef.current) objectsToTest.push(blueInstancedMeshRef.current);
+      if (redInstancedMeshRef.current) objectsToTest.push(redInstancedMeshRef.current);
 
-      // Convert to normalized device coords
-      const mouseVec = new THREE.Vector2((2 * mouseX) / width - 1, 1 - (2 * mouseY) / height)
-
-      // Now we test the single InstancedMesh
-      const objectsToTest: THREE.Object3D[] = []
-      if (stationInstancedMeshRef.current) objectsToTest.push(stationInstancedMeshRef.current)
-      if (ringInstancedMeshRef.current) objectsToTest.push(ringInstancedMeshRef.current)
-
-      const intersections = overlayAny.raycast(mouseVec, objectsToTest, { recursive: false })
+      const intersections = overlayAny.raycast(mouseVec, objectsToTest, { recursive: false });
       if (intersections.length > 0) {
-        const intersect = intersections[0]
-        const meshHit = intersect.object as THREE.InstancedMesh
-        const instanceId = intersect.instanceId
-
+        const intersect = intersections[0];
+        const meshHit = intersect.object as THREE.InstancedMesh;
+        const instanceId = intersect.instanceId;
         if (instanceId != null) {
-          // Get the station ID from the instance index
-          const clickedStationId = instanceIndexToStationIdMap.current.get(instanceId)
-
-          if (clickedStationId !== undefined) {
-            const stationClicked = stations.find((s) => s.id === clickedStationId)
+          let stationId: number | undefined;
+          if (meshHit === greyInstancedMeshRef.current) {
+            stationId = stationIndexMapsRef.current.grey[instanceId];
+          } else if (meshHit === blueInstancedMeshRef.current) {
+            stationId = stationIndexMapsRef.current.blue[instanceId];
+          } else if (meshHit === redInstancedMeshRef.current) {
+            stationId = stationIndexMapsRef.current.red[instanceId];
+          }
+          if (stationId !== undefined) {
+            const stationClicked = stations.find((s) => s.id === stationId);
             if (stationClicked) {
-              handleStationSelection(stationClicked)
-              ev.stop()
+              handleStationSelection(stationClicked);
+              ev.stop();
             }
           }
         }
       }
-    })
-
+    });
     return () => {
-      window.google.maps.event.removeListener(clickListener)
-    }
+      google.maps.event.removeListener(clickListener);
+    };
   }, [
     actualMap,
     overlayRef,
-    stationInstancedMeshRef,
-    ringInstancedMeshRef,
-    instanceIndexToStationIdMap,
+    greyInstancedMeshRef,
+    blueInstancedMeshRef,
+    redInstancedMeshRef,
+    stationIndexMapsRef,
     stations,
-    handleStationSelection,
+    handleStationSelection
   ]);
 
   // --------------------------
