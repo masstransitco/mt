@@ -4,8 +4,6 @@ import type React from "react"
 import { useEffect, useRef, useMemo, useCallback } from "react"
 import * as THREE from "three"
 import { ThreeJSOverlayView } from "@googlemaps/three"
-// If you want Draco-compressed GLBs, you'd import GLTFLoader / DRACOLoader here
-
 import { useGLTF } from "@react-three/drei"
 
 // Redux + slices
@@ -15,6 +13,20 @@ import { selectRouteDecoded } from "@/store/bookingSlice"
 
 // Constants
 import { DISPATCH_HUB } from "@/constants/map"
+
+// **Snippet imports** for the Maps-friendly lat/lng conversions + types:
+import {
+  latLngAltToVector3,
+  vector3ToLatLngAlt,
+} from "../lib/geo-utils"
+import type {
+  LatLngAltitudeLiteral,
+  RaycastOptions
+} from "../types/webgl"
+
+// Shared for the snippet raycast logic
+const projectionMatrixInverse = new THREE.Matrix4()
+const raycaster = new THREE.Raycaster()
 
 // Pre-create reusable objects for calculations
 const tempMatrix = new THREE.Matrix4()
@@ -228,10 +240,10 @@ export function useThreeOverlay(
   // useMemo for data
   const memoizedCars = useMemo(() => cars.map((c) => ({ ...c })), [cars])
   const memoizedStations = useMemo(() => stations, [stations])
-  const stationSelection = useMemo(() => ({ departureStationId, arrivalStationId }), [
-    departureStationId,
-    arrivalStationId,
-  ])
+  const stationSelection = useMemo(
+    () => ({ departureStationId, arrivalStationId }),
+    [departureStationId, arrivalStationId]
+  )
 
   // Optionally load a default Car model in React:
   const { scene: carModelScene } = useGLTF("/cars/defaultModel.glb")
@@ -245,24 +257,82 @@ export function useThreeOverlay(
   }, [])
 
   // ---------------------------------------------------------------------
-  // animate() - Our own requestAnimationFrame loop
+  // Our own requestAnimationFrame loop
   // ---------------------------------------------------------------------
   const animate = useCallback(() => {
     if (!overlayRef.current) return
     // Example color shift or any per-frame logic
     const time = performance.now() * 0.001
     const hue = (time / 30) % 1
-    if (blueInstancedMeshRef.current && ringMatBlueRef.current) {
+    if (blueInstancedMeshRef.current && matBlueRef.current && ringMatBlueRef.current) {
       ringMatBlueRef.current.color.setHSL(hue, 1, 0.5)
       ringMatBlueRef.current.emissive.setHSL(hue, 0.5, 0.2)
     }
 
-    // Force the overlay to redraw
     overlayRef.current.requestRedraw()
-
-    // Schedule the next frame
     manualAnimationFrameIdRef.current = requestAnimationFrame(animate)
   }, [])
+
+  // ---------------------------------------------------------------------
+  // Raycast approach from snippet
+  // ---------------------------------------------------------------------
+  const raycastAtScreenCoord = useCallback(
+    (
+      screenX: number,
+      screenY: number,
+      objects?: THREE.Object3D[] | null,
+      options: RaycastOptions = { updateMatrix: true, recursive: false }
+    ): THREE.Intersection[] => {
+      if (!overlayRef.current) return []
+      // We cast 'overlayRef.current' to 'any' so we can access .camera
+      const overlayAny = overlayRef.current as any
+      const camera = overlayAny.camera as THREE.Camera
+      if (!camera || !sceneRef.current) return []
+
+      // get boundingRect for the map container
+      const mapDiv = overlayAny.map.getDiv() as HTMLElement
+      const { width, height } = mapDiv.getBoundingClientRect()
+
+      // Convert screen coords (in px) => NDC [-1..1], with y going up
+      const ndcX = (2 * screenX) / width - 1
+      const ndcY = 1 - (2 * screenY) / height
+
+      // Based on snippet logic: invert camera.projectionMatrix => transform from clip -> world
+      if (options.updateMatrix !== false) {
+        projectionMatrixInverse.copy(camera.projectionMatrix).invert()
+      }
+
+      // Ray origin: clipZ=0 in NDC
+      raycaster.ray.origin
+        .set(ndcX, ndcY, 0)
+        .applyMatrix4(projectionMatrixInverse)
+
+      // Ray direction: clipZ=0.5 => origin
+      raycaster.ray.direction
+        .set(ndcX, ndcY, 0.5)
+        .applyMatrix4(projectionMatrixInverse)
+        .sub(raycaster.ray.origin)
+        .normalize()
+
+      // If no objects provided => entire scene
+      if (!objects) {
+        objects = sceneRef.current.children
+        options.recursive = true
+      }
+
+      const oldParams = raycaster.params
+      if (options.raycasterParameters) {
+        raycaster.params = options.raycasterParameters
+      }
+
+      const results = raycaster.intersectObjects(objects, !!options.recursive)
+
+      raycaster.params = oldParams
+
+      return results
+    },
+    []
+  )
 
   // ---------------------------------------------------------------------
   // Populate Instanced Meshes for Stations
@@ -345,7 +415,7 @@ export function useThreeOverlay(
     const scene = sceneRef.current
     const currentCarIds = new Set(memoizedCars.map((c) => c.id))
 
-    // Remove old cars no longer in the data
+    // Remove old cars no longer in data
     carModelsRef.current.forEach((carModel, carId) => {
       if (!currentCarIds.has(carId)) {
         scene.remove(carModel)
@@ -380,7 +450,7 @@ export function useThreeOverlay(
     if (!googleMap || isInitializedRef.current) return
     isInitializedRef.current = true
 
-    console.log("[useThreeOverlay] Initializing with manual rAF approach...")
+    console.log("[useThreeOverlay] Initializing (with snippet-based raycasting) ...")
 
     // Create a Three.js scene
     const scene = new THREE.Scene()
@@ -402,7 +472,7 @@ export function useThreeOverlay(
     overlay.setMap(googleMap)
     overlayRef.current = overlay
 
-    // #region Prepare geometry & materials from pool
+    // Prepare geometry & materials from pool
     if (!stationGeoRef.current) {
       if (GeometryPool.hexagon) {
         stationGeoRef.current = GeometryPool.hexagon
@@ -579,13 +649,21 @@ export function useThreeOverlay(
     }
 
     colorKeys.forEach((color) => {
-      const mainMesh = new THREE.InstancedMesh(stationGeoRef.current!, colorToMainMat[color], maxInstances)
+      const mainMesh = new THREE.InstancedMesh(
+        stationGeoRef.current!,
+        colorToMainMat[color],
+        maxInstances
+      )
       mainMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       mainMesh.frustumCulled = false
       scene.add(mainMesh)
       meshRefs[color].current = mainMesh
 
-      const ringMesh = new THREE.InstancedMesh(stationRingGeoRef.current!, colorToRingMat[color], maxInstances)
+      const ringMesh = new THREE.InstancedMesh(
+        stationRingGeoRef.current!,
+        colorToRingMat[color],
+        maxInstances
+      )
       ringMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       ringMesh.frustumCulled = false
       ringMesh.renderOrder = 998
@@ -623,7 +701,8 @@ export function useThreeOverlay(
         manualAnimationFrameIdRef.current = null
       }
 
-      (overlay as any).setMap(null)
+      // Safely remove from map
+      ;(overlay as any).setMap(null)
       overlayRef.current = null
 
       // Remove all cars
@@ -706,7 +785,6 @@ export function useThreeOverlay(
   useEffect(() => {
     if (!overlayRef.current) return
     populateInstancedMeshes()
-    // Removed overlay.requestRedraw()
   }, [populateInstancedMeshes, memoizedStations.length, stationSelection])
 
   // ---------------------------------------------------------------------
@@ -715,7 +793,6 @@ export function useThreeOverlay(
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
     populateCarModels()
-    // Removed overlay.requestRedraw()
   }, [memoizedCars, populateCarModels])
 
   // ---------------------------------------------------------------------
@@ -736,8 +813,6 @@ export function useThreeOverlay(
     } else if (bookingRouteMeshRef.current) {
       bookingRouteMeshRef.current.visible = false
     }
-
-    // Removed overlay.requestRedraw()
   }, [bookingRouteDecoded])
 
   return {
@@ -748,5 +823,8 @@ export function useThreeOverlay(
     redInstancedMeshRef,
     stationIndexMapsRef,
     pinnedModelRef,
+
+    // The snippet-based "raycastAtScreenCoord" method
+    raycastAtScreenCoord,
   }
 }
