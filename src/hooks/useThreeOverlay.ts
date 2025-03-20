@@ -177,7 +177,8 @@ function createOrUpdateTube(
 // ---------------------------------------------------------------------
 // Hook: useThreeOverlay
 //    Adopts the snippet approach with overlay.update = () => {...}
-//    for per-frame logic, removing the separate continuousRender() loop
+//    for per-frame logic. 
+//    We explicitly call overlay.requestRedraw() each frame to remain visible.
 // ---------------------------------------------------------------------
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -249,24 +250,22 @@ export function useThreeOverlay(
   }, [])
 
   // ---------------------------------------------------------------------
-  // `overlay.update` style approach:
-  // We'll animate or do per-frame tasks here
+  // Animate or do per-frame tasks here
   // ---------------------------------------------------------------------
   const handleOverlayUpdate = useCallback(() => {
     if (!overlayRef.current) return
 
     // For example, animate color with time:
     const time = performance.now() * 0.001
-    // Some simple color shift logic:
+    // Simple color shift:
     const hue = (time / 30) % 1
+
     if (blueInstancedMeshRef.current && ringMatBlueRef.current) {
-      // shift from 0x0000ff => different hue
       ringMatBlueRef.current.color.setHSL(hue, 1, 0.5)
       ringMatBlueRef.current.emissive.setHSL(hue, 0.5, 0.2)
-      // We could also do the same for matBlueRef, etc.
-      // matBlueRef.current?.color.setHSL(hue, 1, 0.5)
     }
 
+    // Force redraw so we remain visible even if user isn't interacting
     overlayRef.current.requestRedraw()
   }, [])
 
@@ -575,7 +574,6 @@ export function useThreeOverlay(
         bookingTubeMatRef.current = mat
       }
     }
-    // #endregion
 
     // ---------------------------------------------------------------------
     // Create InstancedMeshes for stations
@@ -635,21 +633,23 @@ export function useThreeOverlay(
     }
 
     // Place stations and cars initially
-populateInstancedMeshes();
-populateCarModels();
+    populateInstancedMeshes()
+    populateCarModels()
 
-// #region The Key: overlay.update for per-frame logic
-(overlay as any).update = () => {
-  // Do any per-frame animations or updates here
-  handleOverlayUpdate();
-};
-// #endregion
+    // -----------------------------------------------------
+    // #region The Key: overlay.update for per-frame logic
+    // TS fix by casting overlay => any
+    ;(overlay as any).update = () => {
+      // Do per-frame animations or logic
+      handleOverlayUpdate()
+    }
+    // #endregion
 
     // Cleanup
     return () => {
       console.log("[useThreeOverlay] Cleanup...")
 
-      overlay.setMap(null as any) // or (overlay.setMap as unknown as (map: google.maps.Map|null)=>void)(null)
+      overlay.setMap(null as any)
       overlayRef.current = null
 
       // Remove all cars
@@ -704,8 +704,11 @@ populateCarModels();
           const mesh = obj as THREE.Mesh
           if (mesh.geometry) mesh.geometry.dispose()
           if (mesh.material) {
-            if (Array.isArray(mesh.material)) mesh.material.forEach((mat) => mat.dispose())
-            else mesh.material.dispose()
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((mtl) => mtl.dispose())
+            } else {
+              mesh.material.dispose()
+            }
           }
         })
         carGeoRef.current = null
@@ -754,7 +757,7 @@ populateCarModels();
         bookingTubeMatRef.current,
         sceneRef.current,
         overlayRef.current,
-        50 // altitude for route
+        50 // altitude
       )
     } else if (bookingRouteMeshRef.current) {
       bookingRouteMeshRef.current.visible = false
