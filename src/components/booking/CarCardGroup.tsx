@@ -250,21 +250,21 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
           <div className="w-1/2 h-full p-2 flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between">
-                <p className="font-medium text-xs leading-tight text-white">
+                <p className="font-medium text-sm leading-tight text-white">
                   {displayedCar.model || "Unknown Model"}
                 </p>
               </div>
               <div className="flex items-center mt-1 gap-1 flex-wrap">
                 <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
-                  <BatteryIcon className={`w-3 h-3 ${batteryIconColor}`} />
+                  <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
                   <span className="text-xs font-medium">{batteryPercentage}%</span>
                 </div>
                 <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
-                  <Gauge className="w-3 h-3 text-blue-400" />
+                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
                   <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
                 </div>
                 <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
-                  <CarSeat className="w-3 h-3 text-gray-400 drop-shadow-sm filter brightness-110" style={{ filter: 'drop-shadow(0px 1px 1px rgba(0, 0, 0, 0.3))' }} />
+                  <CarSeat className="w-3.5 h-3.5 text-gray-400 drop-shadow-sm filter brightness-110" style={{ filter: 'drop-shadow(0px 1px 1px rgba(0, 0, 0, 0.3))' }} />
                   <span className="text-xs">1+4</span>
                 </div>
               </div>
@@ -276,7 +276,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         <div className="w-full h-5 bg-gray-800/50 px-2 flex items-center justify-between text-xs border-t border-gray-700/30">
           <div className="flex items-center gap-1 relative">
             <Info
-              className="w-3 h-3 text-gray-400 cursor-pointer hover:text-white transition-colors"
+              className="w-3.5 h-3.5 text-gray-400 cursor-pointer hover:text-white transition-colors"
               onClick={handleOdometerClick}
             />
             {showOdometerPopup && (
@@ -285,7 +285,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
                 <div>Year: {displayedCar.year || "2021"}</div>
               </div>
             )}
-            <span className="text-gray-400 text-[10px]">Last driven: {lastDrivenText}</span>
+            <span className="text-gray-400">Last driven: {lastDrivenText}</span>
           </div>
         </div>
       </div>
