@@ -4,9 +4,7 @@ import type React from "react"
 import { useEffect, useRef, useMemo, useCallback } from "react"
 import * as THREE from "three"
 import { ThreeJSOverlayView } from "@googlemaps/three"
-// If you want to specifically load Draco-compressed GLBs imperatively:
-// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
-// import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader'
+// If you want Draco-compressed GLBs, you'd import GLTFLoader / DRACOLoader here
 
 import { useGLTF } from "@react-three/drei"
 
@@ -23,7 +21,7 @@ const tempMatrix = new THREE.Matrix4()
 const tempVector = new THREE.Vector3()
 
 // ---------------------------------------------------------------------
-// Geometry & Material Pools (persist between reinitializations)
+// Geometry & Material Pools
 // ---------------------------------------------------------------------
 const GeometryPool = {
   hexagon: null as THREE.ExtrudeGeometry | null,
@@ -115,7 +113,7 @@ class CustomCurve extends THREE.Curve<THREE.Vector3> {
 }
 
 // ---------------------------------------------------------------------
-// Create or update a 3D tube from a decoded route, using pooling
+// Create or update a 3D tube from a decoded route
 // ---------------------------------------------------------------------
 function createOrUpdateTube(
   decodedPath: Array<{ lat: number; lng: number }>,
@@ -147,10 +145,9 @@ function createOrUpdateTube(
   const radialSegments = 4
   const closed = false
 
-  // Cache key
   const routeKey = `tube_${points[0].x}_${points[0].y}_${points[points.length - 1].x}_${points[points.length - 1].y}_${points.length}`
-
   let geometry: THREE.TubeGeometry
+
   if (GeometryPool.tube.has(routeKey)) {
     geometry = GeometryPool.tube.get(routeKey)!
   } else {
@@ -159,13 +156,11 @@ function createOrUpdateTube(
   }
 
   if (!meshRef.current) {
-    // Create a new mesh and add to scene
     const mesh = new THREE.Mesh(geometry, material)
     mesh.renderOrder = 999
     meshRef.current = mesh
     scene.add(mesh)
   } else {
-    // Reuse the existing mesh
     meshRef.current.visible = true
     meshRef.current.geometry = geometry
     if (meshRef.current.material !== material) {
@@ -176,9 +171,6 @@ function createOrUpdateTube(
 
 // ---------------------------------------------------------------------
 // Hook: useThreeOverlay
-//    Adopts the snippet approach with overlay.update = () => {...}
-//    for per-frame logic. 
-//    We explicitly call overlay.requestRedraw() each frame to remain visible.
 // ---------------------------------------------------------------------
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
@@ -191,6 +183,9 @@ export function useThreeOverlay(
   const overlayRef = useRef<ThreeJSOverlayView | null>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const isInitializedRef = useRef(false)
+
+  // We'll store our requestAnimationFrame ID here
+  const manualAnimationFrameIdRef = useRef<number | null>(null)
 
   // InstancedMesh refs for stations
   const greyInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
@@ -230,7 +225,7 @@ export function useThreeOverlay(
   // Redux route
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded)
 
-  // Memo
+  // useMemo for data
   const memoizedCars = useMemo(() => cars.map((c) => ({ ...c })), [cars])
   const memoizedStations = useMemo(() => stations, [stations])
   const stationSelection = useMemo(() => ({ departureStationId, arrivalStationId }), [
@@ -250,23 +245,23 @@ export function useThreeOverlay(
   }, [])
 
   // ---------------------------------------------------------------------
-  // Animate or do per-frame tasks here
+  // animate() - Our own requestAnimationFrame loop
   // ---------------------------------------------------------------------
-  const handleOverlayUpdate = useCallback(() => {
+  const animate = useCallback(() => {
     if (!overlayRef.current) return
-
-    // For example, animate color with time:
+    // Example color shift or any per-frame logic
     const time = performance.now() * 0.001
-    // Simple color shift:
     const hue = (time / 30) % 1
-
     if (blueInstancedMeshRef.current && ringMatBlueRef.current) {
       ringMatBlueRef.current.color.setHSL(hue, 1, 0.5)
       ringMatBlueRef.current.emissive.setHSL(hue, 0.5, 0.2)
     }
 
-    // Force redraw so we remain visible even if user isn't interacting
+    // Force the overlay to redraw
     overlayRef.current.requestRedraw()
+
+    // Schedule the next frame
+    manualAnimationFrameIdRef.current = requestAnimationFrame(animate)
   }, [])
 
   // ---------------------------------------------------------------------
@@ -385,7 +380,7 @@ export function useThreeOverlay(
     if (!googleMap || isInitializedRef.current) return
     isInitializedRef.current = true
 
-    console.log("[useThreeOverlay] Initializing...")
+    console.log("[useThreeOverlay] Initializing with manual rAF approach...")
 
     // Create a Three.js scene
     const scene = new THREE.Scene()
@@ -407,13 +402,9 @@ export function useThreeOverlay(
     overlay.setMap(googleMap)
     overlayRef.current = overlay
 
-    // #region Imperative glTF loading (like snippet's "onAdd" approach)
+    // #region Imperative glTF loading if wanted
     /*
     const gltfLoader = new GLTFLoader()
-    // If Draco:
-    // const dracoLoader = new DRACOLoader()
-    // dracoLoader.setDecoderPath('/draco/')
-    // gltfLoader.setDRACOLoader(dracoLoader)
     gltfLoader.load('/pin.gltf', (gltf) => {
       gltf.scene.scale.set(25,25,25)
       gltf.scene.rotation.x = Math.PI
@@ -575,9 +566,7 @@ export function useThreeOverlay(
       }
     }
 
-    // ---------------------------------------------------------------------
     // Create InstancedMeshes for stations
-    // ---------------------------------------------------------------------
     const maxInstances = memoizedStations.length
     const colorKeys = ["grey", "blue", "red"] as const
 
@@ -617,9 +606,7 @@ export function useThreeOverlay(
       ringMeshRefs[color].current = ringMesh
     })
 
-    // ---------------------------------------------------------------------
-    // Create/Clone Car Model from R3F
-    // ---------------------------------------------------------------------
+    // Car model
     if (carModelScene && !carGeoRef.current) {
       const clonedScene = carModelScene.clone()
       clonedScene.scale.set(10, 10, 10)
@@ -632,24 +619,24 @@ export function useThreeOverlay(
       })
     }
 
-    // Place stations and cars initially
+    // Populate once
     populateInstancedMeshes()
     populateCarModels()
 
-    // -----------------------------------------------------
-    // #region The Key: overlay.update for per-frame logic
-    // TS fix by casting overlay => any
-    ;(overlay as any).update = () => {
-      // Do per-frame animations or logic
-      handleOverlayUpdate()
-    }
-    // #endregion
+    // *** Start our manual animation loop
+    animate()
 
     // Cleanup
     return () => {
       console.log("[useThreeOverlay] Cleanup...")
 
-      overlay.setMap(null as any)
+      // Cancel the animation frame
+      if (manualAnimationFrameIdRef.current !== null) {
+        cancelAnimationFrame(manualAnimationFrameIdRef.current)
+        manualAnimationFrameIdRef.current = null
+      }
+
+      (overlay as any).setMap(null);
       overlayRef.current = null
 
       // Remove all cars
@@ -726,27 +713,21 @@ export function useThreeOverlay(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleMap])
 
-  // ---------------------------------------------------------------------
-  // Re-populate station meshes when data or selection changes
-  // ---------------------------------------------------------------------
+  // Re-populate station meshes when data changes
   useEffect(() => {
     if (!overlayRef.current) return
     populateInstancedMeshes()
     overlayRef.current.requestRedraw()
   }, [populateInstancedMeshes, memoizedStations.length, stationSelection])
 
-  // ---------------------------------------------------------------------
   // Re-populate car models when car data changes
-  // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
     populateCarModels()
     overlayRef.current.requestRedraw()
   }, [memoizedCars, populateCarModels])
 
-  // ---------------------------------------------------------------------
   // Handle booking route changes
-  // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
 
@@ -757,7 +738,7 @@ export function useThreeOverlay(
         bookingTubeMatRef.current,
         sceneRef.current,
         overlayRef.current,
-        50 // altitude
+        50
       )
     } else if (bookingRouteMeshRef.current) {
       bookingRouteMeshRef.current.visible = false
