@@ -3,8 +3,9 @@
 import React, { memo, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { Gauge, Battery } from "lucide-react";
+import { Gauge, Battery, Info } from "lucide-react";
 import type { Car } from "@/types/cars";
+import { CarSeat } from "@/components/ui/icons/CarSeat";
 
 // Lazy load the 3D viewer component
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
@@ -20,6 +21,28 @@ interface CarCardProps {
   size?: "small" | "large";
 }
 
+// Helper function to format "Last driven" time
+const formatLastDriven = (timestamp: string | null): string => {
+  if (!timestamp) return "Unknown";
+  
+  const lastDriven = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - lastDriven.getTime();
+  
+  // Convert to days, hours, minutes
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (days > 0) {
+    return `${days} ${days === 1 ? 'day' : 'days'}, ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  } else if (hours > 0) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}, ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  } else {
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  }
+};
+
 function CarCardComponent({
   car,
   selected,
@@ -28,8 +51,9 @@ function CarCardComponent({
   size = "large",
 }: CarCardProps) {
   const [isInViewport, setIsInViewport] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
-  // 1. Track whether the card is in the viewport
+  // Track whether the card is in the viewport
   useEffect(() => {
     const observer = new IntersectionObserver(([entry]) => {
       setIsInViewport(entry.isIntersecting);
@@ -43,7 +67,11 @@ function CarCardComponent({
     };
   }, [car.id]);
 
-  // 2. Only mount the 3D viewer when `isInViewport` is true
+  const toggleInfo = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the card onClick
+    setShowInfo(!showInfo);
+  };
+
   return (
     <motion.div
       initial={{ scale: 0.98 }}
@@ -86,27 +114,56 @@ function CarCardComponent({
         )}
       </div>
 
-      <div className="p-4">
+      <div className="p-4 pb-12"> {/* Added padding bottom to make room for the footer */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex flex-col">
             <p className="font-bold text-foreground text-lg">{car.model}</p>
-            {/* Battery */}
-            <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-              <Battery className="w-4 h-4" />
-              <span>{car.electric_battery_percentage_left}%</span>
-            </div>
-            {/* Odometer */}
-            <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-              <Gauge className="w-4 h-4" />
-              <span>{car.odometer} km</span>
+            <div className="mt-2 space-y-1">
+              {/* Battery */}
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Battery className="w-4 h-4" />
+                <span>{car.electric_battery_percentage_left}%</span>
+              </div>
+              
+              {/* Odometer */}
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Gauge className="w-4 h-4" />
+                <span>{car.odometer} km</span>
+              </div>
+              
+              {/* Car Seat - New */}
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <CarSeat className="w-4 h-4 text-orange-600/70" fill="currentColor" />
+                <span>1+4 seats</span>
+              </div>
             </div>
           </div>
 
           <div className="text-right">
             <p className="text-base text-foreground font-normal">{car.name}</p>
-            <p className="text-sm text-muted-foreground">{car.year}</p>
           </div>
         </div>
+        
+        {/* Info dialog that appears when info button is clicked */}
+        {showInfo && (
+          <div className="mt-2 p-3 bg-muted/20 rounded-lg border border-border/50 text-sm">
+            <p className="text-muted-foreground mb-1">Total Distance: {car.odometer} km</p>
+            <p className="text-muted-foreground">Year: {car.year}</p>
+          </div>
+        )}
+      </div>
+      
+      {/* New Footer Component */}
+      <div className="absolute bottom-0 left-0 right-0 h-10 bg-card/80 backdrop-blur-sm border-t border-border/20 px-4 flex items-center justify-between">
+        <button 
+          onClick={toggleInfo} 
+          className="p-1 rounded-full hover:bg-muted/30 transition-colors"
+        >
+          <Info className="w-4 h-4 text-muted-foreground" />
+        </button>
+        <p className="text-xs text-muted-foreground">
+          Last driven: {formatLastDriven(car.location_updated)}
+        </p>
       </div>
     </motion.div>
   );
