@@ -63,9 +63,6 @@ function useTouchScrollHandler() {
     const height = el.clientHeight;
     const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0);
 
-    // Removed e.preventDefault() to avoid the passive event warning
-    // If you need to block overscroll, consider using `touch-action: pan-y; overscroll-behavior: contain;` in CSS
-
     el.dataset.touchY = e.touches[0].clientY.toString();
   }, []);
   
@@ -206,18 +203,14 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "tween", duration: 0.2 }}
-      className="relative overflow-hidden rounded-lg bg-gray-900/50 text-white border border-gray-800 backdrop-blur-sm shadow-md transition-colors cursor-pointer mb-2 w-full h-32"
+      className="relative overflow-hidden rounded-lg bg-gray-900/50 text-white border border-gray-800 backdrop-blur-sm shadow-md transition-colors cursor-pointer mb-2 w-full h-24"
       style={{
         contain: "content",
-        // If you want to block overscroll, try:
-        // touchAction: "pan-y",
-        // overscrollBehavior: "contain",
-        // overflow: "auto",
       }}
       {...touchScrollHandlers}
     >
       {isGroupSelected && (
-        <div className="absolute top-2 right-2 z-10">
+        <div className="absolute top-1 right-1.5 z-10">
           <div className="px-1.5 py-0.5 rounded-full bg-blue-500/80 text-white text-xs backdrop-blur-sm">
             Selected
           </div>
@@ -227,9 +220,9 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         <div className="flex flex-row flex-1">
           <div className="relative w-1/2 h-full overflow-hidden">
             {!isQrScanStation && group.cars.length > 1 && (
-              <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute top-1 left-1.5 z-10" onClick={(e) => e.stopPropagation()}>
                 <select
-                  className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5 text-white text-xs backdrop-blur-sm"
+                  className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-1 py-0.5 text-white text-xs backdrop-blur-sm"
                   onChange={(e) => handleSelectCar(Number.parseInt(e.target.value, 10))}
                   value={displayedCar.id}
                 >
@@ -254,45 +247,45 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
               <ViewerSkeleton />
             )}
           </div>
-          <div className="w-1/2 h-full p-3 flex flex-col justify-between">
+          <div className="w-1/2 h-full p-2 flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between">
-                <p className="font-medium text-sm leading-tight text-white">
+                <p className="font-medium text-xs leading-tight text-white">
                   {displayedCar.model || "Unknown Model"}
                 </p>
               </div>
-              <div className="flex items-center mt-1.5 gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1.5 py-0.5">
-                  <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
+              <div className="flex items-center mt-1 gap-1 flex-wrap">
+                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
+                  <BatteryIcon className={`w-3 h-3 ${batteryIconColor}`} />
                   <span className="text-xs font-medium">{batteryPercentage}%</span>
                 </div>
-                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1.5 py-0.5">
-                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
+                  <Gauge className="w-3 h-3 text-blue-400" />
                   <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
                 </div>
-                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1.5 py-0.5">
-                  <CarSeat className="w-3.5 h-3.5 text-orange-300" />
-                  <span className="text-xs">1+4 seats</span>
+                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
+                  <CarSeat className="w-3 h-3 text-gray-400 drop-shadow-sm filter brightness-110" style={{ filter: 'drop-shadow(0px 1px 1px rgba(0, 0, 0, 0.3))' }} />
+                  <span className="text-xs">1+4</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
         
-        {/* New Footer Component */}
-        <div className="w-full h-6 bg-gray-800/50 px-3 flex items-center justify-between text-xs border-t border-gray-700/30">
-          <div className="flex items-center gap-1.5 relative">
+        {/* Footer Component - Reduced size */}
+        <div className="w-full h-5 bg-gray-800/50 px-2 flex items-center justify-between text-xs border-t border-gray-700/30">
+          <div className="flex items-center gap-1 relative">
             <Info
-              className="w-3.5 h-3.5 text-gray-400 cursor-pointer hover:text-white transition-colors"
+              className="w-3 h-3 text-gray-400 cursor-pointer hover:text-white transition-colors"
               onClick={handleOdometerClick}
             />
             {showOdometerPopup && (
-              <div className="absolute left-0 bottom-6 bg-gray-800 text-white text-xs px-2 py-1 rounded-md shadow-lg border border-gray-700 z-10 min-w-32">
+              <div className="absolute left-0 bottom-5 bg-gray-800 text-white text-xs px-2 py-1 rounded-md shadow-lg border border-gray-700 z-10 min-w-32">
                 <div>Total distance: {displayedCar.odometer || "N/A"} km</div>
                 <div>Year: {displayedCar.year || "2021"}</div>
               </div>
             )}
-            <span className="text-gray-400">Last driven: {lastDrivenText}</span>
+            <span className="text-gray-400 text-[10px]">Last driven: {lastDrivenText}</span>
           </div>
         </div>
       </div>
