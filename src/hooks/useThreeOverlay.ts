@@ -58,7 +58,7 @@ function disposeGeometryPool() {
 
 function disposeMaterial(material: THREE.Material) {
   if ("map" in material && material.map) {
-    (material.map as THREE.Texture).dispose()
+    ;(material.map as THREE.Texture).dispose()
   }
   material.dispose()
 }
@@ -69,6 +69,7 @@ function disposeMaterialPool() {
     MaterialPool.matGrey = null
   }
   if (MaterialPool.matBlue) {
+    disposeMaterial(MaterialPool.matBlue)
     disposeMaterial(MaterialPool.matBlue)
     MaterialPool.matBlue = null
   }
@@ -144,9 +145,10 @@ function createOrUpdateTube(
 
   // Build or retrieve geometry
   const curve = new CustomCurve(points)
-  const tubularSegments = Math.min(Math.max(points.length, 20), 80) // example detail
+  // Optimize tubular segments based on path length
+  const tubularSegments = Math.min(Math.max(Math.floor(points.length / 2), 10), 50)
   const radius = 8
-  const radialSegments = 4
+  const radialSegments = 4 // Low poly for better performance
   const closed = false
 
   // Generate a stable key; for example, based on endpoint coords + point count
@@ -194,6 +196,9 @@ export function useThreeOverlay(
   const overlayRef = useRef<ThreeJSOverlayView | null>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
   const isInitializedRef = useRef<boolean>(false)
+  const isRenderingActiveRef = useRef<boolean>(false)
+  const lastFrameTimeRef = useRef<number>(0)
+  const continuousRenderFrameIdRef = useRef<number | null>(null)
 
   // InstancedMesh refs for station cubes and rings
   const greyInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
@@ -217,16 +222,11 @@ export function useThreeOverlay(
       }
     >
   >(new Map())
-  const lastFrameTimeRef = useRef<number>(0)
   const animationFrameIdRef = useRef<number | null>(null)
-  const continuousRenderFrameIdRef = useRef<number | null>(null)
 
   // Shared geometry/material refs (for pooling)
   const stationGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
   const stationRingGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
-
-  // **Removed dispatch route references** 
-  // (no dispatchBoxGeoRef, no dispatchRouteMeshRef, no dispatchMatRef, etc.)
 
   // Tube mesh ref for the booking route only
   const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null)
@@ -250,13 +250,19 @@ export function useThreeOverlay(
   const mapEventListenersRef = useRef<google.maps.MapsEventListener[]>([])
   const observerRef = useRef<MutationObserver | null>(null)
 
+  // Memory monitoring
+  const memoryMonitorIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   // Redux selector for the booking route
   const bookingRouteDecoded = useAppSelector(selectRouteDecoded)
 
   // Memoize input arrays so we don't recalc them every render
   const memoizedCars = useMemo(() => cars.map((car) => ({ ...car })), [cars])
   const memoizedStations = useMemo(() => stations, [stations])
-  const stationSelection = useMemo(() => ({ departureStationId, arrivalStationId }), [departureStationId, arrivalStationId])
+  const stationSelection = useMemo(
+    () => ({ departureStationId, arrivalStationId }),
+    [departureStationId, arrivalStationId],
+  )
 
   // Setup lights (assumed static)
   const lights = useMemo(() => {
@@ -268,16 +274,60 @@ export function useThreeOverlay(
 
   const ROUTE_ALTITUDE = 50
 
-  // Continuous render loop remains active for overlay visibility
-  const continuousRender = useCallback(() => {
-    overlayRef.current?.requestRedraw()
-    continuousRenderFrameIdRef.current = requestAnimationFrame(continuousRender)
+  // Frame rate limiting constants
+  const TARGET_FPS = 30 // Target 30 frames per second
+  const FRAME_INTERVAL = 1000 / TARGET_FPS // Milliseconds between frames
+
+  // Throttled render loop with frame rate limiting
+  const throttledRender = useCallback(() => {
+    if (continuousRenderFrameIdRef.current !== null) {
+      cancelAnimationFrame(continuousRenderFrameIdRef.current)
+      continuousRenderFrameIdRef.current = null
+    }
+
+    if (!isRenderingActiveRef.current) {
+      return
+    }
+
+    const currentTime = performance.now()
+    const elapsed = currentTime - lastFrameTimeRef.current
+
+    // Only render if enough time has passed since the last frame
+    if (elapsed >= FRAME_INTERVAL) {
+      if (overlayRef.current) {
+        try {
+          overlayRef.current.requestRedraw()
+        } catch (err) {
+          console.error("Error in ThreeJSOverlay requestRedraw:", err)
+        }
+      }
+      lastFrameTimeRef.current = currentTime
+    }
+
+    // Schedule next frame
+    continuousRenderFrameIdRef.current = requestAnimationFrame(throttledRender)
+  }, [FRAME_INTERVAL])
+
+  // Start and stop rendering
+  const startThrottledRendering = useCallback(() => {
+    if (!isRenderingActiveRef.current) {
+      isRenderingActiveRef.current = true
+      lastFrameTimeRef.current = performance.now()
+      throttledRender()
+    }
+  }, [throttledRender])
+
+  const stopRendering = useCallback(() => {
+    isRenderingActiveRef.current = false
+    if (continuousRenderFrameIdRef.current !== null) {
+      cancelAnimationFrame(continuousRenderFrameIdRef.current)
+      continuousRenderFrameIdRef.current = null
+    }
   }, [])
 
   // Animation loop for color transitions
   const animateFrame = useCallback(() => {
     const currentTime = performance.now()
-    lastFrameTimeRef.current = currentTime
     let hasActiveAnimations = false
 
     animationStateRef.current.forEach((state, stationId) => {
@@ -313,6 +363,15 @@ export function useThreeOverlay(
     } else {
       animationFrameIdRef.current = null
     }
+
+    // Request a redraw if we're animating colors
+    if (hasActiveAnimations && overlayRef.current) {
+      try {
+        overlayRef.current.requestRedraw()
+      } catch (err) {
+        console.error("Error requesting redraw during animation:", err)
+      }
+    }
   }, [])
 
   const startColorTransition = useCallback(
@@ -326,12 +385,53 @@ export function useThreeOverlay(
       }
       animationStateRef.current.set(stationId, state)
       if (animationFrameIdRef.current === null) {
-        lastFrameTimeRef.current = performance.now()
         animationFrameIdRef.current = requestAnimationFrame(animateFrame)
       }
     },
     [animateFrame],
   )
+
+  // Memory monitoring function with type safety
+  const startMemoryMonitoring = useCallback(() => {
+    if (typeof window === "undefined" || process.env.NODE_ENV !== "development") {
+      return
+    }
+
+    // Check if the browser supports the memory API (Chrome-specific)
+    const performanceMemory = (window.performance as any).memory
+    if (!performanceMemory) {
+      console.log("Memory monitoring not supported in this browser")
+      return
+    }
+
+    // Clear any existing interval
+    if (memoryMonitorIntervalRef.current) {
+      clearInterval(memoryMonitorIntervalRef.current)
+    }
+
+    memoryMonitorIntervalRef.current = setInterval(() => {
+      const memory = (window.performance as any).memory
+      if (memory) {
+        const usedHeapSizeMB = Math.round(memory.usedJSHeapSize / (1024 * 1024))
+        const totalHeapSizeMB = Math.round(memory.totalJSHeapSize / (1024 * 1024))
+        const heapLimitMB = Math.round(memory.jsHeapSizeLimit / (1024 * 1024))
+
+        console.log(`Memory usage: ${usedHeapSizeMB}MB / ${totalHeapSizeMB}MB (Limit: ${heapLimitMB}MB)`)
+
+        // Alert if memory usage is getting high (over 80% of limit)
+        if (usedHeapSizeMB > heapLimitMB * 0.8) {
+          console.warn(`High memory usage detected: ${usedHeapSizeMB}MB / ${heapLimitMB}MB`)
+        }
+      }
+    }, 30000) // Check every 30 seconds to reduce overhead
+  }, [])
+
+  const stopMemoryMonitoring = useCallback(() => {
+    if (memoryMonitorIntervalRef.current) {
+      clearInterval(memoryMonitorIntervalRef.current)
+      memoryMonitorIntervalRef.current = null
+    }
+  }, [])
 
   // ----------------------------
   // Populate Station InstancedMeshes
@@ -684,8 +784,13 @@ export function useThreeOverlay(
     populateCarModels()
     overlay.requestRedraw()
 
-    // Start continuous rendering
-    continuousRender()
+    // Start throttled rendering
+    startThrottledRendering()
+
+    // Start memory monitoring in development
+    if (process.env.NODE_ENV === "development") {
+      startMemoryMonitoring()
+    }
 
     // Debounce helper for map events
     function debounce(func: Function, wait: number) {
@@ -733,16 +838,26 @@ export function useThreeOverlay(
     // Cleanup only on final unmount
     return () => {
       console.log("[useThreeOverlay] Cleaning up Three.js overlay...")
+
+      // Stop rendering and monitoring
+      stopRendering()
+      stopMemoryMonitoring()
+
+      // Clean up observer
       if (observerRef.current) {
         observerRef.current.disconnect()
         observerRef.current = null
       }
+
+      // Remove map event listeners
       mapEventListenersRef.current.forEach((listener) => {
         if (google && google.maps) {
           google.maps.event.removeListener(listener)
         }
       })
       mapEventListenersRef.current = []
+
+      // Cancel any animation frames
       if (animationFrameIdRef.current !== null) {
         cancelAnimationFrame(animationFrameIdRef.current)
         animationFrameIdRef.current = null
@@ -751,8 +866,10 @@ export function useThreeOverlay(
         cancelAnimationFrame(continuousRenderFrameIdRef.current)
         continuousRenderFrameIdRef.current = null
       }
+
+      // Remove overlay from map
       if (overlayRef.current) {
-        (overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
+        ;(overlayRef.current.setMap as (map: google.maps.Map | null) => void)(null)
       }
 
       // Remove and dispose car models
@@ -822,6 +939,15 @@ export function useThreeOverlay(
         bookingRouteMeshRef.current = null
       }
 
+      // Force garbage collection hint
+      if ((window as any).gc) {
+        try {
+          ;(window as any).gc()
+        } catch (e) {
+          console.log("Manual garbage collection not available")
+        }
+      }
+
       sceneRef.current?.clear()
       sceneRef.current = null
       overlayRef.current = null
@@ -831,7 +957,18 @@ export function useThreeOverlay(
       disposeGeometryPool()
       disposeMaterialPool()
     }
-  }, [googleMap]) // <-- Only depends on googleMap
+  }, [
+    googleMap,
+    lights,
+    memoizedStations,
+    populateInstancedMeshes,
+    populateCarModels,
+    startThrottledRendering,
+    stopRendering,
+    startMemoryMonitoring,
+    stopMemoryMonitoring,
+    carModelScene,
+  ])
 
   // Update car models when cars change
   useEffect(() => {
@@ -854,7 +991,7 @@ export function useThreeOverlay(
         bookingTubeMatRef.current,
         sceneRef.current,
         overlayRef.current,
-        ROUTE_ALTITUDE
+        ROUTE_ALTITUDE,
       )
     } else if (bookingRouteMeshRef.current) {
       // Hide the mesh if no valid path
@@ -864,6 +1001,21 @@ export function useThreeOverlay(
     overlayRef.current.requestRedraw()
   }, [bookingRouteDecoded])
 
+  // Public method to manually trigger a redraw
+  const triggerRedraw = useCallback(() => {
+    console.log("Manual redraw triggered")
+    if (overlayRef.current) {
+      try {
+        overlayRef.current.requestRedraw()
+        return true
+      } catch (err) {
+        console.error("Error in manual redraw:", err)
+        return false
+      }
+    }
+    return false
+  }, [])
+
   return {
     overlayRef,
     sceneRef,
@@ -871,5 +1023,7 @@ export function useThreeOverlay(
     blueInstancedMeshRef,
     redInstancedMeshRef,
     stationIndexMapsRef,
+    triggerRedraw,
   }
 }
+
