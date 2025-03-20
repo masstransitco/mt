@@ -402,19 +402,6 @@ export function useThreeOverlay(
     overlay.setMap(googleMap)
     overlayRef.current = overlay
 
-    // #region Imperative glTF loading if wanted
-    /*
-    const gltfLoader = new GLTFLoader()
-    gltfLoader.load('/pin.gltf', (gltf) => {
-      gltf.scene.scale.set(25,25,25)
-      gltf.scene.rotation.x = Math.PI
-      pinnedModelRef.current = gltf.scene
-      scene.add(gltf.scene)
-      overlay.requestRedraw()
-    })
-    */
-    // #endregion
-
     // #region Prepare geometry & materials from pool
     if (!stationGeoRef.current) {
       if (GeometryPool.hexagon) {
@@ -455,11 +442,11 @@ export function useThreeOverlay(
         outerShape.closePath()
 
         for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i
-          const x = innerSize * Math.cos(angle)
-          const y = innerSize * Math.sin(angle)
-          if (i === 0) innerShape.moveTo(x, y)
-          else innerShape.lineTo(x, y)
+          const ang = (Math.PI / 3) * i
+          const xx = innerSize * Math.cos(ang)
+          const yy = innerSize * Math.sin(ang)
+          if (i === 0) innerShape.moveTo(xx, yy)
+          else innerShape.lineTo(xx, yy)
         }
         innerShape.closePath()
 
@@ -636,7 +623,7 @@ export function useThreeOverlay(
         manualAnimationFrameIdRef.current = null
       }
 
-      (overlay as any).setMap(null);
+      (overlay as any).setMap(null)
       overlayRef.current = null
 
       // Remove all cars
@@ -713,21 +700,27 @@ export function useThreeOverlay(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleMap])
 
+  // ---------------------------------------------------------------------
   // Re-populate station meshes when data changes
+  // ---------------------------------------------------------------------
   useEffect(() => {
     if (!overlayRef.current) return
     populateInstancedMeshes()
-    overlayRef.current.requestRedraw()
+    // Removed overlay.requestRedraw()
   }, [populateInstancedMeshes, memoizedStations.length, stationSelection])
 
+  // ---------------------------------------------------------------------
   // Re-populate car models when car data changes
+  // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
     populateCarModels()
-    overlayRef.current.requestRedraw()
+    // Removed overlay.requestRedraw()
   }, [memoizedCars, populateCarModels])
 
+  // ---------------------------------------------------------------------
   // Handle booking route changes
+  // ---------------------------------------------------------------------
   useEffect(() => {
     if (!sceneRef.current || !overlayRef.current) return
 
@@ -744,7 +737,7 @@ export function useThreeOverlay(
       bookingRouteMeshRef.current.visible = false
     }
 
-    overlayRef.current.requestRedraw()
+    // Removed overlay.requestRedraw()
   }, [bookingRouteDecoded])
 
   return {
