@@ -1,24 +1,29 @@
 // src/store/stations3DSlice.ts
 
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { RootState } from './store';
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+import type { RootState } from "./store";
 
 /** A single 3D feature from stations_3d.geojson */
 export interface Station3DFeature {
-  type: 'Feature';
+  type: "Feature";
   geometry: {
-    type: 'Polygon'; 
-    coordinates: number[][][]; 
-    /* e.g. [
-        [
-          [lng1, lat1], [lng2, lat2], ...
-        ]
-      ]
-    */
+    type: "Polygon";
+    coordinates: number[][][];
   };
   properties: {
-    ObjectId: number; // Must match station.properties.ObjectId in stations.geojson
-    // ... any other fields you need
+    ObjectId: number;
+    Place?: string;
+    Address?: string;
+    District?: string;
+    topHeight?: number | null; // We'll store the parsed building height here
+    // Add additional known fields as needed:
+    Sheet_No?: string;
+    Format_3DS?: string;
+    Format_FBX?: string;
+    Format_MAX?: string;
+    Format_VRML?: string;
+    // And if you want to allow any unrecognized fields:
+    [key: string]: unknown;
   };
 }
 
@@ -34,6 +39,20 @@ const initialState: Stations3DState = {
   error: null,
 };
 
+/** 
+ * Helper to parse the raw TOPHEIGHT (which might be a string like "[np.float64(98.4)]")
+ * into a numeric value. Returns null if it’s missing or unparseable.
+ */
+function parseTopHeight(raw: unknown): number | null {
+  if (!raw) return null;
+  // Convert to string and extract a numeric substring:
+  // e.g. "[np.float64(98.4)]" -> "98.4"
+  const match = String(raw).match(/([\d.]+)/);
+  if (!match) return null;
+  const val = parseFloat(match[1]);
+  return isNaN(val) ? null : val;
+}
+
 /**
  * Thunk to fetch stations_3d.geojson. 
  * You can also add caching logic if desired, 
@@ -44,18 +63,32 @@ export const fetchStations3D = createAsyncThunk<
   void,               // no args
   { rejectValue: string }
 >(
-  'stations3D/fetchStations3D',
+  "stations3D/fetchStations3D",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/stations_3d.geojson');
+      const response = await fetch("/stations_3d.geojson");
       if (!response.ok) {
         throw new Error(`Failed to fetch 3D stations`);
       }
       const data = await response.json();
-      if (data.type !== 'FeatureCollection' || !data.features) {
-        throw new Error('Invalid 3D geojson format');
+      if (data.type !== "FeatureCollection" || !data.features) {
+        throw new Error("Invalid 3D geojson format");
       }
-      return data.features as Station3DFeature[];
+
+      // Transform each feature to include a numeric topHeight
+      const cleanedFeatures = data.features.map((f: any) => {
+        const topHeight = parseTopHeight(f.properties?.TOPHEIGHT);
+
+        return {
+          ...f,
+          properties: {
+            ...f.properties,
+            topHeight, // numeric or null
+          },
+        };
+      });
+
+      return cleanedFeatures as Station3DFeature[];
     } catch (err: any) {
       return rejectWithValue(err.message);
     }
@@ -63,7 +96,7 @@ export const fetchStations3D = createAsyncThunk<
 );
 
 const stations3DSlice = createSlice({
-  name: 'stations3D',
+  name: "stations3D",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
@@ -72,10 +105,13 @@ const stations3DSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchStations3D.fulfilled, (state, action: PayloadAction<Station3DFeature[]>) => {
-        state.loading = false;
-        state.items = action.payload;
-      })
+      .addCase(
+        fetchStations3D.fulfilled,
+        (state, action: PayloadAction<Station3DFeature[]>) => {
+          state.loading = false;
+          state.items = action.payload;
+        }
+      )
       .addCase(fetchStations3D.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
