@@ -1,13 +1,4 @@
-// Effect to update the route tube when route data changes
-useEffect(() => {
-  // Only create tube if both departure and arrival stations are set
-  if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
-    createOrUpdateRouteTube(routeDecoded);
-  } else if (routeTubeRef.current) {
-    // Hide tube if no route data
-    routeTubeRef.current.visible = false;
-  }
-}, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);  // Raycasting references"use client";
+
 
 import { useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
@@ -98,6 +89,17 @@ const createOrUpdateRouteTube = useCallback((path: Array<{lat: number, lng: numb
     }
     return;
   }
+
+  // Effect to update the route tube when route data changes
+useEffect(() => {
+  // Only create tube if both departure and arrival stations are set
+  if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
+    createOrUpdateRouteTube(routeDecoded);
+  } else if (routeTubeRef.current) {
+    // Hide tube if no route data
+    routeTubeRef.current.visible = false;
+  }
+}, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);  // Raycasting references"use client";
   
   // Create material if it doesn't exist
   if (!tubeMaterialRef.current) {
