@@ -35,6 +35,12 @@ export function useThreeOverlay(
   // Add a temporary storage for pending route data
   const pendingRouteDataRef = useRef<Array<{lat: number, lng: number}> | null>(null);
 
+  // Add a reference to track the desired visibility state of the route
+  const routeVisibleRef = useRef<boolean>(true);
+
+  // Add a ref to track the last time we created/updated the route
+  const lastRouteUpdateRef = useRef<number>(0);
+
   // Map anchor
   const anchorRef = useRef({ lat: 0, lng: 0, altitude: 0 });
 
@@ -88,6 +94,9 @@ export function useThreeOverlay(
     // Store the path data for later use if scene isn't ready yet
     pendingRouteDataRef.current = path;
     
+    // Update the timestamp of the last route update
+    lastRouteUpdateRef.current = Date.now();
+    
     if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
       console.log("[ThreeOverlay] Cannot create tube yet - missing dependencies:", {
         hasPath: !!path, 
@@ -98,6 +107,9 @@ export function useThreeOverlay(
       // We'll try again when the scene is ready
       return;
     }
+    
+    // Set route visibility state to true
+    routeVisibleRef.current = true;
     
     // Create material if it doesn't exist
     if (!tubeMaterialRef.current) {
@@ -118,7 +130,6 @@ export function useThreeOverlay(
         { lat, lng, altitude: 50 }, // Increased altitude for visibility
         anchor
       );
-      console.log(`[ThreeOverlay] Point transformed: lat=${lat}, lng=${lng} → x=${x}, y=${y}, z=${z}`);
       points.push(new THREE.Vector3(x, y, z));
     });
     
@@ -140,58 +151,114 @@ export function useThreeOverlay(
     // Create or update the tube mesh
     if (!routeTubeRef.current) {
       const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterialRef.current);
-      tubeMesh.renderOrder = 300; // Ensure it's above ground but below buildings
+      tubeMesh.renderOrder = 1000; // Ensure it's above everything else
       tubeMesh.visible = true; // Explicitly set visible
       console.log("[ThreeOverlay] Adding tube to scene");
       sceneRef.current.add(tubeMesh);
       routeTubeRef.current = tubeMesh;
       // Request explicit redraw
       overlayRef.current.requestRedraw();
+      
+      // Schedule another redraw after a short delay to ensure visibility
+      setTimeout(() => {
+        if (overlayRef.current) {
+          overlayRef.current.requestRedraw();
+        }
+      }, 100);
     } else {
       routeTubeRef.current.visible = true;
       routeTubeRef.current.geometry.dispose(); // Clean up old geometry
       routeTubeRef.current.geometry = tubeGeometry;
+      routeTubeRef.current.renderOrder = 1000; // Ensure it's above everything else
       console.log("[ThreeOverlay] Updated existing tube");
       // Request explicit redraw
       overlayRef.current.requestRedraw();
+      
+      // Schedule another redraw after a short delay to ensure visibility
+      setTimeout(() => {
+        if (overlayRef.current) {
+          overlayRef.current.requestRedraw();
+        }
+      }, 100);
     }
   }, []);
 
-// Effect to update the route tube when route data changes
-useEffect(() => {
-  console.log("[ThreeOverlay] Route effect - data:", {
-    departureStationId, 
-    arrivalStationId, 
-    routePoints: routeDecoded?.length, 
-    routeData: routeDecoded?.slice(0, 3) // Log first few points only to keep log readable
-  });
-  
-  // Only create tube if both departure and arrival stations are set
-  if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
-    console.log("[ThreeOverlay] Calling createOrUpdateRouteTube with path length:", routeDecoded.length);
-    createOrUpdateRouteTube(routeDecoded);
+  // Effect to update the route tube when route data changes
+  useEffect(() => {
+    console.log("[ThreeOverlay] Route effect - data:", {
+      departureStationId, 
+      arrivalStationId, 
+      routePoints: routeDecoded?.length, 
+      routeData: routeDecoded?.slice(0, 3) // Log first few points only to keep log readable
+    });
     
-    // Force the tube to be visible after creation/update
-    if (routeTubeRef.current) {
-      routeTubeRef.current.visible = true;
+    // Only create tube if both departure and arrival stations are set
+    if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
+      console.log("[ThreeOverlay] Calling createOrUpdateRouteTube with path length:", routeDecoded.length);
+      createOrUpdateRouteTube(routeDecoded);
       
-      // Ensure high render order so route appears above buildings
-      routeTubeRef.current.renderOrder = 999;
-      
-      // Force a redraw
-      if (overlayRef.current) {
-        overlayRef.current.requestRedraw();
+      // Force the tube to be visible after creation/update
+      if (routeTubeRef.current) {
+        routeTubeRef.current.visible = true;
+        routeVisibleRef.current = true;
+        
+        // Ensure high render order so route appears above buildings
+        routeTubeRef.current.renderOrder = 1000;
+        
+        // Force a redraw
+        if (overlayRef.current) {
+          overlayRef.current.requestRedraw();
+        }
+      }
+    } else if (routeTubeRef.current) {
+      // Only hide the tube when route data is missing
+      // NOT when the UI sheet is minimized
+      if (!departureStationId || !arrivalStationId || !routeDecoded?.length) {
+        console.log("[ThreeOverlay] Hiding route tube - missing data");
+        routeTubeRef.current.visible = false;
+        routeVisibleRef.current = false;
       }
     }
-  } else if (routeTubeRef.current) {
-    // Only hide the tube when route data is missing
-    // NOT when the UI sheet is minimized
-    if (!departureStationId || !arrivalStationId || !routeDecoded?.length) {
-      console.log("[ThreeOverlay] Hiding route tube - missing data");
-      routeTubeRef.current.visible = false;
+  }, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);
+
+  // Add a watchdog effect to ensure route remains visible even after context recovery
+  useEffect(() => {
+    // This will run on every render cycle
+    if (routeTubeRef.current && routeVisibleRef.current) {
+      // Ensure tube matches our desired visibility state
+      routeTubeRef.current.visible = true;
+      routeTubeRef.current.renderOrder = 1000; // Keep high render order
+      
+      // Only force redraw if we have actual route data
+      if (departureStationId && arrivalStationId && 
+          pendingRouteDataRef.current && pendingRouteDataRef.current.length >= 2) {
+        overlayRef.current?.requestRedraw();
+      }
     }
-  }
-}, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);
+  });
+
+  // Add an interval to periodically check and ensure route visibility
+  useEffect(() => {
+    const checkRouteVisibility = () => {
+      if (routeTubeRef.current && routeVisibleRef.current && 
+          departureStationId && arrivalStationId) {
+        // If the route should be visible but isn't, make it visible
+        if (!routeTubeRef.current.visible) {
+          console.log("[ThreeOverlay] Restoring route visibility in watchdog");
+          routeTubeRef.current.visible = true;
+          routeTubeRef.current.renderOrder = 1000;
+          overlayRef.current?.requestRedraw();
+        }
+      }
+    };
+
+    // Check visibility every 500ms
+    const intervalId = setInterval(checkRouteVisibility, 500);
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [departureStationId, arrivalStationId]);
 
   const raycasterRef = useRef<THREE.Raycaster | null>(null);
   const inverseProjectionMatrixRef = useRef<THREE.Matrix4 | null>(null);
@@ -425,6 +492,15 @@ useEffect(() => {
         console.log("[ThreeOverlay] Creating tube from pending route data during onContextRestored");
         createOrUpdateRouteTube(pendingRouteDataRef.current);
       }
+      
+      // If route should be visible but was lost in the context recovery, restore it
+      if (routeVisibleRef.current && departureStationId && arrivalStationId && 
+          pendingRouteDataRef.current && pendingRouteDataRef.current.length >= 2) {
+        console.log("[ThreeOverlay] Re-creating route tube after context restore");
+        setTimeout(() => {
+          createOrUpdateRouteTube(pendingRouteDataRef.current!);
+        }, 200);
+      }
     };
 
     // the picking logic
@@ -533,19 +609,25 @@ useEffect(() => {
       });
       
       // Update tube positioning if needed
-      if (routeTubeRef.current && routeTubeRef.current.visible) {
-        // Make sure it's visible by adjusting z position if needed
-        routeTubeRef.current.position.z = 10; // Added explicit z-positioning to ensure visibility
-        console.log("[ThreeOverlay] Route tube visible in onDraw");
+      if (routeTubeRef.current) {
+        if (routeVisibleRef.current) {
+          // Ensure tube is visible if it should be according to our ref
+          if (!routeTubeRef.current.visible) {
+            routeTubeRef.current.visible = true;
+          }
+          
+          // Always make sure it has the right position
+          routeTubeRef.current.position.z = 10;
+          routeTubeRef.current.renderOrder = 1000;
+        }
       }
 
-      overlay.requestRedraw();
-      const w = gl.canvas.width;
-      const h = gl.canvas.height;
-      renderer.setViewport(0, 0, w, h);
-
+      renderer.setViewport(0, 0, gl.canvas.width, gl.canvas.height);
       renderer.render(scene, camera);
       renderer.resetState();
+      
+      // Schedule next redraw
+      overlay.requestRedraw();
     };
 
     overlay.onContextLost = () => {
@@ -576,6 +658,7 @@ useEffect(() => {
 
       // Reset pending route data
       pendingRouteDataRef.current = null;
+      routeVisibleRef.current = false;
 
       // cleanup
       const cleanupMeshes = (meshes: THREE.Object3D[]) => {
@@ -614,7 +697,21 @@ useEffect(() => {
     };
   }, [googleMap, stations, buildings3D, handleStationSelected, createOrUpdateRouteTube]);
 
-  return { overlayRef };
+  // Expose a method to force route visibility
+  const forceRouteVisibility = useCallback(() => {
+    if (routeTubeRef.current && routeVisibleRef.current) {
+      routeTubeRef.current.visible = true;
+      routeTubeRef.current.renderOrder = 1000;
+      if (overlayRef.current) {
+        overlayRef.current.requestRedraw();
+      }
+    }
+  }, []);
+
+  return { 
+    overlayRef,
+    forceRouteVisibility
+  };
 }
 
 /** Helper to dispose single or multiple materials. */
