@@ -203,6 +203,10 @@ export default function SignInModal({ isOpen, onClose }: SignInModalProps) {
   return (
     <motion.div 
       className="fixed inset-0 z-[9999] flex items-start justify-center pt-6"
+      style={{ 
+        pointerEvents: "auto", 
+        touchAction: "auto"
+      }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

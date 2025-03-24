@@ -49,6 +49,10 @@ const DialogOverlay = React.forwardRef<
       // ...
       className
     )}
+    style={{
+      pointerEvents: "auto", // Add this
+      touchAction: "auto"    // Add this
+    }}
     {...props}
   />
 ));
@@ -72,6 +76,8 @@ const DialogContent = React.forwardRef<
         width: "95vw",
         height: "85vh",
         borderRadius: "16px",
+        pointerEvents: "auto", // Add this
+        touchAction: "auto"    // Add this
       }}
       className={cn(
         "bg-background overflow-y-auto p-0",
