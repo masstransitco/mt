@@ -170,9 +170,6 @@ export function useThreeOverlay(
     if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
       console.log("[ThreeOverlay] Calling createOrUpdateRouteTube with path length:", routeDecoded.length);
       createOrUpdateRouteTube(routeDecoded);
-    } else if (routeTubeRef.current) {
-      console.log("[ThreeOverlay] Hiding route tube - missing data");
-      routeTubeRef.current.visible = false;
     }
   }, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);
 
