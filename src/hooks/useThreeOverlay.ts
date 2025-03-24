@@ -1,688 +1,610 @@
-"use client"
+import { useEffect, useRef, useCallback } from "react";
+import * as THREE from "three";
+import type { StationFeature } from "@/store/stationsSlice";
+import { latLngAltToVector3 } from "@/lib/geo-utils";
 
-import { memo, useState, useEffect, useMemo, useCallback, Suspense, useRef } from "react"
-import { toast } from "react-hot-toast"
-import { motion } from "framer-motion"
-import dynamic from "next/dynamic"
-import { Clock, Footprints, Info } from "lucide-react"
-import { useAppDispatch, useAppSelector } from "@/store/store"
-import {
-  selectBookingStep,
-  advanceBookingStep,
-  selectRoute,
-  selectDepartureStationId,
-  selectArrivalStationId,
-  // Removed any direct fetchRoute calls here in StationDetail
-} from "@/store/bookingSlice"
-import { saveBookingDetails } from "@/store/bookingThunks"
-import { selectDispatchRoute } from "@/store/dispatchSlice"
-import type { StationFeature } from "@/store/stationsSlice"
-import { cn } from "@/lib/utils"
-import { selectIsSignedIn, selectHasDefaultPaymentMethod } from "@/store/userSlice"
-import { chargeUserForTrip } from "@/lib/stripe"
-import { auth } from "@/lib/firebase"
-import { selectScannedCar } from "@/store/carSlice"
-import TripSheet from "./TripSheet"
-import WalletModal from "@/components/ui/WalletModal"
-import PaymentResultModal from "@/components/ui/PaymentResultModal"
+// Pull from Redux
+import { useAppSelector } from "@/store/store";
+import { selectStations3D } from "@/store/stations3DSlice";
+import { selectDepartureStationId, selectArrivalStationId, selectRouteDecoded } from "@/store/bookingSlice";
 
-/**
- * Dynamically import PaymentSummary
- */
-const PaymentSummary = dynamic(
-  () => import("@/components/ui/PaymentComponents").then((mod) => ({ default: mod.PaymentSummary })),
-  {
-    loading: () => <div className="text-sm text-gray-400">Loading payment...</div>,
-    ssr: false,
-  },
-)
-
-// Map fallback component
-function MapCardFallback() {
-  return (
-    <div className="h-44 w-full bg-gray-800/50 rounded-lg flex items-center justify-center">
-      <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
-    </div>
-  )
+interface ThreeOverlayOptions {
+  onStationSelected?: (stationId: number) => void;
 }
 
-// Lazy-loaded components with improved loading experience
-const CarGrid = dynamic(() => import("./booking/CarGrid"), {
-  loading: ({ error, isLoading, pastDelay }) => {
-    if (error) return <div>Error loading vehicles</div>
-    if (isLoading && pastDelay) {
-      return (
-        <div className="h-32 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
-          <div className="text-xs text-gray-400">Loading vehicles...</div>
-        </div>
-      )
-    }
-    return null
-  },
-  ssr: false,
-})
+export function useThreeOverlay(
+  googleMap: google.maps.Map | null,
+  stations: StationFeature[],
+  options?: ThreeOverlayOptions
+) {
+  const overlayRef = useRef<google.maps.WebGLOverlayView | null>(null);
 
-const MapCard = dynamic(() => import("./MapCard"), {
-  loading: ({ error, isLoading, pastDelay }) => {
-    if (error) return <div>Error loading map</div>
-    if (isLoading && pastDelay) {
-      return <MapCardFallback />
-    }
-    return null
-  },
-  ssr: false,
-})
+  // Scene, camera, renderer references
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
-/** StationDetailProps interface */
-interface StationDetailProps {
-  activeStation: StationFeature | null
-  stations?: StationFeature[]
-  onConfirmDeparture?: () => void
-  onOpenSignIn: () => void
-  onDismiss?: () => void
-  isQrScanStation?: boolean
-  onClose?: () => void
-  isMinimized?: boolean
-}
+  // Mesh references - removed stationMeshesRef as we no longer show station cylinders
+  const buildingMeshesRef = useRef<THREE.Mesh[]>([]);
+  const buildingEdgesRef = useRef<THREE.LineSegments[]>([]);
 
-/**
- * Persistent wrapper for CarGrid with optimized loading
- * - Only renders when visible
- * - Maintains consistent height during loading
- * - Preserves previous render while loading new one
- */
-const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
-  isVisible,
-  isQrScanStation,
-  scannedCar,
-}: {
-  isVisible: boolean
-  isQrScanStation?: boolean
-  scannedCar?: any
-}) {
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [shouldRender, setShouldRender] = useState(false)
+  // Route tube reference
+  const routeTubeRef = useRef<THREE.Mesh | null>(null);
+  const tubeMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
   
-  // Delayed rendering for better UI experience
-  useEffect(() => {
-    if (isVisible) {
-      // Small delay before showing the component
-      const timer = setTimeout(() => {
-        setShouldRender(true)
-      }, 100)
-      return () => clearTimeout(timer)
+  // Add a temporary storage for pending route data
+  const pendingRouteDataRef = useRef<Array<{lat: number, lng: number}> | null>(null);
+
+  // Map anchor
+  const anchorRef = useRef({ lat: 0, lng: 0, altitude: 0 });
+
+  // Guard to ensure we only init once
+  const isInitializedRef = useRef(false);
+
+  // 3D building data
+  const buildings3D = useAppSelector(selectStations3D);
+
+  // Get station selection state from the Redux store
+  const departureStationId = useAppSelector(selectDepartureStationId);
+  const arrivalStationId = useAppSelector(selectArrivalStationId);
+
+  // Get route data for tube visualization
+  const routeDecoded = useAppSelector(selectRouteDecoded);
+
+  // Color constants
+  const BUILDING_DEFAULT_COLOR = new THREE.Color(0xCCCCCC); // Light gray
+  const BUILDING_DEPARTURE_COLOR = new THREE.Color(0x3B82F6); // Blue
+  const BUILDING_ARRIVAL_COLOR = new THREE.Color(0xEF4444); // Red
+  const ROUTE_TUBE_COLOR = new THREE.Color(0x3B82F6); // Blue for route tube
+
+  // Custom curve for tube geometry
+  class CustomCurve extends THREE.Curve<THREE.Vector3> {
+    private points: THREE.Vector3[];
+    
+    constructor(points: THREE.Vector3[]) {
+      super();
+      this.points = points;
+    }
+    
+    getPoint(t: number, optionalTarget = new THREE.Vector3()) {
+      const segment = (this.points.length - 1) * t;
+      const index = Math.floor(segment);
+      const alpha = segment - index;
+      
+      if (index >= this.points.length - 1) {
+        return optionalTarget.copy(this.points[this.points.length - 1]);
+      }
+      
+      const p0 = this.points[index];
+      const p1 = this.points[index + 1];
+      return optionalTarget.copy(p0).lerp(p1, alpha);
+    }
+  }
+
+  // Function to create or update a route tube
+  const createOrUpdateRouteTube = useCallback((path: Array<{lat: number, lng: number}>) => {
+    console.log("[ThreeOverlay] Creating route tube with", path.length, "points");
+    
+    // Store the path data for later use if scene isn't ready yet
+    pendingRouteDataRef.current = path;
+    
+    if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
+      console.log("[ThreeOverlay] Cannot create tube yet - missing dependencies:", {
+        hasPath: !!path, 
+        pathLength: path?.length, 
+        hasScene: !!sceneRef.current, 
+        hasOverlay: !!overlayRef.current
+      });
+      // We'll try again when the scene is ready
+      return;
+    }
+    
+    // Create material if it doesn't exist
+    if (!tubeMaterialRef.current) {
+      tubeMaterialRef.current = new THREE.MeshBasicMaterial({
+        color: ROUTE_TUBE_COLOR,
+        transparent: true,
+        opacity: 0.9, // Increased opacity for visibility
+        side: THREE.DoubleSide, // Ensure it's visible from all angles
+      });
+    }
+    
+    // Convert route points to Vector3 coordinates
+    const points: THREE.Vector3[] = [];
+    const anchor = anchorRef.current;
+    
+    path.forEach(({lat, lng}) => {
+      const {x, y, z} = latLngAltToVector3(
+        { lat, lng, altitude: 50 }, // Increased altitude for visibility
+        anchor
+      );
+      console.log(`[ThreeOverlay] Point transformed: lat=${lat}, lng=${lng} → x=${x}, y=${y}, z=${z}`);
+      points.push(new THREE.Vector3(x, y, z));
+    });
+    
+    // Create curve and tube geometry
+    const curve = new CustomCurve(points);
+    const tubularSegments = Math.min(Math.max(points.length * 2, 32), 100); // Adaptive segments
+    const radius = 8; // Increased tube radius for visibility
+    const radialSegments = 8; // Tube resolution
+    const closed = false;
+    
+    const tubeGeometry = new THREE.TubeGeometry(
+      curve, 
+      tubularSegments, 
+      radius, 
+      radialSegments, 
+      closed
+    );
+    
+    // Create or update the tube mesh
+    if (!routeTubeRef.current) {
+      const tubeMesh = new THREE.Mesh(tubeGeometry, tubeMaterialRef.current);
+      tubeMesh.renderOrder = 300; // Ensure it's above ground but below buildings
+      tubeMesh.visible = true; // Explicitly set visible
+      console.log("[ThreeOverlay] Adding tube to scene");
+      sceneRef.current.add(tubeMesh);
+      routeTubeRef.current = tubeMesh;
+      // Request explicit redraw
+      overlayRef.current.requestRedraw();
     } else {
-      // Small delay before hiding to allow for animations
-      const timer = setTimeout(() => {
-        setShouldRender(false)
-        setIsLoaded(false)
-      }, 150)
-      return () => clearTimeout(timer)
+      routeTubeRef.current.visible = true;
+      routeTubeRef.current.geometry.dispose(); // Clean up old geometry
+      routeTubeRef.current.geometry = tubeGeometry;
+      console.log("[ThreeOverlay] Updated existing tube");
+      // Request explicit redraw
+      overlayRef.current.requestRedraw();
     }
-  }, [isVisible])
-  
-  const handleLoad = useCallback(() => {
-    setIsLoaded(true)
-  }, [])
-  
-  if (!isVisible && !shouldRender) return null
-  
-  return (
-    <Suspense
-      fallback={
-        <div className="h-32 w-full bg-gray-800/50 rounded-lg animate-pulse flex items-center justify-center">
-          <div className="text-xs text-gray-400">Loading vehicles...</div>
-        </div>
-      }
-    >
-      {shouldRender && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="relative"
-          onAnimationComplete={handleLoad}
-        >
-          <CarGrid
-            className="h-32 w-full"
-            isVisible={true}
-            isQrScanStation={isQrScanStation}
-            scannedCar={scannedCar}
-          />
-        </motion.div>
-      )}
-    </Suspense>
-  )
-})
-MemoizedCarGrid.displayName = "MemoizedCarGrid"
+  }, []);
 
-/** InfoPopup component */
-const InfoPopup = memo(function InfoPopup({
-  text = "Parking entry and exits are contactless and requires no further payments.",
-}: {
-  text?: string
-}) {
-  const [isVisible, setIsVisible] = useState(false)
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleShowInfo = useCallback(() => {
-    setIsVisible(true)
-
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
+  // Effect to update the route tube when route data changes
+  useEffect(() => {
+    console.log("[ThreeOverlay] Route effect - data:", {
+      departureStationId, 
+      arrivalStationId, 
+      routePoints: routeDecoded?.length, 
+      routeData: routeDecoded?.slice(0, 3) // Log first few points only to keep log readable
+    });
+    
+    // Only create tube if both departure and arrival stations are set
+    if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
+      console.log("[ThreeOverlay] Calling createOrUpdateRouteTube with path length:", routeDecoded.length);
+      createOrUpdateRouteTube(routeDecoded);
+    } else if (routeTubeRef.current) {
+      console.log("[ThreeOverlay] Hiding route tube - missing data");
+      routeTubeRef.current.visible = false;
     }
+  }, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);
 
-    timeoutRef.current = setTimeout(() => {
-      setIsVisible(false)
-    }, 3000)
-  }, [])
+  const raycasterRef = useRef<THREE.Raycaster | null>(null);
+  const inverseProjectionMatrixRef = useRef<THREE.Matrix4 | null>(null);
+
+  // Cleanup pointer listeners
+  const removePointerListenerRef = useRef<() => void>(() => {});
+
+  // Callback for handling station/building selection
+  const handleStationSelected = useCallback((stationId: number) => {
+    if (options?.onStationSelected) {
+      console.log("[useThreeOverlay] Calling parent callback with stationId:", stationId);
+      options.onStationSelected(stationId);
+    } else {
+      console.warn("[useThreeOverlay] No onStationSelected callback provided");
+    }
+  }, [options]);
 
   useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
+    if (!googleMap || isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
+    console.log("[useThreeOverlay] Initializing WebGLOverlayView...");
+
+    const overlay = new google.maps.WebGLOverlayView();
+    overlayRef.current = overlay;
+
+    overlay.onAdd = () => {
+      console.log("[useThreeOverlay] onAdd - Creating scene & camera...");
+
+      const scene = new THREE.Scene();
+      sceneRef.current = scene;
+
+      const camera = new THREE.PerspectiveCamera();
+      camera.far = 100000;
+      camera.updateProjectionMatrix();
+      cameraRef.current = camera;
+
+      // Decide an anchor based on map center
+      const center = googleMap.getCenter();
+      if (center) {
+        anchorRef.current.lat = center.lat();
+        anchorRef.current.lng = center.lng();
+        anchorRef.current.altitude = 0;
       }
-    }
-  }, [])
+      console.log("[useThreeOverlay] Anchor set to", anchorRef.current);
 
-  return (
-    <div className="relative inline-flex items-center">
-      <button
-        onClick={handleShowInfo}
-        className="text-gray-400 hover:text-gray-300 focus:outline-none"
-        aria-label="More information"
-      >
-        <Info size={14} />
-      </button>
+      // Note: We've removed the station cylinders rendering code
+      // Note: We've removed the debug markers rendering code
 
-      {isVisible && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-gray-800 text-xs text-white w-48 text-center shadow-lg z-50">
-          <div className="relative">
-            {text}
-            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"></div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-})
-InfoPopup.displayName = "InfoPopup"
+      // -- BUILDINGS: extrude from stations3D --
+      console.log(
+        "[useThreeOverlay] Creating building extrusions. Count:",
+        buildings3D.length
+      );
 
-/** StationStats component */
-const StationStats = memo(function StationStats({
-  activeStation,
-  step,
-  driveTimeMin,
-  parkingValue,
-  isVirtualCarStation,
-}: {
-  activeStation: StationFeature
-  step: number
-  driveTimeMin: string | null
-  parkingValue: string
-  isVirtualCarStation: boolean
-}) {
-  const isVirtualCarLocation = isVirtualCarStation || activeStation.properties?.isVirtualCarLocation
+      // Filter valid lat/lng polygons
+      const validBuildings = buildings3D.filter((b) => {
+        const coords = b.geometry.coordinates[0];
+        if (!coords || coords.length < 3) return false;
+        const [lng, lat] = coords[0];
+        return Math.abs(lng) <= 180 && Math.abs(lat) <= 90;
+      });
+      console.log(`[useThreeOverlay] Found ${validBuildings.length} valid lat/lng buildings`);
 
-  return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-lg p-3 space-y-2 border border-gray-700">
-      {isVirtualCarLocation ? (
-        <div className="flex justify-between items-center text-xs">
-          <div className="flex items-center gap-1.5 text-gray-300">
-            <Clock className="w-3.5 h-3.5 text-green-400" />
-            <span>Status</span>
-          </div>
-          <span className="font-medium text-green-400">Ready to Drive</span>
-        </div>
-      ) : activeStation.properties.waitTime ? (
-        <div className="flex justify-between items-center text-xs">
-          <div className="flex items-center gap-1.5 text-gray-300">
-            <Clock className="w-3.5 h-3.5 text-blue-400" />
-            <span>Est. Wait Time</span>
-          </div>
-          <span className="font-medium text-white">{activeStation.properties.waitTime} min</span>
-        </div>
-      ) : null}
+      // Log ObjectId mapping for debugging
+      console.log("[useThreeOverlay] Station ObjectId mapping:");
+      stations.forEach(station => {
+        console.log(`Station ${station.id} has ObjectId: ${station.properties.ObjectId}`);
+      });
+      
+      validBuildings.forEach((building, i) => {
+        try {
+          const coords = building.geometry.coordinates[0];
+          const buildingAltitude = 0;
+          const buildingHeight =
+            building.properties?.topHeight != null
+              ? building.properties.topHeight
+              : 250;
 
-      {step === 2 && typeof activeStation.distance === "number" && !isVirtualCarLocation && (
-        <div className="flex justify-between items-center text-xs">
-          <div className="flex items-center gap-1.5 text-gray-300">
-            <Footprints className="w-3.5 h-3.5 text-blue-400" />
-            <span>Distance from You</span>
-          </div>
-          <span className="font-medium text-white">{activeStation.distance.toFixed(1)} km</span>
-        </div>
-      )}
+          const anchor = anchorRef.current;
 
-      {step === 4 && driveTimeMin && (
-        <div className="flex justify-between items-center text-xs">
-          <div className="flex items-center gap-1.5 text-gray-300">
-            <span>Drive Time</span>
-          </div>
-          <span className="font-medium text-white">{driveTimeMin} min</span>
-        </div>
-      )}
+          // Convert polygon coords to local XY
+          const absolutePoints: THREE.Vector3[] = [];
+          let sumX = 0,
+            sumY = 0;
 
-      <div className="flex justify-between items-center text-xs">
-        <div className="flex items-center gap-1.5 text-gray-300">
-          <span>Departure Gate</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium text-white">{isVirtualCarLocation ? "Current Location" : "Contactless"}</span>
-          {!isVirtualCarLocation && <InfoPopup />}
-        </div>
-      </div>
-    </div>
-  )
-})
-StationStats.displayName = "StationStats"
+          coords.forEach(([lng, lat]) => {
+            const { x, y } = latLngAltToVector3(
+              { lat, lng, altitude: buildingAltitude },
+              anchor
+            );
+            absolutePoints.push(new THREE.Vector3(x, y, 0));
+            sumX += x;
+            sumY += y;
+          });
 
-/** Confirm button component */
-const ConfirmButton = memo(function ConfirmButton({
-  isDepartureFlow,
-  charging,
-  disabled,
-  onClick,
-  isVirtualCarLocation,
-}: {
-  isDepartureFlow: boolean
-  charging: boolean
-  disabled: boolean
-  onClick: () => void
-  isVirtualCarLocation?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "w-full py-2.5 text-sm font-medium rounded-md transition-colors flex items-center justify-center",
-        "text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800/40 disabled:text-blue-100/50 disabled:cursor-not-allowed",
-        isVirtualCarLocation && "bg-green-600 hover:bg-green-700",
-      )}
-    >
-      {charging ? (
-        <>
-          <span className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent mr-2" />
-          Processing...
-        </>
-      ) : isDepartureFlow ? (
-        isVirtualCarLocation ? (
-          "Start Driving Now"
-        ) : (
-          "Choose Return"
-        )
-      ) : (
-        "Confirm Trip"
-      )}
-    </button>
-  )
-})
-ConfirmButton.displayName = "ConfirmButton"
+          // Average center
+          const centerX = sumX / coords.length;
+          const centerY = sumY / coords.length;
 
-// Improved touch handling helper
-function TouchScrollHandler() {
-  function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
-    const el = e.currentTarget
-    const scrollTop = el.scrollTop
-    const scrollHeight = el.scrollHeight
-    const height = el.clientHeight
-    const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0)
+          // Build a shape at local(0,0)
+          const shape = new THREE.Shape();
+          absolutePoints.forEach((pt, idx) => {
+            const localX = pt.x - centerX;
+            const localY = pt.y - centerY;
+            if (idx === 0) {
+              shape.moveTo(localX, localY);
+            } else {
+              shape.lineTo(localX, localY);
+            }
+          });
+          shape.closePath();
 
-    // Prevent overscroll only at boundaries
-    if ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0)) {
-      e.preventDefault()
-    }
+          // Extrude geometry
+          const extrudeSettings = { depth: buildingHeight, bevelEnabled: false };
+          const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
-    el.dataset.touchY = e.touches[0].clientY.toString()
-  }
+          // Use a consistent light gray color for all buildings as default
+          const material = new THREE.MeshBasicMaterial({
+            color: BUILDING_DEFAULT_COLOR,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide,
+          });
 
-  function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
-    e.currentTarget.dataset.touchY = e.touches[0].clientY.toString()
-  }
+          const buildingMesh = new THREE.Mesh(geometry, material);
+          
+          // Instead of wireframes, we create an edges geometry for outlines
+          const edgesGeometry = new THREE.EdgesGeometry(geometry);
+          const edgesMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x000000, 
+            linewidth: 1 
+          });
+          const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+          
+          // Add the edges to the scene separately (not as child of mesh)
+          scene.add(edges);
+          buildingEdgesRef.current.push(edges);
 
-  function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
-    delete e.currentTarget.dataset.touchY
-  }
+          // store center / name
+          buildingMesh.userData.centerPos = new THREE.Vector3(centerX, centerY, 0);
+          buildingMesh.userData.name = building.properties?.Place || `Building ${i}`;
 
-  return {
-    onTouchStart: handleTouchStart,
-    onTouchMove: handleTouchMove,
-    onTouchEnd: handleTouchEnd,
-  }
-}
+          // store the ObjectId for mapping to a station
+          buildingMesh.userData.objectId = building.properties?.ObjectId;
+          
+          // Find matching station by ObjectId
+          const buildingObjectId = building.properties?.ObjectId;
+          console.log(`[useThreeOverlay] Building ${i} ObjectId:`, buildingObjectId);
+          
+          const matchingStation = stations.find(s => 
+            s.properties.ObjectId === buildingObjectId
+          );
+          
+          if (matchingStation) {
+            console.log(`[useThreeOverlay] Found matching station ${matchingStation.id} for building with ObjectId ${buildingObjectId}`);
+            buildingMesh.userData.stationId = matchingStation.id;
+            buildingMesh.userData.isBuilding = true;
+            buildingMesh.userData.objectId = buildingObjectId;
+            
+            // Also store the station data in the edges object
+            edges.userData.stationId = matchingStation.id;
+            edges.userData.isBuilding = true;
+            edges.userData.objectId = buildingObjectId;
+          } else {
+            console.log(`[useThreeOverlay] No matching station found for building with ObjectId ${buildingObjectId}`);
+            // Still store the ObjectId for debugging
+            buildingMesh.userData.objectId = buildingObjectId;
+            edges.userData.objectId = buildingObjectId;
+          }
 
-/**
- * Main StationDetail component with improved scroll behavior and optimized CarGrid handling
- */
-function StationDetailComponent({
-  activeStation,
-  stations = [],
-  onConfirmDeparture = () => {},
-  onOpenSignIn = () => {},
-  onDismiss = () => {},
-  isQrScanStation = false,
-  onClose = () => {},
-  isMinimized = false,
-}: StationDetailProps) {
-  const dispatch = useAppDispatch()
-
-  // Redux states
-  const step = useAppSelector(selectBookingStep)
-  const route = useAppSelector(selectRoute)
-  const departureId = useAppSelector(selectDepartureStationId)
-  const arrivalId = useAppSelector(selectArrivalStationId)
-  const dispatchRoute = useAppSelector(selectDispatchRoute)
-  const isSignedIn = useAppSelector(selectIsSignedIn)
-  const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod)
-  const scannedCarRedux = useAppSelector(selectScannedCar)
-
-  // Flow booleans
-  const isDepartureFlow = useMemo(() => step <= 2, [step])
-
-  // Local states
-  const [isInitialized, setIsInitialized] = useState(true)
-  const [attemptedRender, setAttemptedRender] = useState(true)
-  const [walletModalOpen, setWalletModalOpen] = useState(false)
-  const [charging, setCharging] = useState(false)
-  const [forceRefreshKey, setForceRefreshKey] = useState(0)
-  const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false)
-  const [paymentSuccess, setPaymentSuccess] = useState(false)
-  const [paymentReference, setPaymentReference] = useState("")
-  const [cardLast4, setCardLast4] = useState("")
-
-  // Single source of truth for CarGrid visibility
-  const [carGridVisible, setCarGridVisible] = useState(false)
-
-  // Reference to track last render time to prevent too frequent updates
-  const lastRenderTimeRef = useRef(0)
-
-  // Touch scroll handler
-  const touchScrollHandlers = TouchScrollHandler()
-
-  // Get stations by ID for the receipt or display
-  const departureStation = useMemo(() => stations.find((s) => s.id === departureId) || null, [stations, departureId])
-  const arrivalStation = useMemo(() => stations.find((s) => s.id === arrivalId) || null, [stations, arrivalId])
-
-  // For the "Departure Gate" label value
-  const parkingValue = useMemo(() => {
-    if (step === 2 || step === 4) return "Contactless"
-    return ""
-  }, [step])
-
-  // Convert route duration => minutes
-  const driveTimeMin = useMemo(() => {
-    if (!route || !departureId || !arrivalId) return null
-    return Math.round(route.duration / 60).toString()
-  }, [route, departureId, arrivalId])
-
-  // Identify if station is a "virtual" car location
-  const isVirtualCarLocation = useMemo(() => !!activeStation?.properties?.isVirtualCarLocation, [activeStation])
-
-  // We no longer re‐fetch route from StationDetail for step≥3,
-  // leaving that solely to GMap or the store.
-
-  // Payment modal open/close
-  const handleOpenWalletModal = useCallback(() => {
-    setWalletModalOpen(true)
-  }, [])
-  const handleCloseWalletModal = useCallback(() => {
-    setWalletModalOpen(false)
-  }, [])
-
-  // Payment result modal steps
-  const handlePaymentContinue = useCallback(() => {
-    setPaymentResultModalOpen(false)
-    if (paymentSuccess) {
-      dispatch(advanceBookingStep(5))
-      dispatch(saveBookingDetails())
-    }
-  }, [dispatch, paymentSuccess])
-
-  const handlePaymentRetry = useCallback(() => {
-    setPaymentResultModalOpen(false)
-  }, [])
-
-  // Confirm button logic
-  const handleConfirm = useCallback(async () => {
-    // Step 2 => proceed to step 3 (choose arrival)
-    if (isDepartureFlow && step === 2) {
-      dispatch(advanceBookingStep(3))
-      if (isVirtualCarLocation) {
-        toast.success("Car ready! Now select your dropoff station.")
-      } else {
-        toast.success("Departure station confirmed! Now choose your arrival station.")
-      }
-      onConfirmDeparture()
-      return
-    }
-
-    // Step 4 => handle payment
-    if (!isDepartureFlow && step === 4) {
-      if (!isSignedIn) {
-        onOpenSignIn()
-        return
-      }
-      if (!hasDefaultPaymentMethod) {
-        toast.error("Please add/set a default payment method first.")
-        handleOpenWalletModal()
-        return
-      }
-
-      try {
-        setCharging(true)
-        // Example charge of $50 => 5000 cents
-        const result = await chargeUserForTrip(auth.currentUser!.uid, 5000)
-
-        if (!result.success) {
-          throw new Error(result.error || "Charge failed")
+          scene.add(buildingMesh);
+          buildingMeshesRef.current.push(buildingMesh);
+        } catch (err) {
+          console.error("[useThreeOverlay] Error creating building:", err);
         }
-        // Payment succeeded
-        setPaymentSuccess(true)
-        setPaymentReference(result.transactionId || "TXN" + Date.now().toString().slice(-8))
-        setCardLast4(result.cardLast4 || "4242")
-        setPaymentResultModalOpen(true)
-      } catch (err) {
-        console.error("Failed to charge trip =>", err)
-        setPaymentSuccess(false)
-        setPaymentResultModalOpen(true)
-      } finally {
-        setCharging(false)
+      });
+      
+      // Check if we have pending route data to create now that the scene is ready
+      if (pendingRouteDataRef.current && pendingRouteDataRef.current.length >= 2) {
+        console.log("[ThreeOverlay] Creating tube from pending route data during onAdd");
+        createOrUpdateRouteTube(pendingRouteDataRef.current);
       }
-    }
-  }, [
-    isDepartureFlow,
-    step,
-    isVirtualCarLocation,
-    dispatch,
-    onConfirmDeparture,
-    isSignedIn,
-    onOpenSignIn,
-    hasDefaultPaymentMethod,
-    handleOpenWalletModal,
-  ])
+    };
 
-  // Possibly show an "estimated pickup time" if we have a dispatch route
-  const estimatedPickupTime = useMemo(() => {
-    if (isVirtualCarLocation || !dispatchRoute?.duration) return null
-    const now = new Date()
-    const pickupTime = new Date(now.getTime() + dispatchRoute.duration * 1000)
-    const hh = pickupTime.getHours() % 12 || 12
-    const mm = pickupTime.getMinutes()
-    const ampm = pickupTime.getHours() >= 12 ? "pm" : "am"
-    return `${hh}:${mm < 10 ? "0" + mm : mm}${ampm}`
-  }, [isVirtualCarLocation, dispatchRoute])
+    overlay.onContextRestored = ({ gl }) => {
+      console.log("[useThreeOverlay] onContextRestored");
 
-  // If user is already in final step (5), show TripSheet
-  if (step === 5) {
-    return (
-      <>
-        <div className="fixed inset-0 bg-black/50 z-40 pointer-events-auto" />
-        <div className="fixed inset-0 z-50 flex flex-col">
-          <TripSheet />
-        </div>
-      </>
-    )
-  }
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      if (!scene || !camera) return;
 
-  // If we want a loading spinner until fully loaded
-  if (!isInitialized) {
-    return (
-      <div className="p-4 flex justify-center items-center">
-        <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+      // create WebGLRenderer
+      const renderer = new THREE.WebGLRenderer({
+        canvas: gl.canvas as HTMLCanvasElement,
+        context: gl,
+        ...gl.getContextAttributes(),
+      });
+      renderer.autoClear = false;
+      rendererRef.current = renderer;
 
-  // If we attempted to render but have no activeStation
-  if (!activeStation && attemptedRender) {
-    console.error(
-      "StationDetail attempted to render but activeStation is null",
-      "departureId:",
-      departureId,
-      "arrivalId:",
-      arrivalId,
-      "isQrScanStation:",
-      isQrScanStation,
-    )
-  }
+      // create Raycaster
+      raycasterRef.current = new THREE.Raycaster();
+      console.log("[useThreeOverlay] Raycaster initialized:", !!raycasterRef.current);
+      inverseProjectionMatrixRef.current = new THREE.Matrix4();
 
-  // Default UI, without active / selected station
-  if (!activeStation) {
-    return null
-  }
+      // pointer events on canvas
+      const canvas = gl.canvas as HTMLCanvasElement;
+      // Ensure it's on top of the map
+      canvas.style.zIndex = "50";
+      canvas.style.position = "absolute";
+      canvas.style.top = "0";
+      canvas.style.left = "0";
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      
+      // Also ensure pointer events aren't disabled
+      canvas.style.pointerEvents = "auto";
+      const handlePointerDown = (ev: PointerEvent) => {
+        console.log("[useThreeOverlay] Pointer event detected", ev.clientX, ev.clientY);
+        pickWithRay(ev);
+      };
+      canvas.addEventListener("pointerdown", handlePointerDown);
 
-  // Manage CarGrid visibility
-  const [carGridVisible, setCarGridVisible] = useState(false)
-  useEffect(() => {
-    const shouldShowCarGrid =
-      !isMinimized && 
-      isDepartureFlow && 
-      step === 2 && 
-      (!!activeStation || isQrScanStation)
-
-    if (shouldShowCarGrid) {
-      const timer = setTimeout(() => {
-        setCarGridVisible(true)
-      }, 100)
-      return () => clearTimeout(timer)
-    } else {
-      const timer = setTimeout(() => {
-        setCarGridVisible(false)
-      }, 150)
-      return () => clearTimeout(timer)
-    }
-  }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation])
-
-  // Force re‐render on sheet expansion, but no route fetch
-  useEffect(() => {
-    if (!isMinimized) {
-      const now = Date.now()
-      if (now - lastRenderTimeRef.current > 300) {
-        setForceRefreshKey((prev) => prev + 1)
-        setIsInitialized(true)
-        setAttemptedRender(true)
-        lastRenderTimeRef.current = now
+      removePointerListenerRef.current = () => {
+        canvas.removeEventListener("pointerdown", handlePointerDown);
+      };
+      
+      // Check if we have pending route data to create now that the context is restored
+      if (pendingRouteDataRef.current && pendingRouteDataRef.current.length >= 2) {
+        console.log("[ThreeOverlay] Creating tube from pending route data during onContextRestored");
+        createOrUpdateRouteTube(pendingRouteDataRef.current);
       }
-    }
-  }, [isMinimized])
+    };
 
-  // Use forceRefreshKey to force remount if needed
-  return (
-    <>
-      <motion.div
-        className="p-3 space-y-2 overscroll-contain touchaction-none"
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "tween", duration: 0.2 }}
-        {...touchScrollHandlers}
-      >
-        {/* Map preview with proper touch handling */}
-        <Suspense fallback={<MapCardFallback />}>
-          <div className="pointer-events-auto">
-            <MapCard
-              coordinates={[activeStation.geometry.coordinates[0], activeStation.geometry.coordinates[1]]}
-              name={activeStation.properties.Place}
-              address={activeStation.properties.Address}
-              className="mt-0 mb-1.5 h-44 w-full"
-            />
-          </div>
-        </Suspense>
+    // the picking logic
+    const pickWithRay = (ev: PointerEvent) => {
+      const camera = cameraRef.current;
+      const renderer = rendererRef.current;
+      const raycaster = raycasterRef.current;
+      const invProj = inverseProjectionMatrixRef.current;
+      if (!camera || !renderer || !raycaster || !invProj) return;
 
-        {/* Station Stats */}
-        <div className="pointer-events-auto">
-          <StationStats
-            activeStation={activeStation}
-            step={step}
-            driveTimeMin={driveTimeMin}
-            parkingValue={parkingValue}
-            isVirtualCarStation={isVirtualCarLocation}
-          />
-        </div>
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const ndcX = (x / rect.width) * 2 - 1;
+      const ndcY = 1 - (y / rect.height) * 2;
 
-        {/* CarGrid + Confirm Button for step=2 */}
-        {isDepartureFlow && step === 2 && (
-          <div className="space-y-3 pointer-events-auto">
-            <MemoizedCarGrid
-              isVisible={carGridVisible}
-              isQrScanStation={isQrScanStation}
-              scannedCar={scannedCarRedux}
-            />
-            <ConfirmButton
-              isDepartureFlow={isDepartureFlow}
-              charging={charging}
-              disabled={charging || !(step === 2 || step === 4)}
-              onClick={handleConfirm}
-              isVirtualCarLocation={isVirtualCarLocation}
-            />
-          </div>
-        )}
+      invProj.copy(camera.projectionMatrix).invert();
 
-        {/* PaymentSummary if step=4 and user is signed in */}
-        {Number(step) === 4 && (
-          <div className="space-y-1.5 pointer-events-auto">
-            {isSignedIn ? (
-              <>
-                <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
-                <ConfirmButton
-                  isDepartureFlow={isDepartureFlow}
-                  charging={charging}
-                  disabled={charging || !(Number(step) === 2 || Number(step) === 4)}
-                  onClick={handleConfirm}
-                  isVirtualCarLocation={isVirtualCarLocation}
-                />
-              </>
-            ) : (
-              <button
-                onClick={onOpenSignIn}
-                className="w-full py-2.5 text-sm font-medium rounded-md transition-colors
-                  text-white bg-blue-500/80 hover:bg-blue-600/80 flex items-center justify-center"
-              >
-                Sign In
-              </button>
-            )}
-          </div>
-        )}
+      const origin = new THREE.Vector3(ndcX, ndcY, 0).applyMatrix4(invProj);
+      const farPos = new THREE.Vector3(ndcX, ndcY, 0.5).applyMatrix4(invProj);
+      const direction = farPos.sub(origin).normalize();
 
-        {/* Wallet/Payment Modal */}
-      </motion.div>
+      raycaster.ray.origin.copy(origin);
+      raycaster.ray.direction.copy(direction);
 
-      <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
+      // Enhanced debugging - log what objects we're checking against
+      console.log(`[useThreeOverlay] Raycasting against ${buildingMeshesRef.current.length} buildings`);
+      
+      // Check intersections with buildings and edges
+      let buildingHits = raycaster.intersectObjects(buildingMeshesRef.current, false);
+      let edgeHits = raycaster.intersectObjects(buildingEdgesRef.current, false);
+      
+      console.log(`[useThreeOverlay] Building hits: ${buildingHits.length}, Edge hits: ${edgeHits.length}`);
+      
+      // Process all hits to find the closest valid one
+      const hits = [...buildingHits, ...edgeHits].sort((a, b) => a.distance - b.distance);
 
-      {/* Payment Result Modal */}
-      <PaymentResultModal
-        isOpen={paymentResultModalOpen}
-        isSuccess={paymentSuccess}
-        amount={5000} // e.g. HK$50.00 in cents
-        referenceId={paymentReference}
-        cardLast4={cardLast4}
-        onContinue={handlePaymentContinue}
-        onRetry={handlePaymentRetry}
-        departureStation={departureStation?.properties.Place}
-        arrivalStation={arrivalStation?.properties.Place}
-      />
-    </>
-  )
+      if (hits.length > 0) {
+        const firstHit = hits[0];
+        const hitObject = firstHit.object;
+        const userData = hitObject.userData;
+        
+        console.log("[useThreeOverlay] Picked object:", userData);
+
+        // Get stationId from the hit object
+        const stationId = userData.stationId;
+        
+        if (stationId) {
+          console.log("[useThreeOverlay] Selecting station:", stationId);
+          // Use the callback to handle the station selection
+          handleStationSelected(stationId);
+        } else {
+          console.log("[useThreeOverlay] No stationId found in hit object");
+          // Check if this is a building that doesn't have station mapping
+          if (userData.objectId) {
+            console.log("[useThreeOverlay] Building has ObjectId but no station mapping:", userData.objectId);
+          }
+        }
+      } else {
+        console.log("[useThreeOverlay] No intersections found");
+      }
+    };
+
+    overlay.onDraw = ({ gl, transformer }) => {
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      const renderer = rendererRef.current;
+      if (!scene || !camera || !renderer) return;
+
+      // update camera
+      const anchor = anchorRef.current;
+      const camMatArr = transformer.fromLatLngAltitude({
+        lat: anchor.lat,
+        lng: anchor.lng,
+        altitude: anchor.altitude,
+      });
+      camera.projectionMatrix.fromArray(camMatArr);
+
+      // buildings: place them at (centerX, centerY, 0)
+      buildingMeshesRef.current.forEach((bldg, index) => {
+        if (bldg.userData.centerPos) {
+          const c = bldg.userData.centerPos as THREE.Vector3;
+          bldg.position.set(c.x, c.y, 0);
+          
+          // Also position the corresponding edge
+          if (index < buildingEdgesRef.current.length) {
+            buildingEdgesRef.current[index].position.set(c.x, c.y, 0);
+          }
+          
+          // Update building color based on selection state
+          const material = bldg.material as THREE.MeshBasicMaterial;
+          const stationId = bldg.userData.stationId;
+          
+          if (stationId) {
+            if (stationId === departureStationId) {
+              material.color.copy(BUILDING_DEPARTURE_COLOR);
+            } else if (stationId === arrivalStationId) {
+              material.color.copy(BUILDING_ARRIVAL_COLOR);
+            } else {
+              material.color.copy(BUILDING_DEFAULT_COLOR);
+            }
+          } else {
+            material.color.copy(BUILDING_DEFAULT_COLOR);
+          }
+        }
+      });
+      
+      // Update tube positioning if needed
+      if (routeTubeRef.current && routeTubeRef.current.visible) {
+        // Make sure it's visible by adjusting z position if needed
+        routeTubeRef.current.position.z = 10; // Added explicit z-positioning to ensure visibility
+        console.log("[ThreeOverlay] Route tube visible in onDraw");
+      }
+
+      overlay.requestRedraw();
+      const w = gl.canvas.width;
+      const h = gl.canvas.height;
+      renderer.setViewport(0, 0, w, h);
+
+      renderer.render(scene, camera);
+      renderer.resetState();
+    };
+
+    overlay.onContextLost = () => {
+      console.log("[useThreeOverlay] onContextLost - disposing renderer");
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        rendererRef.current = null;
+      }
+    };
+
+    overlay.onRemove = () => {
+      console.log("[useThreeOverlay] onRemove - cleaning up...");
+      const scene = sceneRef.current;
+
+      // remove pointer events
+      removePointerListenerRef.current?.();
+
+      // Clean up route tube
+      if (routeTubeRef.current) {
+        scene?.remove(routeTubeRef.current);
+        routeTubeRef.current.geometry.dispose();
+        if (tubeMaterialRef.current) {
+          tubeMaterialRef.current.dispose();
+          tubeMaterialRef.current = null;
+        }
+        routeTubeRef.current = null;
+      }
+
+      // Reset pending route data
+      pendingRouteDataRef.current = null;
+
+      // cleanup
+      const cleanupMeshes = (meshes: THREE.Object3D[]) => {
+        meshes.forEach((m) => {
+          scene?.remove(m);
+          if (m instanceof THREE.Mesh) {
+            m.geometry.dispose();
+            disposeMaterial(m.material);
+          } else if (m instanceof THREE.LineSegments) {
+            m.geometry.dispose();
+            disposeMaterial(m.material);
+          }
+        });
+        meshes.length = 0;
+      };
+      
+      cleanupMeshes(buildingMeshesRef.current);
+      cleanupMeshes(buildingEdgesRef.current);
+
+      if (sceneRef.current) {
+        sceneRef.current.clear();
+        sceneRef.current = null;
+      }
+      cameraRef.current = null;
+      raycasterRef.current = null;
+      inverseProjectionMatrixRef.current = null;
+    };
+
+    overlay.setMap(googleMap);
+
+    return () => {
+      console.log("[useThreeOverlay] Cleanup - removing overlay");
+      overlay.setMap(null);
+      overlayRef.current = null;
+      isInitializedRef.current = false;
+    };
+  }, [googleMap, stations, buildings3D, handleStationSelected, createOrUpdateRouteTube]);
+
+  return { overlayRef };
 }
 
-export default memo(StationDetailComponent)
+/** Helper to dispose single or multiple materials. */
+function disposeMaterial(mtl: THREE.Material | THREE.Material[]) {
+  if (Array.isArray(mtl)) {
+    mtl.forEach((sub) => sub.dispose());
+  } else {
+    mtl.dispose();
+  }
+}
