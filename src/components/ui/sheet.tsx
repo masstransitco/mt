@@ -310,67 +310,69 @@ function SheetImpl(
   const zIndexClass = highPriority ? "z-[1000]" : "z-[999]";
 
   return (
-    <AnimatePresence>
-      <motion.div
-        className={`fixed bottom-0 left-0 right-0 ${zIndexClass} pointer-events-none`}
-        key="sheet-container"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        onAnimationComplete={handleAnimationComplete}
-        style={{ width: "100%", maxHeight: "100%" }}
-      >
+    <AnimatePresence mode="wait" initial={false}>
+      {isOpen && (
         <motion.div
-          ref={containerRef}
-          className="w-full pointer-events-auto"
-          style={containerStyle}
-          animate={controls}
-          drag="y"
-          dragListener={false}
-          dragControls={dragControls}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.2}
-          onDragEnd={handleDragEnd}
-          dragMomentum={false}
+          className={`fixed bottom-0 left-0 right-0 ${zIndexClass} pointer-events-none`}
+          key="sheet-container"
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+          onAnimationComplete={handleAnimationComplete}
+          style={{ width: "100%", maxHeight: "100%" }}
         >
-          <div
-            ref={sheetRef}
-            className={cn(
-              "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col h-full",
-              "select-none",
-              className
-            )}
+          <motion.div
+            ref={containerRef}
+            className="w-full pointer-events-auto"
+            style={containerStyle}
+            animate={controls}
+            drag="y"
+            dragListener={false}
+            dragControls={dragControls}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            dragMomentum={false}
           >
-            <SheetHeader
-              title={title}
-              subtitle={subtitle}
-              headerContent={headerContent}
-              count={count}
-              countLabel={countLabel}
-              isMinimized={isMinimized}
-              onToggle={toggleMinimized}
-              headerRef={headerRef}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              startDrag={startDrag}
-            />
             <div
-              ref={bodyRef}
-              className="flex-grow overflow-y-auto overscroll-contain touchaction-none transition-all duration-200 px-3 pt-2 pb-3"
-              style={bodyStyle}
-              onTouchStart={(e) => {
-                const target = e.currentTarget as HTMLDivElement;
-                target.dataset.touchStartY = e.touches[0].clientY.toString();
-              }}
-              onTouchMove={handleBodyTouchMove}
-              onTouchEnd={handleBodyTouchEnd}
+              ref={sheetRef}
+              className={cn(
+                "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col h-full",
+                "select-none",
+                className
+              )}
             >
-              {children}
+              <SheetHeader
+                title={title}
+                subtitle={subtitle}
+                headerContent={headerContent}
+                count={count}
+                countLabel={countLabel}
+                isMinimized={isMinimized}
+                onToggle={toggleMinimized}
+                headerRef={headerRef}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                startDrag={startDrag}
+              />
+              <div
+                ref={bodyRef}
+                className="flex-grow overflow-y-auto overscroll-contain touchaction-none transition-all duration-200 px-3 pt-2 pb-3"
+                style={bodyStyle}
+                onTouchStart={(e) => {
+                  const target = e.currentTarget as HTMLDivElement;
+                  target.dataset.touchStartY = e.touches[0].clientY.toString();
+                }}
+                onTouchMove={handleBodyTouchMove}
+                onTouchEnd={handleBodyTouchEnd}
+              >
+                {children}
+              </div>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 }
