@@ -1,830 +1,479 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useEffect, useRef, useMemo, useCallback } from "react"
-import * as THREE from "three"
-import { ThreeJSOverlayView } from "@googlemaps/three"
-import { useGLTF } from "@react-three/drei"
+import { useEffect, useRef, useCallback } from "react";
+import * as THREE from "three";
+import type { StationFeature } from "@/store/stationsSlice";
+import { latLngAltToVector3 } from "@/lib/geo-utils";
 
-// Redux + slices
-import { useAppSelector } from "@/store/store"
-import type { StationFeature } from "@/store/stationsSlice"
-import { selectRouteDecoded } from "@/store/bookingSlice"
+// Pull buildings from Redux
+import { useAppSelector } from "@/store/store";
+import { selectStations3D } from "@/store/stations3DSlice";
 
-// Constants
-import { DISPATCH_HUB } from "@/constants/map"
-
-// **Snippet imports** for the Maps-friendly lat/lng conversions + types:
-import {
-  latLngAltToVector3,
-  vector3ToLatLngAlt,
-} from "../lib/geo-utils"
-import type {
-  LatLngAltitudeLiteral,
-  RaycastOptions
-} from "../types/webgl"
-
-// Shared for the snippet raycast logic
-const projectionMatrixInverse = new THREE.Matrix4()
-const raycaster = new THREE.Raycaster()
-
-// Pre-create reusable objects for calculations
-const tempMatrix = new THREE.Matrix4()
-const tempVector = new THREE.Vector3()
-
-// ---------------------------------------------------------------------
-// Geometry & Material Pools
-// ---------------------------------------------------------------------
-const GeometryPool = {
-  hexagon: null as THREE.ExtrudeGeometry | null,
-  hexagonRing: null as THREE.ExtrudeGeometry | null,
-  tube: new Map<string, THREE.TubeGeometry>(),
+interface ThreeOverlayOptions {
+  onStationSelected?: (stationId: number) => void;
 }
 
-const MaterialPool = {
-  matGrey: null as THREE.MeshPhongMaterial | null,
-  matBlue: null as THREE.MeshPhongMaterial | null,
-  matRed: null as THREE.MeshPhongMaterial | null,
-  ringMatGrey: null as THREE.MeshPhongMaterial | null,
-  ringMatBlue: null as THREE.MeshPhongMaterial | null,
-  ringMatRed: null as THREE.MeshPhongMaterial | null,
-  bookingTubeMat: null as THREE.MeshPhongMaterial | null,
-}
-
-function disposeGeometryPool() {
-  if (GeometryPool.hexagon) {
-    GeometryPool.hexagon.dispose()
-    GeometryPool.hexagon = null
-  }
-  if (GeometryPool.hexagonRing) {
-    GeometryPool.hexagonRing.dispose()
-    GeometryPool.hexagonRing = null
-  }
-  GeometryPool.tube.forEach((geom) => geom.dispose())
-  GeometryPool.tube.clear()
-}
-
-function disposeMaterial(material: THREE.Material) {
-  if ("map" in material && material.map) {
-    (material.map as THREE.Texture).dispose()
-  }
-  material.dispose()
-}
-
-function disposeMaterialPool() {
-  if (MaterialPool.matGrey) {
-    disposeMaterial(MaterialPool.matGrey)
-    MaterialPool.matGrey = null
-  }
-  if (MaterialPool.matBlue) {
-    disposeMaterial(MaterialPool.matBlue)
-    MaterialPool.matBlue = null
-  }
-  if (MaterialPool.matRed) {
-    disposeMaterial(MaterialPool.matRed)
-    MaterialPool.matRed = null
-  }
-  if (MaterialPool.ringMatGrey) {
-    disposeMaterial(MaterialPool.ringMatGrey)
-    MaterialPool.ringMatGrey = null
-  }
-  if (MaterialPool.ringMatBlue) {
-    disposeMaterial(MaterialPool.ringMatBlue)
-    MaterialPool.ringMatBlue = null
-  }
-  if (MaterialPool.ringMatRed) {
-    disposeMaterial(MaterialPool.ringMatRed)
-    MaterialPool.ringMatRed = null
-  }
-  if (MaterialPool.bookingTubeMat) {
-    disposeMaterial(MaterialPool.bookingTubeMat)
-    MaterialPool.bookingTubeMat = null
-  }
-}
-
-// ---------------------------------------------------------------------
-// Custom curve for tube geometry
-// ---------------------------------------------------------------------
-class CustomCurve extends THREE.Curve<THREE.Vector3> {
-  private points: THREE.Vector3[]
-  constructor(points: THREE.Vector3[]) {
-    super()
-    this.points = points
-  }
-  getPoint(t: number, optionalTarget = new THREE.Vector3()) {
-    const segment = (this.points.length - 1) * t
-    const index = Math.floor(segment)
-    const alpha = segment - index
-    if (index >= this.points.length - 1) {
-      return optionalTarget.copy(this.points[this.points.length - 1])
-    }
-    const p0 = this.points[index]
-    const p1 = this.points[index + 1]
-    return optionalTarget.copy(p0).lerp(p1, alpha)
-  }
-}
-
-// ---------------------------------------------------------------------
-// Create or update a 3D tube from a decoded route
-// ---------------------------------------------------------------------
-function createOrUpdateTube(
-  decodedPath: Array<{ lat: number; lng: number }>,
-  meshRef: React.MutableRefObject<THREE.Mesh | null>,
-  material: THREE.MeshPhongMaterial,
-  scene: THREE.Scene,
-  overlay: ThreeJSOverlayView,
-  altitude: number
-) {
-  // If there's no valid path, just hide the mesh
-  if (!decodedPath || decodedPath.length < 2) {
-    if (meshRef.current) {
-      meshRef.current.visible = false
-    }
-    return
-  }
-
-  // Convert route points to Vector3
-  const points = decodedPath.map(({ lat, lng }) => {
-    const vector = new THREE.Vector3()
-    overlay.latLngAltitudeToVector3({ lat, lng, altitude }, vector)
-    return vector
-  })
-
-  // Build or retrieve geometry
-  const curve = new CustomCurve(points)
-  const tubularSegments = Math.min(Math.max(points.length, 20), 80)
-  const radius = 8
-  const radialSegments = 4
-  const closed = false
-
-  const routeKey = `tube_${points[0].x}_${points[0].y}_${points[points.length - 1].x}_${points[points.length - 1].y}_${points.length}`
-  let geometry: THREE.TubeGeometry
-
-  if (GeometryPool.tube.has(routeKey)) {
-    geometry = GeometryPool.tube.get(routeKey)!
-  } else {
-    geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, closed)
-    GeometryPool.tube.set(routeKey, geometry)
-  }
-
-  if (!meshRef.current) {
-    const mesh = new THREE.Mesh(geometry, material)
-    mesh.renderOrder = 999
-    meshRef.current = mesh
-    scene.add(mesh)
-  } else {
-    meshRef.current.visible = true
-    meshRef.current.geometry = geometry
-    if (meshRef.current.material !== material) {
-      meshRef.current.material = material
-    }
-  }
-}
-
-// ---------------------------------------------------------------------
-// Hook: useThreeOverlay
-// ---------------------------------------------------------------------
 export function useThreeOverlay(
   googleMap: google.maps.Map | null,
   stations: StationFeature[],
-  departureStationId: number | null,
-  arrivalStationId: number | null,
-  cars: Array<{ id: number; lat: number; lng: number }>
+  options?: ThreeOverlayOptions
 ) {
-  // Scene & Overlay references
-  const overlayRef = useRef<ThreeJSOverlayView | null>(null)
-  const sceneRef = useRef<THREE.Scene | null>(null)
-  const isInitializedRef = useRef(false)
+  const overlayRef = useRef<google.maps.WebGLOverlayView | null>(null);
 
-  // We'll store our requestAnimationFrame ID here
-  const manualAnimationFrameIdRef = useRef<number | null>(null)
+  // Scene, camera, renderer references
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
-  // InstancedMesh refs for stations
-  const greyInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
-  const blueInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
-  const redInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
-  const greyRingInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
-  const blueRingInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
-  const redRingInstancedMeshRef = useRef<THREE.InstancedMesh | null>(null)
+  // Mesh references
+  const stationMeshesRef = useRef<THREE.Mesh[]>([]);
+  const buildingMeshesRef = useRef<THREE.Mesh[]>([]);
+  const debugMarkersRef = useRef<THREE.Mesh[]>([]);
 
-  // For tracking which station is in which instanced slot
-  const stationIndexMapsRef = useRef<{ grey: number[]; blue: number[]; red: number[] }>({
-    grey: [],
-    blue: [],
-    red: [],
-  })
+  // Map anchor
+  const anchorRef = useRef({ lat: 0, lng: 0, altitude: 0 });
 
-  // Geometry & materials
-  const stationGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
-  const stationRingGeoRef = useRef<THREE.ExtrudeGeometry | null>(null)
-  const matGreyRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const matBlueRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const matRedRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const ringMatGreyRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const ringMatBlueRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const ringMatRedRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const bookingTubeMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
+  // Guard to ensure we only init once
+  const isInitializedRef = useRef(false);
 
-  // Booking route mesh
-  const bookingRouteMeshRef = useRef<THREE.Mesh | null>(null)
+  // 3D building data
+  const buildings3D = useAppSelector(selectStations3D);
 
-  // Car references
-  const carGeoRef = useRef<THREE.Group | null>(null)
-  const carsMatRef = useRef<THREE.MeshPhongMaterial | null>(null)
-  const carModelsRef = useRef<Map<number, THREE.Object3D>>(new Map())
-  const pinnedModelRef = useRef<THREE.Object3D | null>(null)
+  // Raycasting references
+  const raycasterRef = useRef<THREE.Raycaster | null>(null);
+  const inverseProjectionMatrixRef = useRef<THREE.Matrix4 | null>(null);
 
-  // Redux route
-  const bookingRouteDecoded = useAppSelector(selectRouteDecoded)
+  // Cleanup pointer listeners
+  const removePointerListenerRef = useRef<() => void>(() => {});
 
-  // useMemo for data
-  const memoizedCars = useMemo(() => cars.map((c) => ({ ...c })), [cars])
-  const memoizedStations = useMemo(() => stations, [stations])
-  const stationSelection = useMemo(
-    () => ({ departureStationId, arrivalStationId }),
-    [departureStationId, arrivalStationId]
-  )
-
-  // Optionally load a default Car model in React:
-  const { scene: carModelScene } = useGLTF("/cars/defaultModel.glb")
-
-  // Basic lights
-  const lights = useMemo(() => {
-    const ambient = new THREE.AmbientLight(0xffffff, 0.75)
-    const directional = new THREE.DirectionalLight(0xffffff, 0.25)
-    directional.position.set(0, 10, 50)
-    return { ambient, directional }
-  }, [])
-
-  // ---------------------------------------------------------------------
-  // Our own requestAnimationFrame loop
-  // ---------------------------------------------------------------------
-  const animate = useCallback(() => {
-    if (!overlayRef.current) return
-    // Example color shift or any per-frame logic
-    const time = performance.now() * 0.001
-    const hue = (time / 30) % 1
-    if (blueInstancedMeshRef.current && matBlueRef.current && ringMatBlueRef.current) {
-      ringMatBlueRef.current.color.setHSL(hue, 1, 0.5)
-      ringMatBlueRef.current.emissive.setHSL(hue, 0.5, 0.2)
+  // Callback for handling station/building selection
+  const handleStationSelected = useCallback((stationId: number) => {
+    if (options?.onStationSelected) {
+      console.log("[useThreeOverlay] Calling parent callback with stationId:", stationId);
+      options.onStationSelected(stationId);
+    } else {
+      console.warn("[useThreeOverlay] No onStationSelected callback provided");
     }
+  }, [options]);
 
-    overlayRef.current.requestRedraw()
-    manualAnimationFrameIdRef.current = requestAnimationFrame(animate)
-  }, [])
-
-  // ---------------------------------------------------------------------
-  // Raycast approach from snippet
-  // ---------------------------------------------------------------------
-  const raycastAtScreenCoord = useCallback(
-    (
-      screenX: number,
-      screenY: number,
-      objects?: THREE.Object3D[] | null,
-      options: RaycastOptions = { updateMatrix: true, recursive: false }
-    ): THREE.Intersection[] => {
-      if (!overlayRef.current) return []
-      // We cast 'overlayRef.current' to 'any' so we can access .camera
-      const overlayAny = overlayRef.current as any
-      const camera = overlayAny.camera as THREE.Camera
-      if (!camera || !sceneRef.current) return []
-
-      // get boundingRect for the map container
-      const mapDiv = overlayAny.map.getDiv() as HTMLElement
-      const { width, height } = mapDiv.getBoundingClientRect()
-
-      // Convert screen coords (in px) => NDC [-1..1], with y going up
-      const ndcX = (2 * screenX) / width - 1
-      const ndcY = 1 - (2 * screenY) / height
-
-      // Based on snippet logic: invert camera.projectionMatrix => transform from clip -> world
-      if (options.updateMatrix !== false) {
-        projectionMatrixInverse.copy(camera.projectionMatrix).invert()
-      }
-
-      // Ray origin: clipZ=0 in NDC
-      raycaster.ray.origin
-        .set(ndcX, ndcY, 0)
-        .applyMatrix4(projectionMatrixInverse)
-
-      // Ray direction: clipZ=0.5 => origin
-      raycaster.ray.direction
-        .set(ndcX, ndcY, 0.5)
-        .applyMatrix4(projectionMatrixInverse)
-        .sub(raycaster.ray.origin)
-        .normalize()
-
-      // If no objects provided => entire scene
-      if (!objects) {
-        objects = sceneRef.current.children
-        options.recursive = true
-      }
-
-      const oldParams = raycaster.params
-      if (options.raycasterParameters) {
-        raycaster.params = options.raycasterParameters
-      }
-
-      const results = raycaster.intersectObjects(objects, !!options.recursive)
-
-      raycaster.params = oldParams
-
-      return results
-    },
-    []
-  )
-
-  // ---------------------------------------------------------------------
-  // Populate Instanced Meshes for Stations
-  // ---------------------------------------------------------------------
-  const populateInstancedMeshes = useCallback(() => {
-    if (
-      !greyInstancedMeshRef.current ||
-      !blueInstancedMeshRef.current ||
-      !redInstancedMeshRef.current ||
-      !greyRingInstancedMeshRef.current ||
-      !blueRingInstancedMeshRef.current ||
-      !redRingInstancedMeshRef.current ||
-      !overlayRef.current
-    ) {
-      return
-    }
-
-    const greyMesh = greyInstancedMeshRef.current
-    const blueMesh = blueInstancedMeshRef.current
-    const redMesh = redInstancedMeshRef.current
-    const greyRing = greyRingInstancedMeshRef.current
-    const blueRing = blueRingInstancedMeshRef.current
-    const redRing = redRingInstancedMeshRef.current
-
-    const counts = { grey: 0, blue: 0, red: 0 }
-    stationIndexMapsRef.current = { grey: [], blue: [], red: [] }
-
-    memoizedStations.forEach((station) => {
-      const [lng, lat] = station.geometry.coordinates
-      overlayRef.current!.latLngAltitudeToVector3(
-        { lat, lng, altitude: DISPATCH_HUB.altitude + 50 },
-        tempVector
-      )
-      tempMatrix.makeTranslation(tempVector.x, tempVector.y, tempVector.z)
-
-      if (station.id === stationSelection.departureStationId) {
-        blueMesh.setMatrixAt(counts.blue, tempMatrix)
-        blueRing.setMatrixAt(counts.blue, tempMatrix)
-        stationIndexMapsRef.current.blue[counts.blue] = station.id
-        counts.blue++
-      } else if (station.id === stationSelection.arrivalStationId) {
-        redMesh.setMatrixAt(counts.red, tempMatrix)
-        redRing.setMatrixAt(counts.red, tempMatrix)
-        stationIndexMapsRef.current.red[counts.red] = station.id
-        counts.red++
-      } else {
-        greyMesh.setMatrixAt(counts.grey, tempMatrix)
-        greyRing.setMatrixAt(counts.grey, tempMatrix)
-        stationIndexMapsRef.current.grey[counts.grey] = station.id
-        counts.grey++
-      }
-    })
-
-    // Update instance counts
-    greyMesh.count = counts.grey
-    greyMesh.instanceMatrix.needsUpdate = true
-
-    blueMesh.count = counts.blue
-    blueMesh.instanceMatrix.needsUpdate = true
-
-    redMesh.count = counts.red
-    redMesh.instanceMatrix.needsUpdate = true
-
-    greyRing.count = counts.grey
-    greyRing.instanceMatrix.needsUpdate = true
-
-    blueRing.count = counts.blue
-    blueRing.instanceMatrix.needsUpdate = true
-
-    redRing.count = counts.red
-    redRing.instanceMatrix.needsUpdate = true
-  }, [memoizedStations, stationSelection])
-
-  // ---------------------------------------------------------------------
-  // Populate or Update Car Models
-  // ---------------------------------------------------------------------
-  const populateCarModels = useCallback(() => {
-    if (!carGeoRef.current || !overlayRef.current || !sceneRef.current) return
-
-    const scene = sceneRef.current
-    const currentCarIds = new Set(memoizedCars.map((c) => c.id))
-
-    // Remove old cars no longer in data
-    carModelsRef.current.forEach((carModel, carId) => {
-      if (!currentCarIds.has(carId)) {
-        scene.remove(carModel)
-        carModelsRef.current.delete(carId)
-      }
-    })
-
-    // Add or update each car
-    memoizedCars.forEach((car) => {
-      overlayRef.current!.latLngAltitudeToVector3(
-        { lat: car.lat, lng: car.lng, altitude: 50 },
-        tempVector
-      )
-      let carModel = carModelsRef.current.get(car.id)
-      if (!carModel) {
-        // Clone base model
-        carModel = carGeoRef.current!.clone()
-        carModel.userData = { isCar: true, carId: car.id }
-        carModel.visible = true
-        scene.add(carModel)
-        carModelsRef.current.set(car.id, carModel)
-      }
-      carModel.position.set(tempVector.x, tempVector.y, tempVector.z)
-      carModel.rotation.x = Math.PI / 2
-    })
-  }, [memoizedCars])
-
-  // ---------------------------------------------------------------------
-  // Main Effect: Initialize the Overlay (runs once)
-  // ---------------------------------------------------------------------
   useEffect(() => {
-    if (!googleMap || isInitializedRef.current) return
-    isInitializedRef.current = true
+    if (!googleMap || isInitializedRef.current) return;
+    isInitializedRef.current = true;
 
-    console.log("[useThreeOverlay] Initializing (with snippet-based raycasting) ...")
+    console.log("[useThreeOverlay] Initializing WebGLOverlayView...");
 
-    // Create a Three.js scene
-    const scene = new THREE.Scene()
-    scene.background = null
-    sceneRef.current = scene
+    const overlay = new google.maps.WebGLOverlayView();
+    overlayRef.current = overlay;
 
-    // Add lights
-    scene.add(lights.ambient)
-    scene.add(lights.directional)
+    overlay.onAdd = () => {
+      console.log("[useThreeOverlay] onAdd - Creating scene & camera...");
 
-    // Create the Overlay
-    const overlay = new ThreeJSOverlayView({
-      map: googleMap,
-      scene,
-      anchor: DISPATCH_HUB,
-      // @ts-ignore
-      THREE,
-    })
-    overlay.setMap(googleMap)
-    overlayRef.current = overlay
+      const scene = new THREE.Scene();
+      sceneRef.current = scene;
 
-    // Prepare geometry & materials from pool
-    if (!stationGeoRef.current) {
-      if (GeometryPool.hexagon) {
-        stationGeoRef.current = GeometryPool.hexagon
-      } else {
-        const stationShape = new THREE.Shape()
-        const size = 30
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i
-          const x = size * Math.cos(angle)
-          const y = size * Math.sin(angle)
-          if (i === 0) stationShape.moveTo(x, y)
-          else stationShape.lineTo(x, y)
+      const camera = new THREE.PerspectiveCamera();
+      camera.far = 100000;
+      camera.updateProjectionMatrix();
+      cameraRef.current = camera;
+
+      // Decide an anchor based on map center
+      const center = googleMap.getCenter();
+      if (center) {
+        anchorRef.current.lat = center.lat();
+        anchorRef.current.lng = center.lng();
+        anchorRef.current.altitude = 0;
+      }
+      console.log("[useThreeOverlay] Anchor set to", anchorRef.current);
+
+      // -- STATION CYLINDERS --
+      console.log("[useThreeOverlay] Creating station cylinders...");
+      stations.forEach((st, idx) => {
+        const geom = new THREE.CylinderGeometry(10, 10, 30, 12);
+        // Cylinder is Y‐axis up by default → rotate so it's Z‐axis up
+        geom.rotateX(Math.PI / 2);
+
+        const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff });
+        const mesh = new THREE.Mesh(geom, mat);
+
+        // Store station id in the mesh for raycasting
+        mesh.userData.stationId = st.id;
+        mesh.userData.isStation = true;
+
+        // We'll let mesh be updated each frame
+        mesh.matrixAutoUpdate = true;
+        scene.add(mesh);
+        stationMeshesRef.current.push(mesh);
+      });
+
+      // -- DEBUG MARKERS --
+      const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
+      for (let i = 0; i < 5; i++) {
+        const sphereGeo = new THREE.SphereGeometry(20, 16, 16);
+        const sphereMat = new THREE.MeshBasicMaterial({ color: colors[i] });
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+
+        scene.add(sphere);
+        debugMarkersRef.current.push(sphere);
+      }
+
+      // -- BUILDINGS: extrude from stations3D --
+      console.log(
+        "[useThreeOverlay] Creating building extrusions. Count:",
+        buildings3D.length
+      );
+
+      // Filter valid lat/lng polygons
+      const validBuildings = buildings3D.filter((b) => {
+        const coords = b.geometry.coordinates[0];
+        if (!coords || coords.length < 3) return false;
+        const [lng, lat] = coords[0];
+        return Math.abs(lng) <= 180 && Math.abs(lat) <= 90;
+      });
+      console.log(`[useThreeOverlay] Found ${validBuildings.length} valid lat/lng buildings`);
+
+      // Log ObjectId mapping for debugging
+      console.log("[useThreeOverlay] Station ObjectId mapping:");
+      stations.forEach(station => {
+        console.log(`Station ${station.id} has ObjectId: ${station.properties.ObjectId}`);
+      });
+      
+      validBuildings.forEach((building, i) => {
+        try {
+          const coords = building.geometry.coordinates[0];
+          const buildingAltitude = 0;
+          const buildingHeight =
+            building.properties?.topHeight != null
+              ? building.properties.topHeight
+              : 250;
+
+          const anchor = anchorRef.current;
+
+          // Convert polygon coords to local XY
+          const absolutePoints: THREE.Vector3[] = [];
+          let sumX = 0,
+            sumY = 0;
+
+          coords.forEach(([lng, lat]) => {
+            const { x, y } = latLngAltToVector3(
+              { lat, lng, altitude: buildingAltitude },
+              anchor
+            );
+            absolutePoints.push(new THREE.Vector3(x, y, 0));
+            sumX += x;
+            sumY += y;
+          });
+
+          // Average center
+          const centerX = sumX / coords.length;
+          const centerY = sumY / coords.length;
+
+          // Build a shape at local(0,0)
+          const shape = new THREE.Shape();
+          absolutePoints.forEach((pt, idx) => {
+            const localX = pt.x - centerX;
+            const localY = pt.y - centerY;
+            if (idx === 0) {
+              shape.moveTo(localX, localY);
+            } else {
+              shape.lineTo(localX, localY);
+            }
+          });
+          shape.closePath();
+
+          // Extrude geometry
+          const extrudeSettings = { depth: buildingHeight, bevelEnabled: false };
+          const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+
+          const color = new THREE.Color(
+            0.5 + Math.random() * 0.5,
+            0.5 + Math.random() * 0.5,
+            0.5 + Math.random() * 0.5
+          );
+          const material = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide,
+          });
+
+          const buildingMesh = new THREE.Mesh(geometry, material);
+
+          // Optional wireframe
+          const wireframe = new THREE.LineSegments(
+            new THREE.WireframeGeometry(geometry),
+            new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 })
+          );
+          buildingMesh.add(wireframe);
+
+          // store center / name
+          buildingMesh.userData.centerPos = new THREE.Vector3(centerX, centerY, 0);
+          buildingMesh.userData.name = building.properties?.Place || `Building ${i}`;
+
+          // store the ObjectId for mapping to a station
+          buildingMesh.userData.objectId = building.properties?.ObjectId;
+          
+          // Find matching station by ObjectId
+          const buildingObjectId = building.properties?.ObjectId;
+          console.log(`[useThreeOverlay] Building ${i} ObjectId:`, buildingObjectId);
+          
+          const matchingStation = stations.find(s => 
+            s.properties.ObjectId === buildingObjectId
+          );
+          
+          if (matchingStation) {
+            console.log(`[useThreeOverlay] Found matching station ${matchingStation.id} for building with ObjectId ${buildingObjectId}`);
+            buildingMesh.userData.stationId = matchingStation.id;
+            buildingMesh.userData.isBuilding = true;
+            buildingMesh.userData.objectId = buildingObjectId;
+          } else {
+            console.log(`[useThreeOverlay] No matching station found for building with ObjectId ${buildingObjectId}`);
+            // Still store the ObjectId for debugging
+            buildingMesh.userData.objectId = buildingObjectId;
+          }
+
+          scene.add(buildingMesh);
+          buildingMeshesRef.current.push(buildingMesh);
+        } catch (err) {
+          console.error("[useThreeOverlay] Error creating building:", err);
         }
-        stationShape.closePath()
+      });
+    };
 
-        const extrudeSettings = { depth: 5, bevelEnabled: false }
-        const hexGeom = new THREE.ExtrudeGeometry(stationShape, extrudeSettings)
-        GeometryPool.hexagon = hexGeom
-        stationGeoRef.current = hexGeom
-      }
-    }
-    if (!stationRingGeoRef.current) {
-      if (GeometryPool.hexagonRing) {
-        stationRingGeoRef.current = GeometryPool.hexagonRing
-      } else {
-        const outerShape = new THREE.Shape()
-        const innerShape = new THREE.Path()
-        const outerSize = 38
-        const innerSize = 32
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i
-          const x = outerSize * Math.cos(angle)
-          const y = outerSize * Math.sin(angle)
-          if (i === 0) outerShape.moveTo(x, y)
-          else outerShape.lineTo(x, y)
+    overlay.onContextRestored = ({ gl }) => {
+      console.log("[useThreeOverlay] onContextRestored");
+
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      if (!scene || !camera) return;
+
+      // create WebGLRenderer
+      const renderer = new THREE.WebGLRenderer({
+        canvas: gl.canvas as HTMLCanvasElement,
+        context: gl,
+        ...gl.getContextAttributes(),
+      });
+      renderer.autoClear = false;
+      rendererRef.current = renderer;
+
+      // create Raycaster
+      raycasterRef.current = new THREE.Raycaster();
+      console.log("[useThreeOverlay] Raycaster initialized:", !!raycasterRef.current);
+      inverseProjectionMatrixRef.current = new THREE.Matrix4();
+
+      // pointer events on canvas
+      const canvas = gl.canvas as HTMLCanvasElement;
+        // Ensure it’s on top of the map
+  canvas.style.zIndex = "50";
+  canvas.style.position = "absolute";
+  canvas.style.top = "0";
+  canvas.style.left = "0";
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  
+
+  // Also ensure pointer events aren’t disabled
+  canvas.style.pointerEvents = "auto";
+      const handlePointerDown = (ev: PointerEvent) => {
+        console.log("[useThreeOverlay] Pointer event detected", ev.clientX, ev.clientY);
+        pickWithRay(ev);
+      };
+      canvas.addEventListener("pointerdown", handlePointerDown);
+
+      removePointerListenerRef.current = () => {
+        canvas.removeEventListener("pointerdown", handlePointerDown);
+      };
+    };
+
+    // the picking logic
+    const pickWithRay = (ev: PointerEvent) => {
+      const camera = cameraRef.current;
+      const renderer = rendererRef.current;
+      const raycaster = raycasterRef.current;
+      const invProj = inverseProjectionMatrixRef.current;
+      if (!camera || !renderer || !raycaster || !invProj) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const y = ev.clientY - rect.top;
+      const ndcX = (x / rect.width) * 2 - 1;
+      const ndcY = 1 - (y / rect.height) * 2;
+
+      invProj.copy(camera.projectionMatrix).invert();
+
+      const origin = new THREE.Vector3(ndcX, ndcY, 0).applyMatrix4(invProj);
+      const farPos = new THREE.Vector3(ndcX, ndcY, 0.5).applyMatrix4(invProj);
+      const direction = farPos.sub(origin).normalize();
+
+      raycaster.ray.origin.copy(origin);
+      raycaster.ray.direction.copy(direction);
+
+      // Enhanced debugging - log what objects we're checking against
+      console.log(`[useThreeOverlay] Raycasting against ${buildingMeshesRef.current.length} buildings and ${stationMeshesRef.current.length} stations`);
+      
+      // Check intersections with buildings first (prioritize building selection)
+      let buildingHits = raycaster.intersectObjects(buildingMeshesRef.current, true);
+      console.log(`[useThreeOverlay] Building hits: ${buildingHits.length}`);
+      
+      // Then check stations if no building hits
+      let stationHits = raycaster.intersectObjects(stationMeshesRef.current, true);
+      console.log(`[useThreeOverlay] Station hits: ${stationHits.length}`);
+      
+      // Combined hits for processing
+      const hits = [...buildingHits, ...stationHits];
+
+      if (hits.length > 0) {
+        const firstHit = hits[0];
+        const hitObject = firstHit.object;
+        // Navigate up to parent if we hit a child object (like wireframe)
+        const targetObj = hitObject.parent && hitObject.parent.userData && hitObject.parent.userData.isBuilding
+          ? hitObject.parent
+          : hitObject;
+        
+        const userData = targetObj.userData;
+        console.log("[useThreeOverlay] Picked object:", userData);
+
+        // Get stationId either directly (for cylinders) or via mapping (for buildings)
+        const stationId = userData.stationId;
+        
+        if (stationId) {
+          console.log("[useThreeOverlay] Selecting station:", stationId);
+          // Use the callback instead of directly dispatching
+          handleStationSelected(stationId);
+        } else {
+          console.log("[useThreeOverlay] No stationId found in hit object");
+          // Check if this is a building that doesn't have station mapping
+          if (userData.objectId) {
+            console.log("[useThreeOverlay] Building has ObjectId but no station mapping:", userData.objectId);
+          }
         }
-        outerShape.closePath()
+      } else {
+        console.log("[useThreeOverlay] No intersections found");
+      }
+    };
 
-        for (let i = 0; i < 6; i++) {
-          const ang = (Math.PI / 3) * i
-          const xx = innerSize * Math.cos(ang)
-          const yy = innerSize * Math.sin(ang)
-          if (i === 0) innerShape.moveTo(xx, yy)
-          else innerShape.lineTo(xx, yy)
+    overlay.onDraw = ({ gl, transformer }) => {
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      const renderer = rendererRef.current;
+      if (!scene || !camera || !renderer) return;
+
+      // update camera
+      const anchor = anchorRef.current;
+      const camMatArr = transformer.fromLatLngAltitude({
+        lat: anchor.lat,
+        lng: anchor.lng,
+        altitude: anchor.altitude,
+      });
+      camera.projectionMatrix.fromArray(camMatArr);
+
+      // Position station cylinders
+      stationMeshesRef.current.forEach((mesh, i) => {
+        if (i < stations.length) {
+          const station = stations[i];
+          const [lng, lat] = station.geometry.coordinates;
+          const alt = 50;
+          const { x, y, z } = latLngAltToVector3(
+            { lat, lng, altitude: alt },
+            anchor
+          );
+          mesh.position.set(x, y, z);
         }
-        innerShape.closePath()
+      });
 
-        outerShape.holes.push(innerShape)
-        const ringGeom = new THREE.ExtrudeGeometry(outerShape, {
-          depth: 3,
-          bevelEnabled: false,
-        })
-        GeometryPool.hexagonRing = ringGeom
-        stationRingGeoRef.current = ringGeom
+      // debug markers
+      const offsets = [
+        { lat: 0.001, lng: 0.001 },
+        { lat: 0.001, lng: -0.001 },
+        { lat: -0.001, lng: -0.001 },
+        { lat: -0.001, lng: 0.001 },
+        { lat: 0, lng: 0 },
+      ];
+      debugMarkersRef.current.forEach((marker, i) => {
+        if (i < offsets.length) {
+          const offset = offsets[i];
+          const markerLat = anchor.lat + offset.lat;
+          const markerLng = anchor.lng + offset.lng;
+
+          const { x, y, z } = latLngAltToVector3(
+            { lat: markerLat, lng: markerLng, altitude: 100 },
+            anchor
+          );
+          marker.position.set(x, y, z);
+        }
+      });
+
+      // buildings: place them at (centerX, centerY, 0)
+      buildingMeshesRef.current.forEach((bldg) => {
+        if (bldg.userData.centerPos) {
+          const c = bldg.userData.centerPos as THREE.Vector3;
+          bldg.position.set(c.x, c.y, 0);
+        }
+      });
+
+      overlay.requestRedraw();
+      const w = gl.canvas.width;
+      const h = gl.canvas.height;
+      renderer.setViewport(0, 0, w, h);
+
+      renderer.render(scene, camera);
+      renderer.resetState();
+    };
+
+    overlay.onContextLost = () => {
+      console.log("[useThreeOverlay] onContextLost - disposing renderer");
+      if (rendererRef.current) {
+        rendererRef.current.dispose();
+        rendererRef.current = null;
       }
-    }
+    };
 
-    // Station materials
-    if (!matGreyRef.current) {
-      if (MaterialPool.matGrey) {
-        matGreyRef.current = MaterialPool.matGrey
-      } else {
-        const mat = new THREE.MeshPhongMaterial({ color: 0xeeeeee })
-        MaterialPool.matGrey = mat
-        matGreyRef.current = mat
+    overlay.onRemove = () => {
+      console.log("[useThreeOverlay] onRemove - cleaning up...");
+      const scene = sceneRef.current;
+
+      // remove pointer events
+      removePointerListenerRef.current?.();
+
+      // cleanup
+      const cleanupMeshes = (meshes: THREE.Mesh[]) => {
+        meshes.forEach((m) => {
+          scene?.remove(m);
+          m.geometry.dispose();
+          disposeMaterial(m.material);
+        });
+        meshes.length = 0;
+      };
+      cleanupMeshes(stationMeshesRef.current);
+      cleanupMeshes(buildingMeshesRef.current);
+      cleanupMeshes(debugMarkersRef.current);
+
+      if (sceneRef.current) {
+        sceneRef.current.clear();
+        sceneRef.current = null;
       }
-    }
-    if (!matBlueRef.current) {
-      if (MaterialPool.matBlue) {
-        matBlueRef.current = MaterialPool.matBlue
-      } else {
-        const mat = new THREE.MeshPhongMaterial({
-          color: 0x0000ff,
-          opacity: 0.95,
-          transparent: true,
-        })
-        MaterialPool.matBlue = mat
-        matBlueRef.current = mat
-      }
-    }
-    if (!matRedRef.current) {
-      if (MaterialPool.matRed) {
-        matRedRef.current = MaterialPool.matRed
-      } else {
-        const mat = new THREE.MeshPhongMaterial({
-          color: 0xff0000,
-          opacity: 0.95,
-          transparent: true,
-        })
-        MaterialPool.matRed = mat
-        matRedRef.current = mat
-      }
-    }
-    if (!ringMatGreyRef.current) {
-      if (MaterialPool.ringMatGrey) {
-        ringMatGreyRef.current = MaterialPool.ringMatGrey
-      } else {
-        const mat = new THREE.MeshPhongMaterial({
-          color: 0xcccccc,
-          emissive: 0x333333,
-          shininess: 80,
-        })
-        MaterialPool.ringMatGrey = mat
-        ringMatGreyRef.current = mat
-      }
-    }
-    if (!ringMatBlueRef.current) {
-      if (MaterialPool.ringMatBlue) {
-        ringMatBlueRef.current = MaterialPool.ringMatBlue
-      } else {
-        const mat = new THREE.MeshPhongMaterial({
-          color: 0x0000ff,
-          emissive: 0x000033,
-          shininess: 80,
-          opacity: 0.95,
-          transparent: true,
-        })
-        MaterialPool.ringMatBlue = mat
-        ringMatBlueRef.current = mat
-      }
-    }
-    if (!ringMatRedRef.current) {
-      if (MaterialPool.ringMatRed) {
-        ringMatRedRef.current = MaterialPool.ringMatRed
-      } else {
-        const mat = new THREE.MeshPhongMaterial({
-          color: 0xff0000,
-          emissive: 0x330000,
-          shininess: 80,
-          opacity: 0.95,
-          transparent: true,
-        })
-        MaterialPool.ringMatRed = mat
-        ringMatRedRef.current = mat
-      }
-    }
-    if (!bookingTubeMatRef.current) {
-      if (MaterialPool.bookingTubeMat) {
-        bookingTubeMatRef.current = MaterialPool.bookingTubeMat
-      } else {
-        const mat = new THREE.MeshPhongMaterial({
-          color: 0x03a9f4,
-          opacity: 0.8,
-          transparent: true,
-        })
-        MaterialPool.bookingTubeMat = mat
-        bookingTubeMatRef.current = mat
-      }
-    }
+      cameraRef.current = null;
+      raycasterRef.current = null;
+      inverseProjectionMatrixRef.current = null;
+    };
 
-    // Create InstancedMeshes for stations
-    const maxInstances = memoizedStations.length
-    const colorKeys = ["grey", "blue", "red"] as const
+    overlay.setMap(googleMap);
 
-    const colorToMainMat = {
-      grey: matGreyRef.current!,
-      blue: matBlueRef.current!,
-      red: matRedRef.current!,
-    }
-    const colorToRingMat = {
-      grey: ringMatGreyRef.current!,
-      blue: ringMatBlueRef.current!,
-      red: ringMatRedRef.current!,
-    }
-    const meshRefs = {
-      grey: greyInstancedMeshRef,
-      blue: blueInstancedMeshRef,
-      red: redInstancedMeshRef,
-    }
-    const ringMeshRefs = {
-      grey: greyRingInstancedMeshRef,
-      blue: blueRingInstancedMeshRef,
-      red: redRingInstancedMeshRef,
-    }
-
-    colorKeys.forEach((color) => {
-      const mainMesh = new THREE.InstancedMesh(
-        stationGeoRef.current!,
-        colorToMainMat[color],
-        maxInstances
-      )
-      mainMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-      mainMesh.frustumCulled = false
-      scene.add(mainMesh)
-      meshRefs[color].current = mainMesh
-
-      const ringMesh = new THREE.InstancedMesh(
-        stationRingGeoRef.current!,
-        colorToRingMat[color],
-        maxInstances
-      )
-      ringMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-      ringMesh.frustumCulled = false
-      ringMesh.renderOrder = 998
-      scene.add(ringMesh)
-      ringMeshRefs[color].current = ringMesh
-    })
-
-    // Car model
-    if (carModelScene && !carGeoRef.current) {
-      const clonedScene = carModelScene.clone()
-      clonedScene.scale.set(10, 10, 10)
-      clonedScene.visible = false
-      carGeoRef.current = clonedScene
-      carsMatRef.current = new THREE.MeshPhongMaterial({
-        color: 0xff5722,
-        opacity: 0.95,
-        transparent: true,
-      })
-    }
-
-    // Populate once
-    populateInstancedMeshes()
-    populateCarModels()
-
-    // *** Start our manual animation loop
-    animate()
-
-    // Cleanup
     return () => {
-      console.log("[useThreeOverlay] Cleanup...")
+      console.log("[useThreeOverlay] Cleanup - removing overlay");
+      overlay.setMap(null);
+      overlayRef.current = null;
+      isInitializedRef.current = false;
+    };
+  }, [googleMap, stations, buildings3D, handleStationSelected]);
 
-      // Cancel the animation frame
-      if (manualAnimationFrameIdRef.current !== null) {
-        cancelAnimationFrame(manualAnimationFrameIdRef.current)
-        manualAnimationFrameIdRef.current = null
-      }
+  return { overlayRef };
+}
 
-      // Safely remove from map
-      ;(overlay as any).setMap(null)
-      overlayRef.current = null
-
-      // Remove all cars
-      carModelsRef.current.forEach((model) => {
-        scene.remove(model)
-        model.traverse((obj: THREE.Object3D) => {
-          if ((obj as THREE.Mesh).isMesh) {
-            const mesh = obj as THREE.Mesh
-            mesh.geometry.dispose()
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((m) => m.dispose())
-            } else {
-              mesh.material.dispose()
-            }
-          }
-        })
-      })
-      carModelsRef.current.clear()
-
-      // Remove pinned model if loaded
-      if (pinnedModelRef.current) {
-        scene.remove(pinnedModelRef.current)
-        pinnedModelRef.current.traverse((obj) => {
-          if ((obj as THREE.Mesh).isMesh) {
-            const mesh = obj as THREE.Mesh
-            mesh.geometry.dispose()
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((m) => m.dispose())
-            } else {
-              mesh.material.dispose()
-            }
-          }
-        })
-        pinnedModelRef.current = null
-      }
-
-      // Dispose station geometry
-      stationGeoRef.current = null
-      stationRingGeoRef.current = null
-
-      matGreyRef.current = null
-      matBlueRef.current = null
-      matRedRef.current = null
-      ringMatGreyRef.current = null
-      ringMatBlueRef.current = null
-      ringMatRedRef.current = null
-      bookingTubeMatRef.current = null
-
-      // Dispose car geometry
-      if (carGeoRef.current) {
-        carGeoRef.current.traverse((obj) => {
-          const mesh = obj as THREE.Mesh
-          if (mesh.geometry) mesh.geometry.dispose()
-          if (mesh.material) {
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach((mtl) => mtl.dispose())
-            } else {
-              mesh.material.dispose()
-            }
-          }
-        })
-        carGeoRef.current = null
-      }
-      carsMatRef.current?.dispose()
-      carsMatRef.current = null
-
-      scene.clear()
-      sceneRef.current = null
-      isInitializedRef.current = false
-
-      disposeGeometryPool()
-      disposeMaterialPool()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleMap])
-
-  // ---------------------------------------------------------------------
-  // Re-populate station meshes when data changes
-  // ---------------------------------------------------------------------
-  useEffect(() => {
-    if (!overlayRef.current) return
-    populateInstancedMeshes()
-  }, [populateInstancedMeshes, memoizedStations.length, stationSelection])
-
-  // ---------------------------------------------------------------------
-  // Re-populate car models when car data changes
-  // ---------------------------------------------------------------------
-  useEffect(() => {
-    if (!sceneRef.current || !overlayRef.current) return
-    populateCarModels()
-  }, [memoizedCars, populateCarModels])
-
-  // ---------------------------------------------------------------------
-  // Handle booking route changes
-  // ---------------------------------------------------------------------
-  useEffect(() => {
-    if (!sceneRef.current || !overlayRef.current) return
-
-    if (bookingRouteDecoded && bookingRouteDecoded.length >= 2 && bookingTubeMatRef.current) {
-      createOrUpdateTube(
-        bookingRouteDecoded,
-        bookingRouteMeshRef,
-        bookingTubeMatRef.current,
-        sceneRef.current,
-        overlayRef.current,
-        50
-      )
-    } else if (bookingRouteMeshRef.current) {
-      bookingRouteMeshRef.current.visible = false
-    }
-  }, [bookingRouteDecoded])
-
-  return {
-    overlayRef,
-    sceneRef,
-    greyInstancedMeshRef,
-    blueInstancedMeshRef,
-    redInstancedMeshRef,
-    stationIndexMapsRef,
-    pinnedModelRef,
-
-    // The snippet-based "raycastAtScreenCoord" method
-    raycastAtScreenCoord,
+/** Helper to dispose single or multiple materials. */
+function disposeMaterial(mtl: THREE.Material | THREE.Material[]) {
+  if (Array.isArray(mtl)) {
+    mtl.forEach((sub) => sub.dispose());
+  } else {
+    mtl.dispose();
   }
 }
