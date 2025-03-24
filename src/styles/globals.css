@@ -30,6 +30,11 @@
 
 
 @layer base {
+  main {
+    pointer-events: none !important;
+  }
+
+
   :root {
     --background: 0 0% 7%;
     --foreground: 0 0% 98%;
@@ -72,8 +77,51 @@
   }
 }
 
+
+
 @layer components {
-  /* Car related components */
+
+
+  /* StationSelector needs to be interactive */
+   .station-selector,
+   .station-selector * {
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+     z-index: 50 !important; /* Ensure it's above map elements */
+    }
+
+    header.main-header,
+    div:has(> header.main-header) {
+      pointer-events: auto !important;
+      touch-action: auto !important;
+      position: relative !important;
+      z-index: 9999 !important;
+    }
+    
+    /* Ensure all children of the header are interactive */
+    header.main-header *,
+    div:has(> header.main-header) * {
+      pointer-events: auto !important;
+      touch-action: auto !important;
+    }
+    
+    /* Specifically target buttons to ensure they're clickable */
+    header.main-header button,
+    header.main-header a {
+      cursor: pointer !important;
+      pointer-events: auto !important;
+      touch-action: auto !important;
+    }
+    
+    /* This ensures the header sits outside the stacking context affected by pointer-events: none */
+    body > div > div > header.main-header,
+    body > div > div > div > header.main-header {
+      position: relative !important;
+      z-index: 9999 !important;
+    }
+
+
+/* Car related components */
   .car-card {
     @apply relative overflow-hidden rounded-xl transition-all duration-300 bg-card border border-border hover:border-primary/50 text-foreground mx-auto w-full;
   }
