@@ -9,8 +9,10 @@ import React, {
 } from "react";
 import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
-import * as THREE from "three";
 import dynamic from "next/dynamic";
+
+// Three.js not directly used here, but left in case needed for local logic
+import * as THREE from "three";
 
 // Redux & store hooks
 import type { Car } from "@/types/cars";
@@ -24,6 +26,7 @@ import {
   addVirtualStation,
   removeStation,
 } from "@/store/stationsSlice";
+
 import {
   fetchCars,
   selectAllCars,
@@ -32,7 +35,9 @@ import {
   selectScannedCar,
   setScannedCar,
 } from "@/store/carSlice";
+
 import { selectUserLocation, setUserLocation } from "@/store/userSlice";
+
 import {
   selectBookingStep,
   advanceBookingStep,
@@ -49,13 +54,18 @@ import {
   selectIsQrScanStation,
   selectQrVirtualStationId,
   clearQrStationData,
+  selectDepartureStation as selectDepartureStationAction,
 } from "@/store/bookingSlice";
+
 import {
   fetchDispatchDirections,
   clearDispatchRoute,
   selectDispatchRoute,
   selectDispatchRouteDecoded,
 } from "@/store/dispatchSlice";
+
+// 3D buildings from Redux
+import { fetchStations3D } from "@/store/stations3DSlice";
 
 // UI Components
 import Sheet, { SheetHandle } from "@/components/ui/sheet";
@@ -109,6 +119,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [markerIcons, setMarkerIcons] = useState<any>(null);
+  const [isThreeOverlaySelection, setIsThreeOverlaySelection] = useState(false);
+
 
   // Sheet states
   const [openSheet, setOpenSheet] = useState<OpenSheetType>("none");
@@ -149,7 +161,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const scannedCar = useAppSelector(selectScannedCar);
   const dispatchRoute = useAppSelector(selectDispatchRoute);
 
-  // ---------- New: read QR station from Redux -----------
+  // Possibly QR-based "virtual station" references
   const isQrScanStation = useAppSelector(selectIsQrScanStation);
   const virtualStationId = useAppSelector(selectQrVirtualStationId);
 
@@ -160,6 +172,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // For debouncing route fetch
   const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedCarIdRef = useRef<number | null>(null);
+
+  // Flag to track whether the detail sheet should be automatically opened
+  const shouldOpenDetailSheetRef = useRef(false);
 
   // If user completes step 5, close sheets
   useEffect(() => {
@@ -180,6 +195,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     libraries: LIBRARIES,
   });
 
+  // Once script is loaded, confirm Maps is fully ready
   useEffect(() => {
     if (isLoaded) {
       const timer = setTimeout(async () => {
@@ -195,14 +211,111 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [isLoaded]);
 
-  // 3D overlay
-  const {
-    overlayRef,
-    stationIndexMapsRef,
-    greyInstancedMeshRef,
-    blueInstancedMeshRef,
-    redInstancedMeshRef,
-  } = useThreeOverlay(actualMap, stations, departureStationId, arrivalStationId, cars);
+   // --------------------------
+  // Station selection logic
+  // --------------------------
+  const handleStationSelection = useCallback(
+    (station: StationFeature) => {
+      // If user picks a different station while a QR station is active
+      if (isQrScanStation && virtualStationId && station.id !== virtualStationId) {
+        console.log("Different station selected, removing QR station:", virtualStationId);
+        dispatch(clearDepartureStation());
+        dispatch(removeStation(virtualStationId));
+        dispatch(clearQrStationData());
+        processedCarIdRef.current = null;
+      }
+
+      if (bookingStep === 1) {
+        dispatch(selectDepartureStationAction(station.id));
+        dispatch(advanceBookingStep(2));
+        toast.success("Departure station selected!");
+      } else if (bookingStep === 2) {
+        dispatch(selectDepartureStationAction(station.id));
+        toast.success("Departure station re-selected!");
+      } else if (bookingStep === 3) {
+        dispatch(selectArrivalStation(station.id));
+        dispatch(advanceBookingStep(4));
+        toast.success("Arrival station selected!");
+      } else if (bookingStep === 4) {
+        dispatch(selectArrivalStation(station.id));
+        toast.success("Arrival station re-selected!");
+      } else {
+        toast(`Station tapped, but no action at step ${bookingStep}`);
+      }
+
+      // Trigger detail sheet
+      setDetailKey((prev) => prev + 1);
+      setForceSheetOpen(true);
+      setOpenSheet("detail");
+      setIsDetailSheetMinimized(false);
+      setPreviousSheet("none");
+    },
+    [dispatch, isQrScanStation, virtualStationId, bookingStep]
+  );
+
+  const handleStationSelectedFromList = useCallback(
+    (station: StationFeature) => handleStationSelection(station),
+    [handleStationSelection]
+  );
+
+  // Handle selection from Three.js overlay
+const handleThreeOverlayStationSelected = useCallback((stationId: number) => {
+  console.log("[GMap] ThreeOverlay selected station:", stationId);
+  
+  // Find the station to confirm it exists
+  const selectedStation = stations.find(s => s.id === stationId);
+  
+  if (selectedStation) {
+    console.log("[GMap] Found matching station for 3D selection:", selectedStation);
+    
+    // Set 3D-specific state
+    setIsThreeOverlaySelection(true);
+    
+    // Reuse the common station selection logic
+    handleStationSelection(selectedStation);
+    
+    // Additional 3D-specific behavior - center map on selected station
+    if (actualMap) {
+      const [lng, lat] = selectedStation.geometry.coordinates;
+      actualMap.panTo({ lat, lng });
+      actualMap.setZoom(16);
+    }
+    
+    // Set flag to ensure detail sheet opens (if needed)
+    shouldOpenDetailSheetRef.current = true;
+  } else {
+    console.error("[GMap] Station not found for id:", stationId);
+    toast.error("Unable to select station. Please try again.");
+  }
+}, [stations, actualMap, handleStationSelection]);
+
+// The overlay that handles 3D polygons & station cylinders (with raycasting)
+const { overlayRef } = useThreeOverlay(actualMap, stations, {
+  onStationSelected: handleThreeOverlayStationSelected
+});
+
+// Log station data for debugging
+useEffect(() => {
+  if (stations.length > 0) {
+    console.log("[GMap] Station data loaded. First few stations:");
+    stations.slice(0, 5).forEach(station => {
+      console.log(`Station ${station.id}: ObjectId=${station.properties.ObjectId}, Coords=[${station.geometry.coordinates}]`);
+    });
+  }
+}, [stations]);
+
+// Effect to handle building selections from ThreeOverlay
+// Note: Most of this is now handled directly in the callback for better synchronization
+useEffect(() => {
+  if (shouldOpenDetailSheetRef.current && 
+     ((bookingStep === 2 && departureStationId) || 
+      (bookingStep === 4 && arrivalStationId))) {
+    console.log("[GMap] Opening detail sheet after ThreeOverlay selection");
+    
+    // Reset the flag - we handle the actual opening in the callback now
+    shouldOpenDetailSheetRef.current = false;
+  }
+}, [departureStationId, arrivalStationId, bookingStep, isThreeOverlaySelection]);
 
   // --------------------------
   // Data loading
@@ -213,6 +326,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         await Promise.all([
           dispatch(fetchStations()).unwrap(),
           dispatch(fetchCars()).unwrap(),
+          dispatch(fetchStations3D()).unwrap(), // We'll fetch building data as well
         ]);
       } catch (err) {
         console.error("Error fetching data:", err);
@@ -221,6 +335,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
+  // Once data is loaded, hide the overlay spinner
   useEffect(() => {
     if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -307,7 +422,10 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setForceSheetOpen(false);
       setIsDetailSheetMinimized(false);
       setIsListSheetMinimized(false);
+
+      // Force redraw if needed
       overlayRef.current?.requestRedraw();
+
       setTimeout(() => resolve(), 300);
     });
   }, [overlayRef]);
@@ -362,7 +480,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [actualMap, scannedCar]);
 
-  // The fix: create a new virtual station, add to Redux, select it
   const handleQrScanSuccess = useCallback(
     (car: Car) => {
       if (!car) {
@@ -379,145 +496,34 @@ export default function GMap({ googleApiKey }: GMapProps) {
       dispatch(clearRoute());
 
       // Create a "virtual station" for the scanned car
-      // Could be any unique ID. We'll use Date.now() for example:
       const vStationId = Date.now();
       const virtualStation = createVirtualStationFromCar(car, vStationId);
 
-      // Add to stations Redux
       dispatch(addVirtualStation(virtualStation));
-      // Mark it as new departure
-      dispatch(selectDepartureStation(vStationId));
+      dispatch(selectDepartureStationAction(vStationId));
       dispatch(advanceBookingStep(2));
 
       processedCarIdRef.current = car.id;
 
-      // Finally, open the detail sheet for step=2 and notify user
       openDetailSheet();
       toast.success(`Car ${car.id} selected as departure`);
     },
     [dispatch, openDetailSheet]
   );
-
-  // --------------------------
-  // Station selection logic
-  // --------------------------
-  const handleStationSelection = useCallback(
-    (station: StationFeature) => {
-      // If user picks a different station while a QR station is active
-      if (isQrScanStation && virtualStationId && station.id !== virtualStationId) {
-        console.log("Different station selected, removing QR station:", virtualStationId);
-        dispatch(clearDepartureStation());
-        dispatch(removeStation(virtualStationId));
-        dispatch(clearQrStationData());
-        processedCarIdRef.current = null;
-      }
-
-      // Normal step-based logic
-      if (bookingStep === 1) {
-        dispatch(selectDepartureStation(station.id));
-        dispatch(advanceBookingStep(2));
-        toast.success("Departure station selected!");
-      } else if (bookingStep === 2) {
-        dispatch(selectDepartureStation(station.id));
-        toast.success("Departure station re-selected!");
-      } else if (bookingStep === 3) {
-        dispatch(selectArrivalStation(station.id));
-        dispatch(advanceBookingStep(4));
-        toast.success("Arrival station selected!");
-      } else if (bookingStep === 4) {
-        dispatch(selectArrivalStation(station.id));
-        toast.success("Arrival station re-selected!");
-      } else {
-        toast(`Station tapped, but no action at step ${bookingStep}`);
-      }
-
-      // Show the detail sheet
-      setDetailKey((prev) => prev + 1);
-      setForceSheetOpen(true);
-      setOpenSheet("detail");
-      setIsDetailSheetMinimized(false);
-      setPreviousSheet("none");
-    },
-    [
-      dispatch,
-      isQrScanStation,
-      virtualStationId,
-      bookingStep,
-    ]
-  );
-
-  const handleStationSelectedFromList = useCallback(
-    (station: StationFeature) => handleStationSelection(station),
-    [handleStationSelection]
-  );
-
-  // 3D overlay → station selection
-  useEffect(() => {
-    if (!actualMap || !overlayRef.current) return;
-    const clickListener = actualMap.addListener("click", (ev: google.maps.MapMouseEvent) => {
-      const overlayAny = overlayRef.current as any;
-      if (!overlayAny?.raycast || !overlayAny?.camera) return;
-      const domEvent = ev.domEvent;
-      if (!domEvent || !(domEvent instanceof MouseEvent)) return;
-
-      const mapDiv = actualMap.getDiv();
-      const { left, top, width, height } = mapDiv.getBoundingClientRect();
-      const mouseX = domEvent.clientX - left;
-      const mouseY = domEvent.clientY - top;
-      const mouseVec = new THREE.Vector2(
-        (2 * mouseX) / width - 1,
-        1 - (2 * mouseY) / height
-      );
-
-      const objectsToTest: THREE.Object3D[] = [];
-      if (greyInstancedMeshRef.current) objectsToTest.push(greyInstancedMeshRef.current);
-      if (blueInstancedMeshRef.current) objectsToTest.push(blueInstancedMeshRef.current);
-      if (redInstancedMeshRef.current) objectsToTest.push(redInstancedMeshRef.current);
-
-      const intersections = overlayAny.raycast(mouseVec, objectsToTest, { recursive: false });
-      if (intersections.length > 0) {
-        const intersect = intersections[0];
-        const meshHit = intersect.object as THREE.InstancedMesh;
-        const instanceId = intersect.instanceId;
-        if (instanceId != null) {
-          let stationId: number | undefined;
-          if (meshHit === greyInstancedMeshRef.current) {
-            stationId = stationIndexMapsRef.current.grey[instanceId];
-          } else if (meshHit === blueInstancedMeshRef.current) {
-            stationId = stationIndexMapsRef.current.blue[instanceId];
-          } else if (meshHit === redInstancedMeshRef.current) {
-            stationId = stationIndexMapsRef.current.red[instanceId];
-          }
-          if (stationId !== undefined) {
-            const stationClicked = stations.find((s) => s.id === stationId);
-            if (stationClicked) {
-              handleStationSelection(stationClicked);
-              ev.stop();
-            }
-          }
-        }
-      }
-    });
-    return () => {
-      google.maps.event.removeListener(clickListener);
-    };
-  }, [
-    actualMap,
-    overlayRef,
-    greyInstancedMeshRef,
-    blueInstancedMeshRef,
-    redInstancedMeshRef,
-    stationIndexMapsRef,
-    stations,
-    handleStationSelection
-  ]);
+  
+ 
 
   // --------------------------
   // Map config once loaded
   // --------------------------
   useEffect(() => {
     if (isLoaded && googleMapsReady && window.google) {
-      setMapOptions(createMapOptions());
+      setMapOptions((prev) => ({
+        ...prev,
+        ...createMapOptions(),
+        tilt: 67.5,
+        heading: 45,
+      }));
       setMarkerIcons(createMarkerIcons());
     }
   }, [isLoaded, googleMapsReady]);
@@ -629,7 +635,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // StationDetail close/minimize
   // --------------------------
   const handleStationDetailClose = useCallback(() => {
-    // Minimizes the detail sheet
     setIsDetailSheetMinimized(true);
   }, []);
 
@@ -642,7 +647,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
     dispatch(clearDispatchRoute());
     dispatch(clearRoute());
 
-    // Remove any existing virtual station
     if (virtualStationId !== null) {
       console.log("Removing existing virtual station:", virtualStationId);
       dispatch(removeStation(virtualStationId));
@@ -690,19 +694,25 @@ export default function GMap({ googleApiKey }: GMapProps) {
       "isQrScanStation:",
       isQrScanStation,
       "virtualStationId:",
-      virtualStationId
+      virtualStationId,
+      "isThreeOverlaySelection:",
+      isThreeOverlaySelection
     );
-  }, [bookingStep, departureStationId, isQrScanStation, virtualStationId]);
+  }, [bookingStep, departureStationId, isQrScanStation, virtualStationId, isThreeOverlaySelection]);
 
   // --------------------------
-  // Which station to show in detail?
+  // Determine which station to show in detail
   // --------------------------
   const hasError = stationsError || carsError || loadError;
-  const hasStationSelected = bookingStep < 3 
-    ? (typeof departureStationId === 'number' ? departureStationId : null) 
-    : (typeof arrivalStationId === 'number' ? arrivalStationId : null);
+  const hasStationSelected =
+    bookingStep < 3
+      ? typeof departureStationId === "number"
+        ? departureStationId
+        : null
+      : typeof arrivalStationId === "number"
+      ? arrivalStationId
+      : null;
 
-  // Log stations for debugging
   useEffect(() => {
     if (stations.length > 0 && virtualStationId) {
       const virtualStation = stations.find((s) => s.id === virtualStationId);
@@ -710,12 +720,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [stations, virtualStationId]);
 
-  // Determine which station to show in detail
   let stationToShow: StationFeature | null = null;
-
   if (hasStationSelected) {
     if (isQrScanStation && virtualStationId === hasStationSelected) {
-      // The new QR-based station
       stationToShow = stations.find((s) => s.id === virtualStationId) || null;
       if (!stationToShow) {
         console.warn("Virtual station not found in stations list:", virtualStationId);
@@ -750,32 +757,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const renderSheetContent = useCallback(() => {
     // Special case for QR-scanned car
     if (isQrScanStation && scannedCar && bookingStep === 2) {
-      return <CarPlate 
-        plateNumber={scannedCar.name} 
-        vehicleModel={scannedCar.model || "Electric Vehicle"} 
-      />;
+      return (
+        <CarPlate
+          plateNumber={scannedCar.name}
+          vehicleModel={scannedCar.model || "Electric Vehicle"}
+        />
+      );
     }
-    
+
     if (bookingStep === 1) {
       return <PickupGuide isDepartureFlow={true} />;
     } else if (bookingStep === 2) {
       const { startTime, endTime } = getPickupTimeRange();
       return <PickupTime startTime={startTime} endTime={endTime} />;
     } else if (bookingStep === 3) {
-      return <PickupGuide 
-        isDepartureFlow={false} 
-        primaryText="Choose dropoff station" 
-        secondaryText="Return to any station"
-        primaryDescription="Select destination on map"
-        secondaryDescription="All stations accept returns"
-      />;
+      return (
+        <PickupGuide
+          isDepartureFlow={false}
+          primaryText="Choose dropoff station"
+          secondaryText="Return to any station"
+          primaryDescription="Select destination on map"
+          secondaryDescription="All stations accept returns"
+        />
+      );
     } else if (bookingStep === 4) {
       return <FareDisplay baseFare={50.0} currency="HKD" perMinuteRate={1} />;
     }
     return null;
   }, [bookingStep, getPickupTimeRange, isQrScanStation, scannedCar]);
 
-  // Extra debugging log before rendering
+  // Debug logs
   useEffect(() => {
     const debugSheet = JSON.stringify({
       openSheet,
@@ -787,23 +798,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
       departureStationId,
       arrivalStationId,
       isQrScanStation,
-      virtualStationId
+      virtualStationId,
+      isThreeOverlaySelection,
     });
     console.log("Sheet debug:", debugSheet);
   }, [
     openSheet,
     forceSheetOpen,
-    hasStationSelected,
     stationToShow,
     isStepTransitioning,
     bookingStep,
     departureStationId,
     arrivalStationId,
     isQrScanStation,
-    virtualStationId
+    virtualStationId,
+    isThreeOverlaySelection,
+    hasStationSelected,
   ]);
 
-  // Log when detail sheet conditions change
   useEffect(() => {
     const shouldShowDetail =
       (openSheet === "detail" || forceSheetOpen) &&
@@ -812,12 +824,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
     console.log("Detail sheet visibility:", shouldShowDetail, "Key:", detailKey);
   }, [openSheet, forceSheetOpen, stationToShow, isStepTransitioning, detailKey]);
 
-  // --------------------------
-  // Final setup of detail sheet
-  // --------------------------
+  // Force the detail sheet to open if the departure station is a new QR-based station
   useEffect(() => {
     if (isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
-      // Force detail sheet open with a fresh key
       setDetailKey(Date.now());
       setForceSheetOpen(true);
       setIsDetailSheetMinimized(false);
@@ -848,14 +857,24 @@ export default function GMap({ googleApiKey }: GMapProps) {
       {!hasError && !overlayVisible && (
         <>
           {/* Debug overlay (remove in production) */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="absolute top-0 right-0 z-50 bg-black/70 text-white text-xs p-2 max-w-xs overflow-auto" style={{ fontSize: '10px' }}>
-              Step: {bookingStep} ({isQrScanStation ? 'QR' : 'Normal'})<br />
-              {virtualStationId && `vStation: ${virtualStationId}`}<br />
-              {departureStationId && `depId: ${departureStationId}`}<br />
-              {arrivalStationId && `arrId: ${arrivalStationId}`}<br />
-              Sheet: {openSheet} {forceSheetOpen ? '(forced)' : ''}<br />
-              {isStepTransitioning && 'Transitioning...'}
+          {process.env.NODE_ENV === "development" && (
+            <div
+              className="absolute top-0 right-0 z-50 bg-black/70 text-white text-xs p-2 max-w-xs overflow-auto"
+              style={{ fontSize: "10px" }}
+            >
+              Step: {bookingStep} ({isQrScanStation ? "QR" : "Normal"})
+              <br />
+              {virtualStationId && `vStation: ${virtualStationId}`}
+              <br />
+              {departureStationId && `depId: ${departureStationId}`}
+              <br />
+              {arrivalStationId && `arrId: ${arrivalStationId}`}
+              <br />
+              Sheet: {openSheet} {forceSheetOpen ? "(forced)" : ""}
+              <br />
+              {isThreeOverlaySelection && "3D overlay selection active"}
+              <br />
+              {isStepTransitioning && "Transitioning..."}
             </div>
           )}
 
@@ -870,7 +889,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
               {/* 3D overlay is handled by useThreeOverlay */}
             </GoogleMap>
           </div>
-
+         
+          <div className="stations-selector"></div>
           {/* Station Selector */}
           <StationSelector
             onAddressSearch={handleAddressSearch}
@@ -884,52 +904,57 @@ export default function GMap({ googleApiKey }: GMapProps) {
           />
 
           {/* Station List Sheet */}
-{openSheet === "list" && !isStepTransitioning && (
-  <Sheet
-    isOpen={true}
-    isMinimized={isListSheetMinimized}
-    onMinimize={() => setIsListSheetMinimized(true)}
-    onExpand={() => setIsListSheetMinimized(false)}
-    onDismiss={() => setIsListSheetMinimized(true)}
-    headerContent={<StationsDisplay stationsCount={sortedStations.length} totalStations={stations.length} />}
-    highPriority={true} // Set to true for station list sheet to appear on top
-    ref={listSheetRef}
-  >
-    <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
-      <StationList
-        stations={sortedStations}
-        height={350}
-        showLegend={true}
-        hideStationCount={true} // Hide the count in the StationList since it's in the header
-        userLocation={userLocation}
-        isVisible={!isListSheetMinimized}
-        onStationClick={handleStationSelectedFromList}
-      />
-    </div>
-  </Sheet>
-)}
+          {openSheet === "list" && !isStepTransitioning && (
+            <Sheet
+              isOpen={true}
+              isMinimized={isListSheetMinimized}
+              onMinimize={() => setIsListSheetMinimized(true)}
+              onExpand={() => setIsListSheetMinimized(false)}
+              onDismiss={() => setIsListSheetMinimized(true)}
+              headerContent={
+                <StationsDisplay
+                  stationsCount={sortedStations.length}
+                  totalStations={stations.length}
+                />
+              }
+              highPriority={true}
+              ref={listSheetRef}
+            >
+              <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+                <StationList
+                  stations={sortedStations}
+                  height={350}
+                  showLegend={true}
+                  hideStationCount={true}
+                  userLocation={userLocation}
+                  isVisible={!isListSheetMinimized}
+                  onStationClick={handleStationSelectedFromList}
+                />
+              </div>
+            </Sheet>
+          )}
 
-{/* Station Detail Sheet */}
-<Sheet
-  isOpen={(openSheet === "detail" || forceSheetOpen) && !isStepTransitioning}
-  isMinimized={isDetailSheetMinimized}
-  onMinimize={() => setIsDetailSheetMinimized(true)}
-  onExpand={() => setIsDetailSheetMinimized(false)}
-  onDismiss={handleStationDetailClose}
-  headerContent={renderSheetContent()}
-  ref={detailSheetRef}
->
-  <StationDetail
-    stations={searchLocation ? sortedStations : stations}
-    activeStation={stationToShow}
-    onOpenSignIn={handleOpenSignIn}
-    onConfirmDeparture={handleStationConfirm}
-    onDismiss={() => setIsDetailSheetMinimized(true)}
-    isQrScanStation={isQrScanStation}
-    onClose={handleStationDetailClose}
-    isMinimized={isDetailSheetMinimized}
-  />
-</Sheet>
+          {/* Station Detail Sheet */}
+          <Sheet
+            isOpen={(openSheet === "detail" || forceSheetOpen) && !isStepTransitioning}
+            isMinimized={isDetailSheetMinimized}
+            onMinimize={() => setIsDetailSheetMinimized(true)}
+            onExpand={() => setIsDetailSheetMinimized(false)}
+            onDismiss={handleStationDetailClose}
+            headerContent={renderSheetContent()}
+            ref={detailSheetRef}
+          >
+            <StationDetail
+              stations={searchLocation ? sortedStations : stations}
+              activeStation={stationToShow}
+              onOpenSignIn={handleOpenSignIn}
+              onConfirmDeparture={handleStationConfirm}
+              onDismiss={() => setIsDetailSheetMinimized(true)}
+              isQrScanStation={isQrScanStation}
+              onClose={handleStationDetailClose}
+              isMinimized={isDetailSheetMinimized}
+            />
+          </Sheet>
 
           {/* QR Scanner Overlay */}
           <QrScannerOverlay
@@ -946,11 +971,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
           />
 
           {/* Gaussian Splat Modal (lazy-loaded) */}
-          <Suspense fallback={
-            <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-              <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
-            </div>
-          }>
+          <Suspense
+            fallback={
+              <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+                <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
+              </div>
+            }
+          >
             {isSplatModalOpen && (
               <GaussianSplatModal
                 isOpen={isSplatModalOpen}
@@ -961,6 +988,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         </>
       )}
 
+      {/* Sign-In Modal */}
       <SignInModal
         isOpen={signInModalOpen}
         onClose={() => setSignInModalOpen(false)}

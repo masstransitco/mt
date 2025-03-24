@@ -384,7 +384,7 @@ function StationSelector({
   }, [onScan])
 
   return (
-    <div className="relative z-10 w-full max-w-screen-md mx-auto px-1">
+    <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto px-1">
       {/* Station Inputs Container */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
