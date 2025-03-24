@@ -1,4 +1,3 @@
-
 "use client"
 
 import { memo, useState, useEffect, useMemo, useCallback, Suspense, useRef } from "react"
@@ -13,7 +12,7 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-  fetchRoute,
+  // Removed any direct fetchRoute calls here in StationDetail
 } from "@/store/bookingSlice"
 import { saveBookingDetails } from "@/store/bookingThunks"
 import { selectDispatchRoute } from "@/store/dispatchSlice"
@@ -111,7 +110,6 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
       const timer = setTimeout(() => {
         setShouldRender(true)
       }, 100)
-      
       return () => clearTimeout(timer)
     } else {
       // Small delay before hiding to allow for animations
@@ -119,17 +117,14 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
         setShouldRender(false)
         setIsLoaded(false)
       }, 150)
-      
       return () => clearTimeout(timer)
     }
   }, [isVisible])
   
-  // Track when component is fully loaded
   const handleLoad = useCallback(() => {
     setIsLoaded(true)
   }, [])
   
-  // If not visible at all, return null
   if (!isVisible && !shouldRender) return null
   
   return (
@@ -333,28 +328,27 @@ function TouchScrollHandler() {
     const scrollHeight = el.scrollHeight
     const height = el.clientHeight
     const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0)
-    
+
     // Prevent overscroll only at boundaries
     if ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0)) {
       e.preventDefault()
     }
-    
-    // Update current touch position
+
     el.dataset.touchY = e.touches[0].clientY.toString()
   }
-  
+
   function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
     e.currentTarget.dataset.touchY = e.touches[0].clientY.toString()
   }
-  
+
   function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
     delete e.currentTarget.dataset.touchY
   }
-  
+
   return {
     onTouchStart: handleTouchStart,
     onTouchMove: handleTouchMove,
-    onTouchEnd: handleTouchEnd
+    onTouchEnd: handleTouchEnd,
   }
 }
 
@@ -396,10 +390,10 @@ function StationDetailComponent({
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentReference, setPaymentReference] = useState("")
   const [cardLast4, setCardLast4] = useState("")
-  
+
   // Single source of truth for CarGrid visibility
   const [carGridVisible, setCarGridVisible] = useState(false)
-  
+
   // Reference to track last render time to prevent too frequent updates
   const lastRenderTimeRef = useRef(0)
 
@@ -425,69 +419,8 @@ function StationDetailComponent({
   // Identify if station is a "virtual" car location
   const isVirtualCarLocation = useMemo(() => !!activeStation?.properties?.isVirtualCarLocation, [activeStation])
 
-  // Debounce route fetching
-  const routeFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // Combined logic for CarGrid visibility in one place
-  useEffect(() => {
-    // Determine if CarGrid should be visible based on current state
-    const shouldShowCarGrid = 
-      !isMinimized && 
-      isDepartureFlow && 
-      step === 2 && 
-      (!!activeStation || isQrScanStation);
-      
-    // Apply debounce to prevent flickering during transitions
-    if (shouldShowCarGrid) {
-      // Small delay when showing to ensure smooth transition
-      const timer = setTimeout(() => {
-        setCarGridVisible(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    } else {
-      // Delay hiding slightly to avoid flicker during transitions
-      const timer = setTimeout(() => {
-        setCarGridVisible(false);
-      }, 150);
-      return () => clearTimeout(timer);
-    }
-  }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation]);
-
-  // Handle sheet expansion => force a content refresh, but throttle to avoid excessive renders
-  useEffect(() => {
-    if (!isMinimized) {
-      const now = Date.now();
-      // Only refresh if more than 300ms since last refresh
-      if (now - lastRenderTimeRef.current > 300) {
-        setForceRefreshKey((prev) => prev + 1);
-        setIsInitialized(true);
-        setAttemptedRender(true);
-        lastRenderTimeRef.current = now;
-      }
-
-      // If step 3 or 4 => refetch route, but only if sheet is expanded
-      if (step >= 3 && departureId && arrivalId && stations.length > 0) {
-        // Clear previous debounce
-        if (routeFetchTimeoutRef.current) {
-          clearTimeout(routeFetchTimeoutRef.current);
-        }
-        
-        routeFetchTimeoutRef.current = setTimeout(() => {
-          const depStation = stations.find((s) => s.id === departureId);
-          const arrStation = stations.find((s) => s.id === arrivalId);
-          if (depStation && arrStation) {
-            dispatch(fetchRoute({ departure: depStation, arrival: arrStation }));
-          }
-        }, 500);
-      }
-    }
-    
-    return () => {
-      if (routeFetchTimeoutRef.current) {
-        clearTimeout(routeFetchTimeoutRef.current);
-      }
-    };
-  }, [isMinimized, step, departureId, arrivalId, stations, dispatch]);
+  // We no longer re‐fetch route from StationDetail for step≥3,
+  // leaving that solely to GMap or the store.
 
   // Payment modal open/close
   const handleOpenWalletModal = useCallback(() => {
@@ -616,10 +549,45 @@ function StationDetailComponent({
 
   // Default UI, without active / selected station
   if (!activeStation) {
-    return null; // Guidance now comes from the sheet header
+    return null
   }
 
-  // Use forceRefreshKey to force remount of the component
+  // Manage CarGrid visibility
+  const [carGridVisible, setCarGridVisible] = useState(false)
+  useEffect(() => {
+    const shouldShowCarGrid =
+      !isMinimized && 
+      isDepartureFlow && 
+      step === 2 && 
+      (!!activeStation || isQrScanStation)
+
+    if (shouldShowCarGrid) {
+      const timer = setTimeout(() => {
+        setCarGridVisible(true)
+      }, 100)
+      return () => clearTimeout(timer)
+    } else {
+      const timer = setTimeout(() => {
+        setCarGridVisible(false)
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation])
+
+  // Force re‐render on sheet expansion, but no route fetch
+  useEffect(() => {
+    if (!isMinimized) {
+      const now = Date.now()
+      if (now - lastRenderTimeRef.current > 300) {
+        setForceRefreshKey((prev) => prev + 1)
+        setIsInitialized(true)
+        setAttemptedRender(true)
+        lastRenderTimeRef.current = now
+      }
+    }
+  }, [isMinimized])
+
+  // Use forceRefreshKey to force remount if needed
   return (
     <>
       <motion.div
@@ -652,14 +620,13 @@ function StationDetailComponent({
           />
         </div>
 
-        {/* CarGrid + Confirm Button for step=2 with reduced space between */}
+        {/* CarGrid + Confirm Button for step=2 */}
         {isDepartureFlow && step === 2 && (
           <div className="space-y-3 pointer-events-auto">
-            {/* Always render the MemoizedCarGrid component, but let it handle its visibility internally */}
-            <MemoizedCarGrid 
-              isVisible={carGridVisible} 
-              isQrScanStation={isQrScanStation} 
-              scannedCar={scannedCarRedux} 
+            <MemoizedCarGrid
+              isVisible={carGridVisible}
+              isQrScanStation={isQrScanStation}
+              scannedCar={scannedCarRedux}
             />
             <ConfirmButton
               isDepartureFlow={isDepartureFlow}
@@ -671,35 +638,36 @@ function StationDetailComponent({
           </div>
         )}
 
-       {/* PaymentSummary if step=4 and user is signed in */}
-{Number(step) === 4 && (
-  <div className="space-y-1.5 pointer-events-auto">
-    {isSignedIn ? (
-      <>
-        <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
-        <ConfirmButton
-          isDepartureFlow={isDepartureFlow}
-          charging={charging}
-          disabled={charging || !(Number(step) === 2 || Number(step) === 4)}
-          onClick={handleConfirm}
-          isVirtualCarLocation={isVirtualCarLocation}
-        />
-      </>
-    ) : (
-      <button
-        onClick={onOpenSignIn}
-        className="w-full py-2.5 text-sm font-medium rounded-md transition-colors
+        {/* PaymentSummary if step=4 and user is signed in */}
+        {Number(step) === 4 && (
+          <div className="space-y-1.5 pointer-events-auto">
+            {isSignedIn ? (
+              <>
+                <PaymentSummary onOpenWalletModal={handleOpenWalletModal} />
+                <ConfirmButton
+                  isDepartureFlow={isDepartureFlow}
+                  charging={charging}
+                  disabled={charging || !(Number(step) === 2 || Number(step) === 4)}
+                  onClick={handleConfirm}
+                  isVirtualCarLocation={isVirtualCarLocation}
+                />
+              </>
+            ) : (
+              <button
+                onClick={onOpenSignIn}
+                className="w-full py-2.5 text-sm font-medium rounded-md transition-colors
                   text-white bg-blue-500/80 hover:bg-blue-600/80 flex items-center justify-center"
-      >
-        Sign In
-      </button>
-    )}
-  </div>
-)}
+              >
+                Sign In
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Wallet/Payment Modal */}
-        <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
       </motion.div>
+
+      <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
 
       {/* Payment Result Modal */}
       <PaymentResultModal
