@@ -12,7 +12,7 @@ import {
   selectRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-  // Removed any direct fetchRoute calls here in StationDetail
+  fetchRoute,
 } from "@/store/bookingSlice"
 import { saveBookingDetails } from "@/store/bookingThunks"
 import { selectDispatchRoute } from "@/store/dispatchSlice"
@@ -106,13 +106,11 @@ const MemoizedCarGrid = memo(function MemoizedCarGridWrapper({
   // Delayed rendering for better UI experience
   useEffect(() => {
     if (isVisible) {
-      // Small delay before showing the component
       const timer = setTimeout(() => {
         setShouldRender(true)
       }, 100)
       return () => clearTimeout(timer)
     } else {
-      // Small delay before hiding to allow for animations
       const timer = setTimeout(() => {
         setShouldRender(false)
         setIsLoaded(false)
@@ -167,11 +165,9 @@ const InfoPopup = memo(function InfoPopup({
 
   const handleShowInfo = useCallback(() => {
     setIsVisible(true)
-
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
-
     timeoutRef.current = setTimeout(() => {
       setIsVisible(false)
     }, 3000)
@@ -194,7 +190,6 @@ const InfoPopup = memo(function InfoPopup({
       >
         <Info size={14} />
       </button>
-
       {isVisible && (
         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-gray-800 text-xs text-white w-48 text-center shadow-lg z-50">
           <div className="relative">
@@ -328,27 +323,27 @@ function TouchScrollHandler() {
     const scrollHeight = el.scrollHeight
     const height = el.clientHeight
     const delta = e.touches[0].clientY - (el.dataset.touchY ? parseFloat(el.dataset.touchY) : 0)
-
+    
     // Prevent overscroll only at boundaries
     if ((scrollTop <= 0 && delta > 0) || (scrollTop + height >= scrollHeight && delta < 0)) {
       e.preventDefault()
     }
-
+    
     el.dataset.touchY = e.touches[0].clientY.toString()
   }
-
+  
   function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
     e.currentTarget.dataset.touchY = e.touches[0].clientY.toString()
   }
-
+  
   function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
     delete e.currentTarget.dataset.touchY
   }
-
+  
   return {
     onTouchStart: handleTouchStart,
     onTouchMove: handleTouchMove,
-    onTouchEnd: handleTouchEnd,
+    onTouchEnd: handleTouchEnd
   }
 }
 
@@ -390,10 +385,10 @@ function StationDetailComponent({
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentReference, setPaymentReference] = useState("")
   const [cardLast4, setCardLast4] = useState("")
-
+  
   // Single source of truth for CarGrid visibility
   const [carGridVisible, setCarGridVisible] = useState(false)
-
+  
   // Reference to track last render time to prevent too frequent updates
   const lastRenderTimeRef = useRef(0)
 
@@ -419,8 +414,42 @@ function StationDetailComponent({
   // Identify if station is a "virtual" car location
   const isVirtualCarLocation = useMemo(() => !!activeStation?.properties?.isVirtualCarLocation, [activeStation])
 
-  // We no longer re‐fetch route from StationDetail for step≥3,
-  // leaving that solely to GMap or the store.
+  // Debounce used previously for route fetch—no longer needed for sheet expansions
+  // so we remove the routeFetchTimeoutRef references.
+
+  // Combined logic for CarGrid visibility
+  useEffect(() => {
+    const shouldShowCarGrid = 
+      !isMinimized && 
+      isDepartureFlow && 
+      step === 2 && 
+      (!!activeStation || isQrScanStation)
+
+    if (shouldShowCarGrid) {
+      const timer = setTimeout(() => {
+        setCarGridVisible(true)
+      }, 100)
+      return () => clearTimeout(timer)
+    } else {
+      const timer = setTimeout(() => {
+        setCarGridVisible(false)
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation])
+
+  // Only force a content refresh on expansion—no route re-fetch
+  useEffect(() => {
+    if (!isMinimized) {
+      const now = Date.now()
+      if (now - lastRenderTimeRef.current > 300) {
+        setForceRefreshKey((prev) => prev + 1)
+        setIsInitialized(true)
+        setAttemptedRender(true)
+        lastRenderTimeRef.current = now
+      }
+    }
+  }, [isMinimized])
 
   // Payment modal open/close
   const handleOpenWalletModal = useCallback(() => {
@@ -430,7 +459,7 @@ function StationDetailComponent({
     setWalletModalOpen(false)
   }, [])
 
-  // Payment result modal steps
+  // Payment result modal
   const handlePaymentContinue = useCallback(() => {
     setPaymentResultModalOpen(false)
     if (paymentSuccess) {
@@ -445,7 +474,7 @@ function StationDetailComponent({
 
   // Confirm button logic
   const handleConfirm = useCallback(async () => {
-    // Step 2 => proceed to step 3 (choose arrival)
+    // Step 2 => proceed to step 3
     if (isDepartureFlow && step === 2) {
       dispatch(advanceBookingStep(3))
       if (isVirtualCarLocation) {
@@ -471,13 +500,11 @@ function StationDetailComponent({
 
       try {
         setCharging(true)
-        // Example charge of $50 => 5000 cents
         const result = await chargeUserForTrip(auth.currentUser!.uid, 5000)
 
         if (!result.success) {
           throw new Error(result.error || "Charge failed")
         }
-        // Payment succeeded
         setPaymentSuccess(true)
         setPaymentReference(result.transactionId || "TXN" + Date.now().toString().slice(-8))
         setCardLast4(result.cardLast4 || "4242")
@@ -513,7 +540,7 @@ function StationDetailComponent({
     return `${hh}:${mm < 10 ? "0" + mm : mm}${ampm}`
   }, [isVirtualCarLocation, dispatchRoute])
 
-  // If user is already in final step (5), show TripSheet
+  // If user is at final step
   if (step === 5) {
     return (
       <>
@@ -525,7 +552,7 @@ function StationDetailComponent({
     )
   }
 
-  // If we want a loading spinner until fully loaded
+  // Spinner until fully loaded
   if (!isInitialized) {
     return (
       <div className="p-4 flex justify-center items-center">
@@ -534,7 +561,7 @@ function StationDetailComponent({
     )
   }
 
-  // If we attempted to render but have no activeStation
+  // If we tried to render but no activeStation
   if (!activeStation && attemptedRender) {
     console.error(
       "StationDetail attempted to render but activeStation is null",
@@ -547,47 +574,12 @@ function StationDetailComponent({
     )
   }
 
-  // Default UI, without active / selected station
+  // If no station, show nothing
   if (!activeStation) {
     return null
   }
 
-  // Manage CarGrid visibility
-  const [carGridVisible, setCarGridVisible] = useState(false)
-  useEffect(() => {
-    const shouldShowCarGrid =
-      !isMinimized && 
-      isDepartureFlow && 
-      step === 2 && 
-      (!!activeStation || isQrScanStation)
-
-    if (shouldShowCarGrid) {
-      const timer = setTimeout(() => {
-        setCarGridVisible(true)
-      }, 100)
-      return () => clearTimeout(timer)
-    } else {
-      const timer = setTimeout(() => {
-        setCarGridVisible(false)
-      }, 150)
-      return () => clearTimeout(timer)
-    }
-  }, [isMinimized, isDepartureFlow, step, activeStation, isQrScanStation])
-
-  // Force re‐render on sheet expansion, but no route fetch
-  useEffect(() => {
-    if (!isMinimized) {
-      const now = Date.now()
-      if (now - lastRenderTimeRef.current > 300) {
-        setForceRefreshKey((prev) => prev + 1)
-        setIsInitialized(true)
-        setAttemptedRender(true)
-        lastRenderTimeRef.current = now
-      }
-    }
-  }, [isMinimized])
-
-  // Use forceRefreshKey to force remount if needed
+  // Use forceRefreshKey to force a remount if needed
   return (
     <>
       <motion.div
@@ -665,9 +657,8 @@ function StationDetailComponent({
         )}
 
         {/* Wallet/Payment Modal */}
+        <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
       </motion.div>
-
-      <WalletModal isOpen={walletModalOpen} onClose={handleCloseWalletModal} />
 
       {/* Payment Result Modal */}
       <PaymentResultModal
