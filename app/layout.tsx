@@ -5,7 +5,6 @@ import { Inter } from "next/font/google";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, getFirestore } from "firebase/firestore";
-import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 
 import { auth } from "@/lib/firebase";
@@ -78,18 +77,18 @@ function BookingStateRecovery() {
     if (bookingStep === 6) {
       console.log(`[BookingStateRecovery] Detected step=6, resetting to step 1`);
       dispatch(resetBookingFlow());
-      localStorage.removeItem('persist:booking');
-      localStorage.removeItem('persist:root');
+      localStorage.removeItem("persist:booking");
+      localStorage.removeItem("persist:root");
       dispatch(saveBookingDetails())
         .then(() => {
           // after reset is saved, refresh data
           console.log("Booking reset saved, refreshing data...");
           return Promise.all([
             dispatch(fetchCars()),
-            dispatch(fetchDispatchLocations())
+            dispatch(fetchDispatchLocations()),
           ]);
         })
-        .catch(err => console.error("Error during booking reset:", err));
+        .catch((err) => console.error("Error during booking reset:", err));
 
       toast.success("Your previous trip is completed. Ready for a new trip!");
     }
@@ -118,39 +117,42 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     const db = getFirestore();
 
     // Listen for Firebase Auth changes
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser: User | null) => {
-      setLoading(false);
+    const unsubscribeAuth = onAuthStateChanged(
+      auth,
+      async (firebaseUser: User | null) => {
+        setLoading(false);
 
-      if (firebaseUser) {
-        const userPayload = {
-          uid: firebaseUser.uid,
-          phoneNumber: firebaseUser.phoneNumber ?? undefined,
-          email: firebaseUser.email ?? undefined,
-          displayName: firebaseUser.displayName ?? undefined,
-        };
-        dispatch(setAuthUser(userPayload));
+        if (firebaseUser) {
+          const userPayload = {
+            uid: firebaseUser.uid,
+            phoneNumber: firebaseUser.phoneNumber ?? undefined,
+            email: firebaseUser.email ?? undefined,
+            displayName: firebaseUser.displayName ?? undefined,
+          };
+          dispatch(setAuthUser(userPayload));
 
-        // Subscribe to user doc
-        const userDocRef = doc(db, "users", firebaseUser.uid);
-        const unsubscribeDoc = onSnapshot(userDocRef, (snap) => {
-          if (snap.exists()) {
-            const data = snap.data() as any;
-            if (data.defaultPaymentMethodId) {
-              dispatch(setDefaultPaymentMethodId(data.defaultPaymentMethodId));
+          // Subscribe to user doc
+          const userDocRef = doc(db, "users", firebaseUser.uid);
+          const unsubscribeDoc = onSnapshot(userDocRef, (snap) => {
+            if (snap.exists()) {
+              const data = snap.data() as any;
+              if (data.defaultPaymentMethodId) {
+                dispatch(setDefaultPaymentMethodId(data.defaultPaymentMethodId));
+              } else {
+                dispatch(setDefaultPaymentMethodId(null));
+              }
             } else {
               dispatch(setDefaultPaymentMethodId(null));
             }
-          } else {
-            dispatch(setDefaultPaymentMethodId(null));
-          }
-        });
-        return () => unsubscribeDoc();
-      } else {
-        // no user => sign out in Redux
-        dispatch(signOutUser());
-        dispatch(setDefaultPaymentMethodId(null));
+          });
+          return () => unsubscribeDoc();
+        } else {
+          // no user => sign out in Redux
+          dispatch(signOutUser());
+          dispatch(setDefaultPaymentMethodId(null));
+        }
       }
-    });
+    );
 
     return () => {
       unsubscribeAuth();
@@ -160,12 +162,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // This effect previously removed localStorage data on mount,
   // but that is now handled by bookingStep5Transform. We no longer do it here.
   useEffect(() => {
-    console.log("[LayoutInner] App mount - no forced ephemeral clearing here anymore.");
-    
+    console.log(
+      "[LayoutInner] App mount - no forced ephemeral clearing here anymore."
+    );
+
     // Initialize booking state for all users, regardless of auth status
     dispatch(resetBookingFlow());
     console.log("[LayoutInner] Initialized booking state for all users");
-    
+
     setLoading(false);
   }, [dispatch]);
 
@@ -187,6 +191,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <div className={`${inter.className} h-full flex flex-col relative`}>
       <BookingStateRecovery />
+      {/* Children rendered directly with no Header */}
       {children}
     </div>
   );
