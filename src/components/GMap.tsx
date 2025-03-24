@@ -638,10 +638,8 @@ useEffect(() => {
     // ONLY minimize the sheet, don't clear any route data
     setIsDetailSheetMinimized(true);
     
-    // Force the Three.js overlay to redraw to ensure route remains visible
-    if (overlayRef.current) {
-      overlayRef.current.requestRedraw();
-    }
+    // Force redraw to ensure route remains visible
+    overlayRef.current?.requestRedraw();
   }, []);
 
   useEffect(() => {
