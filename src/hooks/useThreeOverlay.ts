@@ -31,6 +31,9 @@ export function useThreeOverlay(
   // Route tube reference
   const routeTubeRef = useRef<THREE.Mesh | null>(null);
   const tubeMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  
+  // Add a temporary storage for pending route data
+  const pendingRouteDataRef = useRef<Array<{lat: number, lng: number}> | null>(null);
 
   // Map anchor
   const anchorRef = useRef({ lat: 0, lng: 0, altitude: 0 });
@@ -82,17 +85,17 @@ export function useThreeOverlay(
   const createOrUpdateRouteTube = useCallback((path: Array<{lat: number, lng: number}>) => {
     console.log("[ThreeOverlay] Creating route tube with", path.length, "points");
     
+    // Store the path data for later use if scene isn't ready yet
+    pendingRouteDataRef.current = path;
+    
     if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
-      console.log("[ThreeOverlay] Cannot create tube - missing data:", {
+      console.log("[ThreeOverlay] Cannot create tube yet - missing dependencies:", {
         hasPath: !!path, 
         pathLength: path?.length, 
         hasScene: !!sceneRef.current, 
         hasOverlay: !!overlayRef.current
       });
-      // Hide the tube if no valid path
-      if (routeTubeRef.current) {
-        routeTubeRef.current.visible = false;
-      }
+      // We'll try again when the scene is ready
       return;
     }
     
@@ -349,6 +352,12 @@ export function useThreeOverlay(
           console.error("[useThreeOverlay] Error creating building:", err);
         }
       });
+      
+      // Check if we have pending route data to create now that the scene is ready
+      if (pendingRouteDataRef.current && pendingRouteDataRef.current.length >= 2) {
+        console.log("[ThreeOverlay] Creating tube from pending route data during onAdd");
+        createOrUpdateRouteTube(pendingRouteDataRef.current);
+      }
     };
 
     overlay.onContextRestored = ({ gl }) => {
@@ -393,6 +402,12 @@ export function useThreeOverlay(
       removePointerListenerRef.current = () => {
         canvas.removeEventListener("pointerdown", handlePointerDown);
       };
+      
+      // Check if we have pending route data to create now that the context is restored
+      if (pendingRouteDataRef.current && pendingRouteDataRef.current.length >= 2) {
+        console.log("[ThreeOverlay] Creating tube from pending route data during onContextRestored");
+        createOrUpdateRouteTube(pendingRouteDataRef.current);
+      }
     };
 
     // the picking logic
@@ -503,7 +518,7 @@ export function useThreeOverlay(
       // Update tube positioning if needed
       if (routeTubeRef.current && routeTubeRef.current.visible) {
         // Make sure it's visible by adjusting z position if needed
-        // routeTubeRef.current.position.z = 10; // Adjust if needed for visibility
+        routeTubeRef.current.position.z = 10; // Added explicit z-positioning to ensure visibility
         console.log("[ThreeOverlay] Route tube visible in onDraw");
       }
 
@@ -542,6 +557,9 @@ export function useThreeOverlay(
         routeTubeRef.current = null;
       }
 
+      // Reset pending route data
+      pendingRouteDataRef.current = null;
+
       // cleanup
       const cleanupMeshes = (meshes: THREE.Object3D[]) => {
         meshes.forEach((m) => {
@@ -577,7 +595,7 @@ export function useThreeOverlay(
       overlayRef.current = null;
       isInitializedRef.current = false;
     };
-  }, [googleMap, stations, buildings3D, handleStationSelected]);
+  }, [googleMap, stations, buildings3D, handleStationSelected, createOrUpdateRouteTube]);
 
   return { overlayRef };
 }
