@@ -642,13 +642,6 @@ useEffect(() => {
     overlayRef.current?.requestRedraw();
   }, []);
 
-  useEffect(() => {
-    // When sheet state changes, force overlay redraw
-    if (departureStationId && arrivalStationId) {
-      overlayRef.current?.requestRedraw();
-    }
-  }, [isDetailSheetMinimized, departureStationId, arrivalStationId]);
-
   // --------------------------
   // QR Scanner
   // --------------------------
