@@ -635,8 +635,15 @@ useEffect(() => {
   // StationDetail close/minimize
   // --------------------------
   const handleStationDetailClose = useCallback(() => {
+    // ONLY minimize the sheet, don't clear any route data
     setIsDetailSheetMinimized(true);
+    
+    // Force the Three.js overlay to redraw to ensure route remains visible
+    if (overlayRef.current) {
+      overlayRef.current.requestRedraw();
+    }
   }, []);
+
 
   // --------------------------
   // QR Scanner
