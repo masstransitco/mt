@@ -157,24 +157,41 @@ export function useThreeOverlay(
     }
   }, []);
 
-  // Effect to update the route tube when route data changes
-  useEffect(() => {
-    console.log("[ThreeOverlay] Route effect - data:", {
-      departureStationId, 
-      arrivalStationId, 
-      routePoints: routeDecoded?.length, 
-      routeData: routeDecoded?.slice(0, 3) // Log first few points only to keep log readable
-    });
+// Effect to update the route tube when route data changes
+useEffect(() => {
+  console.log("[ThreeOverlay] Route effect - data:", {
+    departureStationId, 
+    arrivalStationId, 
+    routePoints: routeDecoded?.length, 
+    routeData: routeDecoded?.slice(0, 3) // Log first few points only to keep log readable
+  });
+  
+  // Only create tube if both departure and arrival stations are set
+  if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
+    console.log("[ThreeOverlay] Calling createOrUpdateRouteTube with path length:", routeDecoded.length);
+    createOrUpdateRouteTube(routeDecoded);
     
-    // Only create tube if both departure and arrival stations are set
-    if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
-      console.log("[ThreeOverlay] Calling createOrUpdateRouteTube with path length:", routeDecoded.length);
-      createOrUpdateRouteTube(routeDecoded);
-    } else if (routeTubeRef.current) {
+    // Force the tube to be visible after creation/update
+    if (routeTubeRef.current) {
+      routeTubeRef.current.visible = true;
+      
+      // Ensure high render order so route appears above buildings
+      routeTubeRef.current.renderOrder = 999;
+      
+      // Force a redraw
+      if (overlayRef.current) {
+        overlayRef.current.requestRedraw();
+      }
+    }
+  } else if (routeTubeRef.current) {
+    // Only hide the tube when route data is missing
+    // NOT when the UI sheet is minimized
+    if (!departureStationId || !arrivalStationId || !routeDecoded?.length) {
       console.log("[ThreeOverlay] Hiding route tube - missing data");
       routeTubeRef.current.visible = false;
     }
-  }, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);
+  }
+}, [routeDecoded, departureStationId, arrivalStationId, createOrUpdateRouteTube]);
 
   const raycasterRef = useRef<THREE.Raycaster | null>(null);
   const inverseProjectionMatrixRef = useRef<THREE.Matrix4 | null>(null);
