@@ -638,8 +638,14 @@ useEffect(() => {
     // ONLY minimize the sheet, don't clear any route data
     setIsDetailSheetMinimized(true);
     
-    // Force redraw to ensure route remains visible
-    overlayRef.current?.requestRedraw();
+    // We need to wait for the next frame to ensure we don't trigger a cleanup
+    requestAnimationFrame(() => {
+      // Force a redraw of the overlay without reinitializing it
+      if (overlayRef.current) {
+        overlayRef.current.requestRedraw();
+        console.log("[GMap] Requested redraw after minimize");
+      }
+    });
   }, []);
 
   // --------------------------
