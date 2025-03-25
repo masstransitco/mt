@@ -17,6 +17,7 @@ import {
   Variants,
 } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/lib/useBodyScrollLock";
 
 interface SheetHeaderProps {
   title?: string;
@@ -24,6 +25,7 @@ interface SheetHeaderProps {
   headerContent?: ReactNode;
   count?: number;
   countLabel?: string;
+  disableMinimize?: boolean;
   headerRef: React.RefObject<HTMLDivElement>;
   onPointerDown: (e: React.PointerEvent) => void;
 }
@@ -110,6 +112,8 @@ export interface SheetProps {
   count?: number;
   /** Label to show alongside `count`. */
   countLabel?: string;
+  /** Whether to disable minimizing the sheet. */
+  disableMinimize?: boolean;
   /** Additional CSS classes for the sheet container. */
   className?: string;
   /** The main body contents rendered inside the sheet. */
@@ -118,7 +122,7 @@ export interface SheetProps {
 
 // Variants for the sheet's main motion.div
 // "hidden": sheet is off-screen at the bottom
-// "minimized": sheet is partially visible (60% down the screen)
+// "minimized": sheet is partially visible (80% down the screen)
 // "expanded": sheet is fully visible
 const sheetVariants: Variants = {
   hidden: {
@@ -150,9 +154,13 @@ export default function Sheet({
   headerContent,
   count,
   countLabel,
+  disableMinimize = false,
   className,
   children,
 }: SheetProps) {
+  // 1) Lock body scroll only if sheet is open & expanded.
+  useBodyScrollLock(isOpen && !isMinimized);
+
   const zIndexClass = highPriority ? "z-[1000]" : "z-[999]";
   const dragControls = useDragControls();
 
@@ -169,22 +177,30 @@ export default function Sheet({
     setHeaderHeight(Math.max(64, Math.ceil(measuredHeight)));
   }, [title, subtitle, headerContent, count, countLabel]);
 
- 
   /**
-   * Start drag when pointer is down on the header.
+   * Start drag when pointer is down on the header,
+   * but only if the sheet is not minimized.
    */
   const handleHeaderPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (isMinimized) {
+        e.preventDefault();
+        return;
+      }
       dragControls.start(e);
     },
-    [dragControls]
+    [dragControls, isMinimized]
   );
 
   /**
-   * If the user drags enough to pass thresholds, we call onMinimize or onExpand.
+   * If the user drags enough to pass thresholds, we call onMinimize.
+   * (Removed expand from minimized - user must use the expand button)
    */
   const handleDragEnd = useCallback(
     (_e: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) => {
+      if (disableMinimize) {
+        return;
+      }
       if (isMinimized && info.offset.y > 0) {
         // If already minimized, dragging down further does nothing
         return;
@@ -196,11 +212,7 @@ export default function Sheet({
         return;
       }
 
-      // If minimized and user drags up < -80px => expand
-      if (isMinimized && info.offset.y < -80) {
-        onExpand?.();
-        return;
-      }
+      // Removed logic for expanding from minimized
 
       // Optionally, dismiss the sheet if minimized and dragged down beyond 50px
       // if (isMinimized && info.offset.y > 50) {
@@ -210,7 +222,7 @@ export default function Sheet({
 
       // Otherwise, do nothing (remain in current state)
     },
-    [isMinimized, onMinimize, onExpand, onDismiss]
+    [isMinimized, disableMinimize, onMinimize]
   );
 
   /**
@@ -251,6 +263,7 @@ export default function Sheet({
     <AnimatePresence onExitComplete={onDismiss} initial={false}>
       {isOpen && (
         <motion.div
+          style={{ touchAction: isMinimized ? "none" : "auto" }}
           className={cn("fixed bottom-0 left-0 right-0", zIndexClass)}
           key="sheet-container"
           variants={sheetVariants}
@@ -261,7 +274,7 @@ export default function Sheet({
           drag={isMinimized ? false : "y"}
           dragConstraints={{
             top: 0,         // can drag up (top) as far as you want
-            bottom: isMinimized ? 0 : 300  // if minimized, bottom=0 so you cannot drag down
+            bottom: isMinimized ? 0 : 300,  // if minimized, bottom=0 so you cannot drag down
           }}
           dragListener={!isMinimized}
           dragControls={dragControls}
