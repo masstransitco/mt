@@ -260,10 +260,10 @@ export default function Sheet({
           style={{ width: "100%", maxHeight: "100%" }}
         >
           <motion.div
-            className="w-full pointer-events-auto"
-            style={containerStyle}
-            animate={{ y: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
+          className="w-full pointer-events-none"
+          style={{ ...containerStyle, y: finalY }}
+          animate={{ y: finalY }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
             drag="y"
             dragListener={false}
             dragControls={dragControls}
@@ -272,15 +272,11 @@ export default function Sheet({
             onDragEnd={handleDragEnd}
             dragMomentum={false}
           >
-            <motion.div
+            <div
               className={cn(
-                "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col",
-                "select-none",
+                "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col select-none",
                 className
               )}
-              style={{ y: finalY }}
-              animate={{ y: finalY }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
             >
               <SheetHeader
                 title={title}
@@ -304,7 +300,7 @@ export default function Sheet({
               >
                 {children}
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         </motion.div>
       )}
