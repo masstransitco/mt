@@ -248,61 +248,62 @@ export default function Sheet({
     <AnimatePresence onExitComplete={onDismiss} initial={false}>
       {isOpen && (
         <motion.div
-          className={cn(
-            "fixed bottom-0 left-0 right-0 pointer-events-none",
-            zIndexClass
-          )}
-          key="sheet-container"
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: "100%" }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
-          style={{ width: "100%", maxHeight: "100%" }}
-        >
-          <motion.div
-          className="w-full pointer-events-none"
+        className={cn("fixed bottom-0 left-0 right-0", zIndexClass)}
+        key="sheet-container"
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ duration: 0.2, ease: "easeInOut" }}
+        style={{ width: "100%", maxHeight: "100%" }}
+      >
+        <motion.div
+          className="w-full pointer-events-auto"
           style={{ ...containerStyle, y: finalY }}
           animate={{ y: finalY }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
-            drag="y"
-            dragListener={false}
-            dragControls={dragControls}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.2}
-            onDragEnd={handleDragEnd}
-            dragMomentum={false}
+          drag="y"
+          dragListener={false}
+          dragControls={dragControls}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.2}
+          onDragEnd={handleDragEnd}
+          dragMomentum={false}
+        >
+          <div
+            className={cn(
+              "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col select-none",
+              className
+            )}
           >
+            <SheetHeader
+              title={title}
+              subtitle={subtitle}
+              headerContent={headerContent}
+              count={count}
+              countLabel={countLabel}
+              headerRef={headerRef}
+              onPointerDown={handleHeaderPointerDown}
+            />
+      
+            {/* Body content: pointer‐events depends on minimized */}
             <div
+              ref={bodyRef}
               className={cn(
-                "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col select-none",
-                className
+                "flex-grow overflow-y-auto overscroll-contain touchaction-none transition-all duration-200 px-3 pt-2 pb-3",
+                isMinimized ? "pointer-events-none" : "pointer-events-auto"
               )}
+              onTouchStart={(e) => {
+                const target = e.currentTarget as HTMLDivElement;
+                target.dataset.touchStartY = e.touches[0].clientY.toString();
+              }}
+              onTouchMove={handleBodyTouchMove}
+              onTouchEnd={handleBodyTouchEnd}
             >
-              <SheetHeader
-                title={title}
-                subtitle={subtitle}
-                headerContent={headerContent}
-                count={count}
-                countLabel={countLabel}
-                headerRef={headerRef}
-                onPointerDown={handleHeaderPointerDown}
-              />
-              {/* Body content */}
-              <div
-                ref={bodyRef}
-                className="flex-grow overflow-y-auto overscroll-contain touchaction-none transition-all duration-200 px-3 pt-2 pb-3"
-                onTouchStart={(e) => {
-                  const target = e.currentTarget as HTMLDivElement;
-                  target.dataset.touchStartY = e.touches[0].clientY.toString();
-                }}
-                onTouchMove={handleBodyTouchMove}
-                onTouchEnd={handleBodyTouchEnd}
-              >
-                {children}
-              </div>
+              {children}
             </div>
-          </motion.div>
+          </div>
         </motion.div>
+      </motion.div>
       )}
     </AnimatePresence>
   );
