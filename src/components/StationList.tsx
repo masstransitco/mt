@@ -1,289 +1,99 @@
-// src/components/StationList.tsx
 "use client";
 
-import React, { memo, useCallback, useEffect, useMemo, useState, useRef } from "react";
-import { FixedSizeList as List } from "react-window";
-import InfiniteLoader from "react-window-infinite-loader";
-import { useAppDispatch, useAppSelector } from "@/store/store";
-import {
-  selectBookingStep,
-  selectDepartureStationId,
-  selectArrivalStationId,
-  selectDepartureStation as actionSelectDeparture,
-  selectArrivalStation as actionSelectArrival,
-} from "@/store/bookingSlice";
-import { selectDispatchRoute } from "@/store/dispatchSlice";
-import { StationFeature } from "@/store/stationsSlice";
-import StationListItem, { StationListItemData } from "./StationListItem";
-import { MapPin, Navigation } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { memo } from "react";
+import { motion } from "framer-motion";
+import type { StationFeature } from "@/store/stationsSlice";
 
-/**
- * StationList props.
- */
-interface StationListProps {
-  /** Stations to display */
+export interface StationListProps {
+  /** Array of station features to display in the list. */
   stations: StationFeature[];
-  /** React-window list height. */
-  height?: number;
-  /** Whether to show a small legend row at the top. */
-  showLegend?: boolean;
-  /** The user's location, typed as LatLngLiteral or null. */
-  userLocation?: google.maps.LatLngLiteral | null; // Possibly undefined or null
-  /** Whether this list is currently visible (un-minimized). */
-  isVisible?: boolean;
-  /** Whether to hide the station count (if it's already shown in the header) */
-  hideStationCount?: boolean;
-
-  /**
-   * Optional callback for station clicks.
-   * If not supplied, the component uses its default logic
-   * (selecting departure/arrival based on step).
-   */
+  /** Callback when the user selects a station. */
   onStationClick?: (station: StationFeature) => void;
-}
-
-/** Basic walking time calculation */
-function calculateWalkingTime(
-  station: StationFeature,
-  userLocation: google.maps.LatLngLiteral | null
-): number {
-  if (!userLocation || !station.geometry?.coordinates) return 0;
-
-  const [lng, lat] = station.geometry.coordinates;
-  const { lat: userLat, lng: userLng } = userLocation;
-
-  const toRad = (val: number) => (val * Math.PI) / 180;
-  const R = 6371; // Earth radius in km
-  const dLat = toRad(userLat - lat);
-  const dLng = toRad(userLng - lng);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat)) *
-      Math.cos(toRad(userLat)) *
-      Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distanceKm = R * c;
-
-  // e.g. walking ~12 min per km
-  return Math.round(distanceKm * 12);
-}
-
-/** Placeholder driving time calculation */
-function calculateDrivingTime(station: StationFeature): number {
-  // For demonstration only:
-  if (!station.geometry?.coordinates) return 0;
-  return 8; // e.g., 8 minutes
+  /** Whether the list is visible. Parent can hide the sheet altogether if needed. */
+  isVisible?: boolean;
+  /** Optional: user location if you want to display distances or highlight the closest station. */
+  userLocation?: { lat: number; lng: number } | null;
+  /** Additional CSS class names for container. */
+  className?: string;
 }
 
 /**
- * Main StationList component using react-window + infinite scrolling.
+ * StationList:
+ * - Renders a scrollable list of stations.
+ * - Expects the parent to handle open/close or step logic.
+ * - No overscroll or sheet logic inside; parent’s sheet handles that.
  */
 function StationList({
   stations,
-  height = 300,
-  showLegend = true,
-  userLocation,
-  isVisible = true,
-  hideStationCount = false,
   onStationClick,
+  isVisible = true,
+  userLocation,
+  className = "",
 }: StationListProps) {
-  const dispatch = useAppDispatch();
-  const listRef = useRef<List | null>(null);
-
-  // For forcing re-renders on visibility changes
-  const [forceRenderKey, setForceRenderKey] = useState(0);
-  const visibilityChangedRef = useRef(false);
-
-  // Redux states
-  const step = useAppSelector(selectBookingStep);
-  const departureId = useAppSelector(selectDepartureStationId);
-  const arrivalId = useAppSelector(selectArrivalStationId);
-  const dispatchRoute = useAppSelector(selectDispatchRoute);
-
-  /**
-   * If the user didn't supply onStationClick,
-   * we use the default logic to set departure or arrival.
-   */
-  const handleStationSelected = useCallback(
-    (station: StationFeature) => {
-      if (onStationClick) {
-        // If parent provided a custom callback, use that instead
-        onStationClick(station);
-        return;
-      }
-
-      // Otherwise do the default selection logic
-      if (step <= 2) {
-        dispatch(actionSelectDeparture(station.id));
-      } else if (step >= 3 && step <= 4) {
-        dispatch(actionSelectArrival(station.id));
-      } else {
-        toast("Cannot select station at this stage.");
-      }
-    },
-    [onStationClick, step, dispatch]
-  );
-
-  /**
-   * Preprocess the stations array to embed walkTime + drivingTime.
-   * We coerce userLocation to null if it's undefined.
-   */
-  const processedStations = useMemo(() => {
-    return stations.map((st) => {
-      const walkTime = calculateWalkingTime(st, userLocation || null);
-      const drivingTime = calculateDrivingTime(st);
-      return {
-        ...st,
-        walkTime,
-        drivingTime,
-        properties: {
-          ...st.properties,
-          walkTime,
-          drivingTime,
-        },
-      };
-    });
-  }, [stations, userLocation]);
-
-  // Basic infinite-load states
-  const [loadedCount, setLoadedCount] = useState(10);
-  const [visibleStations, setVisibleStations] = useState<StationFeature[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-
-  // Update stations slice when loadedCount changes
-  useEffect(() => {
-    if (!processedStations.length) {
-      setVisibleStations([]);
-      setHasMore(false);
-      return;
-    }
-    const slice = processedStations.slice(0, loadedCount);
-    setVisibleStations(slice);
-    setHasMore(slice.length < processedStations.length);
-  }, [processedStations, loadedCount]);
-
-  // Force re-render when we become visible again
-  useEffect(() => {
-    if (isVisible && visibilityChangedRef.current) {
-      setForceRenderKey((prev) => prev + 1);
-      // Reset loaded count so it can re-load
-      setLoadedCount(10);
-      visibilityChangedRef.current = false;
-
-      // Reset list's scroll
-      if (listRef.current) {
-        listRef.current.scrollTo(0);
-        // Some versions of react-window have resetAfterIndex
-        if (
-          "resetAfterIndex" in listRef.current &&
-          typeof (listRef.current as any).resetAfterIndex === "function"
-        ) {
-          (listRef.current as any).resetAfterIndex(0, true);
-        }
-      }
-    } else if (!isVisible) {
-      // Mark that we changed visibility
-      visibilityChangedRef.current = true;
-    }
-  }, [isVisible]);
-
-  // Setup itemData for each row
-  const itemData = useMemo<StationListItemData>(() => {
-    return {
-      items: visibleStations,
-      onStationSelected: handleStationSelected,
-      departureId,
-      arrivalId,
-      dispatchRoute,
-      forceRenderKey,
-    };
-  }, [
-    visibleStations,
-    handleStationSelected,
-    departureId,
-    arrivalId,
-    dispatchRoute,
-    forceRenderKey,
-  ]);
-
-  const itemCount = hasMore ? visibleStations.length + 1 : visibleStations.length;
-  const isItemLoaded = useCallback(
-    (index: number) => index < visibleStations.length,
-    [visibleStations]
-  );
-  const loadMoreItems = useCallback(() => {
-    setLoadedCount((prev) => prev + 5);
-  }, []);
-
-  // The actual row renderer
-  const renderItem = useCallback((props: any) => {
-    return <StationListItem {...props} />;
-  }, []);
-
-  // If not visible, render hidden placeholder
-  if (!isVisible) {
-    return <div className="hidden" />;
-  }
+  if (!isVisible || !stations?.length) return null;
 
   return (
-    <div
-      className="flex flex-col w-full"
-      key={`station-list-container-${forceRenderKey}`}
+    <motion.div
+      className={className}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
     >
-      {showLegend && (
-        <div className="px-4 py-2 bg-gray-900/60 border-b border-gray-800 flex justify-between items-center">
-          
-          {/* Always show legend icons, even when count is hidden */}
-          <div className={`flex gap-3 ${hideStationCount ? "w-full justify-end" : ""}`}>
-            {/* Example legend icons */}
-            <div className="flex items-center gap-1.5">
-              <div className="p-1 rounded-full bg-blue-600">
-                <MapPin className="w-3 h-3 text-white" />
-              </div>
-              <span className="text-xs text-gray-300">Pickup</span>
+      {stations.map((station) => {
+        // Force null if userLocation is undefined
+        const distanceDisplay = computeDistanceDisplay(userLocation ?? null, station);
+        return (
+          <button
+            key={station.id}
+            onClick={() => onStationClick?.(station)}
+            className="w-full text-left p-2 mb-2 bg-gray-800/50 rounded-md shadow-sm hover:bg-gray-700 transition-colors"
+          >
+            <div className="text-sm font-medium text-white">
+              {station.properties.Place}
             </div>
-            <div className="flex items-center gap-1.5">
-              <div className="p-1 rounded-full bg-green-600">
-                <Navigation className="w-3 h-3 text-white" />
-              </div>
-              <span className="text-xs text-gray-300">Dropoff</span>
+            <div className="text-xs text-gray-400">
+              {station.properties.Address || "No address"}
+              {distanceDisplay && ` • ${distanceDisplay}`}
             </div>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-b-lg overflow-hidden bg-black">
-        <InfiniteLoader
-          isItemLoaded={isItemLoaded}
-          itemCount={itemCount}
-          loadMoreItems={loadMoreItems}
-          key={`infinite-loader-${forceRenderKey}`}
-        >
-          {({ onItemsRendered, ref }) => (
-            <List
-              height={height}
-              itemCount={itemCount}
-              itemSize={70}
-              width="100%"
-              itemData={itemData}
-              onItemsRendered={onItemsRendered}
-              ref={(listInstance) => {
-                if (typeof ref === "function") {
-                  ref(listInstance);
-                }
-                listRef.current = listInstance;
-              }}
-              className="scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
-              key={`fixed-size-list-${forceRenderKey}`}
-            >
-              {renderItem}
-            </List>
-          )}
-        </InfiniteLoader>
-      </div>
-    </div>
+          </button>
+        );
+      })}
+    </motion.div>
   );
+}
+
+/** Utility to compute a simple distance label if userLocation is available. */
+function computeDistanceDisplay(
+  userLocation: { lat: number; lng: number } | null,
+  station: StationFeature
+): string | null {
+  if (!userLocation) return null;
+
+  // Make sure station.geometry.coordinates is [lng, lat]:
+  const [stationLng, stationLat] = station.geometry.coordinates;
+
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (val: number) => (val * Math.PI) / 180;
+
+  const lat1 = toRad(userLocation.lat);
+  const lat2 = toRad(stationLat);
+  const deltaLat = toRad(stationLat - userLocation.lat);
+  const deltaLng = toRad(stationLng - userLocation.lng);
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // in meters
+
+  if (distance < 1000) {
+    return `${Math.round(distance)}m away`;
+  }
+  return `${(distance / 1000).toFixed(1)}km away`;
 }
 
 export default memo(StationList);
