@@ -649,7 +649,7 @@ const renderSheetHeader = useCallback(() => {
          <div className="flex items-center w-full">
            <div className="flex-1 flex justify-center">
               {renderSheetHeader()}
-           </div>
+          </div>
 
       {sheetMinimized ? (
         /* If minimized, show Maximize2 icon to restore */
