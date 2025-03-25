@@ -12,22 +12,24 @@ import React, {
 import {
   AnimatePresence,
   motion,
-  useAnimation,
   useDragControls,
   type PanInfo,
+  Variants,
 } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-// The pixel distance the user must drag to trigger minimize/expand.
-const DRAG_THRESHOLD = 50;
-
-// Maximum height for the sheet in expanded mode.
-const MAX_EXPANDED_HEIGHT = "90vh";
+interface SheetHeaderProps {
+  title?: string;
+  subtitle?: ReactNode;
+  headerContent?: ReactNode;
+  count?: number;
+  countLabel?: string;
+  headerRef: React.RefObject<HTMLDivElement>;
+  onPointerDown: (e: React.PointerEvent) => void;
+}
 
 /**
  * A sub-component for rendering the Sheet's header area.
- * This includes an optional title, subtitle, count, and extra content.
- * The entire header can handle pointer events to initiate dragging.
  */
 const SheetHeader = memo(function SheetHeader({
   title,
@@ -37,15 +39,7 @@ const SheetHeader = memo(function SheetHeader({
   countLabel,
   headerRef,
   onPointerDown,
-}: {
-  title?: string;
-  subtitle?: ReactNode;
-  headerContent?: ReactNode;
-  count?: number;
-  countLabel?: string;
-  headerRef: React.RefObject<HTMLDivElement>;
-  onPointerDown: (e: React.PointerEvent) => void;
-}) {
+}: SheetHeaderProps) {
   const titleSection = useMemo(() => {
     if (!(title || subtitle || typeof count === "number")) return null;
     return (
@@ -72,11 +66,12 @@ const SheetHeader = memo(function SheetHeader({
     return <div className="mt-1">{headerContent}</div>;
   }, [headerContent]);
 
-  // Prevent accidental text selection by calling `preventDefault` on click.
+  // Keep pointer events active on the header so user can click/drag even if the rest is disabled
   return (
     <div
       ref={headerRef}
       className="cursor-grab active:cursor-grabbing w-full pointer-events-auto"
+      style={{ pointerEvents: "auto" }}
       onPointerDown={onPointerDown}
       onClick={(e) => e.preventDefault()}
     >
@@ -121,14 +116,27 @@ export interface SheetProps {
   children: ReactNode;
 }
 
+// Variants for the sheet's main motion.div
+// "hidden": sheet is off-screen at the bottom
+// "minimized": sheet is partially visible (60% down the screen)
+// "expanded": sheet is fully visible
+const sheetVariants: Variants = {
+  hidden: {
+    y: "100%",
+    transition: { duration: 0.2, ease: "easeInOut" },
+  },
+  minimized: {
+    y: "80%",
+    transition: { duration: 0.2, ease: "easeInOut" },
+  },
+  expanded: {
+    y: "0%",
+    transition: { duration: 0.2, ease: "easeInOut" },
+  },
+};
+
 /**
- * A "dumb" Sheet component:
- *   - uses AnimatePresence to animate open/close via the `isOpen` prop,
- *   - uses a vertical offset to represent minimized vs. expanded (`isMinimized`),
- *   - triggers onMinimize/onExpand callbacks upon drag gestures,
- *   - calls onDismiss once fully closed (after exit animation).
- *
- * The parent is the single source of truth for open/closed and minimized/expanded states.
+ * A Sheet (bottom drawer) with open/close/minimize states managed via Framer Motion.
  */
 export default function Sheet({
   isOpen,
@@ -146,40 +154,24 @@ export default function Sheet({
   children,
 }: SheetProps) {
   const zIndexClass = highPriority ? "z-[1000]" : "z-[999]";
-  const controls = useAnimation();
   const dragControls = useDragControls();
 
   // Refs for the header/body if we need to measure or handle overscroll.
   const headerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // We'll measure the header's height to adjust the minimized offset.
+  // We'll measure the header's height, though we might not do much with it.
   const [headerHeight, setHeaderHeight] = useState(64);
 
-  // measure again whenever these relevant props change
   useEffect(() => {
     if (!headerRef.current) return;
     const measuredHeight = headerRef.current.getBoundingClientRect().height;
-    // ensure at least 64px
     setHeaderHeight(Math.max(64, Math.ceil(measuredHeight)));
   }, [title, subtitle, headerContent, count, countLabel]);
 
-  // We do not forcibly shrink the sheet container in minimized mode.
-  // Instead, we simply offset it so that only ~the header remains visible.
-  // A single maxHeight can keep it from overfilling the screen.
-  const containerStyle: React.CSSProperties = {
-    height: "auto",
-    maxHeight: MAX_EXPANDED_HEIGHT,
-  };
-
-  // The offset for minimized mode, revealing just the measured header height.
-  const minimizedY = `calc(100% - ${headerHeight}px - env(safe-area-inset-bottom, 0px))`;
-
-  // 0 when expanded, minimizedY when minimized.
-  const finalY = isMinimized ? minimizedY : "0";
-
+ 
   /**
-   * Start drag when pointer is down on the header (via dragControls).
+   * Start drag when pointer is down on the header.
    */
   const handleHeaderPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -189,25 +181,36 @@ export default function Sheet({
   );
 
   /**
-   * Handle the end of a drag gesture to decide whether to minimize or expand.
+   * If the user drags enough to pass thresholds, we call onMinimize or onExpand.
    */
   const handleDragEnd = useCallback(
     (_e: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) => {
-      // If user drags down beyond threshold => minimize
-      if (info.offset.y > DRAG_THRESHOLD && !isMinimized) {
+      if (isMinimized && info.offset.y > 0) {
+        // If already minimized, dragging down further does nothing
+        return;
+      }
+
+      // If expanded (not minimized) and user drags down > 50px => minimize
+      if (!isMinimized && info.offset.y > 50) {
         onMinimize?.();
+        return;
       }
-      // If user drags up beyond threshold => expand
-      if (info.offset.y < -DRAG_THRESHOLD && isMinimized) {
+
+      // If minimized and user drags up < -80px => expand
+      if (isMinimized && info.offset.y < -80) {
         onExpand?.();
+        return;
       }
-      // Animate back to final position
-      controls.start({
-        y: 0,
-        transition: { duration: 0.2, ease: "easeInOut" },
-      });
+
+      // Optionally, dismiss the sheet if minimized and dragged down beyond 50px
+      // if (isMinimized && info.offset.y > 50) {
+      //   onDismiss?.();
+      //   return;
+      // }
+
+      // Otherwise, do nothing (remain in current state)
     },
-    [isMinimized, onMinimize, onExpand, controls]
+    [isMinimized, onMinimize, onExpand, onDismiss]
   );
 
   /**
@@ -233,7 +236,7 @@ export default function Sheet({
     // Update the stored pointer position
     target.dataset.touchStartY = touch.clientY.toString();
 
-    // If scrolling up at top, or scrolling down at bottom, prevent default to avoid bounce
+    // If scrolling up at top, or scrolling down at bottom, prevent bounce
     if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
       e.preventDefault();
     }
@@ -248,23 +251,20 @@ export default function Sheet({
     <AnimatePresence onExitComplete={onDismiss} initial={false}>
       {isOpen && (
         <motion.div
-        className={cn("fixed bottom-0 left-0 right-0", zIndexClass)}
-        key="sheet-container"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        style={{ width: "100%", maxHeight: "100%" }}
-      >
-        <motion.div
-          className="w-full pointer-events-auto"
-          style={{ ...containerStyle, y: finalY }}
-          animate={{ y: finalY }}
+          className={cn("fixed bottom-0 left-0 right-0", zIndexClass)}
+          key="sheet-container"
+          variants={sheetVariants}
+          initial={"hidden"}
+          animate={isOpen ? (isMinimized ? "minimized" : "expanded") : "hidden"}
+          exit="hidden"
           transition={{ duration: 0.2, ease: "easeInOut" }}
-          drag="y"
-          dragListener={false}
+          drag={isMinimized ? false : "y"}
+          dragConstraints={{
+            top: 0,         // can drag up (top) as far as you want
+            bottom: isMinimized ? 0 : 300  // if minimized, bottom=0 so you cannot drag down
+          }}
+          dragListener={!isMinimized}
           dragControls={dragControls}
-          dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={0.2}
           onDragEnd={handleDragEnd}
           dragMomentum={false}
@@ -274,6 +274,10 @@ export default function Sheet({
               "relative bg-black text-white rounded-t-lg border-t border-gray-800 shadow-xl flex flex-col select-none",
               className
             )}
+            style={{
+              // We'll rely on the motion variants for y positioning.
+              pointerEvents: "auto",
+            }}
           >
             <SheetHeader
               title={title}
@@ -284,12 +288,12 @@ export default function Sheet({
               headerRef={headerRef}
               onPointerDown={handleHeaderPointerDown}
             />
-      
-            {/* Body content: pointer‐events depends on minimized */}
+
+            {/* Body area: pointerEvents depends on isMinimized */}
             <div
               ref={bodyRef}
               className={cn(
-                "flex-grow overflow-y-auto overscroll-contain touchaction-none transition-all duration-200 px-3 pt-2 pb-3",
+                "flex-grow overflow-y-auto overscroll-contain px-3 pt-2 pb-3 transition-all duration-200",
                 isMinimized ? "pointer-events-none" : "pointer-events-auto"
               )}
               onTouchStart={(e) => {
@@ -303,7 +307,6 @@ export default function Sheet({
             </div>
           </div>
         </motion.div>
-      </motion.div>
       )}
     </AnimatePresence>
   );
