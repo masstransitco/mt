@@ -112,33 +112,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
   // -------------------------
-  // Local UI & Map States
-  // -------------------------
-  const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
-  const [overlayVisible, setOverlayVisible] = useState(true);
-  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
-  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
-  const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
-  const [markerIcons, setMarkerIcons] = useState<any>(null);
-
-  // Consolidated sheet states
-  const [sheetMode, setSheetMode] = useState<SheetMode>("none");
-  const [sheetMinimized, setSheetMinimized] = useState(false);
-
-  // For step transitions or animations if needed
-  const [isStepTransitioning, setIsStepTransitioning] = useState(false);
-
-  // Google Maps readiness
-  const [googleMapsReady, setGoogleMapsReady] = useState(false);
-
-  // QR Scanner
-  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
-
-  // Additional optional modals
-  const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
-  const [signInModalOpen, setSignInModalOpen] = useState(false);
-
-  // -------------------------
   // Redux States
   // -------------------------
   const stations = useAppSelector(selectStationsWithDistance);
@@ -167,6 +140,36 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Timers
   const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processedCarIdRef = useRef<number | null>(null);
+
+  // -------------------------
+  // Local UI & Map States
+  // -------------------------
+  const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
+  const [overlayVisible, setOverlayVisible] = useState(true);
+  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
+  const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
+  const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
+  const [markerIcons, setMarkerIcons] = useState<any>(null);
+
+  // Consolidated sheet states
+  const [sheetMode, setSheetMode] = useState<SheetMode>("none");
+  const [sheetMinimized, setSheetMinimized] = useState(false);
+  const disableMinimize = bookingStep === 1 || bookingStep === 3;
+
+  // For step transitions or animations if needed
+  const [isStepTransitioning, setIsStepTransitioning] = useState(false);
+
+  // Google Maps readiness
+  const [googleMapsReady, setGoogleMapsReady] = useState(false);
+
+  // QR Scanner
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+
+  // Additional optional modals
+  const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
+  const [signInModalOpen, setSignInModalOpen] = useState(false);
+
+  
 
   // -------------------------
   // Load Google Maps script
@@ -616,6 +619,7 @@ const renderSheetHeader = useCallback(() => {
             onClearDeparture={() => {
               dispatch(clearDepartureStation());
               dispatch(advanceBookingStep(1));
+              setSheetMinimized(false);
               dispatch(clearDispatchRoute());
               if (isQrScanStation && virtualStationId !== null) {
                 dispatch(removeStation(virtualStationId));
@@ -628,6 +632,7 @@ const renderSheetHeader = useCallback(() => {
             onClearArrival={() => {
               dispatch(clearArrivalStation());
               dispatch(advanceBookingStep(3));
+              setSheetMinimized(false);
               dispatch(clearRoute());
               toast.success("Arrival station cleared. Back to picking arrival.");
             }}
@@ -640,35 +645,38 @@ const renderSheetHeader = useCallback(() => {
 
           {/* The single sheet for both list & detail */}
           <Sheet
-          isOpen={sheetMode !== "none" && !isStepTransitioning}
-          isMinimized={sheetMinimized}
-          onMinimize={() => setSheetMinimized(true)}
-          onExpand={() => setSheetMinimized(false)}
-          onDismiss={() => setSheetMode("none")}
-          headerContent={
+            isOpen={sheetMode !== "none" && !isStepTransitioning}
+            isMinimized={sheetMinimized}
+            onMinimize={() => setSheetMinimized(true)}
+            onExpand={() => setSheetMinimized(false)}
+            onDismiss={() => setSheetMode("none")}
+            disableMinimize={disableMinimize}
+            headerContent={
          <div className="flex items-center w-full">
            <div className="flex-1 flex justify-center">
               {renderSheetHeader()}
           </div>
 
-      {sheetMinimized ? (
-        /* If minimized, show Maximize2 icon to restore */
-        <button
-          type="button"
-          className="p-1 text-gray-400 hover:text-gray-200"
-          onClick={() => setSheetMinimized(false)}
-        >
-          <Maximize2 size={20} />
-        </button>
-      ) : (
-        /* If expanded, show Minimize2 icon to collapse */
-        <button
-          type="button"
-          className="p-1 text-gray-400 hover:text-gray-200"
-          onClick={() => setSheetMinimized(true)}
-        >
-          <Minimize2 size={20} />
-        </button>
+      {bookingStep !== 1 && bookingStep !== 3 && (
+        sheetMinimized ? (
+          /* If minimized, show Maximize2 icon to restore */
+          <button
+            type="button"
+            className="p-1 text-gray-400 hover:text-gray-200"
+            onClick={() => { if (!disableMinimize) setSheetMinimized(false); }}
+          >
+            <Maximize2 size={20} />
+          </button>
+        ) : (
+          /* If expanded, show Minimize2 icon to collapse */
+          <button
+            type="button"
+            className="p-1 text-gray-400 hover:text-gray-200"
+            onClick={() => { if (!disableMinimize) setSheetMinimized(true); }}
+          >
+            <Minimize2 size={20} />
+          </button>
+        )
       )}
     </div>
             }
