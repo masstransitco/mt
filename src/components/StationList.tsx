@@ -3,6 +3,7 @@
 import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import type { StationFeature } from "@/store/stationsSlice";
+import ModalPortal from "./ModalPortal";
 import StationListModal from "./StationListModal";
 
 export interface StationListProps {
@@ -69,12 +70,15 @@ function StationList({
 
       {/* The full-list modal */}
       {isModalOpen && (
-        <StationListModal
-          stations={stations}
-          userLocation={userLocation}
-          onStationClick={onStationClick}
-          onClose={() => setIsModalOpen(false)}
-        />
+  <ModalPortal>
+    <StationListModal
+    isOpen={isModalOpen}
+      stations={stations}
+      userLocation={userLocation}
+      onStationClick={onStationClick}
+      onClose={() => setIsModalOpen(false)}
+    />
+  </ModalPortal>
       )}
     </>
   );
