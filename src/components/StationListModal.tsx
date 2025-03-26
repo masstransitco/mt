@@ -36,7 +36,7 @@ export default function StationListModal({
         transition={{ duration: 0.3, ease: "easeOut" }}
       >
         <motion.div
-          className="bg-gradient-to-b from-[#1c1c1e] to-[#2c2c2e] w-[90vw] max-w-md h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-[#38383a]"
+          className="bg-gradient-to-b from-[#1c1c1e] to-[#2c2c2e] w-[90vw] max-w-md h-[75vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-[#38383a]"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.98, opacity: 0 }}
