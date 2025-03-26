@@ -9,7 +9,7 @@ import { selectBookingStep, selectDepartureStationId, selectArrivalStationId, se
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectScannedCar } from "@/store/carSlice"
 import { clearDispatchRoute } from "@/store/dispatchSlice"
-import { setSearchLocation } from "@/store/userSlice"
+import { setSearchLocation, setUserLocation } from "@/store/userSlice"
 import { MapPinDown } from "@/components/ui/icons/MapPinDown"
 import { MapPinUp } from "@/components/ui/icons/MapPinUp"
 import { NearPin } from "@/components/ui/icons/NearPin"
@@ -349,6 +349,7 @@ function StationSelector({
         toast.dismiss(toastId)
         toast.success("Location found!")
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        dispatch(setUserLocation(loc))
         dispatch(setSearchLocation(loc))
         onAddressSearch(loc)
       },
