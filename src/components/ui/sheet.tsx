@@ -249,9 +249,10 @@ export default function Sheet({
     target.dataset.touchStartY = touch.clientY.toString();
 
     // If scrolling up at top, or scrolling down at bottom, prevent bounce
-    if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
-      e.preventDefault();
-    }
+    // Removed e.preventDefault() to allow child scrolling
+    // if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
+    //   e.preventDefault();
+    // }
   }, []);
 
   const handleBodyTouchEnd = useCallback((e: React.TouchEvent) => {
@@ -309,12 +310,7 @@ export default function Sheet({
                 "flex-grow overflow-y-auto overscroll-contain px-3 pt-2 pb-3 transition-all duration-200",
                 isMinimized ? "pointer-events-none" : "pointer-events-auto"
               )}
-              onTouchStart={(e) => {
-                const target = e.currentTarget as HTMLDivElement;
-                target.dataset.touchStartY = e.touches[0].clientY.toString();
-              }}
-              onTouchMove={handleBodyTouchMove}
-              onTouchEnd={handleBodyTouchEnd}
+              style={{ WebkitOverflowScrolling: "touch" }}
             >
               {children}
             </div>
