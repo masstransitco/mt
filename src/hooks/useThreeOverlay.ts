@@ -10,23 +10,14 @@ import {
   selectArrivalStationId,
   selectRouteDecoded,
 } from "@/store/bookingSlice";
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { selectUserLocation } from '@/store/userSlice';
 
 // -----------------------
 // 1. Building extrude helper
 // -----------------------
-/**
- * Creates a THREE.Group that has:
- *   - A Mesh (extruded shape)
- *   - An Edges line mesh
- * Both share the same center anchor so you can position the group at once.
- *
- * @param building - The 3D feature with polygon geometry
- * @param anchor - The anchor lat/lng/alt for local coordinate conversion
- * @param defaultColor - A default color for the building
- * @param index - Optional numeric index (e.g. for debugging)
- */
 function createExtrudedBuilding(
-  building: any, // or your Station3DFeature type
+  building: any,
   anchor: { lat: number; lng: number; altitude: number },
   defaultColor: THREE.Color,
   index: number
@@ -35,7 +26,6 @@ function createExtrudedBuilding(
   const buildingAltitude = 0;
   const buildingHeight = building.properties?.topHeight ?? 250;
 
-  // Convert polygon coords to local XY
   const absolutePoints: THREE.Vector3[] = [];
   let sumX = 0,
     sumY = 0;
@@ -74,7 +64,6 @@ function createExtrudedBuilding(
   };
   const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
-  // Create the mesh
   const material = new THREE.MeshBasicMaterial({
     color: defaultColor,
     transparent: true,
@@ -83,7 +72,6 @@ function createExtrudedBuilding(
   });
   const buildingMesh = new THREE.Mesh(geometry, material);
 
-  // Create the edges
   const edgesGeometry = new THREE.EdgesGeometry(geometry);
   const edgesMaterial = new THREE.LineBasicMaterial({
     color: 0x000000,
@@ -91,17 +79,13 @@ function createExtrudedBuilding(
   });
   const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
 
-  // Combine mesh + edges in a Group so we only manage one object
   const group = new THREE.Group();
   group.add(buildingMesh);
   group.add(edges);
 
-  // Store data in group.userData
-  // We'll store center position for easy re-positioning
   group.userData.centerPos = new THREE.Vector3(centerX, centerY, 0);
   group.userData.index = index;
 
-  // Also store building details for identification
   const objectId = building.properties?.ObjectId;
   group.userData.objectId = objectId;
   group.userData.buildingHeight = buildingHeight;
@@ -126,6 +110,7 @@ export function useThreeOverlay(
   const overlayRef = useRef<google.maps.WebGLOverlayView | null>(null);
 
   // references for scene/camera/renderer
+  const cursorRef = useRef<THREE.Group | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -133,15 +118,20 @@ export function useThreeOverlay(
   // Single array for building groups (mesh + edges)
   const buildingGroupsRef = useRef<THREE.Group[]>([]);
 
+  // Grab user location from store
+  const userLocation = useAppSelector(selectUserLocation);
+
   // Route tube references
   const routeTubeRef = useRef<THREE.Mesh | null>(null);
   const tubeMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
 
-  // Store route data to handle “scene not ready” case
+  // Store route data to handle "scene not ready" case
   const routeDataRef = useRef<Array<{ lat: number; lng: number }>>([]);
 
-  // Anchor for local coordinate transforms
+  // Anchor for local coordinate transforms (lat, lng, altitude)
   const anchorRef = useRef({ lat: 0, lng: 0, altitude: 0 });
+  // Keep track of previous userLocation to prevent re-anchoring unless changed
+  const prevLocationRef = useRef<google.maps.LatLngLiteral | null>(null);
 
   // Track initialization
   const isInitializedRef = useRef(false);
@@ -157,25 +147,18 @@ export function useThreeOverlay(
   const routeDecoded = useAppSelector(selectRouteDecoded);
 
   // Colors
-  const BUILDING_DEFAULT_COLOR = new THREE.Color(0xcccccc); // Light gray
-  const BUILDING_DEPARTURE_COLOR = new THREE.Color(0x3b82f6); // Blue
-  const BUILDING_ARRIVAL_COLOR = new THREE.Color(0xef4444); // Red
-  const ROUTE_TUBE_COLOR = new THREE.Color(0x3b82f6); // Blue for route tube
+  const BUILDING_DEFAULT_COLOR = new THREE.Color(0xcccccc);
+  const BUILDING_DEPARTURE_COLOR = new THREE.Color(0x3b82f6);
+  const BUILDING_ARRIVAL_COLOR = new THREE.Color(0xef4444);
+  const ROUTE_TUBE_COLOR = new THREE.Color(0x3b82f6);
 
-  // 4. Single method to “refresh or create” the route tube
+  // 4. Single method to "refresh or create" the route tube
   const refreshRouteTube = useCallback(() => {
-    // If no route data or scene is not ready, do nothing
     const path = routeDataRef.current;
-    if (
-      !path ||
-      path.length < 2 ||
-      !sceneRef.current ||
-      !overlayRef.current
-    ) {
+    if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
       return;
     }
 
-    // Make sure we have a material
     if (!tubeMaterialRef.current) {
       tubeMaterialRef.current = new THREE.MeshBasicMaterial({
         color: ROUTE_TUBE_COLOR,
@@ -189,14 +172,12 @@ export function useThreeOverlay(
     const anchor = anchorRef.current;
     const points = path.map(({ lat, lng }) => {
       const { x, y, z } = latLngAltToVector3(
-        { lat, lng, altitude: 5 }, // slight altitude above ground
+        { lat, lng, altitude: 5 },
         anchor
       );
       return new THREE.Vector3(x, y, z);
     });
 
-    // Build a TubeGeometry
-    // We'll keep the “custom curve” for smooth interpolation
     class CustomCurve extends THREE.Curve<THREE.Vector3> {
       private pts: THREE.Vector3[];
       constructor(pts: THREE.Vector3[]) {
@@ -228,41 +209,30 @@ export function useThreeOverlay(
       false
     );
 
-    // Create or update the routeTube mesh
     if (!routeTubeRef.current) {
-      // create new
       const tubeMesh = new THREE.Mesh(tubeGeom, tubeMaterialRef.current);
       tubeMesh.renderOrder = 300;
       tubeMesh.visible = true;
       routeTubeRef.current = tubeMesh;
       sceneRef.current.add(tubeMesh);
     } else {
-      // update existing
       routeTubeRef.current.visible = true;
       routeTubeRef.current.geometry.dispose();
       routeTubeRef.current.geometry = tubeGeom;
     }
 
-    // Force redraw
     overlayRef.current.requestRedraw();
   }, [ROUTE_TUBE_COLOR]);
 
   // Re-run refresh whenever routeDecoded changes
   useEffect(() => {
     if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
-      // Store the data in routeDataRef
       routeDataRef.current = routeDecoded;
     } else {
       routeDataRef.current = [];
     }
-    // If scene is already ready, just do a refresh
     refreshRouteTube();
-  }, [
-    routeDecoded,
-    departureStationId,
-    arrivalStationId,
-    refreshRouteTube,
-  ]);
+  }, [routeDecoded, departureStationId, arrivalStationId, refreshRouteTube]);
 
   // Callback for station selection
   const handleStationSelected = useCallback(
@@ -278,19 +248,16 @@ export function useThreeOverlay(
   const raycasterRef = useRef<THREE.Raycaster | null>(null);
   const invProjMatrixRef = useRef<THREE.Matrix4 | null>(null);
 
-  // pointer event removal
   const removePointerListenerRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!googleMap || isInitializedRef.current) return;
     isInitializedRef.current = true;
 
-    // Create & set up the WebGLOverlayView
     const overlay = new google.maps.WebGLOverlayView();
     overlayRef.current = overlay;
 
     overlay.onAdd = () => {
-      // Initialize scene & camera
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
@@ -299,16 +266,20 @@ export function useThreeOverlay(
       camera.updateProjectionMatrix();
       cameraRef.current = camera;
 
-      // Decide anchor from map center
+      // Decide anchor from map center but only if not set yet
       const center = googleMap.getCenter();
-      if (center) {
+      if (
+        center &&
+        anchorRef.current.lat === 0 &&
+        anchorRef.current.lng === 0 &&
+        anchorRef.current.altitude === 0
+      ) {
         anchorRef.current.lat = center.lat();
         anchorRef.current.lng = center.lng();
         anchorRef.current.altitude = 0;
       }
 
-      // BUILDINGS: extrude from stations3D
-      // Filter out invalid polygons
+      // BUILDINGS
       const validBuildings = buildings3D.filter((b: any) => {
         const coords = b.geometry.coordinates[0];
         if (!coords || coords.length < 3) return false;
@@ -316,7 +287,6 @@ export function useThreeOverlay(
         return Math.abs(lng) <= 180 && Math.abs(lat) <= 90;
       });
 
-      // For each valid building, create a group
       validBuildings.forEach((building, i) => {
         try {
           const group = createExtrudedBuilding(
@@ -325,8 +295,6 @@ export function useThreeOverlay(
             BUILDING_DEFAULT_COLOR,
             i
           );
-
-          // If we can find a matching station by ObjectId, store the stationId in group.userData
           const objectId = building.properties?.ObjectId;
           const matchingStation = stations.find(
             (s) => s.properties.ObjectId === objectId
@@ -334,8 +302,6 @@ export function useThreeOverlay(
           if (matchingStation) {
             group.userData.stationId = matchingStation.id;
           }
-
-          // Add group to the scene
           scene.add(group);
           buildingGroupsRef.current.push(group);
         } catch (err) {
@@ -343,7 +309,6 @@ export function useThreeOverlay(
         }
       });
 
-      // Once building groups are added, also refresh route if we have data
       refreshRouteTube();
     };
 
@@ -352,7 +317,6 @@ export function useThreeOverlay(
       const camera = cameraRef.current;
       if (!scene || !camera) return;
 
-      // Create a WebGL renderer
       const renderer = new THREE.WebGLRenderer({
         canvas: gl.canvas as HTMLCanvasElement,
         context: gl,
@@ -361,11 +325,76 @@ export function useThreeOverlay(
       renderer.autoClear = false;
       rendererRef.current = renderer;
 
-      // Create Raycaster
+      // Minimal ambient light so the model isn't black
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+      scene.add(ambientLight);
+
+      const loader = new GLTFLoader();
+      loader.load(
+        '/map/cursor.glb',
+        (gltf) => {
+          const originalModel = gltf.scene;
+          console.log("[useThreeOverlay] cursor.glb loaded, scale & rotation are being set.");
+          
+          // Create a group to hold both the original model and its edge effect
+          const cursorGroup = new THREE.Group();
+          
+          // Add the original model to the group
+          originalModel.scale.setScalar(50);
+          originalModel.rotation.set(Math.PI / 2, 0, Math.PI, 'ZXY');
+          cursorGroup.add(originalModel);
+          
+          // Create edges for visual appeal and depth
+          originalModel.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              // Create edge geometry from the mesh
+              const edgesGeometry = new THREE.EdgesGeometry(child.geometry);
+              const edgesMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x000000, 
+                linewidth: 2,
+                transparent: true,
+                opacity: 0.8
+              });
+              
+              const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+              
+              // Match the exact transformation of the mesh
+              edges.position.copy(child.position);
+              edges.rotation.copy(child.rotation);
+              edges.scale.copy(child.scale).multiplyScalar(1.02); // Slightly larger to prevent z-fighting
+              
+              // Use the same matrix world as the parent, ensuring proper alignment
+              edges.matrixAutoUpdate = child.matrixAutoUpdate;
+              if (!edges.matrixAutoUpdate) {
+                edges.matrix.copy(child.matrix);
+              }
+              
+              // Add the edges to the same parent as the mesh if it exists, otherwise to the model
+              if (child.parent) {
+                child.parent.add(edges);
+              } else {
+                originalModel.add(edges);
+              }
+            }
+          });
+          
+          // Set the cursor to be initially invisible
+          cursorGroup.visible = false;
+          
+          // Add the cursor group to the scene
+          scene.add(cursorGroup);
+          cursorRef.current = cursorGroup;
+          
+          // Initial visibility will be handled in the onDraw method
+          overlayRef.current?.requestRedraw();
+        },
+        undefined,
+        (error) => console.error('[useThreeOverlay] Cursor GLB load error:', error)
+      );
+
       raycasterRef.current = new THREE.Raycaster();
       invProjMatrixRef.current = new THREE.Matrix4();
 
-      // Ensure the canvas can receive pointer events
       const canvas = gl.canvas as HTMLCanvasElement;
       canvas.style.zIndex = "50";
       canvas.style.position = "absolute";
@@ -375,7 +404,6 @@ export function useThreeOverlay(
       canvas.style.height = "100%";
       canvas.style.pointerEvents = "auto";
 
-      // Pointer handler
       const handlePointerDown = (ev: PointerEvent) => {
         pickWithRay(ev);
       };
@@ -384,11 +412,9 @@ export function useThreeOverlay(
         canvas.removeEventListener("pointerdown", handlePointerDown);
       };
 
-      // If we already have route data, refresh the tube
       refreshRouteTube();
     };
 
-    // Ray-picking logic
     const pickWithRay = (ev: PointerEvent) => {
       const camera = cameraRef.current;
       const renderer = rendererRef.current;
@@ -402,7 +428,6 @@ export function useThreeOverlay(
       const ndcX = (x / rect.width) * 2 - 1;
       const ndcY = 1 - (y / rect.height) * 2;
 
-      // Manual approach: invert camera's projection matrix
       invProj.copy(camera.projectionMatrix).invert();
       const origin = new THREE.Vector3(ndcX, ndcY, 0).applyMatrix4(invProj);
       const farPos = new THREE.Vector3(ndcX, ndcY, 0.5).applyMatrix4(invProj);
@@ -411,23 +436,18 @@ export function useThreeOverlay(
       raycaster.ray.origin.copy(origin);
       raycaster.ray.direction.copy(direction);
 
-      // Intersect with building groups
-      // We only want hits on their children (meshes)
       const hits: THREE.Intersection[] = [];
       buildingGroupsRef.current.forEach((group) => {
         const groupHits = raycaster.intersectObjects(group.children, false);
-        // If groupHits found something, store the group in the object or pass it up
         groupHits.forEach((hit) => {
-          // We can attach group in the intersection for easier reference
           (hit as any).buildingGroup = group;
         });
         hits.push(...groupHits);
       });
 
       if (hits.length > 0) {
-        // Sort by distance
         hits.sort((a, b) => a.distance - b.distance);
-        const firstHit = hits[0] as any; // extended
+        const firstHit = hits[0] as any;
         const group = firstHit.buildingGroup;
         const stationId = group.userData.stationId;
         if (stationId) {
@@ -444,7 +464,6 @@ export function useThreeOverlay(
       const renderer = rendererRef.current;
       if (!scene || !camera || !renderer) return;
 
-      // 1) Update camera with Maps transform
       const anchor = anchorRef.current;
       const camMatArr = transformer.fromLatLngAltitude({
         lat: anchor.lat,
@@ -453,15 +472,12 @@ export function useThreeOverlay(
       });
       camera.projectionMatrix.fromArray(camMatArr);
 
-      // 2) Position each building group
+      // Update building positions and colors
       buildingGroupsRef.current.forEach((group) => {
         const c = group.userData.centerPos as THREE.Vector3;
         group.position.set(c.x, c.y, 0);
 
-        // Color the building based on station selection
         const stationId = group.userData.stationId;
-        // group.children[0] is the main extruded mesh,
-        // group.children[1] is edges
         const mesh = group.children[0] as THREE.Mesh;
         const mat = mesh.material as THREE.MeshBasicMaterial;
 
@@ -474,12 +490,33 @@ export function useThreeOverlay(
         }
       });
 
-      // 3) If we have a route tube, position it slightly above zero
+      // Handle cursor visibility and position in the same draw cycle
+      if (cursorRef.current) {
+        // Check if user location is valid
+        const hasValidLocation = !!(
+          userLocation && 
+          typeof userLocation.lat === 'number' && 
+          typeof userLocation.lng === 'number'
+        );
+        
+        // Set visibility based on location validity
+        cursorRef.current.visible = hasValidLocation;
+        
+        // Update position only if location is valid
+        if (hasValidLocation) {
+          const { lat, lng } = userLocation;
+          const { x, y, z } = latLngAltToVector3(
+            { lat, lng, altitude: 10 }, 
+            anchor
+          );
+          cursorRef.current.position.set(x, y, z);
+        }
+      }
+
       if (routeTubeRef.current) {
         routeTubeRef.current.position.z = 10;
       }
 
-      // 4) Render
       overlay.requestRedraw();
       renderer.setViewport(0, 0, gl.canvas.width, gl.canvas.height);
       renderer.render(scene, camera);
@@ -496,10 +533,8 @@ export function useThreeOverlay(
     overlay.onRemove = () => {
       const scene = sceneRef.current;
 
-      // remove pointer events
       removePointerListenerRef.current();
 
-      // remove route tube
       if (routeTubeRef.current) {
         scene?.remove(routeTubeRef.current);
         routeTubeRef.current.geometry.dispose();
@@ -510,7 +545,6 @@ export function useThreeOverlay(
         routeTubeRef.current = null;
       }
 
-      // dispose building groups
       buildingGroupsRef.current.forEach((group) => {
         scene?.remove(group);
         group.children.forEach((child) => {
@@ -525,7 +559,6 @@ export function useThreeOverlay(
       });
       buildingGroupsRef.current = [];
 
-      // cleanup scene
       if (sceneRef.current) {
         sceneRef.current.clear();
         sceneRef.current = null;
@@ -541,7 +574,6 @@ export function useThreeOverlay(
     overlay.setMap(googleMap);
 
     return () => {
-      // If the component unmounts, remove overlay
       overlay.setMap(null);
     };
   }, [
@@ -554,10 +586,16 @@ export function useThreeOverlay(
 
   // Trigger a redraw if station IDs change
   useEffect(() => {
-    if (overlayRef.current) {
+    overlayRef.current?.requestRedraw();
+  }, [departureStationId, arrivalStationId]);
+
+  // Consolidated cursor position tracking
+  useEffect(() => {
+    // Request a redraw whenever userLocation changes to ensure cursor updates
+    if (overlayRef.current && userLocation) {
       overlayRef.current.requestRedraw();
     }
-  }, [departureStationId, arrivalStationId]);
+  }, [userLocation]);
 
   return { overlayRef };
 }
