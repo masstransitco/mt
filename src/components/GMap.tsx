@@ -657,27 +657,29 @@ const renderSheetHeader = useCallback(() => {
               {renderSheetHeader()}
           </div>
 
-      {bookingStep !== 1 && bookingStep !== 3 && (
-        sheetMinimized ? (
-          /* If minimized, show Maximize2 icon to restore */
-          <button
-            type="button"
-            className="p-1 text-gray-400 hover:text-gray-200"
-            onClick={() => { if (!disableMinimize) setSheetMinimized(false); }}
-          >
-            <Maximize2 size={20} />
-          </button>
-        ) : (
-          /* If expanded, show Minimize2 icon to collapse */
-          <button
-            type="button"
-            className="p-1 text-gray-400 hover:text-gray-200"
-            onClick={() => { if (!disableMinimize) setSheetMinimized(true); }}
-          >
-            <Minimize2 size={20} />
-          </button>
-        )
-      )}
+          {(sheetMode === "list" || (bookingStep !== 1 && bookingStep !== 3)) && (
+  sheetMinimized ? (
+    <button
+      type="button"
+      className="p-1 text-gray-400 hover:text-gray-200"
+      onClick={() => {
+        if (!disableMinimize) setSheetMinimized(false);
+      }}
+    >
+      <Maximize2 size={20} />
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="p-1 text-gray-400 hover:text-gray-200"
+      onClick={() => {
+        if (!disableMinimize) setSheetMinimized(true);
+      }}
+    >
+      <Minimize2 size={20} />
+    </button>
+  )
+)}
     </div>
             }
           >
