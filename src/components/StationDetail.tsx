@@ -170,7 +170,6 @@ function StationDetail({
         ]}
         name={activeStation.properties.Place}
         address={activeStation.properties.Address}
-        className="h-44 w-full"
       />
 
       {/* Station info/stats */}
