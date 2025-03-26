@@ -120,6 +120,7 @@ const MapCard: React.FC<MapCardProps> = ({
 
   // Initialize or reinitialize the map when needed
   useEffect(() => {
+    if (!expanded) return;
     let currentMapContainer = mapContainer.current;
     if (!currentMapContainer) return;
 
@@ -407,7 +408,25 @@ const MapCard: React.FC<MapCardProps> = ({
     }
   }
 
-  // Regular inline rendering when not expanded
+  if (!expanded) {
+    return (
+      <div className={cn("relative overflow-hidden rounded-lg shadow-lg border border-gray-700 pointer-events-auto", className)}>
+        {/* Simple static snippet content here */}
+        <div className="p-3 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
+          <div>
+            <div className="text-white text-sm font-medium">{name}</div>
+            <div className="text-gray-200 text-xs mt-0.5">{address}</div>
+          </div>
+          <button
+            onClick={(e) => toggleExpanded(e)}
+            className="ml-2 bg-gray-800/80 p-1.5 rounded-full text-white hover:bg-gray-700/80"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
   return mapCard;
 };
 
