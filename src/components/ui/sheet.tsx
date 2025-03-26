@@ -167,6 +167,11 @@ export default function Sheet({
   // Refs for the header/body if we need to measure or handle overscroll.
   const headerRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  
+  // Track if we're in a scrolling container
+  const isDraggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const [preventDrag, setPreventDrag] = useState(false);
 
   // We'll measure the header's height, though we might not do much with it.
   const [headerHeight, setHeaderHeight] = useState(64);
@@ -187,20 +192,48 @@ export default function Sheet({
         e.preventDefault();
         return;
       }
+      isDraggingRef.current = true;
+      startYRef.current = e.clientY;
       dragControls.start(e);
     },
     [dragControls, isMinimized]
   );
 
   /**
+   * Check if we're in a scrollable area that's not at the top
+   */
+  const isInScrollableContent = useCallback((target: HTMLElement | null): boolean => {
+    if (!target) return false;
+    
+    // Find closest scrollable parent
+    const scrollableParent = target.closest('.overflow-y-auto, .overflow-auto');
+    if (!scrollableParent) return false;
+    
+    // Check if we're not at the top of the scroll
+    return scrollableParent.scrollTop > 0;
+  }, []);
+
+  /**
    * If the user drags enough to pass thresholds, we call onMinimize.
-   * (Removed expand from minimized - user must use the expand button)
    */
   const handleDragEnd = useCallback(
-    (_e: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) => {
+    (e: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) => {
+      // Reset dragging state
+      isDraggingRef.current = false;
+      setPreventDrag(false);
+      
+      // Get the target element
+      const target = e.target as HTMLElement;
+      
+      // Don't minimize the sheet if we're in a scrollable area that's not at the top
+      if (isInScrollableContent(target) && info.offset.y > 0) {
+        return;
+      }
+      
       if (disableMinimize) {
         return;
       }
+      
       if (isMinimized && info.offset.y > 0) {
         // If already minimized, dragging down further does nothing
         return;
@@ -212,59 +245,37 @@ export default function Sheet({
         return;
       }
 
-      // Removed logic for expanding from minimized
-
-      // Optionally, dismiss the sheet if minimized and dragged down beyond 50px
-      // if (isMinimized && info.offset.y > 50) {
-      //   onDismiss?.();
-      //   return;
-      // }
-
-      // Otherwise, do nothing (remain in current state)
+      // If minimized and user drags up > 50px => expand
+      if (isMinimized && info.offset.y < -50) {
+        onExpand?.();
+        return;
+      }
     },
-    [isMinimized, disableMinimize, onMinimize]
+    [isMinimized, disableMinimize, onMinimize, onExpand, isInScrollableContent]
   );
 
   /**
-   * Prevent iOS overscroll bounce in the body content.
+   * Handle initial touchstart on the body to determine if we should allow dragging
    */
-  const handleBodyTouchMove = useCallback((e: React.TouchEvent) => {
-    const target = e.currentTarget as HTMLDivElement;
-    const scrollTop = target.scrollTop;
-    const scrollHeight = target.scrollHeight;
-    const clientHeight = target.clientHeight;
-
-    const isAtTop = scrollTop <= 0;
-    const isAtBottom = Math.abs(scrollHeight - scrollTop - clientHeight) < 1;
-
-    const touch = e.touches[0];
-    const touchStartY = target.dataset.touchStartY
-      ? parseFloat(target.dataset.touchStartY)
-      : touch.clientY;
-
-    const isScrollingUp = touch.clientY > touchStartY;
-    const isScrollingDown = touch.clientY < touchStartY;
-
-    // Update the stored pointer position
-    target.dataset.touchStartY = touch.clientY.toString();
-
-    // If scrolling up at top, or scrolling down at bottom, prevent bounce
-    // Removed e.preventDefault() to allow child scrolling
-    // if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
-    //   e.preventDefault();
-    // }
-  }, []);
-
-  const handleBodyTouchEnd = useCallback((e: React.TouchEvent) => {
-    const target = e.currentTarget as HTMLDivElement;
-    delete target.dataset.touchStartY;
-  }, []);
+  const handleBodyTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    
+    // If we're in a scrollable area that's not at the top,
+    // prevent dragging the sheet initially
+    if (isInScrollableContent(target)) {
+      setPreventDrag(true);
+    } else {
+      setPreventDrag(false);
+    }
+  }, [isInScrollableContent]);
 
   return (
     <AnimatePresence onExitComplete={onDismiss} initial={false}>
       {isOpen && (
         <motion.div
-          style={{ touchAction: isMinimized ? "none" : "auto" }}
+          style={{ 
+            touchAction: isMinimized ? "none" : "auto",
+          }}
           className={cn("fixed bottom-0 left-0 right-0", zIndexClass)}
           key="sheet-container"
           variants={sheetVariants}
@@ -272,12 +283,12 @@ export default function Sheet({
           animate={isOpen ? (isMinimized ? "minimized" : "expanded") : "hidden"}
           exit="hidden"
           transition={{ duration: 0.2, ease: "easeInOut" }}
-          drag={isMinimized ? false : "y"}
+          drag={isMinimized || preventDrag ? false : "y"}
           dragConstraints={{
             top: 0,         // can drag up (top) as far as you want
             bottom: isMinimized ? 0 : 300,  // if minimized, bottom=0 so you cannot drag down
           }}
-          dragListener={!isMinimized}
+          dragListener={!isMinimized && !preventDrag}
           dragControls={dragControls}
           dragElastic={0.2}
           onDragEnd={handleDragEnd}
@@ -303,14 +314,19 @@ export default function Sheet({
               onPointerDown={handleHeaderPointerDown}
             />
 
-            {/* Body area: pointerEvents depends on isMinimized */}
+            {/* Body area: always enable pointer events but handle scrolling properly */}
             <div
               ref={bodyRef}
               className={cn(
-                "flex-grow overflow-y-auto overscroll-contain px-3 pt-2 pb-3 transition-all duration-200",
-                isMinimized ? "pointer-events-none" : "pointer-events-auto"
+                "flex-grow overflow-y-auto overscroll-contain px-3 pt-2 pb-3 transition-all duration-200 sheet-body",
+                isMinimized ? "opacity-50" : "opacity-100"
               )}
-              style={{ WebkitOverflowScrolling: "touch" }}
+              style={{ 
+                WebkitOverflowScrolling: "touch",
+                pointerEvents: isMinimized ? "none" : "auto", 
+                touchAction: "pan-y" 
+              }}
+              onTouchStart={handleBodyTouchStart}
             >
               {children}
             </div>
