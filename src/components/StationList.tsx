@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import type { StationFeature } from "@/store/stationsSlice";
 
@@ -9,9 +9,7 @@ export interface StationListProps {
   stations: StationFeature[];
   /** Callback when the user selects a station. */
   onStationClick?: (station: StationFeature) => void;
-  /** Whether the list is visible. Parent can hide the sheet altogether if needed. */
-  isVisible?: boolean;
-  /** Optional: user location if you want to display distances or highlight the closest station. */
+  /** Optional: user location if you want to display distances. */
   userLocation?: { lat: number; lng: number } | null;
   /** Additional CSS class names for container. */
   className?: string;
@@ -19,28 +17,43 @@ export interface StationListProps {
 
 /**
  * StationList:
- * - Renders a scrollable list of stations.
- * - Expects the parent to handle open/close or step logic.
- * - No overscroll or sheet logic inside; parent’s sheet handles that.
+ * - Shows only 5 stations at first, and loads more as user scrolls.
+ * - Uses a single <motion.div>, so it stays in sync with Framer Motion.
+ * - The parent Sheet controls minimize/expand states and overall positioning.
  */
 function StationList({
   stations,
   onStationClick,
-  isVisible = true,
   userLocation,
   className = "",
 }: StationListProps) {
-  if (!isVisible || !stations?.length) return null;
+  if (!stations?.length) return null;
+
+  // Track how many stations are currently displayed
+  const [visibleCount, setVisibleCount] = useState(5);
+
+  // On scroll, if near the bottom, load 5 more stations
+  const handleScroll = useCallback(
+    (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      if (el.scrollTop + el.clientHeight + 50 >= el.scrollHeight) {
+        setVisibleCount((prev) => Math.min(prev + 5, stations.length));
+      }
+    },
+    [stations.length]
+  );
 
   return (
     <motion.div
-      className={className}
+      // Add overflow and a max-height so only ~5 items appear initially
+      // (adjust as needed for your design)
+      className={`${className} overflow-y-auto max-h-[400px]`}
+      onScroll={handleScroll}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
     >
-      {stations.map((station) => {
-        // Force null if userLocation is undefined
+      {stations.slice(0, visibleCount).map((station) => {
         const distanceDisplay = computeDistanceDisplay(userLocation ?? null, station);
         return (
           <button
@@ -62,38 +75,27 @@ function StationList({
   );
 }
 
-/** Utility to compute a simple distance label if userLocation is available. */
+/** Example distance calculation, returns e.g. "245m away" or "2.5km away". */
 function computeDistanceDisplay(
   userLocation: { lat: number; lng: number } | null,
   station: StationFeature
 ): string | null {
   if (!userLocation) return null;
 
-  // Make sure station.geometry.coordinates is [lng, lat]:
   const [stationLng, stationLat] = station.geometry.coordinates;
+  const dx = stationLng - userLocation.lng;
+  const dy = stationLat - userLocation.lat;
+  const distanceInDegrees = Math.sqrt(dx * dx + dy * dy);
 
-  const R = 6371e3; // Earth radius in meters
-  const toRad = (val: number) => (val * Math.PI) / 180;
+  // Roughly convert degrees to meters (111 km per degree).
+  const distanceInMeters = distanceInDegrees * 111000;
 
-  const lat1 = toRad(userLocation.lat);
-  const lat2 = toRad(stationLat);
-  const deltaLat = toRad(stationLat - userLocation.lat);
-  const deltaLng = toRad(stationLng - userLocation.lng);
-
-  const a =
-    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      Math.sin(deltaLng / 2) *
-      Math.sin(deltaLng / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const distance = R * c; // in meters
-
-  if (distance < 1000) {
-    return `${Math.round(distance)}m away`;
+  if (distanceInMeters < 1000) {
+    return `${distanceInMeters.toFixed(0)}m away`;
+  } else {
+    const distanceInKm = distanceInMeters / 1000;
+    return `${distanceInKm.toFixed(1)}km away`;
   }
-  return `${(distance / 1000).toFixed(1)}km away`;
 }
 
 export default memo(StationList);

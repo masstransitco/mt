@@ -682,11 +682,10 @@ const renderSheetHeader = useCallback(() => {
             }
           >
             {sheetMode === "list" && (
-              <div className="space-y-2 overflow-y-auto max-h-[60vh] px-4 py-2">
+              <div className="space-y-2 px-4 py-2">
                 <StationList
                   stations={sortedStations}
                   userLocation={userLocation}
-                  isVisible={!sheetMinimized}
                   onStationClick={handleStationSelectedFromList}
                   className="space-y-2"
                 />
