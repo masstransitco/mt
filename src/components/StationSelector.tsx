@@ -406,7 +406,8 @@ function StationSelector({
 
   return (
     <>
-      <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto">
+      <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto 
+                 px-4 pt-4">
         <div className="flex flex-col w-full select-none">
           {/* Station Inputs Container */}
           <motion.div
