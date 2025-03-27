@@ -194,7 +194,7 @@ const MapCard: React.FC<MapCardProps> = ({
         maxZoom: 19,
       });
 
-      map.current.on("load", () => {
+      map.current!.on("load", () => {
         setMapInitialized(true);
 
         // Add a base 3D buildings layer
