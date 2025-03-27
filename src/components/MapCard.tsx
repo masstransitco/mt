@@ -23,11 +23,11 @@ interface MapCardProps {
   address: string;               // Station address
   className?: string;
 
-  // NEW/CHANGED: external expand control
+  // If you want external expand control:
   expanded?: boolean;
   onToggleExpanded?: (newVal: boolean) => void;
 
-  // NEW/CHANGED: hide the default expand button in the card
+  // Hide the default expand button
   hideDefaultExpandButton?: boolean;
 }
 
@@ -38,7 +38,6 @@ const MapCard: React.FC<MapCardProps> = ({
   name,
   address,
   className,
-  // NEW/CHANGED:
   expanded: externalExpanded,
   onToggleExpanded,
   hideDefaultExpandButton = false
@@ -46,39 +45,35 @@ const MapCard: React.FC<MapCardProps> = ({
   const mapContainer = useRef<HTMLDivElement>(null);
   const portalContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const marker = useRef<mapboxgl.Marker | null>(null);
 
-  // If the parent is controlling expansion, default to that. Otherwise, use our own local state
+  // Local expand state if parent is not controlling expansion
   const [localExpanded, setLocalExpanded] = useState(false);
   const isExpanded =
     typeof externalExpanded === "boolean" ? externalExpanded : localExpanded;
 
   const [mapInitialized, setMapInitialized] = useState(false);
-  const animFrameRef = useRef<number | null>(null);
   const [, setRenderTrigger] = useState(0);
 
-  // If parent's externalExpanded changes, keep our local state in sync
+  // Keep local state in sync if external prop changes
   useEffect(() => {
     if (typeof externalExpanded === "boolean") {
       setLocalExpanded(externalExpanded);
     }
   }, [externalExpanded]);
 
-  // NEW: A function that toggles expansion
   const toggleExpanded = useCallback(
     (e?: React.MouseEvent) => {
       if (e) {
         e.stopPropagation();
         e.preventDefault();
       }
-      // If the parent provided a callback, call it with the new value
       if (onToggleExpanded) {
         onToggleExpanded(!isExpanded);
       } else {
         setLocalExpanded((prev) => !prev);
       }
 
-      // Force a render re-check
+      // Force a size re-check for the map
       setTimeout(() => {
         setRenderTrigger((prev) => prev + 1);
         if (map.current) {
@@ -89,10 +84,9 @@ const MapCard: React.FC<MapCardProps> = ({
     [isExpanded, onToggleExpanded]
   );
 
-  // Ensure portal div exists and persists
+  // Ensure a portal div exists in the DOM (for expanded mode)
   useEffect(() => {
     let existingPortal = document.getElementById(MAP_PORTAL_ID) as HTMLDivElement | null;
-
     if (existingPortal) {
       portalContainer.current = existingPortal;
     } else if (typeof document !== "undefined") {
@@ -108,154 +102,27 @@ const MapCard: React.FC<MapCardProps> = ({
       document.body.appendChild(div);
       portalContainer.current = div;
     }
-
     return () => {
-      // we do NOT remove the portal from the DOM here,
-      // so it can be reused if MapCard remounts
+      // Do not remove the portal from the DOM so it can be reused
       portalContainer.current = null;
     };
   }, []);
 
+  // Helper to get a bounding box near the point
   const getBoundingBox = (center: [number, number], radiusKm: number = 0.25) => {
     const earthRadiusKm = 6371;
     const latRadian = (center[1] * Math.PI) / 180;
     const latDelta = (radiusKm / earthRadiusKm) * (180 / Math.PI);
     const lngDelta =
       (radiusKm / earthRadiusKm) * (180 / Math.PI) / Math.cos(latRadian);
+
     return new mapboxgl.LngLatBounds(
       [center[0] - lngDelta, center[1] - latDelta], // SW
       [center[0] + lngDelta, center[1] + latDelta]  // NE
     );
   };
 
-  const animateMarker = () => {
-    if (!marker.current) return;
-    const markerEl = marker.current.getElement();
-
-    const scaleFactor = 1.1;
-    const duration = 1500;
-    const startTime = Date.now();
-
-    const animate = () => {
-      if (!marker.current) return;
-      const elapsed = Date.now() - startTime;
-      const progress = (elapsed % duration) / duration;
-
-      // sine wave from 0 -> 1 -> 0
-      const scale =
-        1 +
-        (Math.sin(progress * Math.PI * 2) * 0.5 + 0.5) * (scaleFactor - 1);
-
-      const currentTransform = markerEl.style.transform || "";
-      const scaleMatch = currentTransform.match(/scale\([0-9.]+\)/);
-      const newTransform = scaleMatch
-        ? currentTransform.replace(scaleMatch[0], `scale(${scale})`)
-        : `${currentTransform} scale(${scale})`;
-
-      markerEl.style.transform = newTransform;
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    animFrameRef.current = requestAnimationFrame(animate);
-  };
-
-  const destroyMarkerAnimation = () => {
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = null;
-    }
-  };
-
-  // (Re)initialize the map whenever expanded is true
-  useEffect(() => {
-    if (!isExpanded) return;
-    let currentMapContainer = mapContainer.current;
-    if (!currentMapContainer) return;
-
-    // Clean up any existing map
-    if (map.current) {
-      destroyMarkerAnimation();
-      map.current.remove();
-      map.current = null;
-      marker.current = null;
-    }
-
-    // Set bounding box for focus
-    const bounds = getBoundingBox(coordinates);
-
-    try {
-      // Create a new map instance
-      map.current = new mapboxgl.Map({
-        container: currentMapContainer,
-        style: "mapbox://styles/mapbox/dark-v11",
-        center: coordinates,
-        zoom: 12.5,
-        pitch: 40,
-        bearing: 0,
-        interactive: true,
-        attributionControl: false,
-        maxBounds: bounds,
-        minZoom: 11,
-        maxZoom: 19,
-      });
-
-      map.current.on("load", () => {
-        setMapInitialized(true);
-
-        // Attempt to add 3D buildings
-        try {
-          if (map.current) {
-            map.current.addLayer({
-              id: "3d-buildings",
-              source: "composite",
-              "source-layer": "building",
-              type: "fill-extrusion",
-              minzoom: 14,
-              paint: {
-                "fill-extrusion-color": "#aaa",
-                "fill-extrusion-height": ["get", "height"],
-                "fill-extrusion-base": ["get", "min_height"],
-                "fill-extrusion-opacity": 0.6,
-              },
-            });
-          }
-        } catch (error) {
-          console.warn("Could not add 3D buildings layer:", error);
-        }
-
-        // Add a marker
-        if (map.current) {
-          marker.current = new mapboxgl.Marker({
-            color: "#3b82f6",
-          })
-            .setLngLat(coordinates)
-            .addTo(map.current);
-
-          // Start marker pulsing
-          animateMarker();
-
-          // "Fly in" or "zoom in" effect
-          startEntranceAnimation(map.current);
-        }
-      });
-
-      map.current.on("error", (e) => {
-        console.error("Mapbox error:", e);
-      });
-    } catch (err) {
-      console.error("Error initializing Mapbox:", err);
-    }
-
-    return () => {
-      destroyMarkerAnimation();
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-      marker.current = null;
-    };
-  }, [coordinates, isExpanded]);
-
+  // Smooth zoom/pitch/bearing entrance
   const startEntranceAnimation = (mapInstance: mapboxgl.Map) => {
     const startZoom = mapInstance.getZoom();
     const startBearing = mapInstance.getBearing();
@@ -297,6 +164,112 @@ const MapCard: React.FC<MapCardProps> = ({
       : 1 - Math.pow(-2 * t + 2, 3) / 2;
   };
 
+  // Initialize the map only when expanded
+  useEffect(() => {
+    if (!isExpanded) return;
+    const currentMapContainer = mapContainer.current;
+    if (!currentMapContainer) return;
+
+    // Clean up any existing map
+    if (map.current) {
+      map.current.remove();
+      map.current = null;
+    }
+
+    const bounds = getBoundingBox(coordinates);
+
+    try {
+      // Create a new map instance
+      map.current = new mapboxgl.Map({
+        container: currentMapContainer,
+        style: "mapbox://styles/mapbox/dark-v11",
+        center: coordinates,
+        zoom: 12.5,
+        pitch: 40,
+        bearing: 0,
+        interactive: true,
+        attributionControl: false,
+        maxBounds: bounds,
+        minZoom: 11,
+        maxZoom: 19,
+      });
+
+      map.current.on("load", () => {
+        setMapInitialized(true);
+
+        // Add a base 3D buildings layer
+        try {
+          map.current?.addLayer({
+            id: "3d-buildings-base",
+            source: "composite",
+            "source-layer": "building",
+            type: "fill-extrusion",
+            minzoom: 14,
+            paint: {
+              "fill-extrusion-color": "#aaa",
+              "fill-extrusion-height": ["get", "height"],
+              "fill-extrusion-base": ["get", "min_height"],
+              "fill-extrusion-opacity": 0.6,
+            },
+          });
+        } catch (error) {
+          console.warn("Could not add 3D buildings layer:", error);
+        }
+
+        // 1) Convert lng/lat to screen coordinates for query
+        const pixelPoint = map.current?.project(coordinates);
+        if (!pixelPoint) return;
+
+        // 2) Query buildings at that screen coordinate
+        const buildingFeatures = map.current?.queryRenderedFeatures(pixelPoint, {
+          layers: ["3d-buildings-base"], 
+        });
+
+        if (buildingFeatures && buildingFeatures.length > 0) {
+          const buildingFeature = buildingFeatures[0];
+          // 3) Add a highlight fill-extrusion for just this building
+          try {
+            map.current?.addLayer(
+              {
+                id: "highlighted-building",
+                type: "fill-extrusion",
+                source: "composite",
+                "source-layer": "building",
+                filter: ["==", ["id"], buildingFeature.id],
+                paint: {
+                  "fill-extrusion-color": "#3b82f6", // your highlight color
+                  "fill-extrusion-height": ["get", "height"],
+                  "fill-extrusion-base": ["get", "min_height"],
+                  "fill-extrusion-opacity": 0.9,
+                },
+              },
+              "3d-buildings-base"
+            );
+          } catch (err) {
+            console.warn("Error adding highlight layer:", err);
+          }
+        }
+
+        // Fly/zoom in effect
+        startEntranceAnimation(map.current);
+      });
+
+      map.current.on("error", (e) => {
+        console.error("Mapbox error:", e);
+      });
+    } catch (err) {
+      console.error("Error initializing Mapbox:", err);
+    }
+
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, [coordinates, isExpanded]);
+
+  // Resize map on window resize
   useEffect(() => {
     const handleResize = () => {
       if (map.current) {
@@ -307,6 +280,7 @@ const MapCard: React.FC<MapCardProps> = ({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Close expanded mode on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isExpanded) {
@@ -317,6 +291,7 @@ const MapCard: React.FC<MapCardProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isExpanded, toggleExpanded]);
 
+  // Force map resize if re-rendered while expanded
   useEffect(() => {
     if (isExpanded && map.current) {
       const resizeTimer = setTimeout(() => {
@@ -326,7 +301,7 @@ const MapCard: React.FC<MapCardProps> = ({
     }
   }, [isExpanded]);
 
-  // The card in expanded mode
+  // The main map card element
   const mapCard = (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -360,14 +335,13 @@ const MapCard: React.FC<MapCardProps> = ({
         className="absolute inset-0 bg-gray-800"
         style={{ width: "100%", height: "100%" }}
       />
-
       {!mapInitialized && isExpanded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-800/70">
           <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
         </div>
       )}
 
-      {/* NEW/CHANGED: only show the built-in expand button if hideDefaultExpandButton is false */}
+      {/* Built-in expand/minimize button (unless hidden) */}
       {!hideDefaultExpandButton && (
         <div className="absolute top-2 right-2 flex space-x-2 z-50">
           <button
@@ -400,16 +374,15 @@ const MapCard: React.FC<MapCardProps> = ({
     </motion.div>
   );
 
-  // If expanded, render through the portal
+  // If expanded, render into the portal to take up the screen
   if (isExpanded) {
     const portalEl =
-      portalContainer.current ||
-      document.getElementById(MAP_PORTAL_ID);
+      portalContainer.current || document.getElementById(MAP_PORTAL_ID);
 
     if (portalEl) {
       return (
         <>
-          {/* placeholder in the original layout */}
+          {/* Leave a placeholder in the original layout */}
           <div className={cn("h-52", className)} />
 
           {createPortal(
@@ -433,7 +406,7 @@ const MapCard: React.FC<MapCardProps> = ({
     }
   }
 
-  // Not expanded => show small snippet
+  // If not expanded, show the smaller snippet
   return (
     <div
       className={cn(
@@ -446,7 +419,6 @@ const MapCard: React.FC<MapCardProps> = ({
           <div className="text-white text-sm font-medium">{name}</div>
           <div className="text-gray-200 text-xs mt-0.5">{address}</div>
         </div>
-        {/* If we're hiding the default expand button, don't show it. */}
         {!hideDefaultExpandButton && (
           <button
             onClick={(e) => toggleExpanded(e)}
