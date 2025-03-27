@@ -11,10 +11,9 @@ import React, {
 import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import dynamic from "next/dynamic";
-import * as THREE from "three"; // For potential 3D logic (not directly used here)
+import * as THREE from "three"; // Potential 3D usage
 import { Minimize2, Maximize2 } from "lucide-react";
 
-// Redux & store hooks
 import type { Car } from "@/types/cars";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
@@ -44,30 +43,24 @@ import {
   fetchRoute,
   selectDepartureStationId,
   selectArrivalStationId,
-  selectArrivalStation,
-  selectDepartureStation,
-  clearDepartureStation,
-  clearArrivalStation,
-  clearRoute,
-  resetBookingFlow,
-  selectRouteDecoded,
   selectIsQrScanStation,
   selectQrVirtualStationId,
   clearQrStationData,
   selectDepartureStation as selectDepartureStationAction,
+  selectArrivalStation,
+  clearArrivalStation,
+  clearDepartureStation,
+  clearRoute,
+  resetBookingFlow,
 } from "@/store/bookingSlice";
 
 import {
   fetchDispatchDirections,
   clearDispatchRoute,
-  selectDispatchRoute,
-  selectDispatchRouteDecoded,
 } from "@/store/dispatchSlice";
 
-// 3D buildings
 import { fetchStations3D } from "@/store/stations3DSlice";
 
-// UI Components
 import Sheet from "@/components/ui/sheet";
 import StationSelector from "./StationSelector";
 import { LoadingSpinner } from "./LoadingSpinner";
@@ -75,34 +68,24 @@ import StationDetail from "./StationDetail";
 import StationList from "./StationList";
 import QrScannerOverlay from "@/components/ui/QrScannerOverlay";
 import SignInModal from "@/components/ui/SignInModal";
-
-// Custom sheet-header items
-import PickupTime from "@/components/ui/PickupTime";
-import FareDisplay from "@/components/ui/FareDisplay";
 import PickupGuide from "@/components/ui/PickupGuide";
-import StationsDisplay from "@/components/ui/StationsDisplay";
-import CarPlate from "@/components/ui/CarPlate";
 
-// **Map constants** and the custom 3D overlay hook
-import {
-  LIBRARIES,
-  MAP_CONTAINER_STYLE,
-  DEFAULT_CENTER,
-  DEFAULT_ZOOM,
-  createMapOptions,
-  createMarkerIcons,
-} from "@/constants/map";
+import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
+import StationsDisplay from "@/components/ui/StationsDisplay";
+import CarPlate from "@/components/ui/CarPlate";
+import PickupTime from "@/components/ui/PickupTime";
+import FareDisplay from "@/components/ui/FareDisplay";
 
-// Lazy‐load GaussianSplatModal
+// Lazy-load GaussianSplatModal
 const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
   suspense: true,
 });
 
-// A single mode for the sheet: "none" | "list" | "detail"
-type SheetMode = "none" | "list" | "detail";
+// The three modes for controlling the sheet body content
+type SheetMode = "guide" | "list" | "detail";
 
 interface GMapProps {
   googleApiKey: string;
@@ -127,19 +110,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
   const scannedCar = useAppSelector(selectScannedCar);
-  const dispatchRoute = useAppSelector(selectDispatchRoute);
 
-  // Possibly QR-based "virtual station" references
   const isQrScanStation = useAppSelector(selectIsQrScanStation);
   const virtualStationId = useAppSelector(selectQrVirtualStationId);
-
-  // Route data
-  const decodedPath = useAppSelector(selectRouteDecoded);
-  const decodedDispatchPath = useAppSelector(selectDispatchRouteDecoded);
-
-  // Timers
-  const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const processedCarIdRef = useRef<number | null>(null);
 
   // -------------------------
   // Local UI & Map States
@@ -149,14 +122,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
-  const [markerIcons, setMarkerIcons] = useState<any>(null);
 
-  // Consolidated sheet states
-  const [sheetMode, setSheetMode] = useState<SheetMode>("none");
+  // Single state for the sheet mode
+  const [sheetMode, setSheetMode] = useState<SheetMode>("guide");
   const [sheetMinimized, setSheetMinimized] = useState(false);
-  const disableMinimize = bookingStep === 1 || bookingStep === 3;
 
-  // For step transitions or animations if needed
+  // For step transitions or animations (if you need them)
   const [isStepTransitioning, setIsStepTransitioning] = useState(false);
 
   // Google Maps readiness
@@ -169,7 +140,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [isSplatModalOpen, setIsSplatModalOpen] = useState(false);
   const [signInModalOpen, setSignInModalOpen] = useState(false);
 
-  
+  // Timers
+  const routeFetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processedCarIdRef = useRef<number | null>(null);
+
+  // Minimizing is blocked in steps 1 & 3 (or wherever else you want)
+  const disableMinimize = false; // Always allow minimize
 
   // -------------------------
   // Load Google Maps script
@@ -220,12 +196,35 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Hide spinner when all loaded
+  // Hide spinner when loaded
   useEffect(() => {
     if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
     }
   }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
+
+  // -------------------------
+  // Auto-switch sheetMode by bookingStep
+  // -------------------------
+  useEffect(() => {
+    // For steps 1 or 3, show "guide" if we haven't forced other modes
+    if (bookingStep === 1 || bookingStep === 3) {
+      setSheetMode("guide");
+      setSheetMinimized(false);
+      return;
+    }
+
+    // For steps 2 or 4, typically want "detail" once a station is chosen
+    if (bookingStep === 2 || bookingStep === 4) {
+      // If we do not yet have a station chosen, remain in guide or handle as needed
+      if (departureStationId || arrivalStationId) {
+        setSheetMode("detail");
+      } else {
+        setSheetMode("guide");
+      }
+      setSheetMinimized(false);
+    }
+  }, [bookingStep, departureStationId, arrivalStationId]);
 
   // -------------------------
   // Debounced route fetching
@@ -337,17 +336,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
       isQrScanStation,
       virtualStationId,
       dispatch,
-      processedCarIdRef,
       removeStation,
       clearQrStationData,
       clearDepartureStation,
       selectDepartureStationAction,
       selectArrivalStation,
-      advanceBookingStep,
     ]
   );
 
-  // For StationList usage
   const handleStationSelectedFromList = useCallback(
     (station: StationFeature) => {
       pickStationAsDeparture(station.id, false);
@@ -387,8 +383,9 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const handleOpenQrScanner = useCallback(() => {
     resetBookingFlowForQrScan();
-    // Optionally hide the sheet while scanning
-    setSheetMode("none");
+    // Hide the sheet or switch mode if needed:
+    // (You could switch to "guide" or something; for example, let's just keep it at "guide")
+    setSheetMode("guide");
     setIsQrScannerOpen(true);
   }, [resetBookingFlowForQrScan]);
 
@@ -435,6 +432,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
           actualMap.setZoom(15);
         }
         toast.dismiss(loadingToast);
+
         if (googleMapsReady) {
           const sorted = sortStationsByDistanceToPoint(loc, stations);
           setSearchLocation(loc);
@@ -443,9 +441,13 @@ export default function GMap({ googleApiKey }: GMapProps) {
           setSearchLocation(loc);
           setSortedStations(stations);
         }
-        // Force the sheet to show the station list
-        setSheetMode("list");
-        setSheetMinimized(false);
+
+        // If step 1 or 3, switch to "list" to show station results
+        if (bookingStep === 1 || bookingStep === 3) {
+          setSheetMode("list");
+          setSheetMinimized(false);
+        }
+
         toast.success("Location found!");
       },
       (err) => {
@@ -461,21 +463,21 @@ export default function GMap({ googleApiKey }: GMapProps) {
     googleMapsReady,
     stations,
     sortStationsByDistanceToPoint,
+    bookingStep,
   ]);
 
   // -------------------------
-  // Example confirm logic
+  // Confirm logic for detail
   // -------------------------
   const handleStationConfirm = useCallback(() => {
+    // For example: if step 2 is confirmed, move on to step 3
     if (bookingStep === 2) {
       dispatch(advanceBookingStep(3));
       toast.success("Departure confirmed! Now choose your arrival station.");
     }
   }, [bookingStep, dispatch]);
 
-  // -------------------------
   // Which station are we showing in detail?
-  // -------------------------
   let hasStationSelected: number | null = null;
   if (bookingStep < 3) {
     hasStationSelected = departureStationId || null;
@@ -493,64 +495,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
       stationToShow = stationsForDetail.find((s) => s.id === hasStationSelected) || null;
     }
   }
-
-// -------------------------
-// Render dynamic header content
-// -------------------------
-const renderSheetHeader = useCallback(() => {
-  // 1) If we are in station-list mode, show StationsDisplay in the header.
-  if (sheetMode === "list") {
-    return (
-      <StationsDisplay
-        stationsCount={sortedStations.length}
-        totalStations={stations.length}
-      />
-    );
-  }
-
-  // 2) If scanning a car and at booking step 2
-  if (isQrScanStation && scannedCar && bookingStep === 2) {
-    return (
-      <CarPlate
-        plateNumber={scannedCar.name}
-        vehicleModel={scannedCar.model || "Electric Vehicle"}
-      />
-    );
-  }
-
-  // 3) Otherwise, check the booking step
-  if (bookingStep === 1) {
-    return <PickupGuide isDepartureFlow />;
-  } else if (bookingStep === 2) {
-    // Example pickup time
-    const now = new Date();
-    const startTime = new Date(now.getTime() + 5 * 60 * 1000);
-    const endTime = new Date(startTime.getTime() + 15 * 60 * 1000);
-    return <PickupTime startTime={startTime} endTime={endTime} />;
-  } else if (bookingStep === 3) {
-    return (
-      <PickupGuide
-        isDepartureFlow={false}
-        primaryText="Choose dropoff station"
-        secondaryText="Return to any station"
-        primaryDescription="Select destination on map"
-        secondaryDescription="All stations accept returns"
-      />
-    );
-  } else if (bookingStep === 4) {
-    return <FareDisplay baseFare={50.0} currency="HKD" perMinuteRate={1} />;
-  }
-
-  // 4) Default if none of the above
-  return null;
-}, [
-  sheetMode,
-  sortedStations,
-  stations,
-  isQrScanStation,
-  scannedCar,
-  bookingStep
-]);
 
   const hasError = stationsError || carsError || loadError;
 
@@ -583,7 +527,7 @@ const renderSheetHeader = useCallback(() => {
               {virtualStationId && `vStation: ${virtualStationId}`}<br />
               {departureStationId && `depId: ${departureStationId}`}<br />
               {arrivalStationId && `arrId: ${arrivalStationId}`}<br />
-              Sheet: {sheetMode} {sheetMinimized ? "(minimized)" : ""}<br />
+              sheetMode: {sheetMode} {sheetMinimized ? "(minimized)" : ""}<br />
               {isStepTransitioning && "Transitioning..."}
             </div>
           )}
@@ -604,8 +548,6 @@ const renderSheetHeader = useCallback(() => {
           {/* Station selector (top bar) */}
           <StationSelector
             onAddressSearch={(loc) => {
-              // If you want a simpler approach, do so here.
-              // We'll just mimic the locate-me approach:
               setSearchLocation(loc);
               if (googleMapsReady) {
                 const sorted = sortStationsByDistanceToPoint(loc, stations);
@@ -613,8 +555,11 @@ const renderSheetHeader = useCallback(() => {
               } else {
                 setSortedStations(stations);
               }
-              setSheetMode("list");
-              setSheetMinimized(false);
+              // If in step 1 or 3, switch to "list" to show station results
+              if (bookingStep === 1 || bookingStep === 3) {
+                setSheetMode("list");
+                setSheetMinimized(false);
+              }
             }}
             onClearDeparture={() => {
               dispatch(clearDepartureStation());
@@ -643,48 +588,81 @@ const renderSheetHeader = useCallback(() => {
             scannedCar={scannedCar}
           />
 
-          {/* The single sheet for both list & detail */}
+          {/* Unified Sheet - always "open," content depends on sheetMode */}
           <Sheet
-            isOpen={sheetMode !== "none" && !isStepTransitioning}
+            isOpen={true}
             isMinimized={sheetMinimized}
             onMinimize={() => setSheetMinimized(true)}
             onExpand={() => setSheetMinimized(false)}
-            onDismiss={() => setSheetMode("none")}
+            onDismiss={() => setSheetMinimized(true)}
             disableMinimize={disableMinimize}
             headerContent={
-         <div className="flex items-center w-full">
-           <div className="flex-1 flex justify-center">
-              {renderSheetHeader()}
-          </div>
+              <div className="flex items-center w-full justify-between">
+                {/* A simple dynamic title for clarity */}
+                <h2 className="text-sm text-gray-400 font-medium">
+                  {sheetMode === "guide" && (bookingStep === 1 || bookingStep === 3)
+                    ? "Start"
+                    : sheetMode === "list"
+                    ? "Nearby"
+                    : sheetMode === "detail"
+                    ? "Pickup"
+                    : "Sheet"}
+                </h2>
 
-          {(sheetMode === "list" || (bookingStep !== 1 && bookingStep !== 3)) && (
-  sheetMinimized ? (
-    <button
-      type="button"
-      className="p-1 text-gray-400 hover:text-gray-200"
-      onClick={() => {
-        if (!disableMinimize) setSheetMinimized(false);
-      }}
-    >
-      <Maximize2 size={20} />
-    </button>
-  ) : (
-    <button
-      type="button"
-      className="p-1 text-gray-400 hover:text-gray-200"
-      onClick={() => {
-        if (!disableMinimize) setSheetMinimized(true);
-      }}
-    >
-      <Minimize2 size={20} />
-    </button>
-  )
-)}
-    </div>
+                {/* Minimizer icons */}
+                {sheetMinimized ? (
+                  <button
+                    type="button"
+                    className="p-1 text-gray-400 hover:text-gray-200"
+                    onClick={() => {
+                      if (!disableMinimize) setSheetMinimized(false);
+                    }}
+                  >
+                    <Maximize2 size={20} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="p-1 text-gray-400 hover:text-gray-200"
+                    onClick={() => {
+                      if (!disableMinimize) setSheetMinimized(true);
+                    }}
+                  >
+                    <Minimize2 size={20} />
+                  </button>
+                )}
+              </div>
             }
           >
+            {/* Sheet body content depends on sheetMode */}
+            {sheetMode === "guide" && (
+              <>
+                {/* Example: if step 1 => departing, if step 3 => returning */}
+                {bookingStep === 1 && <PickupGuide isDepartureFlow />}
+                {bookingStep === 3 && (
+                  <PickupGuide
+                    isDepartureFlow={false}
+                    primaryText="Choose dropoff station"
+                    secondaryText="Return to any station"
+                    primaryDescription="Select destination on map"
+                    secondaryDescription="All stations accept returns"
+                  />
+                )}
+
+                {/* For demonstration, here's a few extra step-specific items you might show: */}
+                {bookingStep === 2 && (
+                  <PickupTime
+                    startTime={new Date(Date.now() + 5 * 60000)}
+                    endTime={new Date(Date.now() + 20 * 60000)}
+                  />
+                )}
+                {bookingStep === 4 && <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} />}
+              </>
+            )}
+
             {sheetMode === "list" && (
               <div className="space-y-2 px-4 py-2">
+                <StationsDisplay stationsCount={sortedStations.length} totalStations={stations.length} />
                 <StationList
                   stations={sortedStations}
                   userLocation={userLocation}
@@ -695,23 +673,28 @@ const renderSheetHeader = useCallback(() => {
             )}
 
             {sheetMode === "detail" && stationToShow && (
-            <StationDetail
-              activeStation={stationToShow}
-              showCarGrid={bookingStep === 2}
-              onConfirm={handleStationConfirm}
-              isVirtualCarLocation={isQrScanStation}
-              scannedCar={scannedCar}
-              confirmLabel="Confirm"
-            />
+              <StationDetail
+                activeStation={stationToShow}
+                showCarGrid={bookingStep === 2}
+                onConfirm={handleStationConfirm}
+                isVirtualCarLocation={isQrScanStation}
+                scannedCar={scannedCar}
+                confirmLabel="Confirm"
+              />
+            )}
+
+            {/* If stationToShow is null but mode is detail, you could show a fallback */}
+            {sheetMode === "detail" && !stationToShow && (
+              <div className="p-4 text-sm text-gray-400">
+                No station selected yet.
+              </div>
             )}
           </Sheet>
 
           {/* QR Scanner Overlay */}
           <QrScannerOverlay
             isOpen={isQrScannerOpen}
-            onClose={() => {
-              setIsQrScannerOpen(false);
-            }}
+            onClose={() => setIsQrScannerOpen(false)}
             onScanSuccess={(car) => handleQrScanSuccess(car)}
             currentVirtualStationId={virtualStationId}
           />

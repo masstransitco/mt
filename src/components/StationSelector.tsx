@@ -28,8 +28,8 @@ interface IconProps {
 
 const DepartureIcon = React.memo(({ highlight, step }: IconProps) => {
   return (
-    <div className={cn("transition-all duration-300", highlight ? "text-blue-500" : "text-gray-400")}>
-      {step === 1 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinDown className="w-6 h-6" />}
+    <div className={cn("transition-all duration-300", highlight ? "text-[#10a37f]" : "text-gray-400")}>
+      {step === 1 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinDown className="w-5 h-5" />}
     </div>
   )
 })
@@ -37,8 +37,8 @@ DepartureIcon.displayName = "DepartureIcon"
 
 const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
   return (
-    <div className={cn("transition-all duration-300", highlight ? "text-blue-500" : "text-gray-400")}>
-      {step === 3 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinUp className="w-6 h-6" />}
+    <div className={cn("transition-all duration-300", highlight ? "text-[#276EF1]" : "text-gray-400")}>
+      {step === 3 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinUp className="w-5 h-5" />}
     </div>
   )
 })
@@ -192,7 +192,7 @@ const AddressSearch = React.memo(function AddressSearch({
   return (
     <div className="flex-1">
       {isStationSelected ? (
-        <div className="px-1 py-1 text-white font-medium">{selectedStation!.properties.Place}</div>
+        <div className="px-1 py-1 text-white text-base font-medium">{selectedStation!.properties.Place}</div>
       ) : (
         <div className="relative">
           <div className="relative">
@@ -211,18 +211,17 @@ const AddressSearch = React.memo(function AddressSearch({
               disabled={disabled}
               placeholder={placeholder}
               className={cn(
-                "w-full bg-transparent text-white",
+                "w-full bg-transparent text-white text-base",
                 "focus:outline-none",
-                "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 text-base transition-colors",
+                "placeholder:text-gray-500 disabled:cursor-not-allowed p-0 transition-colors",
               )}
             />
             {isLoading ? (
               <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-[#10a37f] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : searchText ? (
               <motion.button
-                whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => {
                   setSearchText("")
@@ -243,7 +242,7 @@ const AddressSearch = React.memo(function AddressSearch({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -5 }}
                 transition={{ duration: 0.2 }}
-                className="absolute top-full left-0 right-0 mt-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded-md shadow-lg z-50 max-h-60 overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-md shadow-lg z-50 max-h-60 overflow-y-auto"
               >
                 {predictions.map((prediction) => (
                   <motion.button
@@ -251,7 +250,7 @@ const AddressSearch = React.memo(function AddressSearch({
                     whileHover={{ backgroundColor: "rgba(42, 42, 42, 0.8)" }}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
-                    className="w-full px-2.5 py-1.5 text-left text-sm text-gray-200 transition-colors border-b border-[#2A2A2A] last:border-b-0"
+                    className="w-full px-2.5 py-1.5 text-left text-base text-gray-200 transition-colors border-b border-[#2a2a2a] last:border-b-0"
                     type="button"
                   >
                     <div className="font-medium">{prediction.structured_formatting.main_text}</div>
@@ -328,13 +327,6 @@ function StationSelector({
   const highlightDeparture = useMemo(() => step <= 2, [step])
   const highlightArrival = useMemo(() => step >= 3, [step])
 
-  // If route is present, show distance in KM
-  // const distanceInKm = useMemo(() => (bookingRoute ? (bookingRoute.distance / 1000).toFixed(1) : null), [bookingRoute])
-
-  // Step-based highlight
-  // const highlightDeparture = step <= 2
-  // const highlightArrival = step >= 3
-
   // "Locate me" logic
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
@@ -380,145 +372,128 @@ function StationSelector({
     onClearArrival?.()
   }, [onClearArrival])
 
-  const handleScan = useCallback(() => {
-    onScan?.()
-  }, [onScan])
-
   return (
-    <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto px-1">
-      {/* Station Inputs Container */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-        className="bg-[#1A1A1A]/90 backdrop-blur-xl rounded-xl px-2 py-2 space-y-1.5 border border-[#2A2A2A] shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
-        style={{ overscrollBehavior: "none", touchAction: "none" }}
-      >
-        {/* If departure & arrival are the same, show an error */}
-        <AnimatePresence>
-          {departureId && arrivalId && departureId === arrivalId && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-red-400 bg-red-900/20 rounded-lg border border-red-800/50"
-            >
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>Departure and arrival stations cannot be the same</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* DEPARTURE input */}
+    <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto">
+      <div className="flex flex-col w-full select-none">
+        {/* Station Inputs Container */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-          className={cn(
-            "flex items-center gap-2 rounded-xl p-2 border transition-all duration-300",
-            highlightDeparture
-              ? "border-blue-500/30 bg-[#1D1D1D] shadow-[0_0_12px_rgba(59,130,246,0.15)]"
-              : "border-[#2A2A2A] bg-[#1D1D1D]/50",
-          )}
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="bg-[#1a1a1a] rounded-xl overflow-hidden shadow-md"
+          style={{ overscrollBehavior: "none", touchAction: "none" }}
         >
-          <DepartureIcon highlight={highlightDeparture} step={step} />
-          <AddressSearch
-            onAddressSelect={handleAddressSearch}
-            disabled={step >= 3}
-            placeholder="Where from?"
-            selectedStation={departureStation}
-          />
-          {departureStation && step <= 3 && (
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={handleClearDeparture}
-              className="p-1 hover:bg-[#2A2A2A] transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
-              type="button"
-              aria-label="Clear departure"
-            >
-              <X className="w-3 h-3" />
-            </motion.button>
-          )}
-        </motion.div>
-
-        {/* ARRIVAL input (only if step≥3) */}
-        <AnimatePresence>
-          {step >= 3 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className={cn(
-                "flex items-center gap-2 rounded-xl p-2 border transition-all duration-300",
-                highlightArrival
-                  ? "border-blue-500/30 bg-[#1D1D1D] shadow-[0_0_12px_rgba(59,130,246,0.15)]"
-                  : "border-[#2A2A2A] bg-[#1D1D1D]/50",
-              )}
-            >
-              <ArrivalIcon highlight={highlightArrival} step={step} />
-              <AddressSearch
-                onAddressSelect={handleAddressSearch}
-                disabled={step < 3}
-                placeholder="Where to?"
-                selectedStation={arrivalStation}
-              />
-              {arrivalStation && step <= 4 && (
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleClearArrival}
-                  className="p-1 hover:bg-[#2A2A2A] transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
-                  type="button"
-                  aria-label="Clear arrival"
-                >
-                  <X className="w-3 h-3" />
-                </motion.button>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Info Bar and Action Buttons */}
-      <div className="mt-1.5">
-        <div className="flex items-center justify-between px-1">
-          {/* Left side - Static Info Text */}
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-xs text-white/90 px-2.5 py-1 bg-[#1A1A1A]/80 backdrop-blur-md rounded-lg border border-[#2A2A2A]/50"
-          >
-            {step < 3 ? "Choose pick-up station" : "Select arrival station"}
-          </motion.span>
-
-          {/* Right side - Distance and Locate Me */}
-          <div className="flex items-center gap-2">
-            {departureStation && arrivalStation && distanceInKm && (
+          {/* If departure & arrival are the same, show an error */}
+          <AnimatePresence>
+            {departureId && arrivalId && departureId === arrivalId && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-xs font-medium text-white px-2.5 py-1 bg-gradient-to-r from-blue-600 to-blue-500 backdrop-blur-md rounded-full shadow-[0_0_10px_rgba(59,130,246,0.3)]"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 px-3 py-2 text-xs text-red-400 bg-red-900/20 border-b border-red-800/50"
               >
-                {distanceInKm} km
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Departure and arrival stations cannot be the same</span>
               </motion.div>
             )}
+          </AnimatePresence>
 
-            {/* Only show locate me button in steps 1 or 2 */}
-            {(step === 1 || step === 2) && (
+          {/* DEPARTURE input */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2 }}
+            className={cn(
+              "flex items-center gap-2 p-3 transition-all duration-300",
+              highlightDeparture ? "bg-[#222222]" : "bg-[#1a1a1a]",
+              arrivalStation ? "border-b border-[#2a2a2a]" : "",
+            )}
+          >
+            <DepartureIcon highlight={highlightDeparture} step={step} />
+            <AddressSearch
+              onAddressSelect={handleAddressSearch}
+              disabled={step >= 3}
+              placeholder="Where from?"
+              selectedStation={departureStation}
+            />
+            {departureStation && step <= 3 && (
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onLocateMe || handleLocateMe}
-                className="w-8 h-8 bg-[#1D1D1D] text-white rounded-full hover:bg-blue-600 transition-all duration-300 shadow-lg flex items-center justify-center border border-[#2A2A2A] hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                whileTap={{ scale: 0.9 }}
+                onClick={handleClearDeparture}
+                className="p-1 hover:bg-[#2a2a2a] transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
                 type="button"
-                aria-label="Find stations near me"
+                aria-label="Clear departure"
               >
-                <NearPin className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </motion.button>
             )}
-          </div>
+          </motion.div>
+
+          {/* ARRIVAL input (only if step≥3) */}
+          <AnimatePresence>
+            {step >= 3 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className={cn(
+                  "flex items-center gap-2 p-3 transition-all duration-300",
+                  highlightArrival ? "bg-[#222222]" : "bg-[#1a1a1a]",
+                )}
+              >
+                <ArrivalIcon highlight={highlightArrival} step={step} />
+                <AddressSearch
+                  onAddressSelect={handleAddressSearch}
+                  disabled={step < 3}
+                  placeholder="Where to?"
+                  selectedStation={arrivalStation}
+                />
+                {arrivalStation && step <= 4 && (
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={handleClearArrival}
+                    className="p-1 hover:bg-[#2a2a2a] transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
+                    type="button"
+                    aria-label="Clear arrival"
+                  >
+                    <X className="w-3 h-3" />
+                  </motion.button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Info Bar and Action Buttons */}
+        <div className="flex items-center justify-between mt-2 px-1">
+          {/* Distance indicator */}
+          {departureStation && arrivalStation && distanceInKm && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={cn(
+                "text-xs font-medium text-white px-2.5 py-1 rounded-lg",
+                step >= 3 ? "bg-[#276EF1]" : "bg-[#10a37f]",
+              )}
+            >
+              {distanceInKm} km
+            </motion.div>
+          )}
+
+          {/* Only show locate me button in steps 1 or 2 */}
+          {(step === 1 || step === 2) && (
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={onLocateMe || handleLocateMe}
+              className="text-xs text-white px-2.5 py-1 bg-[#2a2a2a] rounded-lg flex items-center gap-1.5 hover:bg-[#333333] transition-colors"
+              type="button"
+              aria-label="Find stations near me"
+            >
+              <NearPin className="w-3 h-3" />
+              <span>Locate me</span>
+            </motion.button>
+          )}
         </div>
       </div>
     </div>
