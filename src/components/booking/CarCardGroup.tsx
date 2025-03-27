@@ -5,15 +5,15 @@ import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { useAppDispatch, useAppSelector } from "@/store/store"
 import { selectCar } from "@/store/userSlice"
 import { BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Gauge, Info } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import dynamic from "next/dynamic"
 import type { Car } from "@/types/cars"
 import { CarSeat } from "@/components/ui/icons/CarSeat"
 
 // Fallback skeleton while the 3D viewer loads
 const ViewerSkeleton = memo(() => (
-  <div className="relative w-full h-full bg-gray-900/30 rounded-lg overflow-hidden">
-    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-900/30 via-gray-800/30 to-gray-900/30" />
+  <div className="relative w-full h-full bg-[#1a1a1a]/30 rounded-lg overflow-hidden">
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#1a1a1a]/30 via-[#222222]/30 to-[#1a1a1a]/30" />
   </div>
 ))
 ViewerSkeleton.displayName = "ViewerSkeleton"
@@ -58,12 +58,8 @@ function useTouchScrollHandler() {
 
   const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     const el = e.currentTarget
-    const scrollTop = el.scrollTop
-    const scrollHeight = el.scrollHeight
-    const height = el.clientHeight
-    const delta = e.touches[0].clientY - (el.dataset.touchY ? Number.parseFloat(el.dataset.touchY) : 0)
-
-    el.dataset.touchY = e.touches[0].clientY.toString()
+    const touchY = e.touches[0].clientY
+    el.dataset.touchY = touchY.toString()
   }, [])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
@@ -76,6 +72,41 @@ function useTouchScrollHandler() {
     onTouchEnd: handleTouchEnd,
   }
 }
+
+// Simple info popup component for tooltips (similar to StationDetail)
+const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
+  const [isVisible, setIsVisible] = useState(false)
+
+  const handleShowInfo = useCallback(() => {
+    setIsVisible(true)
+    setTimeout(() => setIsVisible(false), 3000)
+  }, [])
+
+  return (
+    <div className="relative inline-flex items-center">
+      <button
+        onClick={handleShowInfo}
+        className="text-gray-400 hover:text-gray-300 focus:outline-none"
+        aria-label="More information"
+      >
+        <Info size={14} />
+      </button>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -5 }}
+          transition={{ duration: 0.2 }}
+          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-[#2a2a2a] text-xs text-white w-48 text-center shadow-lg z-50"
+        >
+          {text}
+          <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#2a2a2a]" />
+        </motion.div>
+      )}
+    </div>
+  )
+})
+InfoPopup.displayName = "InfoPopup"
 
 // Helper function to format "Last driven" time
 function formatLastDriven(timestamp: string | null | undefined): string {
@@ -138,7 +169,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     const parsed = rawBattery != null ? Number(rawBattery) : Number.NaN
     const percentage = !isNaN(parsed) && parsed >= 1 && parsed <= 100 ? parsed : 90
     let Icon = BatteryFull
-    let color = "text-green-400"
+    let color = "text-[#10a37f]" // Using the green from StationDetail
     if (percentage <= 9) {
       Icon = BatteryWarning
       color = "text-red-500"
@@ -184,7 +215,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
   // Determine if any car in the group is selected
   const isGroupSelected = group.cars.some((c) => c.id === selectedCarId)
 
-  // Optional scroll handlers (no more preventDefault)
+  // Optional scroll handlers
   const touchScrollHandlers = useTouchScrollHandler()
 
   return (
@@ -195,27 +226,27 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
           dispatch(selectCar(displayedCar.id))
         }
       }}
-      initial={{ opacity: 0, y: 5 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{
         opacity: 1,
         y: 0,
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="relative overflow-hidden rounded-lg bg-gray-900/50 text-white border border-gray-800 backdrop-blur-sm shadow-md transition-all cursor-pointer mb-2 w-full h-28"
+      className="relative overflow-hidden rounded-xl bg-[#1a1a1a] text-white border border-[#2a2a2a]/50 shadow-md transition-all cursor-pointer mb-3 w-full h-28"
       style={{
         contain: "content",
       }}
       {...touchScrollHandlers}
     >
-      {/* Selected indicator removed as requested */}
       <div className="flex flex-col h-full">
         <div className="flex flex-row flex-1">
+          {/* Car Viewer Section */}
           <div className="relative w-[45%] h-full overflow-hidden flex items-center justify-center">
             {!isQrScanStation && group.cars.length > 1 && (
-              <div className="absolute top-1 left-1.5 z-10" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute top-1.5 left-1.5 z-10" onClick={(e) => e.stopPropagation()}>
                 <select
-                  className="cursor-pointer bg-gray-800/80 border border-gray-700 rounded px-1 py-0.5 text-white text-xs backdrop-blur-sm"
+                  className="cursor-pointer bg-[#222222]/90 border border-[#2a2a2a] rounded-md px-1.5 py-0.5 text-white text-xs backdrop-blur-sm"
                   onChange={(e) => handleSelectCar(Number.parseInt(e.target.value, 10))}
                   value={displayedCar.id}
                 >
@@ -240,25 +271,24 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
               <ViewerSkeleton />
             )}
           </div>
+
+          {/* Car Info Section */}
           <div className="w-[55%] h-full p-3 pl-2 flex flex-col justify-between">
             <div>
               <div className="flex items-start justify-between">
                 <p className="font-medium text-sm leading-tight text-white">{displayedCar.model || "Unknown Model"}</p>
               </div>
-              <div className="flex items-center mt-1.5 gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
+              <div className="flex items-center mt-2 gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1 bg-[#222222] rounded-lg px-1.5 py-0.5">
                   <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
                   <span className="text-xs font-medium">{batteryPercentage}%</span>
                 </div>
-                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
-                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                <div className="flex items-center gap-1 bg-[#222222] rounded-lg px-1.5 py-0.5">
+                  <Gauge className="w-3.5 h-3.5 text-[#276EF1]" /> {/* Using the blue from StationDetail */}
                   <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
                 </div>
-                <div className="flex items-center gap-1 bg-gray-800/70 rounded-full px-1 py-0.5">
-                  <CarSeat
-                    className="w-3.5 h-3.5 text-gray-400 drop-shadow-sm filter brightness-110"
-                    style={{ filter: "drop-shadow(0px 1px 1px rgba(0, 0, 0, 0.3))" }}
-                  />
+                <div className="flex items-center gap-1 bg-[#222222] rounded-lg px-1.5 py-0.5">
+                  <CarSeat className="w-3.5 h-3.5 text-gray-300" />
                   <span className="text-xs">1+4</span>
                 </div>
               </div>
@@ -266,21 +296,35 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
           </div>
         </div>
 
-        {/* Footer Component - Reduced size */}
-        <div className="w-full h-5 bg-gray-800/50 px-3 flex items-center justify-between text-xs border-t border-gray-700/30">
+        {/* Footer Component */}
+        <div className="w-full h-6 bg-[#222222] px-3 flex items-center justify-between text-xs border-t border-[#2a2a2a]/30">
           <div className="flex items-center gap-1.5 relative">
-            <Info
-              className="w-3.5 h-3.5 text-gray-400 cursor-pointer hover:text-white transition-colors"
-              onClick={handleOdometerClick}
-            />
-            {showOdometerPopup && (
-              <div className="absolute left-0 bottom-5 bg-gray-800 text-white text-xs px-2 py-1 rounded-md shadow-lg border border-gray-700 z-10 min-w-32">
-                <div>Total distance: {displayedCar.odometer || "N/A"} km</div>
-                <div>Year: {displayedCar.year || "2021"}</div>
-              </div>
-            )}
+            <div className="relative">
+              <Info
+                className="w-3.5 h-3.5 text-gray-400 cursor-pointer hover:text-white transition-colors"
+                onClick={handleOdometerClick}
+              />
+              <AnimatePresence>
+                {showOdometerPopup && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 5 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute left-0 bottom-5 bg-[#2a2a2a] text-white text-xs px-2.5 py-1.5 rounded-md shadow-lg border border-[#333333] z-10 min-w-32"
+                  >
+                    <div>Total distance: {displayedCar.odometer || "N/A"} km</div>
+                    <div>Year: {displayedCar.year || "2021"}</div>
+                    <div className="absolute -bottom-2 left-2 transform w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#2a2a2a]" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
             <span className="text-gray-400">Last driven: {lastDrivenText}</span>
           </div>
+
+          {/* Status indicator */}
+          <div className="text-xs font-medium text-[#10a37f]">Ready</div>
         </div>
       </div>
     </motion.div>

@@ -8,6 +8,7 @@ import { fetchDispatchLocations, selectDispatchRadius, fetchAvailabilityFromFire
 import { selectCar } from "@/store/userSlice"
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager"
 import CarCardGroup, { type CarGroup } from "./CarCardGroup"
+import EmptyCarState from "@/components/EmptyCarState"
 import type { Car } from "@/types/cars"
 
 /**
@@ -35,27 +36,15 @@ export function preloadCommonCarModels() {
   })
 }
 
-// Memoized empty state component for consistent styling
-const EmptyState = memo(({ isQrScanStation }: { isQrScanStation: boolean }) => (
-  <motion.div
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    transition={{ duration: 0.15 }}
-    className="rounded-lg border border-gray-800 bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-center h-28"
-  >
-    <div className="text-center">
-      <p className="text-gray-400 text-sm">
-        {isQrScanStation ? "Car not found or not in range" : "No cars available right now. Please check again later."}
-      </p>
-    </div>
-  </motion.div>
-))
-EmptyState.displayName = "EmptyState"
-
 // Memoized loading skeleton for consistent styling
 const LoadingSkeleton = memo(() => (
-  <div className="rounded-lg border border-gray-800 bg-gray-900/50 backdrop-blur-sm h-28 w-full animate-pulse flex items-center justify-center">
-    <div className="text-xs text-gray-400">Loading vehicles...</div>
+  <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] h-28 w-full overflow-hidden">
+    <div className="h-full w-full flex items-center justify-center">
+      <div className="flex flex-col items-center justify-center gap-2">
+        <div className="w-6 h-6 border-2 border-[#2a2a2a] border-t-[#10a37f] rounded-full animate-spin" />
+        <div className="text-xs text-gray-400">Loading vehicles...</div>
+      </div>
+    </div>
   </div>
 ))
 LoadingSkeleton.displayName = "LoadingSkeleton"
@@ -172,12 +161,14 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
 
   // Early return if not visible
   if (!isVisible) return null
+
   // Show loading skeleton during initial load
   if (loading && !initialized) return <LoadingSkeleton />
+
   // Show error state if fetch failed
   if (loadingError) {
     return (
-      <div className="rounded-lg border border-red-800 bg-gray-900/50 backdrop-blur-sm p-3 flex items-center justify-center h-32">
+      <div className="rounded-xl border border-red-800 bg-[#1a1a1a] p-4 flex items-center justify-center h-32">
         <div className="text-center">
           <p className="text-red-400 text-sm">{loadingError}</p>
         </div>
@@ -204,7 +195,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
           </AnimatePresence>
         </div>
       ) : (
-        <EmptyState isQrScanStation={isQrScanStation} />
+        <EmptyCarState isQrScanStation={isQrScanStation} />
       )}
     </div>
   )
