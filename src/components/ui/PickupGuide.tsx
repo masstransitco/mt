@@ -1,10 +1,21 @@
-// src/components/ui/PickupGuide.tsx
 "use client"
 
 import { useState, useEffect, memo, useCallback, useMemo, useRef } from "react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
-import CarSwap from "@/components/ui/icons/CarSwap"
-import { CarParkIcon } from "@/components/ui/icons/CarParkIcon"
+import dynamic from "next/dynamic"
+
+// Lazy-load CarGrid with a loading state
+const CarGrid = dynamic(() => import("@/components/booking/CarGrid"), {
+  loading: () => (
+    <div className="h-32 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
+      <div className="text-xs text-gray-400">Loading vehicles...</div>
+    </div>
+  ),
+  ssr: false,
+})
+
+// Import Car type
+import type { Car } from "@/types/cars"
 
 interface PickupGuideProps {
   isDepartureFlow?: boolean
@@ -13,6 +24,9 @@ interface PickupGuideProps {
   primaryDescription?: string
   secondaryDescription?: string
   compact?: boolean
+  // New props for CarGrid integration
+  showCarGrid?: boolean
+  scannedCar?: Car | null
 }
 
 const PickupGuide = memo(function PickupGuide({
@@ -21,27 +35,28 @@ const PickupGuide = memo(function PickupGuide({
   secondaryText,
   primaryDescription,
   secondaryDescription,
-  compact = false
+  compact = false,
+  // New props with defaults
+  showCarGrid = false,
+  scannedCar = null,
 }: PickupGuideProps) {
   // Set default text based on isDepartureFlow
   const defaultPrimaryText = isDepartureFlow ? "Pickup from station" : "Choose dropoff station"
   const defaultSecondaryText = isDepartureFlow ? "Scan a car directly" : "Return to any station"
   const defaultPrimaryDesc = isDepartureFlow ? "Choose station on the map" : "Select destination on map"
   const defaultSecondaryDesc = isDepartureFlow ? "Use QR code on windscreen" : "Park at any station"
-  
+
   // Use provided text or defaults
   const finalPrimaryText = primaryText || defaultPrimaryText
   const finalSecondaryText = secondaryText || defaultSecondaryText
   const finalPrimaryDesc = primaryDescription || defaultPrimaryDesc
   const finalSecondaryDesc = secondaryDescription || defaultSecondaryDesc
 
-  const [isPressed, setIsPressed] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
 
   // Use refs to store timers for proper cleanup
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const stepChangeTimerRef = useRef<NodeJS.Timeout | null>(null)
   const autoAdvanceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Check if user prefers reduced motion
@@ -66,85 +81,44 @@ const PickupGuide = memo(function PickupGuide({
     }
   }, [])
 
-  // Memoize the press handler to prevent recreation on each render
-  const handlePress = useCallback(() => {
-    if (isAnimating) return // Prevent multiple presses during animation
+  // Handle step change
+  const handleStepChange = useCallback(
+    (newStep: number) => {
+      if (isAnimating || newStep === activeStep) return
 
-    setIsPressed(true)
-    setIsAnimating(true)
+      setIsAnimating(true)
 
-    // Clear any existing timers
-    if (stepChangeTimerRef.current) clearTimeout(stepChangeTimerRef.current)
-    if (animationTimerRef.current) clearTimeout(animationTimerRef.current)
-    if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
+      // Clear auto-advance timer
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
 
-    // Delay the step change to allow for animation
-    stepChangeTimerRef.current = setTimeout(
-      () => {
-        setActiveStep((prev) => (prev === 0 ? 1 : 0))
+      // Change step
+      setActiveStep(newStep)
 
-        // Reset animation state after a delay
-        animationTimerRef.current = setTimeout(
-          () => {
-            setIsAnimating(false)
-            setIsPressed(false)
-          },
-          prefersReducedMotion ? 100 : 300,
-        )
-      },
-      prefersReducedMotion ? 100 : 300,
-    )
-  }, [isAnimating, prefersReducedMotion])
-
-  // Handle next step
-  const handleNext = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (isAnimating) return
-      setActiveStep(1)
+      // Reset animation state after a delay
+      animationTimerRef.current = setTimeout(
+        () => {
+          setIsAnimating(false)
+        },
+        prefersReducedMotion ? 100 : 300,
+      )
     },
-    [isAnimating],
-  )
-
-  // Handle previous step
-  const handlePrev = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (isAnimating) return
-      setActiveStep(0)
-    },
-    [isAnimating],
+    [activeStep, isAnimating, prefersReducedMotion],
   )
 
   // Clean up timers on unmount
   useEffect(() => {
     return () => {
-      if (stepChangeTimerRef.current) clearTimeout(stepChangeTimerRef.current)
       if (animationTimerRef.current) clearTimeout(animationTimerRef.current)
       if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
     }
   }, [])
 
-  // Animation variants for consistent animations
-  const containerVariants = useMemo(
-    () => ({
-      pressed: {
-        scale: 0.98,
-        backgroundColor: "#0a0a0a",
-      },
-      normal: {
-        scale: 1,
-        backgroundColor: "#111111",
-      },
-    }),
-    [],
-  )
-
+  // Animation variants
   const contentVariants = useMemo(
     () => ({
       initial: {
         opacity: 0,
-        y: isAnimating ? 20 : 10,
+        y: 10,
       },
       animate: {
         opacity: 1,
@@ -156,163 +130,49 @@ const PickupGuide = memo(function PickupGuide({
       },
       exit: {
         opacity: 0,
-        y: -20,
+        y: -10,
         transition: {
           duration: prefersReducedMotion ? 0.2 : 0.3,
         },
       },
     }),
-    [isAnimating, prefersReducedMotion],
+    [prefersReducedMotion],
   )
 
-  // Custom CarSwap icon component for station selection
-  const StationIcon = () => (
-    <motion.div
-      className="relative w-10 h-10 flex items-center justify-center"
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
-    >
-      {/* Glow effect */}
-      <motion.div
-        className="absolute inset-0 bg-blue-500 rounded-full opacity-10 blur-md"
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.1, 0.2, 0.1],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Number.POSITIVE_INFINITY,
-          repeatType: "reverse",
-          ease: "easeInOut",
-        }}
-      />
-
-      {/* CarSwap Icon */}
-      <div className="relative z-10 text-blue-400">
-        <CarSwap width="24" height="24" />
-      </div>
-    </motion.div>
-  )
-
-  // QR scanning icon
-  const ScanIcon = () => (
-    <motion.div
-      className="relative w-10 h-10 flex items-center justify-center"
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
-    >
-      {/* Glow effect */}
-      <motion.div
-        className="absolute inset-0 bg-blue-500 rounded-full opacity-10 blur-md"
-        animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.1, 0.2, 0.1],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Number.POSITIVE_INFINITY,
-          repeatType: "reverse",
-          ease: "easeInOut",
-        }}
-      />
-
-      {/* Icon: QR for departure flow, CarPark for return flow */}
-      <div className="relative z-10 text-blue-400">
-        {isDepartureFlow ? (
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="relative z-10"
-          >
-            <rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-            <rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-            <rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M14 15H20M14 19H20M17 14V20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <CarParkIcon width="24" height="24" />
-        )}
-      </div>
-    </motion.div>
+  // Step indicator dots
+  const StepIndicator = () => (
+    <div className="flex space-x-1.5 mt-3">
+      {[0, 1].map((step) => (
+        <button
+          key={step}
+          onClick={() => handleStepChange(step)}
+          className="group focus:outline-none"
+          aria-label={`Go to step ${step + 1}`}
+        >
+          <motion.div
+            className={`w-1.5 h-1.5 rounded-full ${
+              activeStep === step ? "bg-white" : "bg-gray-600"
+            } group-hover:bg-gray-400 transition-colors`}
+            animate={{
+              scale: activeStep === step ? 1.2 : 1,
+            }}
+            transition={{ duration: 0.2 }}
+          />
+        </button>
+      ))}
+    </div>
   )
 
   return (
     <div className="flex flex-col w-full select-none">
-      {/* Title centered horizontally */}
-      <motion.div
-        initial={{ opacity: 0, y: -5 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="text-gray-400 text-xs uppercase tracking-wider font-normal mb-2 text-center w-full"
-      >
-        <motion.span
-          initial={{ color: "rgb(156 163 175)" }}
-          animate={{
-            color: ["rgb(156 163 175)", "rgb(59 130 246)", "rgb(156 163 175)"],
-            textShadow: [
-              "0 0 0px rgba(59, 130, 246, 0)",
-              "0 0 8px rgba(59, 130, 246, 0.5)",
-              "0 0 0px rgba(59, 130, 246, 0)",
-            ],
-          }}
-          transition={{
-            duration: 3,
-            repeat: Number.POSITIVE_INFINITY,
-            repeatType: "reverse",
-            ease: "easeInOut",
-            times: [0, 0.5, 1],
-          }}
-        >
-          {isDepartureFlow ? "How to Start" : "Return Options"}
-        </motion.span>
-      </motion.div>
+      {/* Title */}
+      <div className="text-gray-400 text-xs uppercase tracking-wider font-normal mb-2 text-left pl-1">
+        {isDepartureFlow ? "Ways To Start" : "Ways to Return"}
+      </div>
 
-      {/* Guide display with toggle functionality */}
-      <div
-        className="w-full flex items-center justify-center"
-        onMouseDown={handlePress}
-        onTouchStart={handlePress}
-        style={{
-          cursor: "pointer",
-        }}
-      >
-        <motion.div
-          className="flex items-center bg-[#111111] px-4 py-3 rounded-2xl shadow-lg w-full"
-          animate={isPressed ? "pressed" : "normal"}
-          variants={containerVariants}
-          transition={{
-            duration: prefersReducedMotion ? 0.1 : 0.2,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          initial="normal"
-          whileTap="pressed"
-          layout
-        >
-          {/* Left chevron */}
-          <motion.div
-            className={`text-gray-400 mr-2 ${activeStep === 0 ? "opacity-30" : "opacity-100 hover:text-gray-300"}`}
-            initial={{ opacity: 0, x: -5 }}
-            animate={{ opacity: activeStep === 0 ? 0.3 : 1, x: 0 }}
-            transition={{ duration: 0.4 }}
-            onClick={activeStep === 0 ? undefined : handlePrev}
-            style={{ cursor: activeStep === 0 ? "default" : "pointer" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M15 18L9 12L15 6"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
-
+      {/* Guide display */}
+      <div className="relative">
+        <motion.div className="bg-[#1a1a1a] rounded-xl shadow-md overflow-hidden" layout>
           <AnimatePresence mode="wait">
             <motion.div
               key={`guide-step-${activeStep}`}
@@ -320,73 +180,92 @@ const PickupGuide = memo(function PickupGuide({
               initial="initial"
               animate="animate"
               exit="exit"
-              className="flex items-center flex-1"
-              layout
+              className="p-4"
             >
-              {/* Content */}
               {activeStep === 0 ? (
-                <div className="flex items-center flex-1">
-                  <motion.div
-                    className="text-blue-400 mr-3"
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.1 }}
-                  >
-                    <StationIcon />
-                  </motion.div>
-                  <motion.div
-                    className="flex flex-col flex-1"
-                    initial={{ opacity: 0, x: -5 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.3 }}
-                  >
-                    <span className="text-white font-['SF Pro Display'] text-sm font-medium leading-tight">{finalPrimaryText}</span>
-                    {!compact && <span className="text-gray-400 font-['SF Pro Display'] text-xs mt-0.5 leading-tight">{finalPrimaryDesc}</span>}
-                  </motion.div>
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 mr-4 mt-0.5">
+                    <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-white">
+                      <span className="text-sm font-medium">1</span>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-white text-base font-medium mb-1">{finalPrimaryText}</h3>
+                    {!compact && <p className="text-gray-400 text-sm">{finalPrimaryDesc}</p>}
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center flex-1">
-                  <motion.div
-                    className="text-blue-400 mr-3"
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.1 }}
-                  >
-                    <ScanIcon />
-                  </motion.div>
-                  <motion.div
-                    className="flex flex-col flex-1"
-                    initial={{ opacity: 0, x: -5 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.3 }}
-                  >
-                    <span className="text-white font-['SF Pro Display'] text-sm font-medium leading-tight">{finalSecondaryText}</span>
-                    {!compact && <span className="text-gray-400 font-['SF Pro Display'] text-xs mt-0.5 leading-tight">{finalSecondaryDesc}</span>}
-                  </motion.div>
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 mr-4 mt-0.5">
+                    <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-white">
+                      <span className="text-sm font-medium">2</span>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-white text-base font-medium mb-1">{finalSecondaryText}</h3>
+                    {!compact && <p className="text-gray-400 text-sm">{finalSecondaryDesc}</p>}
+                  </div>
                 </div>
               )}
             </motion.div>
           </AnimatePresence>
 
-          {/* Right chevron */}
-          <motion.div
-            className={`text-gray-400 ml-2 ${activeStep === 1 ? "opacity-30" : "opacity-100 hover:text-gray-300"}`}
-            initial={{ opacity: 0, x: 5 }}
-            animate={{ opacity: activeStep === 1 ? 0.3 : 1, x: 0 }}
-            transition={{ duration: 0.4 }}
-            onClick={activeStep === 1 ? undefined : handleNext}
-            style={{ cursor: activeStep === 1 ? "default" : "pointer" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M9 6L15 12L9 18"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </motion.div>
+          {/* Navigation controls */}
+          <div className="flex justify-between items-center px-4 py-3 bg-[#222222]">
+            <StepIndicator />
+
+            <div className="flex space-x-2">
+              <button
+                onClick={() => handleStepChange(0)}
+                disabled={activeStep === 0}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                  activeStep === 0
+                    ? "bg-[#2a2a2a] text-gray-500 cursor-default"
+                    : "bg-[#2a2a2a] text-white hover:bg-[#333333]"
+                }`}
+                aria-label="Previous step"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M15 18L9 12L15 6"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              <button
+                onClick={() => handleStepChange(1)}
+                disabled={activeStep === 1}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                  activeStep === 1
+                    ? "bg-[#2a2a2a] text-gray-500 cursor-default"
+                    : "bg-[#2a2a2a] text-white hover:bg-[#333333]"
+                }`}
+                aria-label="Next step"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M9 6L15 12L9 18"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Car Grid integration - similar to how StationDetail renders it */}
+          {showCarGrid && (
+            <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] p-4">
+              <div className="text-sm text-gray-400 mb-3">Available vehicles:</div>
+              <CarGrid className="w-full" isVisible={true} scannedCar={scannedCar} />
+            </div>
+          )}
         </motion.div>
       </div>
     </div>
@@ -394,3 +273,4 @@ const PickupGuide = memo(function PickupGuide({
 })
 
 export default PickupGuide
+
