@@ -2,20 +2,17 @@
 
 import { memo, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAppSelector } from "@/store/store"
 import { selectBookingStep } from "@/store/bookingSlice"
-
-// The same UI components you already had
-import { PaymentSummary } from "@/components/ui/PaymentComponents" // adjust path if needed
-
-// Types
 import type { StationFeature } from "@/store/stationsSlice"
 import type { Car } from "@/types/cars"
+import { PaymentSummary } from "@/components/ui/PaymentComponents"
+import React from "react"
 
-// Lazy-load CarGrid
+// If you need CarGrid:
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: () => (
     <div className="h-32 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
@@ -25,21 +22,11 @@ const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   ssr: false,
 })
 
-// Optionally show a static map snippet for the station
-const MapCard = dynamic(() => import("./MapCard"), {
-  loading: () => (
-    <div className="h-44 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
-      <div className="animate-spin w-5 h-5 border-2 border-[#10a37f] border-t-transparent rounded-full" />
-    </div>
-  ),
-  ssr: false,
-})
-
-/** Simple info popup icon for tooltips. */
+// Simple info popup icon for tooltips
 const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
-  const [isVisible, setIsVisible] = useState(false)
+  const [isVisible, setIsVisible] = React.useState(false)
 
-  const handleShowInfo = useCallback(() => {
+  const handleShowInfo = React.useCallback(() => {
     setIsVisible(true)
     setTimeout(() => setIsVisible(false), 3000)
   }, [])
@@ -53,29 +40,27 @@ const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
       >
         <Info size={14} />
       </button>
-      <AnimatePresence>
-        {isVisible && (
-          <motion.div
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.2 }}
-            className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-[#2a2a2a] text-xs text-white w-48 text-center shadow-lg z-50"
-          >
-            {text}
-            <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#2a2a2a]" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -5 }}
+          transition={{ duration: 0.2 }}
+          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-[#2a2a2a] text-xs text-white w-48 text-center shadow-lg z-50"
+        >
+          {text}
+          <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#2a2a2a]" />
+        </motion.div>
+      )}
     </div>
   )
 })
 InfoPopup.displayName = "InfoPopup"
 
-/** StationStats: small block with station info. */
+// Station stats block
 const StationStats = memo(function StationStats({
   activeStation,
-  isVirtualCarLocation,
+  isVirtualCarLocation
 }: {
   activeStation: StationFeature
   isVirtualCarLocation?: boolean
@@ -101,12 +86,12 @@ const StationStats = memo(function StationStats({
 })
 StationStats.displayName = "StationStats"
 
-/** A simple confirm button. */
+// Generic confirm button
 function ConfirmButton({
   label,
   onConfirm,
   disabled,
-  buttonClassName,
+  buttonClassName
 }: {
   label: string
   onConfirm?: () => void
@@ -120,7 +105,7 @@ function ConfirmButton({
       whileTap={{ scale: 0.98 }}
       className={cn(
         "w-full py-2.5 text-sm font-medium rounded-xl transition-colors flex items-center justify-center",
-        buttonClassName,
+        buttonClassName
       )}
     >
       {label}
@@ -128,40 +113,26 @@ function ConfirmButton({
   )
 }
 
-/** StationDetail props */
+// Props
 export interface StationDetailProps {
-  /** The currently viewed station, or null if none. */
   activeStation: StationFeature | null
-  /** Whether the CarGrid should show. */
   showCarGrid?: boolean
-  /** Called when user taps the 'Confirm' button. */
   onConfirm?: () => void
-  /** If this station is a special 'virtual' location. */
   isVirtualCarLocation?: boolean
-  /** Currently scanned car (if any). */
   scannedCar?: Car | null
-  /** Text for the confirm button. */
   confirmLabel?: string
 }
 
-/**
- * StationDetail:
- * - Renders station info (map snippet, stats).
- * - Optionally shows a CarGrid if requested.
- * - Uses bookingStep from Redux for final-step fare/payment.
- */
 function StationDetail({
   activeStation,
   showCarGrid = false,
   onConfirm,
   isVirtualCarLocation = false,
   scannedCar,
-  confirmLabel = "Confirm",
+  confirmLabel = "Confirm"
 }: StationDetailProps) {
-  // Pull the bookingStep from Redux
   const bookingStep = useAppSelector(selectBookingStep)
 
-  // If no station, simply render nothing.
   if (!activeStation) return null
 
   return (
@@ -171,34 +142,29 @@ function StationDetail({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
     >
-      {/* Station map preview */}
-      <MapCard
-        coordinates={[activeStation.geometry.coordinates[0], activeStation.geometry.coordinates[1]]}
-        name={activeStation.properties.Place}
-        address={activeStation.properties.Address}
-      />
+      {/* Removed the MapCard entirely */}
 
-      {/* Station info/stats */}
+      {/* Station stats */}
       <StationStats activeStation={activeStation} isVirtualCarLocation={isVirtualCarLocation} />
 
-      {/* Step 4: Show fare/payment; otherwise show CarGrid (if requested) */}
+      {/* Step 4: PaymentSummary; else CarGrid */}
       {bookingStep === 4 ? (
         <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
           <PaymentSummary
             onOpenWalletModal={() => {
-              // Implement or reference your wallet modal
+              // do something
             }}
           />
         </div>
       ) : (
         showCarGrid && (
           <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
-            <CarGrid className="w-full" isVisible={true} scannedCar={scannedCar} />
+            <CarGrid className="w-full" isVisible scannedCar={scannedCar} />
           </div>
         )
       )}
 
-      {/* Confirm button if there's an action to perform */}
+      {/* Confirm button, if any */}
       {onConfirm &&
         (() => {
           let dynamicLabel = confirmLabel
@@ -206,22 +172,24 @@ function StationDetail({
 
           if (bookingStep === 2) {
             dynamicLabel = "Pickup Car Here"
-            dynamicClasses =
-              "text-white bg-[#10a37f] hover:bg-[#0d8c6d] disabled:bg-[#10a37f]/40 disabled:cursor-not-allowed"
+            dynamicClasses = "text-white bg-[#10a37f] hover:bg-[#0d8c6d] disabled:bg-[#10a37f]/40 disabled:cursor-not-allowed"
           } else if (bookingStep === 4) {
             dynamicLabel = "Confirm Trip"
-            dynamicClasses =
-              "text-white bg-[#276EF1] hover:bg-[#1d5bc9] disabled:bg-[#276EF1]/40 disabled:cursor-not-allowed"
+            dynamicClasses = "text-white bg-[#276EF1] hover:bg-[#1d5bc9] disabled:bg-[#276EF1]/40 disabled:cursor-not-allowed"
           } else {
-            dynamicClasses =
-              "text-white bg-[#10a37f] hover:bg-[#0d8c6d] disabled:bg-[#10a37f]/40 disabled:cursor-not-allowed"
+            dynamicClasses = "text-white bg-[#10a37f] hover:bg-[#0d8c6d] disabled:bg-[#10a37f]/40 disabled:cursor-not-allowed"
           }
 
-          return <ConfirmButton label={dynamicLabel} onConfirm={onConfirm} buttonClassName={dynamicClasses} />
+          return (
+            <ConfirmButton
+              label={dynamicLabel}
+              onConfirm={onConfirm}
+              buttonClassName={dynamicClasses}
+            />
+          )
         })()}
     </motion.div>
   )
 }
 
 export default memo(StationDetail)
-
