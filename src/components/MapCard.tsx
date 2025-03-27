@@ -23,7 +23,7 @@ interface MapCardProps {
   address: string;               // Station address
   className?: string;
 
-  // External expand control (optional)
+  // Optionally control expansion from outside
   expanded?: boolean;
   onToggleExpanded?: (newVal: boolean) => void;
 
@@ -73,7 +73,7 @@ const MapCard: React.FC<MapCardProps> = ({
         setLocalExpanded((prev) => !prev);
       }
 
-      // Force a map resize after the animation
+      // Force map to resize after the transition
       setTimeout(() => {
         setRenderTrigger((prev) => prev + 1);
         if (map.current) {
@@ -84,7 +84,7 @@ const MapCard: React.FC<MapCardProps> = ({
     [isExpanded, onToggleExpanded]
   );
 
-  // Ensure a portal div exists in the DOM (for expanded mode)
+  // Ensure a portal div exists (for expanded mode)
   useEffect(() => {
     let existingPortal = document.getElementById(MAP_PORTAL_ID) as HTMLDivElement | null;
     if (existingPortal) {
@@ -103,7 +103,7 @@ const MapCard: React.FC<MapCardProps> = ({
       portalContainer.current = div;
     }
     return () => {
-      // Keep the portal for reuse
+      // Keep the portal around for reuse
       portalContainer.current = null;
     };
   }, []);
@@ -136,7 +136,6 @@ const MapCard: React.FC<MapCardProps> = ({
     const startTime = Date.now();
 
     const animate = () => {
-      // If map is destroyed or no longer loaded, skip
       if (!mapInstance || !mapInstance.loaded()) return;
 
       const elapsed = Date.now() - startTime;
@@ -165,7 +164,7 @@ const MapCard: React.FC<MapCardProps> = ({
       : 1 - Math.pow(-2 * t + 2, 3) / 2;
   };
 
-  // Initialize the map only when expanded
+  // Initialize the map when expanded
   useEffect(() => {
     if (!isExpanded) return;
     const currentMapContainer = mapContainer.current;
@@ -195,9 +194,8 @@ const MapCard: React.FC<MapCardProps> = ({
         maxZoom: 19
       });
 
-      // Use optional chaining or a null check:
-      map.current?.on("load", () => {
-        if (!map.current) return; // <-- TS now knows map.current isn't null
+      map.current.on("load", () => {
+        if (!map.current) return;
         setMapInitialized(true);
 
         // Add a base 3D buildings layer
@@ -219,44 +217,57 @@ const MapCard: React.FC<MapCardProps> = ({
           console.warn("Could not add 3D buildings layer:", error);
         }
 
-        // 1) Convert lng/lat to screen coordinates for query
-        const pixelPoint = map.current.project(coordinates);
-
-        // 2) Query buildings at that screen coordinate
-        const buildingFeatures = map.current.queryRenderedFeatures(pixelPoint, {
-          layers: ["3d-buildings-base"]
-        });
-
-        if (buildingFeatures && buildingFeatures.length > 0) {
-          const buildingFeature = buildingFeatures[0];
-          // 3) Add a highlight fill-extrusion for just this building
-          try {
-            map.current.addLayer(
-              {
-                id: "highlighted-building",
-                type: "fill-extrusion",
-                source: "composite",
-                "source-layer": "building",
-                filter: ["==", ["id"], buildingFeature.id],
-                paint: {
-                  "fill-extrusion-color": "#3b82f6", // your highlight color
-                  "fill-extrusion-height": ["get", "height"],
-                  "fill-extrusion-base": ["get", "min_height"],
-                  "fill-extrusion-opacity": 0.9
-                }
-              },
-              "3d-buildings-base"
-            );
-          } catch (err) {
-            console.warn("Error adding highlight layer:", err);
-          }
-        }
-
-        // Fly/zoom in effect
+        // Trigger a "fly in" effect
         startEntranceAnimation(map.current);
       });
 
-      map.current?.on("error", (e) => {
+      // Wait for the map to be idle (i.e., fully rendered)
+      map.current.on("idle", () => {
+        if (!map.current) return;
+
+        // Only attempt to add highlight once
+        if (!map.current.getLayer("highlighted-building")) {
+          // 1) Convert lng/lat to screen coordinates
+          const pixelPoint = map.current.project(coordinates);
+
+          // 2) Query buildings at that screen coordinate
+          const buildingFeatures = map.current.queryRenderedFeatures(pixelPoint, {
+            layers: ["3d-buildings-base"]
+          });
+
+          if (buildingFeatures && buildingFeatures.length > 0) {
+            const buildingFeature = buildingFeatures[0];
+            // 3) Add a highlight fill-extrusion layer for just this building
+            try {
+              map.current.addLayer(
+                {
+                  id: "highlighted-building",
+                  type: "fill-extrusion",
+                  source: "composite",
+                  "source-layer": "building",
+                  filter: ["==", ["id"], buildingFeature.id],
+                  paint: {
+                    "fill-extrusion-color": "#3b82f6", // your highlight color
+                    "fill-extrusion-height": ["get", "height"],
+                    "fill-extrusion-base": ["get", "min_height"],
+                    "fill-extrusion-opacity": 0.9
+                  }
+                },
+                "3d-buildings-base"
+              );
+            } catch (err) {
+              console.warn("Error adding highlight layer:", err);
+            }
+          } else {
+            // If no building found, place a fallback marker
+            new mapboxgl.Marker({ color: "#3b82f6" })
+              .setLngLat(coordinates)
+              .addTo(map.current);
+          }
+        }
+      });
+
+      map.current.on("error", (e) => {
         console.error("Mapbox error:", e);
       });
     } catch (err) {
@@ -376,7 +387,7 @@ const MapCard: React.FC<MapCardProps> = ({
     </motion.div>
   );
 
-  // If expanded, render into the portal to take up the screen
+  // If expanded, render into the portal so it takes the full screen
   if (isExpanded) {
     const portalEl =
       portalContainer.current || document.getElementById(MAP_PORTAL_ID);
@@ -384,7 +395,7 @@ const MapCard: React.FC<MapCardProps> = ({
     if (portalEl) {
       return (
         <>
-          {/* Placeholder in the original layout */}
+          {/* Placeholder in original layout so the card doesn't collapse */}
           <div className={cn("h-52", className)} />
 
           {createPortal(
@@ -408,7 +419,7 @@ const MapCard: React.FC<MapCardProps> = ({
     }
   }
 
-  // If not expanded, show the smaller snippet
+  // If not expanded, show a small static map card
   return (
     <div
       className={cn(
