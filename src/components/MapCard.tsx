@@ -23,7 +23,7 @@ interface MapCardProps {
   address: string;               // Station address
   className?: string;
 
-  // If you want external expand control:
+  // External expand control (optional)
   expanded?: boolean;
   onToggleExpanded?: (newVal: boolean) => void;
 
@@ -73,7 +73,7 @@ const MapCard: React.FC<MapCardProps> = ({
         setLocalExpanded((prev) => !prev);
       }
 
-      // Force a size re-check for the map
+      // Force a map resize after the animation
       setTimeout(() => {
         setRenderTrigger((prev) => prev + 1);
         if (map.current) {
@@ -103,7 +103,7 @@ const MapCard: React.FC<MapCardProps> = ({
       portalContainer.current = div;
     }
     return () => {
-      // Do not remove the portal from the DOM so it can be reused
+      // Keep the portal for reuse
       portalContainer.current = null;
     };
   }, []);
@@ -136,6 +136,7 @@ const MapCard: React.FC<MapCardProps> = ({
     const startTime = Date.now();
 
     const animate = () => {
+      // If map is destroyed or no longer loaded, skip
       if (!mapInstance || !mapInstance.loaded()) return;
 
       const elapsed = Date.now() - startTime;
@@ -191,15 +192,17 @@ const MapCard: React.FC<MapCardProps> = ({
         attributionControl: false,
         maxBounds: bounds,
         minZoom: 11,
-        maxZoom: 19,
+        maxZoom: 19
       });
 
-      map.current!.on("load", () => {
+      // Use optional chaining or a null check:
+      map.current?.on("load", () => {
+        if (!map.current) return; // <-- TS now knows map.current isn't null
         setMapInitialized(true);
 
         // Add a base 3D buildings layer
         try {
-          map.current?.addLayer({
+          map.current.addLayer({
             id: "3d-buildings-base",
             source: "composite",
             "source-layer": "building",
@@ -209,27 +212,26 @@ const MapCard: React.FC<MapCardProps> = ({
               "fill-extrusion-color": "#aaa",
               "fill-extrusion-height": ["get", "height"],
               "fill-extrusion-base": ["get", "min_height"],
-              "fill-extrusion-opacity": 0.6,
-            },
+              "fill-extrusion-opacity": 0.6
+            }
           });
         } catch (error) {
           console.warn("Could not add 3D buildings layer:", error);
         }
 
         // 1) Convert lng/lat to screen coordinates for query
-        const pixelPoint = map.current?.project(coordinates);
-        if (!pixelPoint) return;
+        const pixelPoint = map.current.project(coordinates);
 
         // 2) Query buildings at that screen coordinate
-        const buildingFeatures = map.current?.queryRenderedFeatures(pixelPoint, {
-          layers: ["3d-buildings-base"], 
+        const buildingFeatures = map.current.queryRenderedFeatures(pixelPoint, {
+          layers: ["3d-buildings-base"]
         });
 
         if (buildingFeatures && buildingFeatures.length > 0) {
           const buildingFeature = buildingFeatures[0];
           // 3) Add a highlight fill-extrusion for just this building
           try {
-            map.current?.addLayer(
+            map.current.addLayer(
               {
                 id: "highlighted-building",
                 type: "fill-extrusion",
@@ -240,8 +242,8 @@ const MapCard: React.FC<MapCardProps> = ({
                   "fill-extrusion-color": "#3b82f6", // your highlight color
                   "fill-extrusion-height": ["get", "height"],
                   "fill-extrusion-base": ["get", "min_height"],
-                  "fill-extrusion-opacity": 0.9,
-                },
+                  "fill-extrusion-opacity": 0.9
+                }
               },
               "3d-buildings-base"
             );
@@ -254,7 +256,7 @@ const MapCard: React.FC<MapCardProps> = ({
         startEntranceAnimation(map.current);
       });
 
-      map.current.on("error", (e) => {
+      map.current?.on("error", (e) => {
         console.error("Mapbox error:", e);
       });
     } catch (err) {
@@ -325,7 +327,7 @@ const MapCard: React.FC<MapCardProps> = ({
               bottom: "5%",
               width: "90%",
               height: "90%",
-              margin: "0 auto",
+              margin: "0 auto"
             }
           : {}
       }
@@ -382,7 +384,7 @@ const MapCard: React.FC<MapCardProps> = ({
     if (portalEl) {
       return (
         <>
-          {/* Leave a placeholder in the original layout */}
+          {/* Placeholder in the original layout */}
           <div className={cn("h-52", className)} />
 
           {createPortal(
