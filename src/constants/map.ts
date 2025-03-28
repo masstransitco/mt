@@ -1,4 +1,3 @@
-
 // src/constants/map.ts
 
 import type { Libraries } from '@react-google-maps/api';
@@ -16,7 +15,7 @@ export const DEFAULT_CENTER = {
 
 export const DEFAULT_ZOOM = 12;
 
-export const LIBRARIES: Libraries = ['geometry', 'places'];
+export const LIBRARIES: Libraries = ['geometry', 'places', 'marker'];
 
 // Map boundaries for Hong Kong
 export const HK_BOUNDS = {
