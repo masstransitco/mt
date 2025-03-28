@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react"
 import Head from "next/head"
 import dynamic from "next/dynamic"
-import { DraggableHeader } from "@/components/DraggableHeader"
+import { SideButtonsPanel } from "@/components/DraggableHeader"
 import SideSheet from "@/components/ui/SideSheet"
 
 // Dynamically import with no SSR
@@ -58,7 +58,7 @@ export default function Page() {
         </div>
 
         {/* Header overlaps the map */}
-        <DraggableHeader onToggleMenu={toggleMenu} onScannerOpen={() => setIsScannerOpen(true)} />
+        <SideButtonsPanel onToggleMenu={toggleMenu} onScannerOpen={() => setIsScannerOpen(true)} />
 
         {/* Side Sheet Menu */}
         <SideSheet isOpen={isMenuOpen} onClose={handleMenuClose} size="full">
