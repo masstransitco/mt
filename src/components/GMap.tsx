@@ -72,6 +72,7 @@ import PickupGuide from "@/components/ui/PickupGuide";
 
 import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
+import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import StationsDisplay from "@/components/ui/StationsDisplay";
@@ -122,6 +123,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
+  const [isSignedIn, setIsSignedIn] = useState(false)
 
   // Single state for the sheet mode
   const [sheetMode, setSheetMode] = useState<SheetMode>("guide");
@@ -365,6 +367,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const { overlayRef } = useThreeOverlay(actualMap, stations, threeOverlayOptions);
 
+// -------------------------
+// Marker overlay
+// -------------------------
+useMarkerOverlay(actualMap);
+
   // -------------------------
   // QR logic
   // -------------------------
@@ -588,138 +595,143 @@ export default function GMap({ googleApiKey }: GMapProps) {
             scannedCar={scannedCar}
           />
 
-          {/* Unified Sheet - always "open," content depends on sheetMode */}
-          <Sheet
-            isOpen={true}
-            isMinimized={sheetMinimized}
-            onMinimize={() => setSheetMinimized(true)}
-            onExpand={() => setSheetMinimized(false)}
-            onDismiss={() => setSheetMinimized(true)}
-            disableMinimize={disableMinimize}
-            headerContent={
-              <div className="flex items-center w-full justify-between">
-                {/* A simple dynamic title for clarity */}
-                <h2 className="text-sm text-gray-400 font-medium">
-                  {sheetMode === "guide" && (bookingStep === 1 || bookingStep === 3)
-                    ? "Start"
-                    : sheetMode === "list"
-                    ? "Nearby"
-                    : sheetMode === "detail"
-                    ? "Pickup"
-                    : "Sheet"}
-                </h2>
+          
+{/* Unified Sheet - always "open," content depends on sheetMode */}
+<Sheet
+  isOpen={true}
+  isMinimized={sheetMinimized}
+  onMinimize={() => setSheetMinimized(true)}
+  onExpand={() => setSheetMinimized(false)}
+  onDismiss={() => setSheetMinimized(true)}
+  disableMinimize={disableMinimize}
+  headerContent={
+    <div className="flex items-center w-full justify-between">
+      {/* A simple dynamic title for clarity */}
+      <h2 className="text-sm text-gray-400 font-medium">
+        {sheetMode === "guide" && (bookingStep === 1 || bookingStep === 3)
+          ? "Start"
+          : sheetMode === "list"
+          ? "Nearby"
+          : sheetMode === "detail"
+          ? "Pickup"
+          : "Sheet"}
+      </h2>
 
-                {/* Minimizer icons */}
-                {sheetMinimized ? (
-                  <button
-                    type="button"
-                    className="p-1 text-gray-400 hover:text-gray-200"
-                    onClick={() => {
-                      if (!disableMinimize) setSheetMinimized(false);
-                    }}
-                  >
-                    <Maximize2 size={20} />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="p-1 text-gray-400 hover:text-gray-200"
-                    onClick={() => {
-                      if (!disableMinimize) setSheetMinimized(true);
-                    }}
-                  >
-                    <Minimize2 size={20} />
-                  </button>
-                )}
-              </div>
-            }
-          >
-            {/* Sheet body content depends on sheetMode */}
-            {sheetMode === "guide" && (
-              <>
-                {/* Example: if step 1 => departing, if step 3 => returning */}
-                {bookingStep === 1 && <PickupGuide isDepartureFlow />}
-                {bookingStep === 3 && (
-                  <PickupGuide
-                    isDepartureFlow={false}
-                    primaryText="Choose dropoff station"
-                    secondaryText="Return to any station"
-                    primaryDescription="Select destination on map"
-                    secondaryDescription="All stations accept returns"
-                  />
-                )}
+      {/* Minimizer icons */}
+      {sheetMinimized ? (
+        <button
+          type="button"
+          className="p-1 text-gray-400 hover:text-gray-200"
+          onClick={() => {
+            if (!disableMinimize) setSheetMinimized(false)
+          }}
+        >
+          <Maximize2 size={20} />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="p-1 text-gray-400 hover:text-gray-200"
+          onClick={() => {
+            if (!disableMinimize) setSheetMinimized(true)
+          }}
+        >
+          <Minimize2 size={20} />
+        </button>
+      )}
+    </div>
+  }
+>
+  {/* Sheet body content depends on sheetMode */}
+  {sheetMode === "guide" && (
+    <>
+      {/* Example: if step 1 => departing, if step 3 => returning */}
+      {bookingStep === 1 && <PickupGuide isDepartureFlow />}
+      {bookingStep === 3 && (
+        <PickupGuide
+          isDepartureFlow={false}
+          primaryText="Choose dropoff station"
+          secondaryText="Return to any station"
+          primaryDescription="Select destination on map"
+          secondaryDescription="All stations accept returns"
+        />
+      )}
 
-                {/* For demonstration, here's a few extra step-specific items you might show: */}
-                {bookingStep === 2 && (
-                  <PickupTime
-                    startTime={new Date(Date.now() + 5 * 60000)}
-                    endTime={new Date(Date.now() + 20 * 60000)}
-                  />
-                )}
-                {bookingStep === 4 && <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} />}
-              </>
-            )}
+      {/* For demonstration, here's a few extra step-specific items you might show: */}
+      {bookingStep === 2 && (
+        <PickupTime
+          startTime={new Date(Date.now() + 5 * 60000)}
+          endTime={new Date(Date.now() + 20 * 60000)}
+        />
+      )}
+      {bookingStep === 4 && <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} />}
+    </>
+  )}
 
-            {sheetMode === "list" && (
-              <div className="space-y-2 px-4 py-2">
-                <StationsDisplay stationsCount={sortedStations.length} totalStations={stations.length} />
-                <StationList
-                  stations={sortedStations}
-                  userLocation={userLocation}
-                  onStationClick={handleStationSelectedFromList}
-                  className="space-y-2"
-                />
-              </div>
-            )}
+  {sheetMode === "list" && (
+    <div className="space-y-2 px-4 py-2">
+      <StationsDisplay stationsCount={sortedStations.length} totalStations={stations.length} />
+      <StationList
+        stations={sortedStations}
+        userLocation={userLocation}
+        onStationClick={handleStationSelectedFromList}
+        className="space-y-2"
+      />
+    </div>
+  )}
 
-            {sheetMode === "detail" && stationToShow && (
-              <StationDetail
-                activeStation={stationToShow}
-                showCarGrid={bookingStep === 2}
-                onConfirm={handleStationConfirm}
-                isVirtualCarLocation={isQrScanStation}
-                scannedCar={scannedCar}
-                confirmLabel="Confirm"
-              />
-            )}
+  {sheetMode === "detail" && stationToShow && (
+    <StationDetail
+      activeStation={stationToShow}
+      showCarGrid={bookingStep === 2}
+      onConfirm={handleStationConfirm}
+      isVirtualCarLocation={isQrScanStation}
+      scannedCar={scannedCar}
+      confirmLabel="Confirm"
 
-            {/* If stationToShow is null but mode is detail, you could show a fallback */}
-            {sheetMode === "detail" && !stationToShow && (
-              <div className="p-4 text-sm text-gray-400">
-                No station selected yet.
-              </div>
-            )}
-          </Sheet>
 
-          {/* QR Scanner Overlay */}
-          <QrScannerOverlay
-            isOpen={isQrScannerOpen}
-            onClose={() => setIsQrScannerOpen(false)}
-            onScanSuccess={(car) => handleQrScanSuccess(car)}
-            currentVirtualStationId={virtualStationId}
-          />
+      isSignedIn={isSignedIn}
+      onOpenSignInModal={() => setSignInModalOpen(true)}
+    />
+  )}
 
-          {/* Gaussian Splat Modal */}
-          <Suspense
-            fallback={
-              <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-                <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
-              </div>
-            }
-          >
-            {isSplatModalOpen && (
-              <GaussianSplatModal
-                isOpen={isSplatModalOpen}
-                onClose={() => setIsSplatModalOpen(false)}
-              />
-            )}
-          </Suspense>
+  {/* If stationToShow is null but mode is detail, you could show a fallback */}
+  {sheetMode === "detail" && !stationToShow && (
+    <div className="p-4 text-sm text-gray-400">
+      No station selected yet.
+    </div>
+  )}
+</Sheet>
 
-          {/* Sign-In Modal */}
-          <SignInModal
-            isOpen={signInModalOpen}
-            onClose={() => setSignInModalOpen(false)}
-          />
+{/* QR Scanner Overlay */}
+<QrScannerOverlay
+  isOpen={isQrScannerOpen}
+  onClose={() => setIsQrScannerOpen(false)}
+  onScanSuccess={(car) => handleQrScanSuccess(car)}
+  currentVirtualStationId={virtualStationId}
+/>
+
+{/* Gaussian Splat Modal */}
+<Suspense
+  fallback={
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+      <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
+    </div>
+  }
+>
+  {isSplatModalOpen && (
+    <GaussianSplatModal
+      isOpen={isSplatModalOpen}
+      onClose={() => setIsSplatModalOpen(false)}
+    />
+  )}
+</Suspense>
+
+{/* Sign-In Modal */}
+<SignInModal
+  isOpen={signInModalOpen}
+  onClose={() => setSignInModalOpen(false)}
+/>
         </>
       )}
     </div>

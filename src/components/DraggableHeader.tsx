@@ -1,86 +1,74 @@
 "use client"
-
-import { useState } from "react"
+import { MenuIcon, Upload } from "lucide-react"
 import { motion } from "framer-motion"
-import { MenuIcon, ChevronDown } from "lucide-react"
 import { QrCodeIcon } from "@/components/ui/icons/QrCodeIcon"
-import { LogoSvg } from "@/components/ui/logo/LogoSvg"
 
-interface DraggableHeaderProps {
+interface SideButtonsPanelProps {
   onToggleMenu: () => void
   onScannerOpen: () => void
+  onDragDropOpen?: () => void
 }
 
-export function DraggableHeader({ onToggleMenu, onScannerOpen }: DraggableHeaderProps) {
-  // State for header visibility
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const headerHeight = 50 // Default header height
-
-  // Toggle header visibility when tab is clicked
-  const toggleHeader = () => {
-    setIsCollapsed(!isCollapsed)
+export function SideButtonsPanel({ onToggleMenu, onScannerOpen, onDragDropOpen }: SideButtonsPanelProps) {
+  // Function to log button clicks for debugging
+  const logButtonClick = (name: string) => {
+    console.log(`Side panel button clicked: ${name}`)
   }
 
   return (
-    <div className="relative">
-      <motion.header
-        className="main-header fixed top-0 left-0 right-0 select-none"
-        style={{
-          zIndex: 9999,
-        }}
-        initial={{ y: 0 }}
-        animate={{ y: isCollapsed ? -headerHeight : 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 300 }}
-      >
-        {/* Main header content */}
-        <div className="bg-[#1a1a1a]/90 border-b border-[#2a2a2a] backdrop-blur-md h-[50px]">
-          <div className="h-full flex items-center justify-between px-3">
-            {/* Left: Logo */}
-            <div className="flex items-center">
-              <LogoSvg aria-label="Logo" width={50} height={50} className="object-contain" />
-            </div>
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="fixed right-0 top-1/4 z-[9999]"
+      style={{
+        pointerEvents: "auto",
+        touchAction: "auto",
+      }}
+    >
+      <div className="bg-[#1a1a1a]/90 backdrop-blur-md border border-[#2a2a2a] rounded-l-xl py-4 px-2 shadow-lg">
+        <div className="flex flex-col items-center space-y-4">
+          {/* Menu Button */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              logButtonClick("Menu")
+              onToggleMenu()
+            }}
+            className="flex items-center justify-center w-10 h-10 rounded-full text-white bg-[#2a2a2a]/60 hover:bg-[#333333]/80 active:scale-95 transition-all duration-200"
+            aria-label="Open menu"
+          >
+            <MenuIcon className="w-5 h-5" />
+          </motion.button>
 
-            {/* Right Icons */}
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onScannerOpen()
-                }}
-                className="flex items-center justify-center w-9 h-9 rounded-full text-gray-300 hover:text-white active:scale-95 transition-all duration-200"
-              >
-                <QrCodeIcon className="w-5 h-5" />
-              </button>
+          {/* QR Scanner Button */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              logButtonClick("Scanner")
+              onScannerOpen()
+            }}
+            className="flex items-center justify-center w-10 h-10 rounded-full text-white bg-[#2a2a2a]/60 hover:bg-[#333333]/80 active:scale-95 transition-all duration-200"
+            aria-label="Open QR scanner"
+          >
+            <QrCodeIcon className="w-5 h-5" />
+          </motion.button>
 
-              {/* Divider */}
-              <div className="w-px h-6 bg-[#2a2a2a]" />
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleMenu()
-                }}
-                className="flex items-center justify-center w-9 h-9 rounded-full text-gray-300 hover:text-white active:scale-95 transition-all duration-200"
-              >
-                <MenuIcon className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+          {/* Drag and Drop Button (Placeholder) */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              logButtonClick("DragDrop")
+              onDragDropOpen?.()
+            }}
+            className="flex items-center justify-center w-10 h-10 rounded-full text-white bg-[#276EF1]/80 hover:bg-[#276EF1] active:scale-95 transition-all duration-200"
+            aria-label="Drag and drop"
+          >
+            <Upload className="w-5 h-5" />
+          </motion.button>
         </div>
-
-        {/* Pull tab indicator */}
-        <div
-          className="absolute bottom-[-15px] left-1/2 transform -translate-x-1/2 cursor-pointer"
-          onClick={toggleHeader}
-        >
-          <div className="bg-[#1a1a1a] w-12 h-4 rounded-b-lg border-b border-l border-r border-[#2a2a2a] flex items-center justify-center">
-            <motion.div animate={{ rotateX: isCollapsed ? 180 : 0 }} transition={{ duration: 0.3 }}>
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            </motion.div>
-          </div>
-        </div>
-      </motion.header>
-    </div>
+      </div>
+    </motion.div>
   )
 }
 
