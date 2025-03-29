@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, getFirestore } from "firebase/firestore";
 import { toast } from "react-hot-toast";
+import { Analytics } from '@vercel/analytics/next';
 
 import { auth } from "@/lib/firebase";
 import Spinner from "@/components/ui/spinner";
@@ -212,6 +213,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.className} h-full overflow-x-hidden bg-background`}>
         <DisablePinchZoom />
+        <Analytics/>
         <ReduxProvider>
           <LayoutInner>{children}</LayoutInner>
         </ReduxProvider>
