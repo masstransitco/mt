@@ -18,10 +18,9 @@ import {
 } from "@/store/stationsSlice"
 import { selectScannedCar } from "@/store/carSlice"
 import { clearDispatchRoute } from "@/store/dispatchSlice"
-import { setSearchLocation, setUserLocation } from "@/store/userSlice"
+import { setSearchLocation } from "@/store/userSlice"
 import { MapPinDown } from "@/components/ui/icons/MapPinDown"
 import { MapPinUp } from "@/components/ui/icons/MapPinUp"
-import { NearPin } from "@/components/ui/icons/NearPin"
 import { cn } from "@/lib/utils"
 import {
   ensureGoogleMapsLoaded,
@@ -30,19 +29,20 @@ import {
 } from "@/lib/googleMaps"
 import { createVirtualStationFromCar } from "@/lib/stationUtils"
 import type { Car } from "@/types/cars"
-
-// Import dispatch route selector
 import { selectDispatchRoute } from "@/store/dispatchSlice"
 
-// Lazy-load MapCard so we don’t bundle Mapbox in SSR
-const MapCard = dynamic(() => import("@/components/MapCard"), {
+// Import the new LocateMeButton
+import LocateMeButton from "@/components/ui/LocateMeButton"
+
+// Lazy-load Google3DMapCard so we don’t bundle the script in SSR
+const Google3DMapCard = dynamic(() => import("@/components/3DMapCard"), {
   ssr: false,
   loading: () => (
     <div className="h-52 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
       <div className="animate-spin w-6 h-6 border-2 border-[#10a37f] border-t-transparent rounded-full" />
     </div>
-  )
-})
+  ),
+});
 
 /* -----------------------------------------------------------
    Icons for departure/arrival
@@ -53,15 +53,33 @@ interface IconProps {
 }
 
 const DepartureIcon = React.memo(({ highlight, step }: IconProps) => (
-  <div className={cn("transition-all duration-300", highlight ? "text-[#10a37f]" : "text-gray-400")}>
-    {step === 1 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinDown className="w-5 h-5" />}
+  <div
+    className={cn(
+      "transition-all duration-300",
+      highlight ? "text-[#10a37f]" : "text-gray-400"
+    )}
+  >
+    {step === 1 ? (
+      <Search className="w-5 h-5 text-gray-200" />
+    ) : (
+      <MapPinDown className="w-5 h-5" />
+    )}
   </div>
 ))
 DepartureIcon.displayName = "DepartureIcon"
 
 const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => (
-  <div className={cn("transition-all duration-300", highlight ? "text-[#276EF1]" : "text-gray-400")}>
-    {step === 3 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinUp className="w-5 h-5" />}
+  <div
+    className={cn(
+      "transition-all duration-300",
+      highlight ? "text-[#276EF1]" : "text-gray-400"
+    )}
+  >
+    {step === 3 ? (
+      <Search className="w-5 h-5 text-gray-200" />
+    ) : (
+      <MapPinUp className="w-5 h-5" />
+    )}
   </div>
 ))
 ArrivalIcon.displayName = "ArrivalIcon"
@@ -83,11 +101,15 @@ const AddressSearch = React.memo(function AddressSearch({
   selectedStation
 }: AddressSearchProps) {
   const [searchText, setSearchText] = useState("")
-  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([])
+  const [predictions, setPredictions] = useState<
+    google.maps.places.AutocompletePrediction[]
+  >([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null)
+  const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(
+    null
+  )
   const geocoder = useRef<google.maps.Geocoder | null>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const mapsLoadedRef = useRef<boolean>(false)
@@ -147,15 +169,23 @@ const AddressSearch = React.memo(function AddressSearch({
           types: ["establishment", "geocode"],
           componentRestrictions: { country: "HK" }
         }
-        const result = await new Promise<google.maps.places.AutocompletePrediction[]>((resolve, reject) => {
-          autocompleteService.current!.getPlacePredictions(request, (preds, status) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && preds) {
-              resolve(preds)
-            } else {
-              reject(new Error(`Places API error: ${status}`))
-            }
-          })
-        })
+        const result = await new Promise<google.maps.places.AutocompletePrediction[]>(
+          (resolve, reject) => {
+            autocompleteService.current!.getPlacePredictions(
+              request,
+              (preds, status) => {
+                if (
+                  status === google.maps.places.PlacesServiceStatus.OK &&
+                  preds
+                ) {
+                  resolve(preds)
+                } else {
+                  reject(new Error(`Places API error: ${status}`))
+                }
+              }
+            )
+          }
+        )
         setPredictions(result.slice(0, 5))
         setIsDropdownOpen(result.length > 0)
       } catch (error) {
@@ -175,15 +205,24 @@ const AddressSearch = React.memo(function AddressSearch({
           await ensureGoogleMapsLoaded()
           geocoder.current = await createGeocoder()
         }
-        const result = await new Promise<google.maps.GeocoderResult[]>((resolve, reject) => {
-          geocoder.current!.geocode({ placeId: prediction.place_id }, (results, status) => {
-            if (status === google.maps.GeocoderStatus.OK && results && results.length > 0) {
-              resolve(results)
-            } else {
-              reject(new Error(`Geocoder error: ${status}`))
-            }
-          })
-        })
+        const result = await new Promise<google.maps.GeocoderResult[]>(
+          (resolve, reject) => {
+            geocoder.current!.geocode(
+              { placeId: prediction.place_id },
+              (results, status) => {
+                if (
+                  status === google.maps.GeocoderStatus.OK &&
+                  results &&
+                  results.length > 0
+                ) {
+                  resolve(results)
+                } else {
+                  reject(new Error(`Geocoder error: ${status}`))
+                }
+              }
+            )
+          }
+        )
         const location = result[0]?.geometry?.location
         if (location) {
           onAddressSelect({ lat: location.lat(), lng: location.lng() })
@@ -202,13 +241,13 @@ const AddressSearch = React.memo(function AddressSearch({
   )
 
   return (
-    <div className="flex-1">
+    <div className="station-selector rounded-xl z-99 flex-1">
       {isStationSelected ? (
         <div className="px-1 py-1 text-white text-base font-medium">
           {selectedStation!.properties.Place}
         </div>
       ) : (
-        <div className="relative">
+        <div className="station-selector z-10 relative">
           <div className="relative">
             <input
               type="text"
@@ -256,7 +295,7 @@ const AddressSearch = React.memo(function AddressSearch({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -5 }}
                 transition={{ duration: 0.2 }}
-                className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-md shadow-lg z-50 max-h-60 overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-md shadow-lg z-50 max-h-60 overflow-y-auto z-[9999]"
               >
                 {predictions.map((prediction) => (
                   <motion.button
@@ -264,11 +303,13 @@ const AddressSearch = React.memo(function AddressSearch({
                     whileHover={{ backgroundColor: "rgba(42,42,42,0.8)" }}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(prediction)}
-                    className="w-full px-2.5 py-1.5 text-left text-base text-gray-200 transition-colors border-b border-[#2a2a2a] last:border-b-0"
+                    className="station-selector rounded-xl w-full px-2.5 py-1.5 text-left text-base text-gray-200 transition-colors border-b border-[#2a2a2a] last:border-b-0 z-[9999]"
                     type="button"
                   >
-                    <div className="font-medium">{prediction.structured_formatting.main_text}</div>
-                    <div className="text-xs text-gray-400">
+                    <div className="station-selector font-medium">
+                      {prediction.structured_formatting.main_text}
+                    </div>
+                    <div className="stationselector text-xs text-gray-400">
                       {prediction.structured_formatting.secondary_text}
                     </div>
                   </motion.button>
@@ -290,7 +331,6 @@ interface StationSelectorProps {
   onAddressSearch: (location: google.maps.LatLngLiteral) => void
   onClearDeparture?: () => void
   onClearArrival?: () => void
-  onLocateMe?: () => void
   onScan?: () => void // for QR scanning
   isQrScanStation?: boolean
   virtualStationId?: number | null
@@ -301,7 +341,6 @@ function StationSelector({
   onAddressSearch,
   onClearDeparture,
   onClearArrival,
-  onLocateMe,
   onScan,
   isQrScanStation = false,
   virtualStationId = null,
@@ -314,30 +353,21 @@ function StationSelector({
   const stations = useAppSelector(selectStationsWithDistance)
   const bookingRoute = useAppSelector(selectRoute)
   const reduxScannedCar = useAppSelector(selectScannedCar)
-
-  // Import dispatch route for pickup-time calculation
   const dispatchRoute = useAppSelector(selectDispatchRoute)
-  // Compute pickup in X minutes = dispatchRoute.duration/60 + 15
-  const pickupMins = useMemo(() => {
-    if (!dispatchRoute?.duration) return null
-    const drivingMins = dispatchRoute.duration / 60
-    return Math.ceil(drivingMins + 15)
-  }, [dispatchRoute])
 
   // Expand states for each station's map
   const [departureMapExpanded, setDepartureMapExpanded] = useState(false)
   const [arrivalMapExpanded, setArrivalMapExpanded] = useState(false)
 
-  // Use either passed scannedCar or Redux
+  // Possibly create a virtual station if departure is from a QR car
   const actualScannedCar = scannedCar || reduxScannedCar
-
-  // Possibly create a "virtual station" if departure is from a QR car
   const departureStation = useMemo(() => {
     const isVirtualStation =
       isQrScanStation &&
       actualScannedCar &&
       departureId &&
-      (virtualStationId === departureId || departureId === 1000000 + actualScannedCar.id)
+      (virtualStationId === departureId ||
+        departureId === 1000000 + actualScannedCar.id)
 
     if (isVirtualStation && actualScannedCar) {
       const vStationId = virtualStationId || 1000000 + actualScannedCar.id
@@ -361,38 +391,14 @@ function StationSelector({
   const highlightDeparture = useMemo(() => step <= 2, [step])
   const highlightArrival = useMemo(() => step >= 3, [step])
 
-  const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not supported.")
-      return
-    }
-    const toastId = toast.loading("Finding your location...")
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        toast.dismiss(toastId)
-        toast.success("Location found!")
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-        dispatch(setUserLocation(loc))
-        dispatch(setSearchLocation(loc))
-        onAddressSearch(loc)
-      },
-      (err) => {
-        console.error("Geolocation error:", err)
-        toast.dismiss(toastId)
-        toast.error("Unable to retrieve location.")
-      },
-      { enableHighAccuracy: false, timeout: 5000, maximumAge: 10000 }
-    )
-  }, [dispatch, onAddressSearch])
+  // Compute pickup in X minutes = dispatchRoute.duration/60 + 15
+  const pickupMins = useMemo(() => {
+    if (!dispatchRoute?.duration) return null
+    const drivingMins = dispatchRoute.duration / 60
+    return Math.ceil(drivingMins + 15)
+  }, [dispatchRoute])
 
-  const handleAddressSearch = useCallback(
-    (location: google.maps.LatLngLiteral) => {
-      dispatch(setSearchLocation(location))
-      onAddressSearch(location)
-    },
-    [dispatch, onAddressSearch]
-  )
-
+  // Handlers to clear departure/arrival
   const handleClearDeparture = useCallback(() => {
     dispatch(clearDispatchRoute())
     setDepartureMapExpanded(false)
@@ -404,17 +410,18 @@ function StationSelector({
     onClearArrival?.()
   }, [onClearArrival])
 
+  // (Optional) handle scanning if needed
+  // ...
+
   return (
     <>
-      <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto 
-                 px-4 pt-4">
+      <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto px-4 pt-4">
         <div className="flex flex-col w-full select-none">
-          {/* Station Inputs Container */}
           <motion.div
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-[#1a1a1a] rounded-xl overflow-hidden shadow-md"
+            className="bg-[#1a1a1a] rounded-xl overflow-visible shadow-md"
             style={{ overscrollBehavior: "none", touchAction: "none" }}
           >
             {/* If departure & arrival are the same, show error */}
@@ -438,14 +445,17 @@ function StationSelector({
               animate={{ opacity: 1 }}
               transition={{ duration: 0.2 }}
               className={cn(
-                "flex items-center gap-2 p-3 transition-all duration-300",
+                "flex items-center gap-2 p-3 transition-all duration-300 rounded-xl",
                 highlightDeparture ? "bg-[#222222]" : "bg-[#1a1a1a]",
                 arrivalStation ? "border-b border-[#2a2a2a]" : ""
               )}
             >
               <DepartureIcon highlight={highlightDeparture} step={step} />
               <AddressSearch
-                onAddressSelect={handleAddressSearch}
+                onAddressSelect={(location) => {
+                  dispatch(setSearchLocation(location))
+                  onAddressSearch(location)
+                }}
                 disabled={step >= 3}
                 placeholder="Where from?"
                 selectedStation={departureStation}
@@ -486,13 +496,16 @@ function StationSelector({
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.3 }}
                   className={cn(
-                    "flex items-center gap-2 p-3 transition-all duration-300",
+                    "flex items-center gap-2 p-3 transition-all duration-300 rounded-xl",
                     highlightArrival ? "bg-[#222222]" : "bg-[#1a1a1a]"
                   )}
                 >
                   <ArrivalIcon highlight={highlightArrival} step={step} />
                   <AddressSearch
-                    onAddressSelect={handleAddressSearch}
+                    onAddressSelect={(location) => {
+                      dispatch(setSearchLocation(location))
+                      onAddressSearch(location)
+                    }}
                     disabled={step < 3}
                     placeholder="Where to?"
                     selectedStation={arrivalStation}
@@ -526,7 +539,7 @@ function StationSelector({
           </motion.div>
 
           {/* Info Bar: distance + pickup time + locate me */}
-          <div className="flex items-center justify-between mt-2 px-1">
+          <div className="inline-flex items-center gap-2 mt-2 px-1 w-auto">
             {/* Distance indicator */}
             {departureStation && arrivalStation && distanceInKm && (
               <motion.div
@@ -552,17 +565,14 @@ function StationSelector({
               </motion.div>
             )}
 
-            {/* "Locate me" only on step 1 */}
+            {/* Use LocateMeButton at step 1, but pass a callback to replicate old logic */}
             {step === 1 && (
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={onLocateMe || handleLocateMe}
-                className="text-xs text-white px-2.5 py-1 bg-[#2a2a2a] rounded-lg flex items-center gap-1.5 hover:bg-[#333333] transition-colors"
-                type="button"
-              >
-                <NearPin className="w-3 h-3" />
-                <span>Locate me</span>
-              </motion.button>
+              <LocateMeButton
+                onLocateSuccess={(loc) => {
+                  // Similar to older handleLocateMe: call parent
+                  onAddressSearch(loc)
+                }}
+              />
             )}
           </div>
         </div>
@@ -570,7 +580,7 @@ function StationSelector({
 
       {/* DEPARTURE MapCard expanded view */}
       {departureMapExpanded && departureStation && (
-        <MapCard
+        <Google3DMapCard
           coordinates={[
             departureStation.geometry.coordinates[0],
             departureStation.geometry.coordinates[1]
@@ -585,7 +595,7 @@ function StationSelector({
 
       {/* ARRIVAL MapCard expanded view */}
       {arrivalMapExpanded && arrivalStation && (
-        <MapCard
+        <Google3DMapCard
           coordinates={[
             arrivalStation.geometry.coordinates[0],
             arrivalStation.geometry.coordinates[1]

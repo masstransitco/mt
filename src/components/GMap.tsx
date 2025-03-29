@@ -155,8 +155,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: googleApiKey,
-    version: "beta",
-    libraries: LIBRARIES,
+    version: "alpha",
+    libraries: LIBRARIES, 
   });
 
   useEffect(() => {
@@ -370,7 +370,34 @@ export default function GMap({ googleApiKey }: GMapProps) {
 // -------------------------
 // Marker overlay
 // -------------------------
-useMarkerOverlay(actualMap);
+
+// 1) Call the hook at the top level of your component
+const { updateMarkerTilt } = useMarkerOverlay(actualMap, {
+  onTiltChange: (tilt) => {
+    // optional callback if needed
+  },
+});
+
+useEffect(() => {
+  if (!actualMap) return;
+
+  // 2) Listen for 'tilt_changed'
+  const handleTiltChanged = () => {
+    const newTilt = actualMap.getTilt?.() ?? 0;
+    updateMarkerTilt(newTilt);
+  };
+
+  const listener = google.maps.event.addListener(
+    actualMap,
+    "tilt_changed",
+    handleTiltChanged
+  );
+  handleTiltChanged(); // initial read
+
+  return () => {
+    google.maps.event.removeListener(listener);
+  };
+}, [actualMap, updateMarkerTilt]);
 
   // -------------------------
   // QR logic
@@ -588,7 +615,6 @@ useMarkerOverlay(actualMap);
               dispatch(clearRoute());
               toast.success("Arrival station cleared. Back to picking arrival.");
             }}
-            onLocateMe={handleLocateMe}
             onScan={handleOpenQrScanner}
             isQrScanStation={isQrScanStation}
             virtualStationId={virtualStationId}
