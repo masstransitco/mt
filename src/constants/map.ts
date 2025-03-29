@@ -15,7 +15,12 @@ export const DEFAULT_CENTER = {
 
 export const DEFAULT_ZOOM = 12;
 
-export const LIBRARIES: Libraries = ['geometry', 'places', 'marker'];
+export const LIBRARIES: Libraries = [
+  "geometry",
+  "places",
+  "marker",
+  "maps3d" as any,
+];
 
 // Map boundaries for Hong Kong
 export const HK_BOUNDS = {
