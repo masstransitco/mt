@@ -17,8 +17,11 @@ import {
 } from "@/store/bookingSlice";
 
 interface UseMarkerOverlayOptions {
-  /** If you want a custom callback for the “Pickup car here” event */
+  /** If you want a custom callback for the "Pickup car here" event */
   onPickupClick?: (stationId: number) => void;
+
+  /** If you want to react to map tilt changes externally */
+  onTiltChange?: (tilt: number) => void;
 }
 
 /**
@@ -43,6 +46,9 @@ export function useMarkerOverlay(
   // Keep references to marker instances
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const markersCreatedRef = useRef(false);
+
+  // Store the current tilt here to avoid frequent React state updates
+  const tiltRef = useRef(0);
 
   /**
    * isStationSelected
@@ -195,7 +201,9 @@ export function useMarkerOverlay(
           const currentStep = store.getState().booking.step;
           if (currentStep === 2) {
             store.dispatch(advanceBookingStep(3));
-            toast.success("Departure confirmed! Now choose your arrival station.");
+            toast.success(
+              "Departure confirmed! Now choose your arrival station."
+            );
             options?.onPickupClick?.(station.id);
           }
         });
@@ -297,7 +305,8 @@ export function useMarkerOverlay(
           lng: centerLng,
           altitude,
         } as google.maps.LatLngAltitudeLiteral,
-        collisionBehavior: "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
+        collisionBehavior:
+          "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
         gmpClickable: true,
         content: container,
       });
@@ -311,6 +320,15 @@ export function useMarkerOverlay(
   }, [googleMap, stations, buildings3D, buildMarkerContainer]);
 
   /**
+   * Helper for vertical post dynamic height based on tilt
+   */
+  const computePostHeight = useCallback((baseHeight: number, tilt: number) => {
+    // tilt is 0..45 => fraction
+    const fraction = Math.min(Math.max(tilt / 45, 0), 1);
+    return baseHeight * fraction;
+  }, []);
+
+  /**
    * refreshMarkers
    *  - Toggle expanded vs. collapsed
    *  - Update collisionBehavior
@@ -318,12 +336,15 @@ export function useMarkerOverlay(
    *  - Apply green border for departure, blue for arrival
    */
   const refreshMarkers = useCallback(() => {
+    const currentTilt = tiltRef.current;
+
     markersRef.current.forEach((marker) => {
       const station = (marker as any)._stationData as StationFeature;
       const container = (marker as any)._container as HTMLDivElement | null;
       if (!container) return;
 
       const expanded = isStationSelected(station.id);
+
       // Force the marker not to hide behind others when expanded
       marker.collisionBehavior = expanded
         ? ("REQUIRED" as any)
@@ -334,16 +355,36 @@ export function useMarkerOverlay(
         marker.element.style.zIndex = expanded ? "9999" : "1";
       }
 
+      // Dynamic vertical Post Height
+      const collapsedPost = container.querySelector<HTMLDivElement>(
+        ".collapsed-wrapper > div:last-child"
+      );
+      const expandedPost = container.querySelector<HTMLDivElement>(
+        ".expanded-wrapper > div:last-child"
+      );
+
+      if (collapsedPost) {
+        const newHeight = computePostHeight(28, currentTilt);
+        collapsedPost.style.height = `${newHeight}px`;
+      }
+      if (expandedPost) {
+        const newHeight = computePostHeight(28, currentTilt);
+        expandedPost.style.height = `${newHeight}px`;
+      }
+
       // Show/hide wrappers
-      const collapsedWrapper = container.querySelector(".collapsed-wrapper") as HTMLDivElement;
-      const expandedWrapper = container.querySelector(".expanded-wrapper") as HTMLDivElement;
+      const collapsedWrapper =
+        container.querySelector<HTMLDivElement>(".collapsed-wrapper");
+      const expandedWrapper =
+        container.querySelector<HTMLDivElement>(".expanded-wrapper");
       if (collapsedWrapper && expandedWrapper) {
         collapsedWrapper.style.display = expanded ? "none" : "flex";
         expandedWrapper.style.display = expanded ? "flex" : "none";
       }
 
       // Show/hide pickup button if it exists
-      const pickupBtn = container.querySelector<HTMLButtonElement>(".pickup-btn");
+      const pickupBtn =
+        container.querySelector<HTMLButtonElement>(".pickup-btn");
       if (pickupBtn) {
         pickupBtn.style.display = bookingStep === 2 ? "inline-block" : "none";
       }
@@ -358,12 +399,14 @@ export function useMarkerOverlay(
         : "#505156"; // fallback
 
       // Collapsed circle border
-      const collapsedDiv = container.querySelector<HTMLDivElement>(".collapsed-view");
+      const collapsedDiv =
+        container.querySelector<HTMLDivElement>(".collapsed-view");
       if (collapsedDiv) {
         collapsedDiv.style.border = `2px solid ${borderColor}`;
       }
       // Expanded box border
-      const expandedDiv = container.querySelector<HTMLDivElement>(".expanded-view");
+      const expandedDiv =
+        container.querySelector<HTMLDivElement>(".expanded-view");
       if (expandedDiv) {
         expandedDiv.style.border = `2px solid ${borderColor}`;
       }
@@ -373,7 +416,22 @@ export function useMarkerOverlay(
     isStationSelected,
     departureStationId,
     arrivalStationId,
+    computePostHeight,
   ]);
+
+  /**
+   * updateMarkerTilt
+   * Called by GMap whenever `tilt_changed` fires to set the new tilt value
+   */
+  const updateMarkerTilt = useCallback(
+    (newTilt: number) => {
+      tiltRef.current = newTilt;
+      // Let the consumer know if needed
+      options?.onTiltChange?.(newTilt);
+      refreshMarkers();
+    },
+    [options, refreshMarkers]
+  );
 
   // Create markers once
   useEffect(() => {
@@ -387,5 +445,9 @@ export function useMarkerOverlay(
     }
   }, [bookingStep, departureStationId, arrivalStationId, refreshMarkers]);
 
-  return markersRef;
+  // Return markersRef (if you need it) and the tilt updater
+  return {
+    markersRef,
+    updateMarkerTilt,
+  };
 }
