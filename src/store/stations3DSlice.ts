@@ -66,7 +66,7 @@ export const fetchStations3D = createAsyncThunk<
   "stations3D/fetchStations3D",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch("/stations_3d.geojson");
+      const response = await fetch("/api/stations3d");
       if (!response.ok) {
         throw new Error(`Failed to fetch 3D stations`);
       }
