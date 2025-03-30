@@ -12,11 +12,14 @@ import {
   selectBookingStep,
 } from "@/store/bookingSlice";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { selectUserLocation } from "@/store/userSlice";
 import { selectAllStations } from "@/store/stationsSlice";
-
-// NEW: We'll import CatmullRomCurve3 for the route animation
 import { CatmullRomCurve3 } from "three";
+
+// --- SINGLETON DracoLoader so it isn't re-instantiated on each context restore ---
+const dracoLoaderSingleton = new DRACOLoader();
+dracoLoaderSingleton.setDecoderPath("/draco/"); // Adjust path if needed
 
 interface ThreeOverlayOptions {
   onStationSelected?: (stationId: number) => void;
@@ -32,12 +35,12 @@ export function useThreeOverlay(
 
   // references for scene/camera/renderer
   const cursorRef = useRef<THREE.Group | null>(null);
-  const navigationCursorRef = useRef<THREE.Group | null>(null); // Holds cursor_navigation.glb
+  const navigationCursorRef = useRef<THREE.Group | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
 
-  // Single array for building groups (mesh + edges)
+  // Single array for building groups (mesh only now)
   const buildingGroupsRef = useRef<THREE.Group[]>([]);
 
   // Redux states
@@ -56,9 +59,9 @@ export function useThreeOverlay(
   // Store route data to handle "scene not ready" case
   const routeDataRef = useRef<Array<{ lat: number; lng: number }>>([]);
 
-  // NEW: We'll store a CatmullRomCurve3 for the route so we can animate on it
+  // We'll store a CatmullRomCurve3 for the route so we can animate on it
   const routeCurveRef = useRef<CatmullRomCurve3 | null>(null);
-  // NEW: Track the start time for our animation
+  // Track the start time for our animation
   const routeStartTimeRef = useRef<number | null>(null);
 
   // Anchor for local coordinate transforms
@@ -72,16 +75,16 @@ export function useThreeOverlay(
 
   // Colors
   const BUILDING_DEFAULT_COLOR = new THREE.Color(0xcccccc);
-  const BUILDING_DEPARTURE_COLOR = new THREE.Color(0x00ff00); // green
-  const BUILDING_ARRIVAL_COLOR = new THREE.Color(0x0000ff);   // blue
-  const ROUTE_TUBE_COLOR = new THREE.Color(0xffffff);         // white
+  const BUILDING_DEPARTURE_COLOR = new THREE.Color(0x00ff00);
+  const BUILDING_ARRIVAL_COLOR = new THREE.Color(0x0000ff);
+  const ROUTE_TUBE_COLOR = new THREE.Color(0xffffff);
 
   // Clock ref for simple animation (used for "breathing" effect)
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
 
-  // -----------------------
-  // 1. Building extrude helper
-  // -----------------------
+  // ------------------------------------------------
+  // 1. Building extrude helper (edges removed)
+  // ------------------------------------------------
   function createExtrudedBuilding(
     building: any,
     anchor: { lat: number; lng: number; altitude: number },
@@ -93,8 +96,8 @@ export function useThreeOverlay(
     const buildingHeight = building.properties?.topHeight ?? 250;
 
     const absolutePoints: THREE.Vector3[] = [];
-    let sumX = 0,
-      sumY = 0;
+    let sumX = 0;
+    let sumY = 0;
 
     coords.forEach(([lng, lat]: [number, number]) => {
       const { x, y } = latLngAltToVector3(
@@ -130,24 +133,15 @@ export function useThreeOverlay(
     };
     const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
 
-    const material = new THREE.MeshBasicMaterial({
+    // Plain opaque material (no edges, no transparency)
+    const material = new THREE.MeshLambertMaterial({
       color: defaultColor,
-      transparent: true,
-      opacity: 0.8,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     });
     const buildingMesh = new THREE.Mesh(geometry, material);
 
-    const edgesGeometry = new THREE.EdgesGeometry(geometry);
-    const edgesMaterial = new THREE.LineBasicMaterial({
-      color: 0x000000,
-      linewidth: 1,
-    });
-    const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-
     const group = new THREE.Group();
     group.add(buildingMesh);
-    group.add(edges);
 
     // Store some userData for picking
     group.userData.centerPos = new THREE.Vector3(centerX, centerY, 0);
@@ -170,9 +164,9 @@ export function useThreeOverlay(
     return group;
   }
 
-  // -----------------------
+  // ------------------------------------------------
   // 2. Refresh or create the route tube
-  // -----------------------
+  // ------------------------------------------------
   const refreshRouteTube = useCallback(() => {
     const path = routeDataRef.current;
     if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
@@ -184,21 +178,18 @@ export function useThreeOverlay(
         color: ROUTE_TUBE_COLOR,
         transparent: true,
         opacity: 0.9,
-        side: THREE.DoubleSide,
+        side: THREE.FrontSide,
       });
     }
 
     // Convert lat/lng to Vector3
     const anchor = anchorRef.current;
     const points = path.map(({ lat, lng }) => {
-      const { x, y, z } = latLngAltToVector3(
-        { lat, lng, altitude: 5 },
-        anchor
-      );
+      const { x, y, z } = latLngAltToVector3({ lat, lng, altitude: 5 }, anchor);
       return new THREE.Vector3(x, y, z);
     });
 
-    // NEW: Also store the route as a CatmullRomCurve3 for our animation
+    // Also store the route as a CatmullRomCurve3 for our animation
     routeCurveRef.current = new CatmullRomCurve3(points, false, "catmullrom", 0.2);
     routeStartTimeRef.current = null; // reset start time so animation restarts
 
@@ -223,16 +214,10 @@ export function useThreeOverlay(
     }
 
     const curve = new CustomCurve(points);
-    const tubularSegments = Math.min(Math.max(points.length * 2, 32), 100);
-    const radius = 8;
-    const radialSegments = 8;
-    const tubeGeom = new THREE.TubeGeometry(
-      curve,
-      tubularSegments,
-      radius,
-      radialSegments,
-      false
-    );
+    const tubularSegments = Math.min(Math.max(points.length * 1, 16), 50);
+    const radius = 5;
+    const radialSegments = 4;
+    const tubeGeom = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
 
     if (!routeTubeRef.current) {
       const tubeMesh = new THREE.Mesh(tubeGeom, tubeMaterialRef.current);
@@ -259,9 +244,9 @@ export function useThreeOverlay(
     refreshRouteTube();
   }, [routeDecoded, departureStationId, arrivalStationId, refreshRouteTube]);
 
-  // -----------------------
+  // ------------------------------------------------
   // 3. Station selection callback
-  // -----------------------
+  // ------------------------------------------------
   const handleStationSelected = useCallback(
     (stationId: number) => {
       if (options?.onStationSelected) {
@@ -271,9 +256,9 @@ export function useThreeOverlay(
     [options]
   );
 
-  // -----------------------
+  // ------------------------------------------------
   // 4. Main useEffect to init & teardown
-  // -----------------------
+  // ------------------------------------------------
   useEffect(() => {
     if (!googleMap || isInitializedRef.current) return;
     isInitializedRef.current = true;
@@ -353,11 +338,13 @@ export function useThreeOverlay(
       directionalLight.position.set(50, 100, 200);
       scene.add(directionalLight);
 
+      // Reuse the single, global DracoLoader
       const loader = new GLTFLoader();
+      loader.setDRACOLoader(dracoLoaderSingleton);
 
-      // 1) Load user location "cursor.glb"
+      // 1) Load user location \"cursor\"
       loader.load(
-        "/map/cursor.glb",
+        "/models/cursor",
         (gltf) => {
           const originalModel = gltf.scene;
           const cursorGroup = new THREE.Group();
@@ -368,17 +355,11 @@ export function useThreeOverlay(
           const q = new THREE.Quaternion().setFromEuler(oldEuler);
           originalModel.rotation.copy(new THREE.Euler().setFromQuaternion(q, "XYZ"));
 
-          // Double-sided, slight emissive
+          // Double-sided, no extra transparency
           originalModel.traverse((child) => {
             if (child instanceof THREE.Mesh && child.material) {
               child.material.side = THREE.DoubleSide;
               child.material.needsUpdate = true;
-              if (child.material instanceof THREE.MeshStandardMaterial) {
-                child.material.emissive = new THREE.Color(0x276ef1);
-                child.material.emissiveIntensity = 0.4;
-                child.material.metalness = 0;
-                child.material.roughness = 0.6;
-              }
             }
           });
 
@@ -390,12 +371,12 @@ export function useThreeOverlay(
           overlayRef.current?.requestRedraw();
         },
         undefined,
-        (err) => console.error("[useThreeOverlay] cursor.glb load error:", err)
+        (err) => console.error("[useThreeOverlay] /models/cursor load error:", err)
       );
 
-      // 2) Load "cursor_navigation.glb" for step 3 & route animation
+      // 2) Load \"cursor_navigation\" for step 3 & route animation
       loader.load(
-        "/map/cursor_navigation.glb",
+        "/models/cursor_navigation",
         (gltf) => {
           const originalModel = gltf.scene;
           const navCursorGroup = new THREE.Group();
@@ -405,17 +386,11 @@ export function useThreeOverlay(
           const q = new THREE.Quaternion().setFromEuler(oldEuler);
           originalModel.rotation.copy(new THREE.Euler().setFromQuaternion(q, "XYZ"));
 
-          // Double-sided, slight emissive
+          // Double-sided
           originalModel.traverse((child) => {
             if (child instanceof THREE.Mesh && child.material) {
               child.material.side = THREE.DoubleSide;
               child.material.needsUpdate = true;
-              if (child.material instanceof THREE.MeshStandardMaterial) {
-                child.material.emissive = new THREE.Color(0x276ef1);
-                child.material.emissiveIntensity = 0.4;
-                child.material.metalness = 0;
-                child.material.roughness = 0.6;
-              }
             }
           });
 
@@ -428,7 +403,7 @@ export function useThreeOverlay(
         },
         undefined,
         (err) =>
-          console.error("[useThreeOverlay] cursor_navigation.glb error:", err)
+          console.error("[useThreeOverlay] /models/cursor_navigation load error:", err)
       );
 
       // Set up raycasting
@@ -478,6 +453,7 @@ export function useThreeOverlay(
 
       const hits: THREE.Intersection[] = [];
       buildingGroupsRef.current.forEach((group) => {
+        // We only have a single mesh child now (no edges)
         const groupHits = raycaster.intersectObjects(group.children, false);
         groupHits.forEach((hit) => {
           (hit as any).buildingGroup = group;
@@ -555,6 +531,7 @@ export function useThreeOverlay(
               child instanceof THREE.Mesh &&
               child.material instanceof THREE.MeshStandardMaterial
             ) {
+              // example: a mild pulsing
               child.material.emissiveIntensity =
                 0.1 + 0.1 * Math.sin(elapsed * breathingSpeed);
             }
@@ -562,14 +539,12 @@ export function useThreeOverlay(
         }
       }
 
-      // 3) Step 3: place navigation cursor near the departure station
-      //    Step 4: animate navigation cursor along route
+      // 3) Step 3 or 4: controlling navigationCursorRef
       if (navigationCursorRef.current) {
         if (bookingStep === 3 && departureStationId != null) {
           // Place the cursor at the side of the building
           const depStation = allStations.find((s) => s.id === departureStationId);
           if (depStation) {
-            // Look up the extruded building group for this station
             const buildingGroup = buildingGroupsRef.current.find(
               (g) => g.userData.stationId === departureStationId
             );
@@ -583,13 +558,11 @@ export function useThreeOverlay(
                   { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
                   anchor
                 );
-                // direction from building center -> user
                 const dx = userVec.x - boundingCenter.x;
                 const dy = userVec.y - boundingCenter.y;
                 angle = Math.atan2(dy, dx);
               }
 
-              // 5m margin outside building
               const margin = 5;
               const offsetDist = boundingRadius + margin;
               const offsetX = boundingCenter.x + offsetDist * Math.cos(angle);
@@ -616,13 +589,11 @@ export function useThreeOverlay(
           } else {
             navigationCursorRef.current.visible = false;
           }
-        } 
-        else if (bookingStep === 4) {
-          // NEW: Animate the navigation cursor along the route
+        } else if (bookingStep === 4) {
+          // Animate the navigation cursor along the route
           if (routeCurveRef.current) {
             navigationCursorRef.current.visible = true;
 
-            // If we haven't set the start time yet, set it now
             if (routeStartTimeRef.current === null) {
               routeStartTimeRef.current = performance.now();
             }
@@ -630,9 +601,8 @@ export function useThreeOverlay(
             const routeDurationMs = 12000; // total animation time
             const t = (elapsed % routeDurationMs) / routeDurationMs;
 
-            // Position
             routeCurveRef.current.getPointAt(t, navigationCursorRef.current.position);
-            // Slight altitude offset to ride "on top" of tube
+            // Slight altitude offset
             navigationCursorRef.current.position.z += 50;
 
             // Orientation
@@ -645,7 +615,6 @@ export function useThreeOverlay(
             );
           }
         } else {
-          // Hide the nav cursor in other steps
           navigationCursorRef.current.visible = false;
         }
       }
@@ -690,9 +659,6 @@ export function useThreeOverlay(
         scene?.remove(group);
         group.children.forEach((child) => {
           if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            disposeMaterial(child.material);
-          } else if (child instanceof THREE.LineSegments) {
             child.geometry.dispose();
             disposeMaterial(child.material);
           }
