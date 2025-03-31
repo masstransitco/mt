@@ -68,10 +68,7 @@ interface UseMarkerOverlayOptions {
   onTiltChange?: (tilt: number) => void
 }
 
-export function useMarkerOverlay(
-  googleMap: google.maps.Map | null,
-  options?: UseMarkerOverlayOptions,
-) {
+export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: UseMarkerOverlayOptions) {
   const dispatch = useAppDispatch()
 
   // Redux state
@@ -88,13 +85,15 @@ export function useMarkerOverlay(
   const bookingRoute = useAppSelector(selectBookingRoute)
 
   // Station "candidates" with geometry + station ID.
-  const candidateStationsRef = useRef<{
-    stationId: number
-    position: google.maps.LatLngAltitudeLiteral
-    stationData?: StationFeature
-    refs?: ReturnType<typeof buildMarkerContainer>
-    marker?: google.maps.marker.AdvancedMarkerElement | null
-  }[]>([])
+  const candidateStationsRef = useRef<
+    {
+      stationId: number
+      position: google.maps.LatLngAltitudeLiteral
+      stationData?: StationFeature
+      refs?: ReturnType<typeof buildMarkerContainer>
+      marker?: google.maps.marker.AdvancedMarkerElement | null
+    }[]
+  >([])
 
   // Single route marker for the departure->arrival route
   const routeMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
@@ -111,8 +110,7 @@ export function useMarkerOverlay(
 
   // Decide if a station marker is forced visible (departure or arrival)
   const isForceVisible = useCallback(
-    (stationId: number): boolean =>
-      stationId === departureStationId || stationId === arrivalStationId,
+    (stationId: number): boolean => stationId === departureStationId || stationId === arrivalStationId,
     [departureStationId, arrivalStationId],
   )
 
@@ -155,7 +153,7 @@ export function useMarkerOverlay(
         position: relative;
         pointer-events: auto;
         transform-origin: center bottom;
-        transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.3s ease;
+        transition: transform 0.28s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.25s ease;
         transform: scale(0);
         opacity: 1;
       `
@@ -174,22 +172,22 @@ export function useMarkerOverlay(
       const collapsedDiv = document.createElement("div")
       collapsedDiv.classList.add("collapsed-view")
       collapsedDiv.style.cssText = `
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #1C1C1E, #2C2C2E);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #F2F2F7;
-        font-size: 14px;
-        border: 2px solid #505156;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-        pointer-events: auto;
-        transform-origin: center;
-        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-      `
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1C1C1E, #2C2C2E);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #F2F2F7;
+  font-size: 14px;
+  border: 1.5px solid #505156;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  pointer-events: auto;
+  transform-origin: center;
+  transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+`
       collapsedDiv.textContent = "⚑"
 
       // Marker click → station selection
@@ -233,46 +231,48 @@ export function useMarkerOverlay(
       const expandedDiv = document.createElement("div")
       expandedDiv.classList.add("expanded-view")
       expandedDiv.style.cssText = `
-        width: 220px;
-        background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
-        color: #F2F2F7;
-        border: 2px solid #505156;
-        border-radius: 12px;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.5);
-        padding: 12px;
-        cursor: pointer;
-        pointer-events: auto;
-        transform-origin: center;
-        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-      `
+  width: 180px;
+  background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
+  color: #F2F2F7;
+  border: 1.5px solid #505156;
+  border-radius: 10px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.45);
+  padding: 10px;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: center;
+  transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+`
       expandedDiv.innerHTML = `
-        <div class="expanded-info-section" style="margin-bottom: 8px;"></div>
+        <div class="expanded-info-section" style="margin-bottom: 6px;"></div>
         <button class="pickup-btn" style="
-          display: inline-block;
-          padding: 8px 12px;
-          background: #10A37F;
-          color: #FFFFFF;
-          font-size: 14px;
-          font-weight: 600;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s ease-in-out;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-          width: 100%;
-        ">
-          Pickup car here
-        </button>
+  display: inline-block;
+  padding: 6px 10px;
+  background: #10A37F;
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  width: 100%;
+  letter-spacing: 0.2px;
+  min-height: 30px;
+">
+  Pickup car here
+</button>
       `
 
       // Hover effect
       expandedDiv.addEventListener("mouseenter", () => {
-        expandedDiv.style.transform = "scale(1.02)"
-        expandedDiv.style.boxShadow = "0 12px 24px rgba(0,0,0,0.6)"
+        expandedDiv.style.transform = "scale(1.015)"
+        expandedDiv.style.boxShadow = "0 8px 20px rgba(0,0,0,0.55)"
       })
       expandedDiv.addEventListener("mouseleave", () => {
         expandedDiv.style.transform = ""
-        expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)"
+        expandedDiv.style.boxShadow = "0 6px 12px rgba(0,0,0,0.45)"
       })
 
       // "Pickup car here" button → only in step 2
@@ -281,7 +281,7 @@ export function useMarkerOverlay(
         pickupBtn.addEventListener("mouseenter", () => {
           pickupBtn.style.background = "#0D8C6D"
           pickupBtn.style.transform = "translateY(-1px)"
-          pickupBtn.style.boxShadow = "0 4px 8px rgba(0,0,0,0.4)"
+          pickupBtn.style.boxShadow = "0 3px 6px rgba(0,0,0,0.35)"
         })
         pickupBtn.addEventListener("mouseleave", () => {
           pickupBtn.style.background = "#10A37F"
@@ -402,20 +402,21 @@ export function useMarkerOverlay(
       const boxDiv = document.createElement("div")
       boxDiv.classList.add("route-box")
       boxDiv.style.cssText = `
-        width: 140px;
-        background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
-        color: #FFFFFF;
-        border: 2px solid #FFFFFF;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        padding: 8px;
-        text-align: center;
-        pointer-events: auto;
-        font-size: 15px;
-        font-weight: 600;
-        cursor: default;
-        transition: transform 0.2s ease;
-      `
+  width: 110px;
+  background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
+  color: #FFFFFF;
+  border: 1.5px solid #FFFFFF;
+  border-radius: 8px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+  padding: 6px;
+  text-align: center;
+  pointer-events: auto;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: default;
+  transition: transform 0.2s ease;
+  letter-spacing: 0.2px;
+`
       boxDiv.innerHTML = `${driveMins} mins drive`
 
       const postDiv = document.createElement("div")
@@ -522,7 +523,7 @@ export function useMarkerOverlay(
 
   // Create an AdvancedMarker for a station
   const createStationMarker = useCallback(
-    (entry: typeof candidateStationsRef.current[number]) => {
+    (entry: (typeof candidateStationsRef.current)[number]) => {
       if (!googleMap) return
       if (!window.google?.maps?.marker?.AdvancedMarkerElement) return
 
@@ -567,9 +568,7 @@ export function useMarkerOverlay(
       if (!refs) return
 
       const forceVis = isForceVisible(station.id)
-      marker.collisionBehavior = forceVis
-        ? ("REQUIRED" as any)
-        : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any)
+      marker.collisionBehavior = forceVis ? ("REQUIRED" as any) : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any)
 
       if (marker.element) {
         marker.element.style.zIndex = forceVis ? "9999" : "1"
@@ -611,20 +610,13 @@ export function useMarkerOverlay(
       // Border color + glow if departure/arrival
       const isDeparture = station.id === departureStationId
       const isArrival = station.id === arrivalStationId
-      const borderColor = isDeparture
-        ? "#10A37F"
-        : isArrival
-        ? "#276EF1"
-        : "#505156"
+      const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#505156"
 
       // Collapsed style
       refs.collapsedDiv.style.borderColor = borderColor
       if (isDeparture || isArrival) {
-        const glowColor = isDeparture
-          ? "rgba(16, 163, 127, 0.5)"
-          : "rgba(39, 110, 241, 0.5)"
-        refs.collapsedDiv.style.boxShadow =
-          `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
+        const glowColor = isDeparture ? "rgba(16, 163, 127, 0.5)" : "rgba(39, 110, 241, 0.5)"
+        refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
       } else {
         refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)"
       }
@@ -632,11 +624,8 @@ export function useMarkerOverlay(
       // Expanded style
       refs.expandedDiv.style.borderColor = borderColor
       if (isDeparture || isArrival) {
-        const glowColor = isDeparture
-          ? "rgba(16, 163, 127, 0.5)"
-          : "rgba(39, 110, 241, 0.5)"
-        refs.expandedDiv.style.boxShadow =
-          `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`
+        const glowColor = isDeparture ? "rgba(16, 163, 127, 0.5)" : "rgba(39, 110, 241, 0.5)"
+        refs.expandedDiv.style.boxShadow = `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`
       } else {
         refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)"
       }
@@ -645,25 +634,25 @@ export function useMarkerOverlay(
       if (!refs.expandedInfoSection) return
       if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
         refs.expandedInfoSection.innerHTML = `
-          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: #10A37F;">
-            Pickup in ${pickupMins} minutes
-          </div>
-          <div style="font-size: 14px; opacity: 0.8;">
-            ${station.properties.Address || "No address available"}
-          </div>
-        `
+  <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: #10A37F; letter-spacing: 0.1px;">
+    Pickup in ${pickupMins} minutes
+  </div>
+  <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
+    ${station.properties.Address || "No address available"}
+  </div>
+`
       } else {
         const placeName = station.properties.Place || `Station ${station.id}`
         const address = station.properties.Address || "No address available"
         const titleColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#F2F2F7"
         refs.expandedInfoSection.innerHTML = `
-          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: ${titleColor};">
-            ${placeName}
-          </div>
-          <div style="font-size: 14px; opacity: 0.8;">
-            ${address}
-          </div>
-        `
+  <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: ${titleColor}; letter-spacing: 0.1px;">
+    ${placeName}
+  </div>
+  <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
+    ${address}
+  </div>
+`
       }
     })
 
@@ -753,7 +742,7 @@ export function useMarkerOverlay(
     departureStationId,
     arrivalStationId,
     dispatchRoute, // updates pickupMins
-    bookingRoute,  // route marker
+    bookingRoute, // route marker
     refreshMarkers,
   ])
 
@@ -798,3 +787,4 @@ export function useMarkerOverlay(
     updateMarkerTilt,
   }
 }
+
