@@ -324,18 +324,7 @@
   @apply bg-accent/30 text-foreground;
 }
 
-/* Map Markers */
-
-.marker-container {
-  transition: transform 0.2s ease-out;
-}
-.collapsed-marker {
-  transform: scale(0.9);
-}
-.expanded-marker {
-  transform: scale(1);
-}
-
+/* Hide Alpha Channel Banner */
 div[role="region"][aria-label*="alpha channel"] {
   display: none !important;
 }
