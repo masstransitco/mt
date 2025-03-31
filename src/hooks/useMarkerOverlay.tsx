@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useMemo } from "react"
 import { toast } from "react-hot-toast"
-import { useAppSelector, store } from "@/store/store"
+import { useAppSelector, useAppDispatch, store } from "@/store/store"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectStations3D } from "@/store/stations3DSlice"
 
@@ -13,8 +13,7 @@ import {
   advanceBookingStep,
   selectDepartureStation as doSelectDepartureStation,
   selectArrivalStation as doSelectArrivalStation,
-  // The route for DEPARTURE->ARRIVAL:
-  selectRoute as selectBookingRoute,
+  selectRoute as selectBookingRoute, // The route for DEPARTURE->ARRIVAL:
 } from "@/store/bookingSlice"
 
 // The route from dispatch hub -> departure station:
@@ -73,10 +72,12 @@ export function useMarkerOverlay(
   googleMap: google.maps.Map | null,
   options?: UseMarkerOverlayOptions,
 ) {
+  const dispatch = useAppDispatch()
+
+  // Redux state
   const stations = useAppSelector(selectStationsWithDistance)
   const buildings3D = useAppSelector(selectStations3D)
 
-  // Booking state
   const bookingStep = useAppSelector(selectBookingStep)
   const departureStationId = useAppSelector(selectDepartureStationId)
   const arrivalStationId = useAppSelector(selectArrivalStationId)
@@ -86,37 +87,38 @@ export function useMarkerOverlay(
   // The route from departure -> arrival
   const bookingRoute = useAppSelector(selectBookingRoute)
 
-  // **Candidate stations**: we'll store geometry + station ID, and create markers on demand
+  // Station "candidates" with geometry + station ID.
   const candidateStationsRef = useRef<{
-    stationId: number;
-    position: google.maps.LatLngAltitudeLiteral;
-    stationData?: StationFeature;
-    refs?: ReturnType<typeof buildMarkerContainer>;
-    marker?: google.maps.marker.AdvancedMarkerElement | null;
+    stationId: number
+    position: google.maps.LatLngAltitudeLiteral
+    stationData?: StationFeature
+    refs?: ReturnType<typeof buildMarkerContainer>
+    marker?: google.maps.marker.AdvancedMarkerElement | null
   }[]>([])
 
-  // Markers are no longer all stored together. Instead, each candidate can have a .marker
-
-  // Route marker
+  // Single route marker for the departure->arrival route
   const routeMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
 
-  // Current tilt
+  // Keep track of current tilt
   const tiltRef = useRef(0)
 
-  // Use `dispatchRoute` to compute "pickup in X minutes" for the departure station
+  // For the departure station, show "Pickup in X minutes"
   const pickupMins = useMemo(() => {
     if (!dispatchRoute?.duration) return null
     const drivingMins = dispatchRoute.duration / 60
     return Math.ceil(drivingMins + 15)
   }, [dispatchRoute])
 
-  // Decide if a station marker is forced visible
+  // Decide if a station marker is forced visible (departure or arrival)
   const isForceVisible = useCallback(
-    (stationId: number): boolean => stationId === departureStationId || stationId === arrivalStationId,
+    (stationId: number): boolean =>
+      stationId === departureStationId || stationId === arrivalStationId,
     [departureStationId, arrivalStationId],
   )
 
-  // Which station(s) are expanded
+  // Which station(s) are expanded?
+  // - Step < 3: only departure station is expanded (once chosen).
+  // - Step >= 3: expand both departure and arrival (if chosen).
   const isExpanded = useCallback(
     (stationId: number): boolean => {
       const isDeparture = stationId === departureStationId
@@ -124,28 +126,27 @@ export function useMarkerOverlay(
       if (bookingStep < 3) {
         return isDeparture
       }
-      // from step 3 onward, show both if chosen
-      if (bookingStep >= 3) {
-        return isDeparture || isArrival
-      }
-      return false
+      return isDeparture || isArrival
     },
     [bookingStep, departureStationId, arrivalStationId],
   )
 
-  // Click on station marker
-  const handleStationClick = useCallback((stationId: number) => {
-    const currentStep = store.getState().booking.step
-    if (currentStep === 1 || currentStep === 2) {
-      store.dispatch(doSelectDepartureStation(stationId))
-      toast.success(`Departure station #${stationId} selected!`)
-    } else if (currentStep === 3 || currentStep === 4) {
-      store.dispatch(doSelectArrivalStation(stationId))
-      toast.success(`Arrival station #${stationId} selected!`)
-    }
-  }, [])
+  // UPDATED: fetch booking step from store to avoid stale closure
+  const handleStationClick = useCallback(
+    (stationId: number) => {
+      const currentStep = store.getState().booking.step
+      if (currentStep === 1 || currentStep === 2) {
+        dispatch(doSelectDepartureStation(stationId))
+        toast.success(`Departure station #${stationId} selected!`)
+      } else if (currentStep === 3 || currentStep === 4) {
+        dispatch(doSelectArrivalStation(stationId))
+        toast.success(`Arrival station #${stationId} selected!`)
+      }
+    },
+    [dispatch],
+  )
 
-  // Build the DOM for each station marker with improved animations and store references
+  // Build DOM for each station marker, hooking up events
   const buildMarkerContainer = useCallback(
     (station: StationFeature) => {
       const container = document.createElement("div")
@@ -159,7 +160,7 @@ export function useMarkerOverlay(
         opacity: 1;
       `
 
-      // Collapsed marker elements
+      // Collapsed marker
       const collapsedWrapper = document.createElement("div")
       collapsedWrapper.classList.add("collapsed-wrapper")
       collapsedWrapper.style.cssText = `
@@ -191,7 +192,7 @@ export function useMarkerOverlay(
       `
       collapsedDiv.textContent = "⚑"
 
-      // Station marker click
+      // Marker click → station selection
       collapsedDiv.addEventListener("click", (ev) => {
         ev.stopPropagation()
         handleStationClick(station.id)
@@ -219,14 +220,13 @@ export function useMarkerOverlay(
       collapsedWrapper.appendChild(collapsedDiv)
       collapsedWrapper.appendChild(collapsedPost)
 
-      // Expanded marker elements
+      // Expanded marker
       const expandedWrapper = document.createElement("div")
       expandedWrapper.classList.add("expanded-wrapper")
       expandedWrapper.style.cssText = `
         display: none;
         flex-direction: column;
         align-items: center;
-        pointer-events: none;
         transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0, 0.2, 1);
       `
 
@@ -275,7 +275,7 @@ export function useMarkerOverlay(
         expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)"
       })
 
-      // "Pickup car here" button
+      // "Pickup car here" button → only in step 2
       const pickupBtn = expandedDiv.querySelector<HTMLButtonElement>(".pickup-btn")
       if (pickupBtn) {
         pickupBtn.addEventListener("mouseenter", () => {
@@ -290,16 +290,15 @@ export function useMarkerOverlay(
         })
         pickupBtn.addEventListener("click", (ev) => {
           ev.stopPropagation()
-          const currentStep = store.getState().booking.step
-          if (currentStep === 2) {
-            store.dispatch(advanceBookingStep(3))
+          if (store.getState().booking.step === 2) {
+            dispatch(advanceBookingStep(3))
             toast.success("Departure confirmed! Now choose your arrival station.")
             options?.onPickupClick?.(station.id)
           }
         })
       }
 
-      // Also expand on click
+      // Clicking the expanded area also selects the station
       expandedDiv.addEventListener("click", (ev) => {
         ev.stopPropagation()
         handleStationClick(station.id)
@@ -317,11 +316,10 @@ export function useMarkerOverlay(
       expandedWrapper.appendChild(expandedDiv)
       expandedWrapper.appendChild(expandedPost)
 
-      // Append collapsed/expanded to container
+      // Combine
       container.appendChild(collapsedWrapper)
       container.appendChild(expandedWrapper)
 
-      // Return container + references for reuse
       return {
         container,
         collapsedWrapper,
@@ -334,32 +332,30 @@ export function useMarkerOverlay(
         expandedInfoSection: expandedDiv.querySelector<HTMLDivElement>(".expanded-info-section"),
       }
     },
-    [handleStationClick, options],
+    [dispatch, handleStationClick, options],
   )
 
-  // Adjust the "post" height based on tilt
+  // Adjust post height based on tilt
   const computePostHeight = useCallback((baseHeight: number, tilt: number) => {
     const fraction = Math.min(Math.max(tilt / 45, 0), 1)
     return baseHeight * fraction
   }, [])
 
-  // Create/update/remove the route marker for the DEPARTURE->ARRIVAL route
+  // Create or update the route marker for DEPARTURE->ARRIVAL
   const createOrUpdateRouteMarker = useCallback(() => {
     if (!googleMap) return
     if (!window.google?.maps?.marker?.AdvancedMarkerElement) return
 
     const hasRoute = bookingRoute?.polyline && bookingRoute.duration
-    // Only show marker in step 4 if arrival chosen and we have a booking route
     const showMarker = bookingStep === 4 && arrivalStationId != null && hasRoute
 
-    // if we shouldn't show, remove with a fade/scale-out animation
     if (!showMarker) {
+      // Fade out if not needed
       if (routeMarkerRef.current) {
         const content = routeMarkerRef.current.content as HTMLElement
         if (content) {
           content.style.transform = "scale(0)"
           content.style.opacity = "0"
-          // Remove after animation completes
           setTimeout(() => {
             if (routeMarkerRef.current) {
               routeMarkerRef.current.map = null
@@ -374,20 +370,19 @@ export function useMarkerOverlay(
       return
     }
 
-    // decode the route
+    // Decode the polyline
     const path = decodePolyline(bookingRoute.polyline)
     if (path.length < 2) return
 
-    // midpoint by distance
+    // Compute route midpoint
     const midpoint = computeRouteMidpoint(path)
-    // match your 3D route altitude offset
     const altitude = 15
     const driveMins = Math.ceil(bookingRoute.duration / 60)
 
     const { AdvancedMarkerElement } = window.google.maps.marker
 
     if (!routeMarkerRef.current) {
-      // create
+      // Create new route marker
       const container = document.createElement("div")
       container.style.cssText = `
         position: relative;
@@ -452,22 +447,18 @@ export function useMarkerOverlay(
 
       routeMarkerRef.current = rMarker
 
-      // Single animation approach for entrance
+      // Animate in
       requestAnimationFrame(() => {
         container.style.transform = "scale(1)"
         container.style.opacity = "1"
       })
     } else {
-      // update existing
-      routeMarkerRef.current.position = {
-        lat: midpoint.lat,
-        lng: midpoint.lng,
-        altitude,
-      } as google.maps.LatLngAltitudeLiteral
+      // Update existing
+      routeMarkerRef.current.position = { lat: midpoint.lat, lng: midpoint.lng, altitude }
       routeMarkerRef.current.collisionBehavior = "REQUIRED" as any
     }
 
-    // update text & post height
+    // Update text & post height
     const rm = routeMarkerRef.current!
     const c = rm.content as HTMLDivElement
     if (c) {
@@ -483,14 +474,10 @@ export function useMarkerOverlay(
     }
   }, [googleMap, bookingRoute, bookingStep, arrivalStationId, computePostHeight])
 
-  // ----- THE CORE CHANGE: station markers are created/destroyed on demand -----
-
-  // 1) Initialize candidate stations (instead of creating markers immediately).
+  // Build candidate station list once
   const initializeCandidateStations = useCallback(() => {
-    // Build candidate list once
     if (!candidateStationsRef.current.length) {
       const stationByObjectId = new Map<number, StationFeature>()
-
       stations.forEach((st) => {
         const objId = st.properties.ObjectId
         if (typeof objId === "number") {
@@ -499,7 +486,6 @@ export function useMarkerOverlay(
       })
 
       const candidateList: typeof candidateStationsRef.current = []
-
       buildings3D.forEach((bld) => {
         const objId = bld.properties?.ObjectId
         if (!objId) return
@@ -524,13 +510,9 @@ export function useMarkerOverlay(
 
         candidateList.push({
           stationId: station.id,
-          position: {
-            lat: centerLat,
-            lng: centerLng,
-            altitude,
-          },
+          position: { lat: centerLat, lng: centerLng, altitude },
           stationData: station,
-          marker: null, // not created yet
+          marker: null,
         })
       })
 
@@ -538,52 +520,13 @@ export function useMarkerOverlay(
     }
   }, [stations, buildings3D])
 
-  // 2) Called whenever the map bounds change or user zooms
-  const handleMapBoundsChange = useCallback(() => {
-    if (!googleMap) return
-    const bounds = googleMap.getBounds()
-    if (!bounds) return
-
-    candidateStationsRef.current.forEach((entry) => {
-      const { stationId, position, marker } = entry
-      // If forced visible (e.g. selected departure/arrival), always ensure marker is present
-      if (isForceVisible(stationId)) {
-        if (!marker) {
-          createStationMarker(entry)
-        } else if (!marker.map) {
-          marker.map = googleMap
-        }
-        return
-      }
-
-      // Is the station center in the current viewport?
-      const isInBounds = bounds.contains({ lat: position.lat, lng: position.lng })
-
-      if (isInBounds) {
-        // Create marker if not existing, or re-attach if previously removed
-        if (!marker) {
-          createStationMarker(entry)
-        } else if (!marker.map) {
-          marker.map = googleMap
-        }
-      } else {
-        // If out of view, remove from the map
-        if (marker?.map) {
-          marker.map = null
-        }
-      }
-    })
-
-    // Re-run styling logic on newly added markers
-    refreshMarkers()
-  }, [googleMap, isForceVisible])
-
-  // 3) Actually create the marker for a station
+  // Create an AdvancedMarker for a station
   const createStationMarker = useCallback(
     (entry: typeof candidateStationsRef.current[number]) => {
-      if (!googleMap || !window.google?.maps?.marker?.AdvancedMarkerElement) return
+      if (!googleMap) return
+      if (!window.google?.maps?.marker?.AdvancedMarkerElement) return
 
-      // If needed, build the DOM references
+      // Build DOM for marker if not built yet
       if (!entry.refs) {
         if (!entry.stationData) return
         entry.refs = buildMarkerContainer(entry.stationData)
@@ -592,7 +535,6 @@ export function useMarkerOverlay(
       if (!container) return
 
       const { AdvancedMarkerElement } = window.google.maps.marker
-      // Create the marker
       entry.marker = new AdvancedMarkerElement({
         position: entry.position,
         collisionBehavior: "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
@@ -600,11 +542,10 @@ export function useMarkerOverlay(
         content: container,
         map: googleMap,
       })
-      // Store references so we can do refresh logic
       ;(entry.marker as any)._refs = entry.refs
       ;(entry.marker as any)._stationData = entry.stationData
 
-      // Animate the marker entrance
+      // Animate in
       container.style.transitionDelay = `${Math.random() * 300}ms`
       requestAnimationFrame(() => {
         container.style.transform = "scale(1)"
@@ -613,30 +554,16 @@ export function useMarkerOverlay(
     [googleMap, buildMarkerContainer],
   )
 
-  // Master refresh logic to style all existing markers
+  // Master refresh logic for markers
   const refreshMarkers = useCallback(() => {
     const currentTilt = tiltRef.current
 
-    // Loop over candidate stations that have a .marker
     candidateStationsRef.current.forEach((entry) => {
       if (!entry.marker) return
 
       const marker = entry.marker
       const station = (marker as any)._stationData as StationFeature
-      const refs = (marker as any)._refs as
-        | {
-            container: HTMLDivElement
-            collapsedWrapper: HTMLDivElement
-            collapsedDiv: HTMLDivElement
-            collapsedPost: HTMLDivElement
-            expandedWrapper: HTMLDivElement
-            expandedDiv: HTMLDivElement
-            expandedPost: HTMLDivElement
-            pickupBtn?: HTMLButtonElement | null
-            expandedInfoSection?: HTMLDivElement | null
-          }
-        | undefined
-
+      const refs = (marker as any)._refs
       if (!refs) return
 
       const forceVis = isForceVisible(station.id)
@@ -648,10 +575,9 @@ export function useMarkerOverlay(
         marker.element.style.zIndex = forceVis ? "9999" : "1"
       }
 
-      // Expand/collapse
+      // Expanded/collapsed logic
       const expanded = isExpanded(station.id)
       if (expanded) {
-        // Animate to expanded
         refs.collapsedWrapper.style.opacity = "0"
         refs.collapsedWrapper.style.transform = "scale(0.8)"
         refs.expandedWrapper.style.display = "flex"
@@ -660,12 +586,10 @@ export function useMarkerOverlay(
           refs.expandedWrapper.style.transform = "scale(1)"
         })
       } else {
-        // Animate to collapsed
         refs.collapsedWrapper.style.opacity = "1"
         refs.collapsedWrapper.style.transform = "scale(1)"
         refs.expandedWrapper.style.opacity = "0"
         refs.expandedWrapper.style.transform = "scale(0.95)"
-        // Hide after transition
         setTimeout(() => {
           refs.expandedWrapper.style.display = "none"
         }, 250)
@@ -674,10 +598,8 @@ export function useMarkerOverlay(
       // Post heights
       const newHeight = computePostHeight(28, currentTilt)
       const showPosts = currentTilt > 5 ? "1" : "0"
-
       refs.collapsedPost.style.height = `${newHeight}px`
       refs.collapsedPost.style.opacity = showPosts
-
       refs.expandedPost.style.height = `${newHeight}px`
       refs.expandedPost.style.opacity = showPosts
 
@@ -686,7 +608,7 @@ export function useMarkerOverlay(
         refs.pickupBtn.style.display = bookingStep === 2 ? "inline-block" : "none"
       }
 
-      // Border colors with smooth transitions
+      // Border color + glow if departure/arrival
       const isDeparture = station.id === departureStationId
       const isArrival = station.id === arrivalStationId
       const borderColor = isDeparture
@@ -695,24 +617,26 @@ export function useMarkerOverlay(
         ? "#276EF1"
         : "#505156"
 
-      // Collapsed
+      // Collapsed style
       refs.collapsedDiv.style.borderColor = borderColor
       if (isDeparture || isArrival) {
         const glowColor = isDeparture
           ? "rgba(16, 163, 127, 0.5)"
           : "rgba(39, 110, 241, 0.5)"
-        refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
+        refs.collapsedDiv.style.boxShadow =
+          `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
       } else {
         refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)"
       }
 
-      // Expanded
+      // Expanded style
       refs.expandedDiv.style.borderColor = borderColor
       if (isDeparture || isArrival) {
         const glowColor = isDeparture
           ? "rgba(16, 163, 127, 0.5)"
           : "rgba(39, 110, 241, 0.5)"
-        refs.expandedDiv.style.boxShadow = `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`
+        refs.expandedDiv.style.boxShadow =
+          `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`
       } else {
         refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)"
       }
@@ -720,7 +644,6 @@ export function useMarkerOverlay(
       // Info section
       if (!refs.expandedInfoSection) return
       if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
-        // "Pickup in X minutes"
         refs.expandedInfoSection.innerHTML = `
           <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: #10A37F;">
             Pickup in ${pickupMins} minutes
@@ -730,11 +653,9 @@ export function useMarkerOverlay(
           </div>
         `
       } else {
-        // Normal station info
         const placeName = station.properties.Place || `Station ${station.id}`
         const address = station.properties.Address || "No address available"
         const titleColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#F2F2F7"
-
         refs.expandedInfoSection.innerHTML = `
           <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px; color: ${titleColor};">
             ${placeName}
@@ -746,7 +667,7 @@ export function useMarkerOverlay(
       }
     })
 
-    // Also refresh route marker
+    // Refresh route marker too
     createOrUpdateRouteMarker()
   }, [
     bookingStep,
@@ -759,7 +680,7 @@ export function useMarkerOverlay(
     isExpanded,
   ])
 
-  // Tilt change
+  // Tilt change → re-style markers
   const updateMarkerTilt = useCallback(
     (newTilt: number) => {
       tiltRef.current = newTilt
@@ -769,12 +690,51 @@ export function useMarkerOverlay(
     [options, refreshMarkers],
   )
 
-  // Initialize candidate stations once
+  // Initialize candidate stations only once
   useEffect(() => {
     initializeCandidateStations()
   }, [initializeCandidateStations])
 
-  // Add map bounds listener once
+  // The function that handles map bounds changes (which markers to add/remove)
+  const handleMapBoundsChange = useCallback(() => {
+    if (!googleMap) return
+    const bounds = googleMap.getBounds()
+    if (!bounds) return
+
+    candidateStationsRef.current.forEach((entry) => {
+      const { stationId, position, marker } = entry
+
+      // Forced visible?
+      if (isForceVisible(stationId)) {
+        if (!marker) {
+          createStationMarker(entry)
+        } else if (!marker.map) {
+          marker.map = googleMap
+        }
+        return
+      }
+
+      // Is the station center in the viewport?
+      const isInBounds = bounds.contains({ lat: position.lat, lng: position.lng })
+      if (isInBounds) {
+        if (!marker) {
+          createStationMarker(entry)
+        } else if (!marker.map) {
+          marker.map = googleMap
+        }
+      } else {
+        // Out of view → remove
+        if (marker?.map) {
+          marker.map = null
+        }
+      }
+    })
+
+    // Re-style after potential new markers appear
+    refreshMarkers()
+  }, [googleMap, isForceVisible, createStationMarker, refreshMarkers])
+
+  // Add map bounds listener with the current handleMapBoundsChange
   useEffect(() => {
     if (!googleMap) return
     const listener = googleMap.addListener("idle", () => {
@@ -785,22 +745,21 @@ export function useMarkerOverlay(
     }
   }, [googleMap, handleMapBoundsChange])
 
-  // Re-run styling whenever booking step / route changes
+  // Re-run styling whenever booking step or route changes
   useEffect(() => {
     refreshMarkers()
   }, [
     bookingStep,
     departureStationId,
     arrivalStationId,
-    dispatchRoute, // so pickupMins updates
-    bookingRoute,  // so route marker updates
+    dispatchRoute, // updates pickupMins
+    bookingRoute,  // route marker
     refreshMarkers,
   ])
 
-  // Cleanup
+  // Cleanup: fade out on unmount
   useEffect(() => {
     return () => {
-      // Fade out existing markers
       candidateStationsRef.current.forEach((entry) => {
         if (entry.marker) {
           const refs = (entry.marker as any)._refs
@@ -811,7 +770,6 @@ export function useMarkerOverlay(
         }
       })
 
-      // Also remove route marker
       if (routeMarkerRef.current) {
         const content = routeMarkerRef.current.content as HTMLElement
         if (content) {
@@ -820,7 +778,6 @@ export function useMarkerOverlay(
         }
       }
 
-      // Actual removal from map after animation
       setTimeout(() => {
         candidateStationsRef.current.forEach((entry) => {
           if (entry.marker) {
@@ -828,7 +785,6 @@ export function useMarkerOverlay(
             entry.marker = null
           }
         })
-
         if (routeMarkerRef.current) {
           routeMarkerRef.current.map = null
           routeMarkerRef.current = null
@@ -838,8 +794,6 @@ export function useMarkerOverlay(
   }, [])
 
   return {
-    // We no longer keep a single markersRef with all stations,
-    // but you can still return references for debugging if you want:
     routeMarkerRef,
     updateMarkerTilt,
   }
