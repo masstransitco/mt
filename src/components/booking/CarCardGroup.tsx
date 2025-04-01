@@ -4,7 +4,7 @@ import type React from "react"
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { useAppDispatch, useAppSelector } from "@/store/store"
 import { selectCar } from "@/store/userSlice"
-import { BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Gauge, Info } from "lucide-react"
+import { BatteryFull, BatteryMedium, BatteryLow, BatteryWarning, Gauge, Info, Clock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import dynamic from "next/dynamic"
 import type { Car } from "@/types/cars"
@@ -12,8 +12,8 @@ import { CarSeat } from "@/components/ui/icons/CarSeat"
 
 // Fallback skeleton while the 3D viewer loads
 const ViewerSkeleton = memo(() => (
-  <div className="relative w-full h-full bg-[#1a1a1a]/30 rounded-lg overflow-hidden">
-    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-[#1a1a1a]/30 via-[#222222]/30 to-[#1a1a1a]/30" />
+  <div className="relative w-full h-full rounded-lg overflow-hidden bg-black/10 backdrop-blur-sm">
+    <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-black/5 via-black/10 to-black/5" />
   </div>
 ))
 ViewerSkeleton.displayName = "ViewerSkeleton"
@@ -73,7 +73,7 @@ function useTouchScrollHandler() {
   }
 }
 
-// Simple info popup component for tooltips (similar to StationDetail)
+// Simple info popup component for tooltips
 const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
   const [isVisible, setIsVisible] = useState(false)
 
@@ -86,7 +86,7 @@ const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
     <div className="relative inline-flex items-center">
       <button
         onClick={handleShowInfo}
-        className="text-gray-400 hover:text-gray-300 focus:outline-none"
+        className="text-gray-400 hover:text-gray-300 focus:outline-none transition-colors"
         aria-label="More information"
       >
         <Info size={14} />
@@ -97,10 +97,10 @@ const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
           transition={{ duration: 0.2 }}
-          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-[#2a2a2a] text-xs text-white w-48 text-center shadow-lg z-50"
+          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md bg-black/80 text-xs text-white w-48 text-center shadow-lg z-50 backdrop-blur-sm"
         >
           {text}
-          <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#2a2a2a]" />
+          <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/80" />
         </motion.div>
       )}
     </div>
@@ -128,11 +128,11 @@ function formatLastDriven(timestamp: string | null | undefined): string {
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
 
     if (diffDays > 0) {
-      return `${diffDays} day${diffDays !== 1 ? "s" : ""}, ${diffHours} hr${diffHours !== 1 ? "s" : ""} ago`
+      return `${diffDays}d ${diffHours}h ago`
     } else if (diffHours > 0) {
-      return `${diffHours} hr${diffHours !== 1 ? "s" : ""}, ${diffMinutes} min${diffMinutes !== 1 ? "s" : ""} ago`
+      return `${diffHours}h ${diffMinutes}m ago`
     } else if (diffMinutes > 0) {
-      return `${diffMinutes} min${diffMinutes !== 1 ? "s" : ""} ago`
+      return `${diffMinutes}m ago`
     } else {
       return "Just now"
     }
@@ -169,7 +169,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     const parsed = rawBattery != null ? Number(rawBattery) : Number.NaN
     const percentage = !isNaN(parsed) && parsed >= 1 && parsed <= 100 ? parsed : 90
     let Icon = BatteryFull
-    let color = "text-[#10a37f]" // Using the green from StationDetail
+    let color = "text-green-500" // Apple-style green
     if (percentage <= 9) {
       Icon = BatteryWarning
       color = "text-red-500"
@@ -233,7 +233,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="relative overflow-hidden rounded-xl bg-[#1a1a1a] text-white border border-[#2a2a2a]/50 shadow-md transition-all cursor-pointer mb-3 w-full h-28"
+      className="relative overflow-hidden rounded-xl bg-black/90 text-white border border-white/10 shadow-lg transition-all cursor-pointer mb-3 w-full h-28 backdrop-blur-sm"
       style={{
         contain: "content",
       }}
@@ -246,9 +246,10 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
             {!isQrScanStation && group.cars.length > 1 && (
               <div className="absolute top-1.5 left-1.5 z-10" onClick={(e) => e.stopPropagation()}>
                 <select
-                  className="cursor-pointer bg-[#222222]/90 border border-[#2a2a2a] rounded-md px-1.5 py-0.5 text-white text-xs backdrop-blur-sm"
+                  className="cursor-pointer bg-black/70 border border-white/20 rounded-full px-2 py-0.5 text-white text-xs backdrop-blur-sm"
                   onChange={(e) => handleSelectCar(Number.parseInt(e.target.value, 10))}
                   value={displayedCar.id}
+                  style={{ WebkitAppearance: "none", appearance: "none", paddingRight: "1.5rem" }}
                 >
                   {group.cars.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -256,6 +257,11 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
                     </option>
                   ))}
                 </select>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 5L0 0H8L4 5Z" fill="white" />
+                  </svg>
+                </div>
               </div>
             )}
             {isInView && isVisible ? (
@@ -277,17 +283,22 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
             <div>
               <div className="flex items-start justify-between">
                 <p className="font-medium text-sm leading-tight text-white">{displayedCar.model || "Unknown Model"}</p>
+                {displayedCar.name && (
+                  <span className="text-xs text-white/70 font-medium rounded-full bg-white/10 px-2 py-0.5">
+                    {displayedCar.name}
+                  </span>
+                )}
               </div>
               <div className="flex items-center mt-2 gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1 bg-[#222222] rounded-lg px-1.5 py-0.5">
+                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
                   <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
                   <span className="text-xs font-medium">{batteryPercentage}%</span>
                 </div>
-                <div className="flex items-center gap-1 bg-[#222222] rounded-lg px-1.5 py-0.5">
-                  <Gauge className="w-3.5 h-3.5 text-[#276EF1]" /> {/* Using the blue from StationDetail */}
+                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
+                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
                   <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
                 </div>
-                <div className="flex items-center gap-1 bg-[#222222] rounded-lg px-1.5 py-0.5">
+                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
                   <CarSeat className="w-3.5 h-3.5 text-gray-300" />
                   <span className="text-xs">1+4</span>
                 </div>
@@ -297,10 +308,10 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         </div>
 
         {/* Footer Component */}
-        <div className="w-full h-6 bg-[#222222] px-3 flex items-center justify-between text-xs border-t border-[#2a2a2a]/30">
+        <div className="w-full h-6 bg-black/50 px-3 flex items-center justify-between text-xs border-t border-white/10">
           <div className="flex items-center gap-1.5 relative">
             <div className="relative">
-              <Info
+              <Clock
                 className="w-3.5 h-3.5 text-gray-400 cursor-pointer hover:text-white transition-colors"
                 onClick={handleOdometerClick}
               />
@@ -311,11 +322,11 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 5 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute left-0 bottom-5 bg-[#2a2a2a] text-white text-xs px-2.5 py-1.5 rounded-md shadow-lg border border-[#333333] z-10 min-w-32"
+                    className="absolute left-0 bottom-5 bg-black/80 text-white text-xs px-2.5 py-1.5 rounded-md shadow-lg border border-white/20 z-10 min-w-32 backdrop-blur-sm"
                   >
                     <div>Total distance: {displayedCar.odometer || "N/A"} km</div>
                     <div>Year: {displayedCar.year || "2021"}</div>
-                    <div className="absolute -bottom-2 left-2 transform w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-[#2a2a2a]" />
+                    <div className="absolute -bottom-2 left-2 transform w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/80" />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -324,7 +335,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
           </div>
 
           {/* Status indicator */}
-          <div className="text-xs font-medium text-[#10a37f]">Ready</div>
+          <div className="text-xs font-medium text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">Ready</div>
         </div>
       </div>
     </motion.div>
