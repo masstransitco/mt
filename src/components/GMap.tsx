@@ -73,6 +73,7 @@ import PickupGuide from "@/components/ui/PickupGuide";
 import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
+import {useCameraAnimation} from "@/hooks/useCameraAnimation"
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import StationsDisplay from "@/components/ui/StationsDisplay";
@@ -354,7 +355,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   );
 
   // -------------------------
-  // 3D overlay
+  // ThreeJs Overlay Hook
   // -------------------------
   const threeOverlayOptions = useMemo(
     () => ({
@@ -368,7 +369,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const { overlayRef } = useThreeOverlay(actualMap, stations, threeOverlayOptions);
 
 // -------------------------
-// Marker overlay
+// Advanced Marker Overlay Hook
 // -------------------------
 
 // 1) Call the hook at the top level of your component
@@ -378,10 +379,21 @@ const { updateMarkerTilt } = useMarkerOverlay(actualMap, {
   },
 });
 
+// -------------------------
+// Camera Animation Hook
+// -------------------------
+// Initialize camera animations with proper overlay reference
+const cameraControls = useCameraAnimation({
+  map: actualMap,
+  stations,
+  overlayRef // Pass the overlay reference from useThreeOverlay
+});
+
+// Hook into tilt changes for marker animations
 useEffect(() => {
   if (!actualMap) return;
 
-  // 2) Listen for 'tilt_changed'
+  // When the map's tilt changes, update markers accordingly
   const handleTiltChanged = () => {
     const newTilt = actualMap.getTilt?.() ?? 0;
     updateMarkerTilt(newTilt);
@@ -392,12 +404,13 @@ useEffect(() => {
     "tilt_changed",
     handleTiltChanged
   );
-  handleTiltChanged(); // initial read
-
+  handleTiltChanged(); // Initial read
+  
   return () => {
     google.maps.event.removeListener(listener);
   };
 }, [actualMap, updateMarkerTilt]);
+
 
   // -------------------------
   // QR logic
