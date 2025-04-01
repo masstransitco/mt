@@ -73,7 +73,7 @@ import PickupGuide from "@/components/ui/PickupGuide";
 import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
-import {useCameraAnimation} from "@/hooks/useCameraAnimation"
+import {useCameraAnimationStable} from "@/hooks/useCameraAnimation"
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import StationsDisplay from "@/components/ui/StationsDisplay";
@@ -382,34 +382,51 @@ const { updateMarkerTilt } = useMarkerOverlay(actualMap, {
 // -------------------------
 // Camera Animation Hook
 // -------------------------
-// Initialize camera animations with proper overlay reference
-const cameraControls = useCameraAnimation({
+const cameraControls = useCameraAnimationStable({
   map: actualMap,
   stations,
-  overlayRef // Pass the overlay reference from useThreeOverlay
+  overlayRef, // from useThreeOverlay
 });
 
+// ...
 // Hook into tilt changes for marker animations
 useEffect(() => {
   if (!actualMap) return;
 
-  // When the map's tilt changes, update markers accordingly
+  // We let Google handle the camera. But if we want
+  // to dynamically update any markers' "post" size on tilt:
   const handleTiltChanged = () => {
     const newTilt = actualMap.getTilt?.() ?? 0;
     updateMarkerTilt(newTilt);
+    // If you also want to re-render a 3D overlay:
+    overlayRef.current?.requestRedraw();
   };
 
-  const listener = google.maps.event.addListener(
+  // Similarly, if you need heading changes:
+  const handleHeadingChanged = () => {
+    overlayRef.current?.requestRedraw();
+  };
+
+  // Attach events
+  const tiltListener = google.maps.event.addListener(
     actualMap,
     "tilt_changed",
     handleTiltChanged
   );
-  handleTiltChanged(); // Initial read
-  
+  const headingListener = google.maps.event.addListener(
+    actualMap,
+    "heading_changed",
+    handleHeadingChanged
+  );
+
+  // Initial read
+  handleTiltChanged();
+
   return () => {
-    google.maps.event.removeListener(listener);
+    google.maps.event.removeListener(tiltListener);
+    google.maps.event.removeListener(headingListener);
   };
-}, [actualMap, updateMarkerTilt]);
+}, [actualMap, updateMarkerTilt, overlayRef]);
 
 
   // -------------------------
