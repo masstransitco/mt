@@ -38,10 +38,10 @@ export function preloadCommonCarModels() {
 
 // Memoized loading skeleton for consistent styling
 const LoadingSkeleton = memo(() => (
-  <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] h-28 w-full overflow-hidden">
+  <div className="rounded-xl border border-white/10 bg-black/90 h-28 w-full overflow-hidden backdrop-blur-sm">
     <div className="h-full w-full flex items-center justify-center">
       <div className="flex flex-col items-center justify-center gap-2">
-        <div className="w-6 h-6 border-2 border-[#2a2a2a] border-t-[#10a37f] rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-white/10 border-t-green-500 rounded-full animate-spin" />
         <div className="text-xs text-gray-400">Loading vehicles...</div>
       </div>
     </div>
@@ -168,7 +168,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
   // Show error state if fetch failed
   if (loadingError) {
     return (
-      <div className="rounded-xl border border-red-800 bg-[#1a1a1a] p-4 flex items-center justify-center h-32">
+      <div className="rounded-xl border border-red-800 bg-black/90 p-4 flex items-center justify-center h-32 backdrop-blur-sm">
         <div className="text-center">
           <p className="text-red-400 text-sm">{loadingError}</p>
         </div>
@@ -177,9 +177,9 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
   }
 
   return (
-    <div className={className} ref={containerRef}>
+    <div className={`w-full ${className}`} ref={containerRef}>
       {groupedByModel.length > 0 ? (
-        <div className="py-1">
+        <div className="w-full">
           <AnimatePresence>
             {groupedByModel.map((group, index) => (
               <motion.div
@@ -188,6 +188,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2, delay: index * 0.05 }}
+                className="w-full mb-2 last:mb-0"
               >
                 <CarCardGroup group={group} isVisible={true} rootRef={containerRef} isQrScanStation={isQrScanStation} />
               </motion.div>
