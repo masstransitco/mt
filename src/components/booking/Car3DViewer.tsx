@@ -4,8 +4,6 @@ import { Suspense, useRef, useEffect, memo, useState, useMemo } from "react"
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls, useGLTF, Html, Environment, AdaptiveDpr, AdaptiveEvents, useProgress } from "@react-three/drei"
 import * as THREE from "three"
-import { EffectComposer, SSAO } from "@react-three/postprocessing"
-import { BlendFunction } from "postprocessing"
 import LoadingOverlay from "@/components/ui/loading-overlay"
 
 /* -------------------------------------
@@ -27,7 +25,7 @@ const LoadingScreen = memo(() => {
   const { progress } = useProgress()
   return (
     <Html center>
-      <LoadingOverlay message={`Loading model... ${progress.toFixed(0)}%`} />
+      <LoadingOverlay message={`${progress.toFixed(0)}%`} />
     </Html>
   )
 })
@@ -55,7 +53,7 @@ function useOptimizedGLTF(url: string, interactive: boolean) {
         if (child.material instanceof THREE.MeshStandardMaterial) {
           child.material.roughness = 0.4
           child.material.metalness = 0.8
-          // For non-interactive, lower texture resolution slightly
+          // For non-interactive, lower texture resolution
           if (!interactive && child.material.map) {
             child.material.map.minFilter = THREE.LinearFilter
             child.material.map.generateMipmaps = false
@@ -108,11 +106,11 @@ const CameraSetup = memo(({ interactive }: { interactive: boolean }) => {
       enableDamping
       dampingFactor={0.1}
       enabled={interactive}
-      enableZoom={interactive}
+      enableZoom={false}
       enablePan={false}
       minPolarAngle={Math.PI / 6}
       maxPolarAngle={Math.PI / 2}
-      rotateSpeed={0.8}
+      rotateSpeed={0.5}
       autoRotate={interactive}
       autoRotateSpeed={0.5}
     />
@@ -124,49 +122,16 @@ CameraSetup.displayName = "CameraSetup"
    Scene Lighting & Ambient
 ------------------------------------- */
 const SceneLighting = memo(() => {
-  const shadowMapSize = 512
   return (
     <>
-      <directionalLight
-        position={[4, 4, 4]}
-        intensity={1.2}
-        castShadow
-        shadow-mapSize-width={shadowMapSize}
-        shadow-mapSize-height={shadowMapSize}
-      />
-      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" castShadow={false} />
-      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" castShadow={false} />
+      <directionalLight position={[4, 4, 4]} intensity={1.2} />
+      <directionalLight position={[-5, 5, -5]} intensity={0.25} color="#FFE4B5" />
+      <directionalLight position={[0, -5, 0]} intensity={0.15} color="#4169E1" />
       <ambientLight intensity={0.3} />
     </>
   )
 })
 SceneLighting.displayName = "SceneLighting"
-
-/* -------------------------------------
-   PostProcessing (SSAO) for Interactive Mode
-------------------------------------- */
-const PostProcessing = memo(({ interactive }: { interactive: boolean }) => {
-  if (!interactive) return null
-  return (
-    <EffectComposer multisampling={2} enabled={interactive} enableNormalPass>
-      <SSAO
-        blendFunction={BlendFunction.MULTIPLY}
-        samples={8}
-        radius={3}
-        intensity={20}
-        luminanceInfluence={0.5}
-        color={new THREE.Color(0x000000)}
-        distanceScaling
-        depthAwareUpsampling
-        worldDistanceThreshold={1}
-        worldDistanceFalloff={1}
-        worldProximityThreshold={1}
-        worldProximityFalloff={1}
-      />
-    </EffectComposer>
-  )
-})
-PostProcessing.displayName = "PostProcessing"
 
 /* -------------------------------------
    Main Car3DViewer Component
@@ -197,20 +162,6 @@ function Car3DViewer({
     }
   }, [isVisible, interactive, isRendered])
 
-  // Monitor WebGL context events (optional)
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const handleContextLost = () => {
-      console.warn("[Car3DViewer] WebGL context lost")
-    }
-    canvas.addEventListener("webglcontextlost", handleContextLost)
-    return () => {
-      canvas.removeEventListener("webglcontextlost", handleContextLost)
-    }
-  }, [])
-
   // Enable THREE.Cache for texture efficiency
   useEffect(() => {
     THREE.Cache.enabled = true
@@ -234,9 +185,8 @@ function Car3DViewer({
           preserveDrawingBuffer: false,
           powerPreference: "high-performance",
           premultipliedAlpha: true,
-          logarithmicDepthBuffer: false,
         }}
-        shadows={interactive}
+        shadows={false}
         camera={{ position: [2.5, 1.8, 2.5], fov: 20 }}
         dpr={dpr}
         frameloop={frameloop}
@@ -251,7 +201,6 @@ function Car3DViewer({
         <AdaptiveDpr pixelated />
         <AdaptiveEvents />
         <SceneLighting />
-        {interactive && <PostProcessing interactive={interactive} />}
         <Environment preset="studio" background={false} />
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup interactive={interactive} />
