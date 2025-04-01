@@ -104,7 +104,7 @@ export function useCameraAnimation({
   const animateCamera = useCallback(
     (
       rawTarget: Partial<google.maps.CameraOptions>,
-      baseDuration = 2300,
+      baseDuration = 580,
       easing = Easing.Quadratic.Out
     ) => {
       if (!map) return;
