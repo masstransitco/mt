@@ -590,13 +590,57 @@ export function useThreeOverlay(
             navigationCursorRef.current.visible = false;
           }
         } else if (bookingStep === 4) {
-          // Animate the navigation cursor along the route
+          // Animate the navigation cursor along the route with fluid movement
           if (routeCurveRef.current) {
             navigationCursorRef.current.visible = true;
 
+            // Initialize animation time if not already set
             if (routeStartTimeRef.current === null) {
               routeStartTimeRef.current = performance.now();
+              
+              // Use renderer's animation loop for smoother animation if renderer exists
+              if (rendererRef.current) {
+                const routeDurationMs = 12000; // total animation time
+                const CAR_FRONT = new THREE.Vector3(0, 1, 0);
+                
+                // Create dedicated animation loop for smooth movement
+                rendererRef.current.setAnimationLoop(() => {
+                  // Check if animation should continue
+                  if (!navigationCursorRef.current || 
+                      !routeCurveRef.current || 
+                      bookingStep !== 4 ||
+                      !sceneRef.current) {
+                    if (rendererRef.current) {
+                      rendererRef.current.setAnimationLoop(null); // Stop animation
+                      return;
+                    }
+                  }
+                  
+                  // Calculate position along curve based on elapsed time
+                  const elapsed = performance.now() - (routeStartTimeRef.current || 0);
+                  const t = (elapsed % routeDurationMs) / routeDurationMs;
+                  
+                  // Update position
+                  routeCurveRef.current.getPointAt(t, navigationCursorRef.current.position);
+                  navigationCursorRef.current.position.z += 50; // Altitude offset
+                  
+                  // Update orientation
+                  const tangent = new THREE.Vector3();
+                  routeCurveRef.current.getTangentAt(t, tangent);
+                  navigationCursorRef.current.quaternion.setFromUnitVectors(
+                    CAR_FRONT,
+                    tangent.normalize()
+                  );
+                  
+                  // Request overlay redraw for smooth updates
+                  overlayRef.current?.requestRedraw();
+                });
+                
+                return; // Skip the non-animation-loop method below
+              }
             }
+            
+            // Fallback method if renderer animation loop couldn't be set up
             const elapsed = performance.now() - routeStartTimeRef.current;
             const routeDurationMs = 12000; // total animation time
             const t = (elapsed % routeDurationMs) / routeDurationMs;
@@ -725,6 +769,22 @@ export function useThreeOverlay(
       overlayRef.current.requestRedraw();
     }
   }, [userLocation]);
+  
+  // Stop animation loop when booking step changes
+  useEffect(() => {
+    // If we're not in step 4 (route navigation), make sure any animation loops are stopped
+    if (bookingStep !== 4 && rendererRef.current) {
+      rendererRef.current.setAnimationLoop(null);
+      routeStartTimeRef.current = null;
+    }
+    
+    // Cleanup function
+    return () => {
+      if (rendererRef.current) {
+        rendererRef.current.setAnimationLoop(null);
+      }
+    };
+  }, [bookingStep]);
 
   return { overlayRef };
 }
