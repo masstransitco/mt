@@ -391,9 +391,10 @@ export function useCameraAnimationStable({
 
   /**
    * Move to a particular station with smooth animation and cinematic tilt
+   * Now supports different behavior for departure vs arrival stations
    */
   const animateToStation = useCallback(
-    (stationId: number) => {
+    (stationId: number, isArrival: boolean = false) => {
       if (!map) return;
       const station = stations.find((s) => s.id === stationId);
       if (!station) return;
@@ -408,8 +409,8 @@ export function useCameraAnimationStable({
           // If we can't get the center, use a simple animation
           map.moveCamera({
             center: targetCenter,
-            zoom: 17,
-            tilt: 45,
+            zoom: isArrival ? 16 : 15.5, // Lower zoom for departure stations
+            tilt: isArrival ? 40 : 35,   // Different tilt for departure/arrival
             heading: 0
           });
           maybeRedraw();
@@ -430,10 +431,18 @@ export function useCameraAnimationStable({
         const deltaLng = targetCenter.lng - currentCenter.lng;
         // Calculate angle in degrees (0° is North, increases clockwise)
         const angleToStation = (Math.atan2(deltaLng, deltaLat) * 180 / Math.PI + 360) % 360;
-        // Offset the heading slightly for a more dynamic view (45° offset looks good)
-        const targetHeading = (angleToStation + 45) % 360;
+        // Offset the heading slightly for a more dynamic view
+        // Use a smaller offset for arrival stations to reduce erratic motion
+        const headingOffset = isArrival ? 30 : 45;
+        const targetHeading = (angleToStation + headingOffset) % 360;
         
-        // Create a cinematic two-phase animation
+        // Set final zoom level - less zoomed for departure to show more context
+        const finalZoom = isArrival ? 16 : 15.5;
+        
+        // Set final tilt - slightly lower for departure
+        const finalTilt = isArrival ? 40 : 35;
+        
+        // Create a cinematic animation with different parameters based on station type
         animateSequence([
           // Starting position (current map state)
           {
@@ -446,22 +455,23 @@ export function useCameraAnimationStable({
           // First phase: Fly out a bit to get perspective
           {
             center: {
-              lat: currentCenter.lat + (targetCenter.lat - currentCenter.lat) * 0.4,
-              lng: currentCenter.lng + (targetCenter.lng - currentCenter.lng) * 0.4
+              // For arrival stations, move more directly to reduce erratic motion
+              lat: currentCenter.lat + (targetCenter.lat - currentCenter.lat) * (isArrival ? 0.6 : 0.4),
+              lng: currentCenter.lng + (targetCenter.lng - currentCenter.lng) * (isArrival ? 0.6 : 0.4)
             },
-            zoom: Math.min(currentZoom, 15), // Slightly zoom out if we're very zoomed in
-            tilt: 30, // Start tilting
+            zoom: Math.min(currentZoom, isArrival ? 15 : 14.5), // Different intermediate zoom
+            tilt: isArrival ? 30 : 25, // Different intermediate tilt
             heading: targetHeading, // Start rotating toward target heading
-            durationMs: 800,
+            durationMs: isArrival ? 900 : 800, // Slightly longer for arrival to feel smoother
             easingFn: 'easeOutQuad'
           },
-          // Final position: Zoomed in with tilt
+          // Final position
           {
             center: targetCenter,
-            zoom: 17, // Closer zoom for better station detail
-            tilt: 45, // Final titled perspective
+            zoom: finalZoom,
+            tilt: finalTilt,
             heading: targetHeading,
-            durationMs: 1100,
+            durationMs: isArrival ? 1000 : 1100,
             easingFn: 'easeOutCubic'
           }
         ]);
@@ -471,8 +481,8 @@ export function useCameraAnimationStable({
         if (map) {
           map.moveCamera({
             center: targetCenter,
-            zoom: 17,
-            tilt: 45,
+            zoom: isArrival ? 16 : 15.5,
+            tilt: isArrival ? 40 : 35,
             heading: 0
           });
           maybeRedraw();
@@ -483,7 +493,8 @@ export function useCameraAnimationStable({
   );
 
   /**
-   * User location or search location with smooth, dynamic animation
+   * User location or search location with simplified smooth animation
+   * No distance calculation, just direct animation
    */
   const animateToLocation = useCallback(
     (loc: google.maps.LatLngLiteral, zoom: number) => {
@@ -512,41 +523,8 @@ export function useCameraAnimationStable({
         const currentTilt = map.getTilt() || 0;
         const currentHeading = map.getHeading() || 0;
         
-        // Calculate distance between current and target
-        const distance = Math.sqrt(
-          Math.pow(loc.lat - currentCenter.lat, 2) + 
-          Math.pow(loc.lng - currentCenter.lng, 2)
-        );
-        
-        // For short distances, use a simpler animation
-        if (distance < 0.01) { // Roughly 1km
-          animateSequence([
-            {
-              // Starting position
-              center: currentCenter,
-              zoom: currentZoom,
-              tilt: currentTilt,
-              heading: currentHeading,
-              durationMs: 0
-            },
-            {
-              // Target location with slight tilt
-              center: loc,
-              zoom: zoom,
-              tilt: 20, // Light tilt for better perspective
-              heading: currentHeading,
-              durationMs: 800,
-              easingFn: 'easeOutCubic'
-            }
-          ]);
-          return;
-        }
-        
-        // For longer distances, create a fly-to effect
-        // Calculate an intermediate zoom level based on distance
-        const midZoom = Math.max(Math.min(currentZoom, zoom) - 2, 10);
-        
-        // Create a "flyover" animation
+        // Use a consistent direct animation regardless of distance
+        // Simple two-keyframe animation
         animateSequence([
           {
             // Starting position
@@ -557,24 +535,12 @@ export function useCameraAnimationStable({
             durationMs: 0
           },
           {
-            // First zoom out with a tilt to get perspective
-            center: {
-              lat: currentCenter.lat + (loc.lat - currentCenter.lat) * 0.3,
-              lng: currentCenter.lng + (loc.lng - currentCenter.lng) * 0.3
-            },
-            zoom: midZoom, // Zoomed out to see more area
-            tilt: 35, // Tilt for perspective
-            heading: currentHeading,
-            durationMs: 700,
-            easingFn: 'easeOutQuad'
-          },
-          {
-            // Final target with slight tilt for perspective
+            // Target location with slight tilt
             center: loc,
             zoom: zoom,
-            tilt: 25, // Maintain some tilt for better view
+            tilt: 20, // Light tilt for better perspective
             heading: currentHeading,
-            durationMs: 900,
+            durationMs: 800,
             easingFn: 'easeOutCubic'
           }
         ]);
@@ -874,12 +840,13 @@ export function useCameraAnimationStable({
 
   /**
    * Animate to a route view with perspective tilt
+   * Enhanced with a smoother transition when coming from station animation
    */
-  const animateToRoute = useCallback((routePoints: Array<{lat: number, lng: number}>) => {
+  const animateToRoute = useCallback((routePoints: Array<{lat: number, lng: number}>, priorArrivalAnimation: boolean = false) => {
     if (!map || !routePoints || routePoints.length < 2) return;
     
-    // Find route midpoint
-    const midIndex = Math.floor(routePoints.length / 2);
+    // Find route midpoint - use a point slightly closer to the start to improve context
+    const midIndex = Math.floor(routePoints.length * 0.4); // 40% along the route
     const midpoint = routePoints[midIndex];
     
     // Calculate route direction for heading
@@ -893,8 +860,8 @@ export function useCameraAnimationStable({
     const routeAngle = (Math.atan2(deltaLng, deltaLat) * 180 / Math.PI + 360) % 360;
     
     // We want to view the route from the side
-    // Adding 90° gives us a perpendicular view to the route direction
-    const viewingAngle = (routeAngle + 90) % 360;
+    // Use a smaller perpendicular offset to make the transition less jarring
+    const viewingAngle = (routeAngle + 70) % 360; // 70° instead of 90° for more natural view
     
     try {
       // Get current camera state
@@ -903,8 +870,8 @@ export function useCameraAnimationStable({
         // If we can't get the center, use a simple animation
         map.moveCamera({
           center: midpoint,
-          zoom: 15,
-          tilt: 55,
+          zoom: 14.5, // Slightly wider view
+          tilt: 45, // Less extreme tilt
           heading: viewingAngle
         });
         maybeRedraw();
@@ -919,46 +886,70 @@ export function useCameraAnimationStable({
       const currentTilt = map.getTilt() || 0;
       const currentHeading = map.getHeading() || 0;
       
-      // Create a smooth cinematic animation sequence
-      animateSequence([
-        // Starting position
-        {
-          center: currentCenter,
-          zoom: currentZoom,
-          tilt: currentTilt,
-          heading: currentHeading,
-          durationMs: 0
-        },
-        // Intermediate position: pull out to see more of the route
-        {
-          center: {
-            lat: midpoint.lat + 0.0015, // Slight offset for better perspective
-            lng: midpoint.lng + 0.0015
+      // If we're coming right after an arrival station animation, use a more subtle transition
+      if (priorArrivalAnimation) {
+        // Single smooth transition to route view
+        animateSequence([
+          // Starting position
+          {
+            center: currentCenter,
+            zoom: currentZoom,
+            tilt: currentTilt, 
+            heading: currentHeading,
+            durationMs: 0
           },
-          zoom: 14, // Wider view
-          tilt: 30, // Begin tilting
-          heading: viewingAngle, // Rotate to perpendicular view
-          durationMs: 1000,
-          easingFn: 'easeOutQuad'
-        },
-        // Final position with elevated tilt for dramatic route view
-        {
-          center: midpoint,
-          zoom: 15, // Balance between seeing route and details
-          tilt: 55, // Higher tilt for good perspective
-          heading: viewingAngle,
-          durationMs: 1200,
-          easingFn: 'easeOutCubic'
-        }
-      ]);
+          // Transition directly to a good route view
+          {
+            center: midpoint,
+            zoom: 14.5, // Slightly wider view to show more of route
+            tilt: 45, // Less extreme tilt
+            heading: viewingAngle,
+            durationMs: 1500, // Longer, smoother animation
+            easingFn: 'easeOutCubic' 
+          }
+        ]);
+      } else {
+        // Standard two-phase animation
+        animateSequence([
+          // Starting position
+          {
+            center: currentCenter,
+            zoom: currentZoom,
+            tilt: currentTilt,
+            heading: currentHeading,
+            durationMs: 0
+          },
+          // Intermediate position: pull out to see more of the route
+          {
+            center: {
+              lat: midpoint.lat + 0.0010, // Less extreme offset
+              lng: midpoint.lng + 0.0010
+            },
+            zoom: 14, // Wider view
+            tilt: 30, // Begin tilting
+            heading: viewingAngle, // Rotate to view angle
+            durationMs: 1000,
+            easingFn: 'easeOutQuad'
+          },
+          // Final position with elevated tilt for dramatic route view
+          {
+            center: midpoint,
+            zoom: 14.5, // Balance between seeing route and details
+            tilt: 45, // Less extreme tilt for better usability
+            heading: viewingAngle,
+            durationMs: 1200,
+            easingFn: 'easeOutCubic'
+          }
+        ]);
+      }
     } catch (error) {
       // Fallback in case of any errors
       console.warn("Error in animateToRoute, using fallback animation:", error);
       if (map) {
         map.moveCamera({
           center: midpoint,
-          zoom: 15,
-          tilt: 55,
+          zoom: 14.5,
+          tilt: 45,
           heading: viewingAngle
         });
         maybeRedraw();
@@ -967,51 +958,196 @@ export function useCameraAnimationStable({
   }, [map, animateSequence, maybeRedraw]);
 
   /**
+   * State tracking for animations between steps
+   */
+  const bookingAnimationStateRef = useRef<{
+    lastStep: number;
+    lastDepId: number | null;
+    lastArrId: number | null;
+    stationAnimationComplete: boolean;
+  }>({
+    lastStep: 0,
+    lastDepId: null,
+    lastArrId: null,
+    stationAnimationComplete: false,
+  });
+
+  /**
+   * Track if we've manually set location via locate me or search
+   * This helps prevent unwanted resets to default view
+   */
+  const manualLocationSetRef = useRef<boolean>(false);
+  
+  // Update manual location flag when user or search location changes
+  useEffect(() => {
+    if (userLocation || searchLocation) {
+      manualLocationSetRef.current = true;
+    }
+  }, [userLocation, searchLocation]);
+  
+  /**
    * Watch booking steps to decide where to animate
+   * Now with better handling of transitions between steps
    */
   useEffect(() => {
     if (!map) return;
-
-    // No stations => reset
+    
+    // No stations - only reset if we haven't manually set a location
     if (!depId && !arrId) {
-      resetView();
+      // Skip resetView if the user has manually set a location
+      if (!manualLocationSetRef.current) {
+        resetView();
+      }
+      bookingAnimationStateRef.current.stationAnimationComplete = false;
       return;
     }
 
-    // Step 1 or 2 => highlight departure
+    // Step 1 or 2 => highlight departure station
     if ((bookingStep === 1 || bookingStep === 2) && depId) {
-      animateToStation(depId);
+      // Call animateToStation with isDeparture=true (isArrival=false)
+      animateToStation(depId, false);
+      bookingAnimationStateRef.current = {
+        lastStep: bookingStep,
+        lastDepId: depId,
+        lastArrId: arrId,
+        stationAnimationComplete: false
+      };
+      // We've moved to a station, so we're no longer in manual location mode
+      manualLocationSetRef.current = false;
     }
 
-    // Step 3 or 4 => if we have a route, move to route view
-    if ((bookingStep === 3 || bookingStep === 4) && depId && arrId) {
+    // Step 3 => arrival station selection - animate to station
+    if (bookingStep === 3 && arrId) {
+      // Animate to arrival station
+      animateToStation(arrId, true); // isArrival=true
+      bookingAnimationStateRef.current = {
+        lastStep: bookingStep,
+        lastDepId: depId,
+        lastArrId: arrId,
+        stationAnimationComplete: true
+      };
+      // We've moved to a station, so we're no longer in manual location mode
+      manualLocationSetRef.current = false;
+    }
+    
+    // Step 4 => route view after arrival station selected
+    if (bookingStep === 4 && depId && arrId) {
+      // Check if we just came from station animation
+      const fromStationAnimation = 
+        (bookingAnimationStateRef.current.lastStep === 3 && 
+         bookingAnimationStateRef.current.lastArrId === arrId &&
+         bookingAnimationStateRef.current.stationAnimationComplete);
+         
       if (routeCoords?.length > 1) {
-        // Use the enhanced route animation
-        animateToRoute(routeCoords);
+        // Use enhanced route animation with smooth transition parameter
+        animateToRoute(routeCoords, fromStationAnimation);
       } else {
-        // fallback if no route
-        animateToStation(arrId);
+        // fallback if no route - still use arrival animation
+        animateToStation(arrId, true);
       }
+      
+      // Reset state
+      bookingAnimationStateRef.current = {
+        lastStep: bookingStep,
+        lastDepId: depId,
+        lastArrId: arrId,
+        stationAnimationComplete: false
+      };
+      // We've moved to a route, so we're no longer in manual location mode
+      manualLocationSetRef.current = false;
     }
   }, [map, bookingStep, depId, arrId, routeCoords, resetView, animateToStation, animateToRoute]);
 
   /**
-   * If user location changes, animate
+   * Animation lock mechanism to prevent concurrent animations
    */
+  const animationLockRef = useRef<string | null>(null);
+  const resetLockTimeout = useRef<NodeJS.Timeout | null>(null);
+  
+  /**
+   * Helper function to manage animation lock
+   */
+  const acquireAnimationLock = useCallback((source: string, durationMs: number = 2000): boolean => {
+    // If lock is held by the same source, allow it
+    if (animationLockRef.current === source) return true;
+    
+    // If there's an active lock by another source, deny
+    if (animationLockRef.current !== null) return false;
+    
+    // Set the lock
+    animationLockRef.current = source;
+    
+    // Clear any existing timeout
+    if (resetLockTimeout.current) {
+      clearTimeout(resetLockTimeout.current);
+    }
+    
+    // Set timeout to release lock
+    resetLockTimeout.current = setTimeout(() => {
+      animationLockRef.current = null;
+      resetLockTimeout.current = null;
+    }, durationMs);
+    
+    return true;
+  }, []);
+  
+  // Store previous locations to detect changes
+  const prevLocationsRef = useRef<{
+    searchLocation: google.maps.LatLngLiteral | null;
+    userLocation: google.maps.LatLngLiteral | null;
+  }>({
+    searchLocation: null,
+    userLocation: null
+  });
+  
+  // searchLocation changes (from search bar or tapping on map)
+  // This is the primary way users navigate the map
   useEffect(() => {
-    if (userLocation) {
+    if (!searchLocation) return;
+    
+    // Skip if no actual change in location
+    if (prevLocationsRef.current.searchLocation && 
+        prevLocationsRef.current.searchLocation.lat === searchLocation.lat &&
+        prevLocationsRef.current.searchLocation.lng === searchLocation.lng) {
+      return;
+    }
+    
+    // Update previous location reference
+    prevLocationsRef.current.searchLocation = searchLocation;
+    
+    // Mark that user has manually set a location (prevents automatic resets)
+    manualLocationSetRef.current = true;
+    
+    // Search location animations take priority
+    if (acquireAnimationLock('search', 1000)) {
+      // Animate with a slightly tighter zoom for search
+      animateToLocation(searchLocation, 15);
+    }
+  }, [searchLocation, acquireAnimationLock, animateToLocation]);
+  
+  // userLocation changes (from Locate Me button)
+  useEffect(() => {
+    if (!userLocation) return;
+    
+    // Skip if no actual change in location
+    if (prevLocationsRef.current.userLocation && 
+        prevLocationsRef.current.userLocation.lat === userLocation.lat &&
+        prevLocationsRef.current.userLocation.lng === userLocation.lng) {
+      return;
+    }
+    
+    // Update previous location reference
+    prevLocationsRef.current.userLocation = userLocation;
+    
+    // Mark that user has manually set a location (prevents automatic resets)
+    manualLocationSetRef.current = true;
+    
+    // Only animate if no search animation is in progress
+    if (acquireAnimationLock('user', 1000)) {
+      // Use a wider zoom for user location to show more context
       animateToLocation(userLocation, 15);
     }
-  }, [userLocation, animateToLocation]);
-
-  /**
-   * If search location changes, animate
-   */
-  useEffect(() => {
-    if (searchLocation) {
-      animateToLocation(searchLocation, 14);
-    }
-  }, [searchLocation, animateToLocation]);
+  }, [userLocation, acquireAnimationLock, animateToLocation]);
 
   // Return whichever methods you'd like to expose
   return {

@@ -20,6 +20,9 @@ import {
 // The route from dispatch hub -> departure station:
 import { selectDispatchRoute } from "@/store/dispatchSlice"
 
+// Import the list selected station
+import { selectListSelectedStationId } from "@/store/userSlice"
+
 // Declare google as any to avoid TypeScript errors
 declare var google: any
 
@@ -80,6 +83,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   const bookingStep = useAppSelector(selectBookingStep)
   const departureStationId = useAppSelector(selectDepartureStationId)
   const arrivalStationId = useAppSelector(selectArrivalStationId)
+  const listSelectedStationId = useAppSelector(selectListSelectedStationId)
 
   // The route from dispatch hub -> departure station
   const dispatchRoute = useAppSelector(selectDispatchRoute)
@@ -111,10 +115,13 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     return Math.ceil(drivingMins + 15)
   }, [dispatchRoute])
 
-  // Decide if a station marker is forced visible (departure or arrival)
+  // Decide if a station marker is forced visible (departure, arrival, or list selected)
   const isForceVisible = useCallback(
-    (stationId: number): boolean => stationId === departureStationId || stationId === arrivalStationId,
-    [departureStationId, arrivalStationId],
+    (stationId: number): boolean => 
+      stationId === departureStationId || 
+      stationId === arrivalStationId || 
+      stationId === listSelectedStationId,
+    [departureStationId, arrivalStationId, listSelectedStationId],
   )
 
   // Which station(s) are expanded?
@@ -211,9 +218,9 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
 
       const collapsedPost = document.createElement("div")
       collapsedPost.style.cssText = `
-        width: 2px;
-        height: 28px;
-        background: linear-gradient(to bottom, rgba(170,170,170,0.8), rgba(170,170,170,0.2));
+        width: 2.5px;
+        height: 35px;
+        background: linear-gradient(to bottom, rgba(170,170,170,0.9), rgba(170,170,170,0.2));
         margin-top: 2px;
         pointer-events: none;
         transition: height 0.3s ease, opacity 0.3s ease;
@@ -309,9 +316,9 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
 
       const expandedPost = document.createElement("div")
       expandedPost.style.cssText = `
-        width: 2px;
-        height: 28px;
-        background: linear-gradient(to bottom, rgba(170,170,170,0.8), rgba(170,170,170,0.2));
+        width: 2.5px;
+        height: 35px;
+        background: linear-gradient(to bottom, rgba(170,170,170,0.9), rgba(170,170,170,0.2));
         margin-top: 2px;
         pointer-events: none;
         transition: height 0.3s ease, opacity 0.3s ease;
@@ -350,7 +357,8 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     }
     
     // Combine both factors - post is only visible when both conditions are met
-    return baseHeight * tiltFraction * zoomFraction
+    // Multiply by 1.5 to increase the length of the vertical post
+    return baseHeight * tiltFraction * zoomFraction * 1.5
   }, [])
 
   // Create or update the route marker for DEPARTURE->ARRIVAL
@@ -434,9 +442,9 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       const postDiv = document.createElement("div")
       postDiv.classList.add("route-post")
       postDiv.style.cssText = `
-        width: 2px;
-        height: 28px;
-        background: linear-gradient(to bottom, rgba(255,255,255,0.8), rgba(255,255,255,0.2));
+        width: 2.5px;
+        height: 35px;
+        background: linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.2));
         margin-top: 2px;
         pointer-events: none;
         transition: height 0.3s ease;
@@ -612,8 +620,8 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       }
 
       // Post heights - consider both tilt and zoom
-      const newHeight = computePostHeight(28, currentTilt, currentZoom)
-      const showPosts = newHeight > 5 ? "1" : "0"
+      const newHeight = computePostHeight(35, currentTilt, currentZoom)
+      const showPosts = newHeight > 4 ? "1" : "0"
       refs.collapsedPost.style.height = `${newHeight}px`
       refs.collapsedPost.style.opacity = showPosts
       refs.expandedPost.style.height = `${newHeight}px`
@@ -624,18 +632,31 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         refs.pickupBtn.style.display = bookingStep === 2 ? "inline-block" : "none"
       }
 
+      // Check if this is the list-selected station
+      const isListSelected = station.id === listSelectedStationId
+      
       // Border color + glow if departure/arrival
-      const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#505156"
+      const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : isListSelected ? "#FFFFFF" : "#505156"
       
       // Collapsed style with special handling for selected stations
       refs.collapsedDiv.style.borderColor = borderColor
       
-      // Special style for departure/arrival stations at any zoom level
-      if (isDeparture || isArrival) {
-        const glowColor = isDeparture ? "rgba(16, 163, 127, 0.5)" : "rgba(39, 110, 241, 0.5)"
+      // Special style for departure/arrival stations or list-selected at any zoom level
+      if (isDeparture || isArrival || isListSelected) {
+        const glowColor = isDeparture 
+          ? "rgba(16, 163, 127, 0.5)" 
+          : isArrival 
+            ? "rgba(39, 110, 241, 0.5)" 
+            : "rgba(255, 255, 255, 0.7)"
+        
         const borderWidth = currentZoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px" // thicker border at low zoom
         refs.collapsedDiv.style.borderWidth = borderWidth
         refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
+        
+        // Extra border for list-selected but not the departure or arrival station
+        if (isListSelected && !isDeparture && !isArrival) {
+          refs.collapsedDiv.style.border = `2px solid #FFFFFF`
+        }
       } else {
         refs.collapsedDiv.style.borderWidth = "1.5px"
         refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)"
@@ -643,9 +664,18 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
 
       // Expanded style
       refs.expandedDiv.style.borderColor = borderColor
-      if (isDeparture || isArrival) {
-        const glowColor = isDeparture ? "rgba(16, 163, 127, 0.5)" : "rgba(39, 110, 241, 0.5)"
+      if (isDeparture || isArrival || isListSelected) {
+        const glowColor = isDeparture 
+          ? "rgba(16, 163, 127, 0.5)" 
+          : isArrival 
+            ? "rgba(39, 110, 241, 0.5)" 
+            : "rgba(255, 255, 255, 0.7)"
         refs.expandedDiv.style.boxShadow = `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`
+        
+        // Extra style for list-selected expanded view
+        if (isListSelected && !isDeparture && !isArrival) {
+          refs.expandedDiv.style.border = `2px solid #FFFFFF`
+        }
       } else {
         refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)"
       }
@@ -764,13 +794,14 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     }
   }, [googleMap, handleMapBoundsChange])
 
-  // Re-run styling whenever booking step or route changes
+  // Re-run styling whenever booking step, route, or list selection changes
   useEffect(() => {
     refreshMarkers()
   }, [
     bookingStep,
     departureStationId,
     arrivalStationId,
+    listSelectedStationId, // update when list selection changes
     dispatchRoute, // updates pickupMins
     bookingRoute, // route marker
     refreshMarkers,
