@@ -70,7 +70,7 @@ import QrScannerOverlay from "@/components/ui/QrScannerOverlay";
 import SignInModal from "@/components/ui/SignInModal";
 import PickupGuide from "@/components/ui/PickupGuide";
 
-import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, createMapOptions } from "@/constants/map";
+import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, MARKER_POST_MAX_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
 import {useCameraAnimationStable} from "@/hooks/useCameraAnimation"
@@ -373,8 +373,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 // -------------------------
 
 // 1) Call the hook at the top level of your component
-const { updateMarkerTilt } = useMarkerOverlay(actualMap, {
+const { updateMarkerTilt, updateMarkerZoom } = useMarkerOverlay(actualMap, {
   onTiltChange: (tilt) => {
+    // optional callback if needed
+  },
+  onZoomChange: (zoom) => {
     // optional callback if needed
   },
 });
@@ -389,7 +392,7 @@ const cameraControls = useCameraAnimationStable({
 });
 
 // ...
-// Hook into tilt changes for marker animations
+// Hook into tilt and zoom changes for marker animations
 useEffect(() => {
   if (!actualMap) return;
 
@@ -402,8 +405,16 @@ useEffect(() => {
     overlayRef.current?.requestRedraw();
   };
 
-  // Similarly, if you need heading changes:
+  // Similarly, for heading changes:
   const handleHeadingChanged = () => {
+    overlayRef.current?.requestRedraw();
+  };
+
+  // Add zoom change handler
+  const handleZoomChanged = () => {
+    const newZoom = actualMap.getZoom?.() ?? DEFAULT_ZOOM;
+    updateMarkerZoom(newZoom);
+    // We may also want to redraw the overlay on zoom
     overlayRef.current?.requestRedraw();
   };
 
@@ -418,15 +429,22 @@ useEffect(() => {
     "heading_changed",
     handleHeadingChanged
   );
+  const zoomListener = google.maps.event.addListener(
+    actualMap,
+    "zoom_changed",
+    handleZoomChanged
+  );
 
-  // Initial read
+  // Initial reads
   handleTiltChanged();
+  handleZoomChanged();
 
   return () => {
     google.maps.event.removeListener(tiltListener);
     google.maps.event.removeListener(headingListener);
+    google.maps.event.removeListener(zoomListener);
   };
-}, [actualMap, updateMarkerTilt, overlayRef]);
+}, [actualMap, updateMarkerTilt, updateMarkerZoom, overlayRef]);
 
 
   // -------------------------
