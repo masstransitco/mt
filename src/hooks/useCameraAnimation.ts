@@ -282,41 +282,115 @@ export function useCameraAnimationStable({
   );
 
   /**
-   * Reset view if there's no station chosen
+   * Reset view with cinematic animation
    */
   const resetView = useCallback(() => {
     if (!map) return;
     
-    // Use animateSequence for a smooth reset to default view
-    const currentCenter = { 
-      lat: map.getCenter().lat(), 
-      lng: map.getCenter().lng() 
-    };
-    const currentZoom = map.getZoom() || 14;
-    
-    animateSequence([
-      {
-        // Starting position (current map state)
-        center: currentCenter,
-        zoom: currentZoom,
-        tilt: map.getTilt() || 0,
-        heading: map.getHeading() || 0,
-        durationMs: 0 // Start immediately
-      },
-      {
-        // Default vantage point
-        center: DEFAULT_CENTER,
-        zoom: 12,
-        tilt: 0,
-        heading: 0,
-        durationMs: 1500, // 1.5 second smooth animation
-        easingFn: 'easeOutCubic' // Smooth deceleration
+    try {
+      // Get current camera state
+      const center = map.getCenter();
+      if (!center) {
+        // If we can't get the center, use a default animation
+        map.moveCamera({
+          center: DEFAULT_CENTER,
+          zoom: 13,
+          tilt: 15,
+          heading: 0
+        });
+        maybeRedraw();
+        return;
       }
-    ]);
-  }, [map, animateSequence]);
+      
+      const currentCenter = { 
+        lat: center.lat(), 
+        lng: center.lng() 
+      };
+      const currentZoom = map.getZoom() || 14;
+      const currentTilt = map.getTilt() || 0;
+      const currentHeading = map.getHeading() || 0;
+    
+      // Calculate distance to default center to determine animation style
+      const distance = Math.sqrt(
+        Math.pow(DEFAULT_CENTER.lat - currentCenter.lat, 2) + 
+        Math.pow(DEFAULT_CENTER.lng - currentCenter.lng, 2)
+      );
+      
+      // For minimal distance, use a simple animation
+      if (distance < 0.01) {
+        animateSequence([
+          {
+            // Starting position
+            center: currentCenter,
+            zoom: currentZoom,
+            tilt: currentTilt,
+            heading: currentHeading,
+            durationMs: 0
+          },
+          {
+            // Default view with slight tilt for perspective
+            center: DEFAULT_CENTER,
+            zoom: 13, // Slightly closer than default
+            tilt: 15, // Light tilt for better perspective
+            heading: 0,
+            durationMs: 1200,
+            easingFn: 'easeOutCubic'
+          }
+        ]);
+        return;
+      }
+      
+      // For longer distances, create a dramatic zoom-out-then-in effect
+      const midZoom = Math.max(Math.min(currentZoom, 13) - 2, 9);
+      
+      animateSequence([
+        {
+          // Starting position
+          center: currentCenter,
+          zoom: currentZoom,
+          tilt: currentTilt,
+          heading: currentHeading,
+          durationMs: 0
+        },
+        {
+          // First zoom out for perspective
+          center: {
+            lat: currentCenter.lat + (DEFAULT_CENTER.lat - currentCenter.lat) * 0.3,
+            lng: currentCenter.lng + (DEFAULT_CENTER.lng - currentCenter.lng) * 0.3
+          },
+          zoom: midZoom, // Zoomed out
+          tilt: 40, // High tilt for dramatic effect
+          heading: 0, // Reset to north
+          durationMs: 900,
+          easingFn: 'easeOutQuad'
+        },
+        {
+          // Final default view position
+          center: DEFAULT_CENTER,
+          zoom: 13, // Slightly closer than default
+          tilt: 20, // Maintain some tilt for better perspective
+          heading: 0,
+          durationMs: 1100,
+          easingFn: 'easeOutCubic'
+        }
+      ]);
+    } catch (error) {
+      // Fallback in case of any errors
+      console.warn("Error in resetView, using fallback animation:", error);
+      if (map) {
+        map.moveCamera({
+          center: DEFAULT_CENTER,
+          zoom: 13,
+          tilt: 15,
+          heading: 0
+        });
+        maybeRedraw();
+      }
+    }
+  }, [map, animateSequence, maybeRedraw]);
 
   /**
-   * Move to a particular station with smooth animation
+   * Move to a particular station with smooth animation and cinematic tilt
    */
   const animateToStation = useCallback(
     (stationId: number) => {
@@ -325,74 +399,200 @@ export function useCameraAnimationStable({
       if (!station) return;
 
       const [lng, lat] = station.geometry.coordinates;
-      
-      // Use animateSequence for smooth transition instead of direct moveCamera
-      // This creates a fluid animation with easing
-      const currentCenter = { 
-        lat: map.getCenter().lat(), 
-        lng: map.getCenter().lng() 
-      };
-      const currentZoom = map.getZoom() || 14;
       const targetCenter = { lat, lng };
       
-      animateSequence([
-        {
-          // Starting position (current map state)
-          center: currentCenter,
-          zoom: currentZoom,
-          tilt: map.getTilt() || 0,
-          heading: map.getHeading() || 0,
-          durationMs: 0 // Start immediately
-        },
-        {
-          // Target position (station location)
-          center: targetCenter,
-          zoom: 16,
-          tilt: 0,
-          heading: 0,
-          durationMs: 1200, // Smooth 1.2 second animation
-          easingFn: 'easeOutCubic' // Smooth deceleration curve
+      try {
+        // Get current camera position
+        const center = map.getCenter();
+        if (!center) {
+          // If we can't get the center, use a simple animation
+          map.moveCamera({
+            center: targetCenter,
+            zoom: 17,
+            tilt: 45,
+            heading: 0
+          });
+          maybeRedraw();
+          return;
         }
-      ]);
+        
+        const currentCenter = { 
+          lat: center.lat(), 
+          lng: center.lng() 
+        };
+        const currentZoom = map.getZoom() || 14;
+        const currentTilt = map.getTilt() || 0;
+        const currentHeading = map.getHeading() || 0;
+        
+        // Calculate a dynamic heading that looks good
+        // We'll rotate to face the station from a slight angle
+        const deltaLat = targetCenter.lat - currentCenter.lat;
+        const deltaLng = targetCenter.lng - currentCenter.lng;
+        // Calculate angle in degrees (0° is North, increases clockwise)
+        const angleToStation = (Math.atan2(deltaLng, deltaLat) * 180 / Math.PI + 360) % 360;
+        // Offset the heading slightly for a more dynamic view (45° offset looks good)
+        const targetHeading = (angleToStation + 45) % 360;
+        
+        // Create a cinematic two-phase animation
+        animateSequence([
+          // Starting position (current map state)
+          {
+            center: currentCenter,
+            zoom: currentZoom,
+            tilt: currentTilt,
+            heading: currentHeading,
+            durationMs: 0 // Start immediately
+          },
+          // First phase: Fly out a bit to get perspective
+          {
+            center: {
+              lat: currentCenter.lat + (targetCenter.lat - currentCenter.lat) * 0.4,
+              lng: currentCenter.lng + (targetCenter.lng - currentCenter.lng) * 0.4
+            },
+            zoom: Math.min(currentZoom, 15), // Slightly zoom out if we're very zoomed in
+            tilt: 30, // Start tilting
+            heading: targetHeading, // Start rotating toward target heading
+            durationMs: 800,
+            easingFn: 'easeOutQuad'
+          },
+          // Final position: Zoomed in with tilt
+          {
+            center: targetCenter,
+            zoom: 17, // Closer zoom for better station detail
+            tilt: 45, // Final titled perspective
+            heading: targetHeading,
+            durationMs: 1100,
+            easingFn: 'easeOutCubic'
+          }
+        ]);
+      } catch (error) {
+        // Fallback in case of any errors
+        console.warn("Error in animateToStation, using fallback animation:", error);
+        if (map) {
+          map.moveCamera({
+            center: targetCenter,
+            zoom: 17,
+            tilt: 45,
+            heading: 0
+          });
+          maybeRedraw();
+        }
+      }
     },
-    [map, stations, animateSequence]
+    [map, stations, animateSequence, maybeRedraw]
   );
 
   /**
-   * User location or search location with smooth animation
+   * User location or search location with smooth, dynamic animation
    */
   const animateToLocation = useCallback(
     (loc: google.maps.LatLngLiteral, zoom: number) => {
       if (!map) return;
       
-      // Use animateSequence for smooth transition to the location
-      const currentCenter = { 
-        lat: map.getCenter().lat(), 
-        lng: map.getCenter().lng() 
-      };
-      const currentZoom = map.getZoom() || 14;
-      
-      animateSequence([
-        {
-          // Starting position (current map state)
-          center: currentCenter,
-          zoom: currentZoom,
-          tilt: map.getTilt() || 0,
-          heading: map.getHeading() || 0,
-          durationMs: 0 // Start immediately
-        },
-        {
-          // Target location
-          center: loc,
-          zoom: zoom,
-          tilt: 0,
-          heading: 0,
-          durationMs: 1000, // 1 second animation
-          easingFn: 'easeOutCubic' // Smooth deceleration
+      try {
+        // Get current camera state
+        const center = map.getCenter();
+        if (!center) {
+          // If we can't get the center, use a simple animation
+          map.moveCamera({
+            center: loc,
+            zoom: zoom,
+            tilt: 20,
+            heading: 0
+          });
+          maybeRedraw();
+          return;
         }
-      ]);
+        
+        const currentCenter = { 
+          lat: center.lat(), 
+          lng: center.lng() 
+        };
+        const currentZoom = map.getZoom() || 14;
+        const currentTilt = map.getTilt() || 0;
+        const currentHeading = map.getHeading() || 0;
+        
+        // Calculate distance between current and target
+        const distance = Math.sqrt(
+          Math.pow(loc.lat - currentCenter.lat, 2) + 
+          Math.pow(loc.lng - currentCenter.lng, 2)
+        );
+        
+        // For short distances, use a simpler animation
+        if (distance < 0.01) { // Roughly 1km
+          animateSequence([
+            {
+              // Starting position
+              center: currentCenter,
+              zoom: currentZoom,
+              tilt: currentTilt,
+              heading: currentHeading,
+              durationMs: 0
+            },
+            {
+              // Target location with slight tilt
+              center: loc,
+              zoom: zoom,
+              tilt: 20, // Light tilt for better perspective
+              heading: currentHeading,
+              durationMs: 800,
+              easingFn: 'easeOutCubic'
+            }
+          ]);
+          return;
+        }
+        
+        // For longer distances, create a fly-to effect
+        // Calculate an intermediate zoom level based on distance
+        const midZoom = Math.max(Math.min(currentZoom, zoom) - 2, 10);
+        
+        // Create a "flyover" animation
+        animateSequence([
+          {
+            // Starting position
+            center: currentCenter,
+            zoom: currentZoom,
+            tilt: currentTilt,
+            heading: currentHeading,
+            durationMs: 0
+          },
+          {
+            // First zoom out with a tilt to get perspective
+            center: {
+              lat: currentCenter.lat + (loc.lat - currentCenter.lat) * 0.3,
+              lng: currentCenter.lng + (loc.lng - currentCenter.lng) * 0.3
+            },
+            zoom: midZoom, // Zoomed out to see more area
+            tilt: 35, // Tilt for perspective
+            heading: currentHeading,
+            durationMs: 700,
+            easingFn: 'easeOutQuad'
+          },
+          {
+            // Final target with slight tilt for perspective
+            center: loc,
+            zoom: zoom,
+            tilt: 25, // Maintain some tilt for better view
+            heading: currentHeading,
+            durationMs: 900,
+            easingFn: 'easeOutCubic'
+          }
+        ]);
+      } catch (error) {
+        // Fallback in case of any errors
+        console.warn("Error in animateToLocation, using fallback animation:", error);
+        if (map) {
+          map.moveCamera({
+            center: loc,
+            zoom: zoom,
+            tilt: 20,
+            heading: 0
+          });
+          maybeRedraw();
+        }
+      }
     },
-    [map, animateSequence]
+    [map, animateSequence, maybeRedraw]
   );
   
   /**
@@ -673,6 +873,100 @@ export function useCameraAnimationStable({
   );
 
   /**
+   * Animate to a route view with perspective tilt
+   */
+  const animateToRoute = useCallback((routePoints: Array<{lat: number, lng: number}>) => {
+    if (!map || !routePoints || routePoints.length < 2) return;
+    
+    // Find route midpoint
+    const midIndex = Math.floor(routePoints.length / 2);
+    const midpoint = routePoints[midIndex];
+    
+    // Calculate route direction for heading
+    // We'll use the first and last points to determine overall direction
+    const startPoint = routePoints[0];
+    const endPoint = routePoints[routePoints.length - 1];
+    const deltaLat = endPoint.lat - startPoint.lat;
+    const deltaLng = endPoint.lng - startPoint.lng;
+    
+    // Calculate route direction angle (0° is North, increases clockwise)
+    const routeAngle = (Math.atan2(deltaLng, deltaLat) * 180 / Math.PI + 360) % 360;
+    
+    // We want to view the route from the side
+    // Adding 90° gives us a perpendicular view to the route direction
+    const viewingAngle = (routeAngle + 90) % 360;
+    
+    try {
+      // Get current camera state
+      const center = map.getCenter();
+      if (!center) {
+        // If we can't get the center, use a simple animation
+        map.moveCamera({
+          center: midpoint,
+          zoom: 15,
+          tilt: 55,
+          heading: viewingAngle
+        });
+        maybeRedraw();
+        return;
+      }
+      
+      const currentCenter = { 
+        lat: center.lat(), 
+        lng: center.lng() 
+      };
+      const currentZoom = map.getZoom() || 14;
+      const currentTilt = map.getTilt() || 0;
+      const currentHeading = map.getHeading() || 0;
+      
+      // Create a smooth cinematic animation sequence
+      animateSequence([
+        // Starting position
+        {
+          center: currentCenter,
+          zoom: currentZoom,
+          tilt: currentTilt,
+          heading: currentHeading,
+          durationMs: 0
+        },
+        // Intermediate position: pull out to see more of the route
+        {
+          center: {
+            lat: midpoint.lat + 0.0015, // Slight offset for better perspective
+            lng: midpoint.lng + 0.0015
+          },
+          zoom: 14, // Wider view
+          tilt: 30, // Begin tilting
+          heading: viewingAngle, // Rotate to perpendicular view
+          durationMs: 1000,
+          easingFn: 'easeOutQuad'
+        },
+        // Final position with elevated tilt for dramatic route view
+        {
+          center: midpoint,
+          zoom: 15, // Balance between seeing route and details
+          tilt: 55, // Higher tilt for good perspective
+          heading: viewingAngle,
+          durationMs: 1200,
+          easingFn: 'easeOutCubic'
+        }
+      ]);
+    } catch (error) {
+      // Fallback in case of any errors
+      console.warn("Error in animateToRoute, using fallback animation:", error);
+      if (map) {
+        map.moveCamera({
+          center: midpoint,
+          zoom: 15,
+          tilt: 55,
+          heading: viewingAngle
+        });
+        maybeRedraw();
+      }
+    }
+  }, [map, animateSequence, maybeRedraw]);
+
+  /**
    * Watch booking steps to decide where to animate
    */
   useEffect(() => {
@@ -689,18 +983,17 @@ export function useCameraAnimationStable({
       animateToStation(depId);
     }
 
-    // Step 3 or 4 => if we have a route, move to approximate midpoint
+    // Step 3 or 4 => if we have a route, move to route view
     if ((bookingStep === 3 || bookingStep === 4) && depId && arrId) {
       if (routeCoords?.length > 1) {
-        const midIndex = Math.floor(routeCoords.length / 2);
-        const midpoint = routeCoords[midIndex];
-        animateCamera(midpoint, 13, 0, 0);
+        // Use the enhanced route animation
+        animateToRoute(routeCoords);
       } else {
         // fallback if no route
         animateToStation(arrId);
       }
     }
-  }, [map, bookingStep, depId, arrId, routeCoords, resetView, animateToStation, animateCamera]);
+  }, [map, bookingStep, depId, arrId, routeCoords, resetView, animateToStation, animateToRoute]);
 
   /**
    * If user location changes, animate
