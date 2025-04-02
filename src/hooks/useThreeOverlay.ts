@@ -168,70 +168,85 @@ export function useThreeOverlay(
   // 2. Refresh or create the route tube
   // ------------------------------------------------
   const refreshRouteTube = useCallback(() => {
-    const path = routeDataRef.current;
-    if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
-      return;
-    }
-
-    if (!tubeMaterialRef.current) {
-      tubeMaterialRef.current = new THREE.MeshBasicMaterial({
-        color: ROUTE_TUBE_COLOR,
-        transparent: true,
-        opacity: 0.9,
-        side: THREE.FrontSide,
+    try {
+      const path = routeDataRef.current;
+      if (!path || path.length < 2 || !sceneRef.current || !overlayRef.current) {
+        return;
+      }
+  
+      if (!tubeMaterialRef.current) {
+        tubeMaterialRef.current = new THREE.MeshBasicMaterial({
+          color: ROUTE_TUBE_COLOR,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.FrontSide,
+        });
+      }
+  
+      // Convert lat/lng to Vector3
+      const anchor = anchorRef.current;
+      const points = path.map(({ lat, lng }) => {
+        const { x, y, z } = latLngAltToVector3({ lat, lng, altitude: 5 }, anchor);
+        return new THREE.Vector3(x, y, z);
       });
-    }
-
-    // Convert lat/lng to Vector3
-    const anchor = anchorRef.current;
-    const points = path.map(({ lat, lng }) => {
-      const { x, y, z } = latLngAltToVector3({ lat, lng, altitude: 5 }, anchor);
-      return new THREE.Vector3(x, y, z);
-    });
-
-    // Also store the route as a CatmullRomCurve3 for our animation
-    routeCurveRef.current = new CatmullRomCurve3(points, false, "catmullrom", 0.2);
-    routeStartTimeRef.current = null; // reset start time so animation restarts
-
-    // Build a TubeGeometry for the route
-    class CustomCurve extends THREE.Curve<THREE.Vector3> {
-      private pts: THREE.Vector3[];
-      constructor(pts: THREE.Vector3[]) {
-        super();
-        this.pts = pts;
-      }
-      getPoint(t: number, target = new THREE.Vector3()) {
-        const segment = (this.pts.length - 1) * t;
-        const index = Math.floor(segment);
-        const alpha = segment - index;
-        if (index >= this.pts.length - 1) {
-          return target.copy(this.pts[this.pts.length - 1]);
+  
+      // Only create curve if we have valid points
+      if (points.length >= 2) {
+        // Store the route as a CatmullRomCurve3 for our animation
+        routeCurveRef.current = new CatmullRomCurve3(points, false, "catmullrom", 0.2);
+        routeStartTimeRef.current = null; // reset start time so animation restarts
+    
+        // Build a TubeGeometry for the route
+        class CustomCurve extends THREE.Curve<THREE.Vector3> {
+          private pts: THREE.Vector3[];
+          constructor(pts: THREE.Vector3[]) {
+            super();
+            this.pts = pts;
+          }
+          getPoint(t: number, target = new THREE.Vector3()) {
+            const segment = (this.pts.length - 1) * t;
+            const index = Math.floor(segment);
+            const alpha = segment - index;
+            if (index >= this.pts.length - 1) {
+              return target.copy(this.pts[this.pts.length - 1]);
+            }
+            const p0 = this.pts[index];
+            const p1 = this.pts[index + 1];
+            return target.copy(p0).lerp(p1, alpha);
+          }
         }
-        const p0 = this.pts[index];
-        const p1 = this.pts[index + 1];
-        return target.copy(p0).lerp(p1, alpha);
+    
+        const curve = new CustomCurve(points);
+        const tubularSegments = Math.min(Math.max(points.length * 1, 16), 50);
+        const radius = 5;
+        const radialSegments = 4;
+        const tubeGeom = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
+    
+        // Safe reference check before updating tube mesh
+        const scene = sceneRef.current;
+        if (scene) {
+          if (!routeTubeRef.current) {
+            // Only create if material exists
+            if (tubeMaterialRef.current) {
+              const tubeMesh = new THREE.Mesh(tubeGeom, tubeMaterialRef.current);
+              tubeMesh.renderOrder = 300;
+              tubeMesh.visible = true;
+              routeTubeRef.current = tubeMesh;
+              scene.add(tubeMesh);
+            }
+          } else {
+            routeTubeRef.current.visible = true;
+            routeTubeRef.current.geometry.dispose();
+            routeTubeRef.current.geometry = tubeGeom;
+          }
+        }
       }
+  
+      // Request redraw after updates
+      overlayRef.current.requestRedraw();
+    } catch (error) {
+      console.warn("Error refreshing route tube:", error);
     }
-
-    const curve = new CustomCurve(points);
-    const tubularSegments = Math.min(Math.max(points.length * 1, 16), 50);
-    const radius = 5;
-    const radialSegments = 4;
-    const tubeGeom = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
-
-    if (!routeTubeRef.current) {
-      const tubeMesh = new THREE.Mesh(tubeGeom, tubeMaterialRef.current);
-      tubeMesh.renderOrder = 300;
-      tubeMesh.visible = true;
-      routeTubeRef.current = tubeMesh;
-      sceneRef.current.add(tubeMesh);
-    } else {
-      routeTubeRef.current.visible = true;
-      routeTubeRef.current.geometry.dispose();
-      routeTubeRef.current.geometry = tubeGeom;
-    }
-
-    overlayRef.current.requestRedraw();
   }, [ROUTE_TUBE_COLOR]);
 
   // Watch for routeDecoded changes => store path, refresh tube
@@ -568,6 +583,7 @@ export function useThreeOverlay(
               const offsetX = boundingCenter.x + offsetDist * Math.cos(angle);
               const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
 
+              // Safe access to navigationCursorRef (already checked above with the if statement)
               navigationCursorRef.current.position.set(offsetX, offsetY, 0);
               navigationCursorRef.current.visible = true;
 
@@ -591,8 +607,10 @@ export function useThreeOverlay(
           }
         } else if (bookingStep === 4) {
           // Animate the navigation cursor along the route with fluid movement
-          if (routeCurveRef.current) {
-            navigationCursorRef.current.visible = true;
+          const navCursor = navigationCursorRef.current; // Store reference to avoid repeated null checks
+          
+          if (routeCurveRef.current && navCursor) {
+            navCursor.visible = true;
 
             // Initialize animation time if not already set
             if (routeStartTimeRef.current === null) {
@@ -602,6 +620,7 @@ export function useThreeOverlay(
               if (rendererRef.current) {
                 const routeDurationMs = 12000; // total animation time
                 const CAR_FRONT = new THREE.Vector3(0, 1, 0);
+                const routeCurve = routeCurveRef.current; // Store reference locally
                 
                 // Create dedicated animation loop for smooth movement
                 rendererRef.current.setAnimationLoop(() => {
@@ -620,17 +639,23 @@ export function useThreeOverlay(
                   const elapsed = performance.now() - (routeStartTimeRef.current || 0);
                   const t = (elapsed % routeDurationMs) / routeDurationMs;
                   
-                  // Update position
-                  routeCurveRef.current.getPointAt(t, navigationCursorRef.current.position);
-                  navigationCursorRef.current.position.z += 50; // Altitude offset
+                  // Safe access to refs that were checked above
+                  const navCursorCurrent = navigationCursorRef.current;
+                  const routeCurveCurrent = routeCurveRef.current;
                   
-                  // Update orientation
-                  const tangent = new THREE.Vector3();
-                  routeCurveRef.current.getTangentAt(t, tangent);
-                  navigationCursorRef.current.quaternion.setFromUnitVectors(
-                    CAR_FRONT,
-                    tangent.normalize()
-                  );
+                  if (navCursorCurrent && routeCurveCurrent) {
+                    // Update position
+                    routeCurveCurrent.getPointAt(t, navCursorCurrent.position);
+                    navCursorCurrent.position.z += 50; // Altitude offset
+                    
+                    // Update orientation
+                    const tangent = new THREE.Vector3();
+                    routeCurveCurrent.getTangentAt(t, tangent);
+                    navCursorCurrent.quaternion.setFromUnitVectors(
+                      CAR_FRONT,
+                      tangent.normalize()
+                    );
+                  }
                   
                   // Request overlay redraw for smooth updates
                   overlayRef.current?.requestRedraw();
@@ -641,22 +666,35 @@ export function useThreeOverlay(
             }
             
             // Fallback method if renderer animation loop couldn't be set up
-            const elapsed = performance.now() - routeStartTimeRef.current;
-            const routeDurationMs = 12000; // total animation time
-            const t = (elapsed % routeDurationMs) / routeDurationMs;
-
-            routeCurveRef.current.getPointAt(t, navigationCursorRef.current.position);
-            // Slight altitude offset
-            navigationCursorRef.current.position.z += 50;
-
-            // Orientation
-            const tangent = new THREE.Vector3();
-            routeCurveRef.current.getTangentAt(t, tangent);
-            const CAR_FRONT = new THREE.Vector3(0, 1, 0);
-            navigationCursorRef.current.quaternion.setFromUnitVectors(
-              CAR_FRONT,
-              tangent.normalize()
-            );
+            try {
+              const startTime = routeStartTimeRef.current || performance.now();
+              const elapsed = performance.now() - startTime;
+              const routeDurationMs = 12000; // total animation time
+              const t = (elapsed % routeDurationMs) / routeDurationMs;
+              
+              const curve = routeCurveRef.current;
+              
+              if (curve && navCursor) {
+                curve.getPointAt(t, navCursor.position);
+                // Slight altitude offset
+                navCursor.position.z += 50;
+  
+                // Orientation
+                const tangent = new THREE.Vector3();
+                curve.getTangentAt(t, tangent);
+                const CAR_FRONT = new THREE.Vector3(0, 1, 0);
+                navCursor.quaternion.setFromUnitVectors(
+                  CAR_FRONT,
+                  tangent.normalize()
+                );
+              }
+            } catch (error) {
+              console.warn("Error animating navigation cursor:", error);
+              // Hide cursor on error to avoid stuck visuals
+              if (navCursor) {
+                navCursor.visible = false;
+              }
+            }
           }
         } else {
           navigationCursorRef.current.visible = false;
