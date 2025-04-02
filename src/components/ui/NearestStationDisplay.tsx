@@ -5,15 +5,38 @@ import { motion, useReducedMotion } from "framer-motion"
 
 interface NearestStationDisplayProps {
   /**
-   * Estimated walking time (minutes) from the user's location
-   * to the nearest station.
+   * Estimated walking time (minutes) from the origin location
+   * to the selected destination station.
    */
   minutesAway?: number
+  
+  /**
+   * The name of the selected station or destination
+   */
+  locationName?: string
+  
+  /**
+   * The source location type - determines which display mode to use
+   * Mutually exclusive with each other
+   */
+  sourceLocationName: "current location" | "search location"
 }
 
-/** Displays the time to the nearest station with a press/scale effect. */
+/**
+ * Displays the walking time to a station with visual feedback.
+ * 
+ * This component handles two mutually exclusive scenarios:
+ * 1. Walking from the user's current location to a station
+ * 2. Walking from a search location to a station
+ * 
+ * The sourceLocationName prop determines which scenario is active.
+ * Only when sourceLocationName is "search location" will the "from search location"
+ * text be shown, otherwise it shows just the walking time to the station.
+ */
 const NearestStationDisplay = memo(function NearestStationDisplay({
   minutesAway = 5,
+  locationName,
+  sourceLocationName,
 }: NearestStationDisplayProps) {
   const [isPressed, setIsPressed] = useState(false)
   const prefersReducedMotion = useReducedMotion()
@@ -80,7 +103,14 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
             }}
             className="bg-[#2a2a2a] rounded-lg px-2.5 py-1"
           >
-            <span className="text-gray-300 font-medium text-xs">walk</span>
+            <span className="text-gray-300 font-medium text-xs">
+              {locationName 
+                ? `walk to ${locationName}` 
+                : "walk to station"}
+              {sourceLocationName === "search location" 
+                ? "" 
+                : ""}
+            </span>
           </motion.div>
         </motion.div>
       </div>

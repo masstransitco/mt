@@ -7,12 +7,24 @@ import { Crosshair } from "lucide-react"
 import { toast } from "react-hot-toast"
 import { setUserLocation, setSearchLocation } from "@/store/userSlice"
 
-// Add an optional onLocateSuccess prop
+// Add props with clear separation of concerns
 interface LocateMeButtonProps {
-  onLocateSuccess?: (loc: google.maps.LatLngLiteral) => void
+  // Callback when location is found - for UI updates without animation
+  onLocationFound?: (loc: google.maps.LatLngLiteral) => void
+  // Whether to update userLocation in Redux - for animation and state
+  updateReduxState?: boolean
+  // Whether to trigger animation directly - to prevent racing animations
+  animateToLocation?: boolean
+  // Whether to also update search location - to ensure consistent station sorting
+  updateSearchLocation?: boolean
 }
 
-export default function LocateMeButton({ onLocateSuccess }: LocateMeButtonProps) {
+export default function LocateMeButton({ 
+  onLocationFound,
+  updateReduxState = true,
+  animateToLocation = true,
+  updateSearchLocation = false
+}: LocateMeButtonProps) {
   const dispatch = useAppDispatch()
   const [isLocating, setIsLocating] = useState(false)
   const [locationFound, setLocationFound] = useState(false)
@@ -39,13 +51,25 @@ export default function LocateMeButton({ onLocateSuccess }: LocateMeButtonProps)
         setLocationFound(true)
         setTimeout(() => setLocationFound(false), 2000)
 
-        // Dispatch location to Redux - only set userLocation to avoid double animation
+        // Create location object
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-        dispatch(setUserLocation(loc))
         
-        // Instead of also dispatching setSearchLocation, which would cause a second animation,
-        // just use the callback to let parent component handle additional logic
-        onLocateSuccess?.(loc)
+        // First call the callback for UI updates
+        // This should happen before Redux updates to prepare UI
+        onLocationFound?.(loc)
+        
+        // Update Redux state if requested - this will trigger animations via the useCameraAnimation hook
+        if (updateReduxState) {
+          // Update user location - this is the primary location source
+          dispatch(setUserLocation(loc))
+          
+          // Always update search location when requested
+          // This ensures consistent station sorting
+          if (updateSearchLocation) {
+            // Update search location right away to ensure station list updates immediately
+            dispatch(setSearchLocation(loc as google.maps.LatLngLiteral))
+          }
+        }
       },
       (err) => {
         console.error("Geolocation error:", err)
