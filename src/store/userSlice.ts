@@ -21,6 +21,9 @@ interface UserState {
   userLocation: google.maps.LatLngLiteral | null;
   searchLocation: google.maps.LatLngLiteral | null; // new field
   viewState: "showCar" | "showMap";
+  
+  // Store the currently selected station in the list view
+  listSelectedStationId: number | null;
 
   // Auth fields
   authUser: AuthUser | null;
@@ -35,6 +38,7 @@ const initialState: UserState = {
   userLocation: null,
   searchLocation: null,
   viewState: "showCar",
+  listSelectedStationId: null,
 
   // Auth
   authUser: null,
@@ -79,8 +83,12 @@ export const userSlice = createSlice({
     setViewState: (state, action: PayloadAction<"showCar" | "showMap">) => {
       state.viewState = action.payload;
     },
+    setListSelectedStation: (state, action: PayloadAction<number | null>) => {
+      state.listSelectedStationId = action.payload;
+    },
     resetUserSelections: (state) => {
       state.selectedCarId = null;
+      state.listSelectedStationId = null;
       // More fields can be reset if needed
     },
 
@@ -114,6 +122,7 @@ export const {
   setUserLocation,
   setSearchLocation,
   setViewState,
+  setListSelectedStation,
   resetUserSelections,
   setAuthUser,
   signOutUser,
@@ -125,6 +134,7 @@ export const selectSelectedCarId = (state: RootState) => state.user.selectedCarI
 export const selectUserLocation = (state: RootState) => state.user.userLocation;
 export const selectSearchLocation = (state: RootState) => state.user.searchLocation;
 export const selectViewState = (state: RootState) => state.user.viewState;
+export const selectListSelectedStationId = (state: RootState) => state.user.listSelectedStationId;
 export const selectAuthUser = (state: RootState) => state.user.authUser;
 export const selectIsSignedIn = (state: RootState) => state.user.isSignedIn;
 

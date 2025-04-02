@@ -7,7 +7,7 @@ import {
   createSelector,
 } from "@reduxjs/toolkit";
 import type { RootState } from "./store";
-import { selectUserLocation } from "./userSlice";
+import { selectUserLocation, selectSearchLocation } from "./userSlice";
 
 /**
  * A single station feature from /stations.geojson
@@ -311,16 +311,19 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
  * For GMap usage: all stations, distance-sorted
  */
 export const selectStationsWithDistance = createSelector(
-  [selectAllStations, selectUserLocation],
-  (stations, userLocation) => {
-    if (!userLocation) return stations;
-    const { lat: userLat, lng: userLng } = userLocation;
+  [selectAllStations, selectUserLocation, selectSearchLocation],
+  (stations, userLocation, searchLocation) => {
+    // Prioritize search location if available, otherwise use user location
+    const referenceLocation = searchLocation || userLocation;
+    if (!referenceLocation) return stations;
+    
+    const { lat: refLat, lng: refLng } = referenceLocation;
 
     const MIN_PER_KM = 12;
     return stations
       .map((station) => {
         const [sLng, sLat] = station.geometry.coordinates;
-        const dist = calculateDistance(userLat, userLng, sLat, sLng);
+        const dist = calculateDistance(refLat, refLng, sLat, sLng);
         const walkTime = Math.round(dist * MIN_PER_KM);
         return { ...station, distance: dist, walkTime };
       })
@@ -332,16 +335,19 @@ export const selectStationsWithDistance = createSelector(
  * For StationList usage: the PAGED subset, distance-sorted
  */
 export const selectListStationsWithDistance = createSelector(
-  [selectPagedStations, selectUserLocation],
-  (stations, userLocation) => {
-    if (!userLocation) return stations;
-    const { lat: userLat, lng: userLng } = userLocation;
+  [selectPagedStations, selectUserLocation, selectSearchLocation],
+  (stations, userLocation, searchLocation) => {
+    // Prioritize search location if available, otherwise use user location
+    const referenceLocation = searchLocation || userLocation;
+    if (!referenceLocation) return stations;
+    
+    const { lat: refLat, lng: refLng } = referenceLocation;
 
     const MIN_PER_KM = 12;
     return stations
       .map((station) => {
         const [sLng, sLat] = station.geometry.coordinates;
-        const dist = calculateDistance(userLat, userLng, sLat, sLng);
+        const dist = calculateDistance(refLat, refLng, sLat, sLng);
         const walkTime = Math.round(dist * MIN_PER_KM);
         return { ...station, distance: dist, walkTime };
       })
