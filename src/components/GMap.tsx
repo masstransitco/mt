@@ -36,7 +36,12 @@ import {
   setScannedCar,
 } from "@/store/carSlice";
 
-import { selectUserLocation, setUserLocation } from "@/store/userSlice";
+import { 
+  selectUserLocation, 
+  setUserLocation, 
+  setSearchLocation,
+  selectSearchLocation 
+} from "@/store/userSlice";
 
 import {
   selectBookingStep,
@@ -97,6 +102,14 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const dispatch = useAppDispatch();
 
   // -------------------------
+  // Local UI & Map States
+  // -------------------------
+  const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
+  const [overlayVisible, setOverlayVisible] = useState(true);
+  // Local state for search location, synchronized with Redux
+  const [searchLocation, setLocalSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
+
+  // -------------------------
   // Redux States
   // -------------------------
   const stations = useAppSelector(selectStationsWithDistance);
@@ -108,6 +121,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const carsError = useAppSelector(selectCarsError);
 
   const userLocation = useAppSelector(selectUserLocation);
+  const reduxSearchLocation = useAppSelector(selectSearchLocation);
   const bookingStep = useAppSelector(selectBookingStep);
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
@@ -115,13 +129,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   const isQrScanStation = useAppSelector(selectIsQrScanStation);
   const virtualStationId = useAppSelector(selectQrVirtualStationId);
-
-  // -------------------------
-  // Local UI & Map States
-  // -------------------------
-  const [actualMap, setActualMap] = useState<google.maps.Map | null>(null);
-  const [overlayVisible, setOverlayVisible] = useState(true);
-  const [searchLocation, setSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [isSignedIn, setIsSignedIn] = useState(false)
@@ -182,6 +189,38 @@ export default function GMap({ googleApiKey }: GMapProps) {
   }, [googleMapsReady]);
 
   // -------------------------
+  // Sorting Stations and Location Helpers
+  // -------------------------
+  const sortStationsByDistanceToPoint = useCallback(
+    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+      if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) {
+        return stationsToSort;
+      }
+      try {
+        const newStations = [...stationsToSort];
+        newStations.sort((a, b) => {
+          const [lngA, latA] = a.geometry.coordinates;
+          const [lngB, latB] = b.geometry.coordinates;
+          const distA = window.google.maps.geometry.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(latA, lngA),
+            new window.google.maps.LatLng(point.lat, point.lng)
+          );
+          const distB = window.google.maps.geometry.spherical.computeDistanceBetween(
+            new window.google.maps.LatLng(latB, lngB),
+            new window.google.maps.LatLng(point.lat, point.lng)
+          );
+          return distA - distB;
+        });
+        return newStations;
+      } catch (error) {
+        console.error("Error sorting stations by distance:", error);
+        return stationsToSort;
+      }
+    },
+    [googleMapsReady]
+  )
+
+  // -------------------------
   // Fetch initial data
   // -------------------------
   useEffect(() => {
@@ -205,6 +244,30 @@ export default function GMap({ googleApiKey }: GMapProps) {
       setOverlayVisible(false);
     }
   }, [isLoaded, googleMapsReady, stationsLoading, carsLoading]);
+  
+  // Sync local search location with Redux state
+  useEffect(() => {
+    // Initialize local state from Redux if needed
+    if (reduxSearchLocation && !searchLocation) {
+      // Ensure type safety with explicit casting
+      setLocalSearchLocation(reduxSearchLocation as google.maps.LatLngLiteral);
+    }
+  }, [reduxSearchLocation, searchLocation]);
+
+  // Use the Redux stations which are already sorted by appropriate location
+  // This useEffect will keep local sortedStations in sync with Redux state
+  useEffect(() => {
+    // stations from Redux are already sorted by the appropriate location 
+    // (either search location or user location)
+    setSortedStations(stations);
+    
+    // When location changes, automatically show the station list
+    if ((userLocation || reduxSearchLocation) && 
+        (bookingStep === 1 || bookingStep === 3 || bookingStep === 4)) {
+      setSheetMode("list");
+      setSheetMinimized(false);
+    }
+  }, [stations, userLocation, reduxSearchLocation, bookingStep]);
 
   // -------------------------
   // Auto-switch sheetMode by bookingStep
@@ -266,37 +329,30 @@ export default function GMap({ googleApiKey }: GMapProps) {
     }
   }, [departureStationId, stations, dispatch, googleMapsReady]);
 
-  // -------------------------
-  // Sorting Stations
-  // -------------------------
-  const sortStationsByDistanceToPoint = useCallback(
-    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
-      if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) {
-        return stationsToSort;
-      }
-      try {
-        const newStations = [...stationsToSort];
-        newStations.sort((a, b) => {
-          const [lngA, latA] = a.geometry.coordinates;
-          const [lngB, latB] = b.geometry.coordinates;
-          const distA = window.google.maps.geometry.spherical.computeDistanceBetween(
-            new window.google.maps.LatLng(latA, lngA),
-            new window.google.maps.LatLng(point.lat, point.lng)
-          );
-          const distB = window.google.maps.geometry.spherical.computeDistanceBetween(
-            new window.google.maps.LatLng(latB, lngB),
-            new window.google.maps.LatLng(point.lat, point.lng)
-          );
-          return distA - distB;
-        });
-        return newStations;
-      } catch (error) {
-        console.error("Error sorting stations by distance:", error);
-        return stationsToSort;
-      }
-    },
-    [googleMapsReady]
-  );
+  
+  
+  // Function to get a formatted location name for display
+  const getLocationDisplayName = useCallback((location: google.maps.LatLngLiteral | null): string => {
+    // Instead of using a fallback logic, explicitly determine the location source
+    // This treats both location types as equal alternatives
+    
+    // If a specific location is provided, use it directly
+    if (location) {
+      return 'Search Location';
+    }
+    
+    // Otherwise, determine if we're using search location or user location
+    if (reduxSearchLocation) {
+      return 'Search Location';
+    }
+    
+    if (userLocation) {
+      return 'Current Location';
+    }
+    
+    // Default when no location is available
+    return 'Nearby';
+  }, [reduxSearchLocation, userLocation]);
 
   // -------------------------
   // One function for station selection
@@ -578,13 +634,10 @@ useEffect(() => {
           {/* Station selector (top bar) */}
           <StationSelector
             onAddressSearch={(loc) => {
-              setSearchLocation(loc);
-              if (googleMapsReady) {
-                const sorted = sortStationsByDistanceToPoint(loc, stations);
-                setSortedStations(sorted);
-              } else {
-                setSortedStations(stations);
-              }
+              setLocalSearchLocation(loc);
+              dispatch(setSearchLocation(loc as google.maps.LatLngLiteral)); // Save to redux
+              // The stations will be automatically sorted by the useEffect that watches Redux state
+              
               // If in step 1, 3, or 4, switch to "list" to show station results
               if (bookingStep === 1 || bookingStep === 3 || bookingStep === 4) {
                 setSheetMode("list");
@@ -629,14 +682,17 @@ useEffect(() => {
   headerContent={
     <div className="flex items-center w-full justify-between">
       {/* A simple dynamic title for clarity */}
-      <h2 className="text-sm text-gray-400 font-medium">
+      <h2 className="text-sm font-medium">
         {sheetMode === "guide" && (bookingStep === 1 || bookingStep === 3)
-          ? "Start"
+          ? <span className="text-gray-400">Start</span>
           : sheetMode === "list"
-          ? "Nearby"
+          ? <>
+              <span className="text-gray-400">Nearby </span>
+              <span className="text-gray-300">{reduxSearchLocation ? "search location" : "current location"}</span>
+            </>
           : sheetMode === "detail"
-          ? "Pickup"
-          : "Sheet"}
+          ? <span className="text-gray-400">Pickup</span>
+          : <span className="text-gray-400">Sheet</span>}
       </h2>
 
       {/* Minimizer icons */}
@@ -695,6 +751,7 @@ useEffect(() => {
       <StationList
         stations={sortedStations}
         userLocation={userLocation}
+        searchLocation={reduxSearchLocation}
         onStationClick={handleStationSelectedFromList}
         className="space-y-2"
       />

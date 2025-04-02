@@ -623,13 +623,18 @@ function StationSelector({
               </motion.div>
             )}
 
-            {/* Use LocateMeButton at step 1, but pass a callback to replicate old logic */}
+            {/* Use LocateMeButton with clean separation of concerns */}
             {step === 1 && (
-              <LocateMeButton
-                onLocateSuccess={(loc) => {
-                  // Similar to older handleLocateMe: call parent
+              <LocateMeButton 
+                // Update Redux state and ensure search location is synchronized
+                updateReduxState={true}
+                animateToLocation={true}
+                updateSearchLocation={true}
+                onLocationFound={(loc) => {
+                  // This updates UI and triggers station sorting
+                  // The animation will be handled by the useCameraAnimation hook
                   onAddressSearch(loc)
-                }}
+                }} 
               />
             )}
           </div>
