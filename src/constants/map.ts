@@ -15,6 +15,10 @@ export const DEFAULT_CENTER = {
 
 export const DEFAULT_ZOOM = 12;
 
+// Zoom thresholds for marker rendering
+export const MARKER_POST_MIN_ZOOM = 15;
+export const MARKER_POST_MAX_ZOOM = 20;
+
 export const LIBRARIES: Libraries = [
   "geometry",
   "places",
@@ -43,7 +47,7 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   maxZoom: 20,
   minZoom: 3,
   clickableIcons: false,
-  mapId: 'd094c1caeb8f9683',
+  mapId: 'b307b162b2a6a5b9',
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
