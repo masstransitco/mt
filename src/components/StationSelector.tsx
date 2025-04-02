@@ -18,6 +18,7 @@ import { ensureGoogleMapsLoaded, createGeocoder, createAutocompleteService } fro
 import type { Car } from "@/types/cars"
 import { selectDispatchRoute } from "@/store/dispatchSlice"
 import { createVirtualStationFromCar } from "@/lib/stationUtils"
+import ModalPortal from "@/components/ModalPortal"
 
 // Import the new LocateMeButton
 import LocateMeButton from "@/components/ui/LocateMeButton"
@@ -64,6 +65,107 @@ const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => (
 ArrivalIcon.displayName = "ArrivalIcon"
 
 /* -----------------------------------------------------------
+   PredictionsDropdown Component
+----------------------------------------------------------- */
+interface PredictionsDropdownProps {
+  predictions: google.maps.places.AutocompletePrediction[]
+  inputRef: React.RefObject<HTMLInputElement>
+  onSelect: (prediction: google.maps.places.AutocompletePrediction) => void
+}
+
+const PredictionsDropdown = React.memo(({ predictions, inputRef, onSelect }: PredictionsDropdownProps) => {
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number }>({ 
+    top: 0, 
+    left: 0, 
+    width: 0 
+  })
+
+  // Calculate position based on input element
+  useEffect(() => {
+    if (!inputRef.current) return;
+    
+    // Initial position calculation
+    const calculatePosition = () => {
+      if (inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect()
+        
+        // Position below the input
+        setDropdownPosition({
+          top: rect.bottom + 5, // Position slightly below the input
+          left: rect.left,
+          width: rect.width
+        })
+      }
+    }
+    
+    // Calculate position immediately
+    calculatePosition()
+    
+    // Recalculate on resize or scroll
+    window.addEventListener('resize', calculatePosition)
+    window.addEventListener('scroll', calculatePosition)
+    
+    return () => {
+      window.removeEventListener('resize', calculatePosition)
+      window.removeEventListener('scroll', calculatePosition)
+    }
+  }, [inputRef])
+
+  // Handle click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        // Click was outside the dropdown and input
+        // We don't need to handle closing here as the input's onBlur does that
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [inputRef])
+
+  // Prevent clicks from bubbling to avoid closing the dropdown
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -5, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -5, scale: 0.98 }}
+      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        position: 'fixed',
+        top: `${dropdownPosition.top}px`,
+        left: `${dropdownPosition.left}px`,
+        width: `${dropdownPosition.width}px`,
+        zIndex: 9999,
+        transformOrigin: 'top',
+      }}
+      className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl shadow-xl max-h-60 overflow-y-auto"
+    >
+      {predictions.map((prediction) => (
+        <motion.button
+          key={prediction.place_id}
+          whileHover={{ backgroundColor: "rgba(42,42,42,0.8)" }}
+          onMouseDown={handleMouseDown}
+          onClick={() => onSelect(prediction)}
+          className="w-full px-2.5 py-1.5 text-left text-base text-gray-200 transition-colors border-b border-[#2a2a2a] last:border-b-0"
+          type="button"
+        >
+          <div className="font-medium">{prediction.structured_formatting.main_text}</div>
+          <div className="text-xs text-gray-400">
+            {prediction.structured_formatting.secondary_text}
+          </div>
+        </motion.button>
+      ))}
+    </motion.div>
+  )
+})
+PredictionsDropdown.displayName = "PredictionsDropdown"
+
+/* -----------------------------------------------------------
    AddressSearch Component
 ----------------------------------------------------------- */
 interface AddressSearchProps {
@@ -88,6 +190,8 @@ const AddressSearch = React.memo(function AddressSearch({
   const geocoder = useRef<google.maps.Geocoder | null>(null)
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const mapsLoadedRef = useRef<boolean>(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const selectionInProgressRef = useRef<boolean>(false)
 
   // Initialize Google Maps services
   useEffect(() => {
@@ -122,6 +226,14 @@ const AddressSearch = React.memo(function AddressSearch({
   }, [])
 
   const isStationSelected = !!selectedStation
+  
+  // Clear search text when a station is selected externally (e.g., clicked on map)
+  useEffect(() => {
+    if (selectedStation && !selectionInProgressRef.current) {
+      // Only clear if not already in the process of selecting via the dropdown
+      setSearchText("")
+    }
+  }, [selectedStation])
 
   const searchPlaces = useCallback((input: string) => {
     if (searchTimeoutRef.current) {
@@ -183,10 +295,24 @@ const AddressSearch = React.memo(function AddressSearch({
         })
         const location = result[0]?.geometry?.location
         if (location) {
-          onAddressSelect({ lat: location.lat(), lng: location.lng() })
+          // Mark that a selection is in progress
+          selectionInProgressRef.current = true
+          
+          // Set the text briefly to show what was selected
           setSearchText(prediction.structured_formatting.main_text)
+          
+          // Clear predictions and close dropdown
           setPredictions([])
           setIsDropdownOpen(false)
+          
+          // Call the callback to trigger station selection
+          onAddressSelect({ lat: location.lat(), lng: location.lng() })
+          
+          // Clear the search text after a brief delay to allow the user to see what was selected
+          setTimeout(() => {
+            setSearchText("")
+            selectionInProgressRef.current = false
+          }, 200)
         } else {
           throw new Error("No location found in geocoder result")
         }
@@ -203,9 +329,10 @@ const AddressSearch = React.memo(function AddressSearch({
       {isStationSelected ? (
         <div className="px-1 py-0.5 text-white text-base font-medium">{selectedStation!.properties.Place}</div>
       ) : (
-        <div className="station-selector z-10 relative">
+        <div className="station-selector z-30 relative">
           <div className="relative">
             <input
+              ref={inputRef}
               type="text"
               value={searchText}
               onChange={(e) => {
@@ -246,29 +373,13 @@ const AddressSearch = React.memo(function AddressSearch({
           </div>
           <AnimatePresence>
             {isDropdownOpen && predictions.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                transition={{ duration: 0.2 }}
-                className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-md shadow-lg z-50 max-h-60 overflow-y-auto z-[9999]"
-              >
-                {predictions.map((prediction) => (
-                  <motion.button
-                    key={prediction.place_id}
-                    whileHover={{ backgroundColor: "rgba(42,42,42,0.8)" }}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelect(prediction)}
-                    className="station-selector rounded-xl w-full px-2.5 py-1.5 text-left text-base text-gray-200 transition-colors border-b border-[#2a2a2a] last:border-b-0 z-[9999]"
-                    type="button"
-                  >
-                    <div className="station-selector font-medium">{prediction.structured_formatting.main_text}</div>
-                    <div className="stationselector text-xs text-gray-400">
-                      {prediction.structured_formatting.secondary_text}
-                    </div>
-                  </motion.button>
-                ))}
-              </motion.div>
+              <ModalPortal>
+                <PredictionsDropdown 
+                  predictions={predictions}
+                  inputRef={inputRef}
+                  onSelect={handleSelect}
+                />
+              </ModalPortal>
             )}
           </AnimatePresence>
         </div>
@@ -362,7 +473,7 @@ function StationSelector({
 
   return (
     <>
-      <div className="station-selector relative z-10 w-full max-w-screen-md mx-auto px-3 pt-3">
+      <div className="station-selector relative z-50 w-full max-w-screen-md mx-auto px-3 pt-3">
         <div className="flex flex-col w-full select-none">
           <motion.div
             initial={{ opacity: 0, y: -5 }}

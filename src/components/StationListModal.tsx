@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import type { StationFeature } from "@/store/stationsSlice"
+import StationsOnlineDisplay from "./ui/StationsOnlineDisplay"
 
 interface StationListModalProps {
   stations: StationFeature[]
@@ -60,6 +61,9 @@ export default function StationListModal({
 
           {/* Scrollable station list */}
           <div className="flex-1 overflow-y-auto px-3 py-2 station-list-modal">
+            <div className="mb-3">
+              <StationsOnlineDisplay stationsCount={stations.length} totalStations={200} />
+            </div>
             <div className="space-y-1.5">
               {stations.map((station, index) => (
                 <motion.button

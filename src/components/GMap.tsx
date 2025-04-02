@@ -12,7 +12,8 @@ import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import dynamic from "next/dynamic";
 import * as THREE from "three"; // Potential 3D usage
-import { Minimize2, Maximize2 } from "lucide-react";
+import ChevronDown from "@/components/ui/icons/ChevronDown";
+import ChevronUp from "@/components/ui/icons/ChevronUp";
 
 import type { Car } from "@/types/cars";
 import { useAppDispatch, useAppSelector } from "@/store/store";
@@ -76,7 +77,6 @@ import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
 import {useCameraAnimationStable} from "@/hooks/useCameraAnimation"
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
-import StationsDisplay from "@/components/ui/StationsDisplay";
 import CarPlate from "@/components/ui/CarPlate";
 import PickupTime from "@/components/ui/PickupTime";
 import FareDisplay from "@/components/ui/FareDisplay";
@@ -497,58 +497,6 @@ useEffect(() => {
   );
 
   // -------------------------
-  // Locate Me
-  // -------------------------
-  const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not supported.");
-      return;
-    }
-    const loadingToast = toast.loading("Finding your location...");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        dispatch(setUserLocation(loc));
-        if (actualMap) {
-          actualMap.panTo(loc);
-          actualMap.setZoom(15);
-        }
-        toast.dismiss(loadingToast);
-
-        if (googleMapsReady) {
-          const sorted = sortStationsByDistanceToPoint(loc, stations);
-          setSearchLocation(loc);
-          setSortedStations(sorted);
-        } else {
-          setSearchLocation(loc);
-          setSortedStations(stations);
-        }
-
-        // If step 1 or 3, switch to "list" to show station results
-        if (bookingStep === 1 || bookingStep === 3) {
-          setSheetMode("list");
-          setSheetMinimized(false);
-        }
-
-        toast.success("Location found!");
-      },
-      (err) => {
-        console.error("Geolocation error:", err);
-        toast.dismiss(loadingToast);
-        toast.error("Unable to retrieve location.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
-    );
-  }, [
-    dispatch,
-    actualMap,
-    googleMapsReady,
-    stations,
-    sortStationsByDistanceToPoint,
-    bookingStep,
-  ]);
-
-  // -------------------------
   // Confirm logic for detail
   // -------------------------
   const handleStationConfirm = useCallback(() => {
@@ -637,8 +585,8 @@ useEffect(() => {
               } else {
                 setSortedStations(stations);
               }
-              // If in step 1 or 3, switch to "list" to show station results
-              if (bookingStep === 1 || bookingStep === 3) {
+              // If in step 1, 3, or 4, switch to "list" to show station results
+              if (bookingStep === 1 || bookingStep === 3 || bookingStep === 4) {
                 setSheetMode("list");
                 setSheetMinimized(false);
               }
@@ -700,7 +648,7 @@ useEffect(() => {
             if (!disableMinimize) setSheetMinimized(false)
           }}
         >
-          <Maximize2 size={20} />
+          <ChevronUp width={20} height={20} />
         </button>
       ) : (
         <button
@@ -710,7 +658,7 @@ useEffect(() => {
             if (!disableMinimize) setSheetMinimized(true)
           }}
         >
-          <Minimize2 size={20} />
+          <ChevronDown width={20} height={20} />
         </button>
       )}
     </div>
@@ -744,7 +692,6 @@ useEffect(() => {
 
   {sheetMode === "list" && (
     <div className="space-y-2 px-4 py-2">
-      <StationsDisplay stationsCount={sortedStations.length} totalStations={stations.length} />
       <StationList
         stations={sortedStations}
         userLocation={userLocation}
