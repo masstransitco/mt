@@ -39,12 +39,12 @@ export default function LocateMeButton({ onLocateSuccess }: LocateMeButtonProps)
         setLocationFound(true)
         setTimeout(() => setLocationFound(false), 2000)
 
-        // Dispatch location to Redux
+        // Dispatch location to Redux - only set userLocation to avoid double animation
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
         dispatch(setUserLocation(loc))
-        dispatch(setSearchLocation(loc))
-
-        // Call optional callback to let parent do more
+        
+        // Instead of also dispatching setSearchLocation, which would cause a second animation,
+        // just use the callback to let parent component handle additional logic
         onLocateSuccess?.(loc)
       },
       (err) => {
@@ -65,7 +65,7 @@ export default function LocateMeButton({ onLocateSuccess }: LocateMeButtonProps)
       className={`
         relative flex items-center gap-1.5 
         text-xs text-white px-2.5 py-1 bg-[#2a2a2a] rounded-lg 
-        hover:bg-[#333333] transition-colors z-20
+        hover:bg-[#333333] transition-colors z-10
       `}
       type="button"
     >
