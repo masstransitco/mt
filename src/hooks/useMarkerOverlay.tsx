@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast"
 import { useAppSelector, useAppDispatch, store } from "@/store/store"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectStations3D } from "@/store/stations3DSlice"
+import { DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, MARKER_POST_MAX_ZOOM } from "@/constants/map"
 
 import {
   selectBookingStep,
@@ -66,6 +67,7 @@ function computeRouteMidpoint(routeCoords: google.maps.LatLngLiteral[]): google.
 interface UseMarkerOverlayOptions {
   onPickupClick?: (stationId: number) => void
   onTiltChange?: (tilt: number) => void
+  onZoomChange?: (zoom: number) => void
 }
 
 export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: UseMarkerOverlayOptions) {
@@ -98,8 +100,9 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // Single route marker for the departure->arrival route
   const routeMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
 
-  // Keep track of current tilt
+  // Keep track of current tilt and zoom
   const tiltRef = useRef(0)
+  const zoomRef = useRef(DEFAULT_ZOOM)
 
   // For the departure station, show "Pickup in X minutes"
   const pickupMins = useMemo(() => {
@@ -335,10 +338,19 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     [dispatch, handleStationClick, options],
   )
 
-  // Adjust post height based on tilt
-  const computePostHeight = useCallback((baseHeight: number, tilt: number) => {
-    const fraction = Math.min(Math.max(tilt / 45, 0), 1)
-    return baseHeight * fraction
+  // Adjust post height based on tilt and zoom
+  const computePostHeight = useCallback((baseHeight: number, tilt: number, zoom: number) => {
+    // First calculate tilt fraction (0-1)
+    const tiltFraction = Math.min(Math.max(tilt / 45, 0), 1)
+    
+    // Calculate zoom fraction (0-1) based on thresholds
+    let zoomFraction = 0
+    if (zoom >= MARKER_POST_MIN_ZOOM) {
+      zoomFraction = Math.min((zoom - MARKER_POST_MIN_ZOOM) / (MARKER_POST_MAX_ZOOM - MARKER_POST_MIN_ZOOM), 1)
+    }
+    
+    // Combine both factors - post is only visible when both conditions are met
+    return baseHeight * tiltFraction * zoomFraction
   }, [])
 
   // Create or update the route marker for DEPARTURE->ARRIVAL
@@ -469,7 +481,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       }
       const post = c.querySelector<HTMLDivElement>(".route-post")
       if (post) {
-        const newHeight = computePostHeight(28, tiltRef.current)
+        const newHeight = computePostHeight(28, tiltRef.current, zoomRef.current)
         post.style.height = `${newHeight}px`
       }
     }
@@ -558,6 +570,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // Master refresh logic for markers
   const refreshMarkers = useCallback(() => {
     const currentTilt = tiltRef.current
+    const currentZoom = zoomRef.current
 
     candidateStationsRef.current.forEach((entry) => {
       if (!entry.marker) return
@@ -574,8 +587,12 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         marker.element.style.zIndex = forceVis ? "9999" : "1"
       }
 
-      // Expanded/collapsed logic
-      const expanded = isExpanded(station.id)
+      // Expanded/collapsed logic based on station selection and zoom level
+      const isDeparture = station.id === departureStationId
+      const isArrival = station.id === arrivalStationId
+      const expanded = isExpanded(station.id) && currentZoom >= MARKER_POST_MIN_ZOOM
+      
+      // When below zoom threshold, always use collapsed view for all markers
       if (expanded) {
         refs.collapsedWrapper.style.opacity = "0"
         refs.collapsedWrapper.style.transform = "scale(0.8)"
@@ -594,9 +611,9 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         }, 250)
       }
 
-      // Post heights
-      const newHeight = computePostHeight(28, currentTilt)
-      const showPosts = currentTilt > 5 ? "1" : "0"
+      // Post heights - consider both tilt and zoom
+      const newHeight = computePostHeight(28, currentTilt, currentZoom)
+      const showPosts = newHeight > 5 ? "1" : "0"
       refs.collapsedPost.style.height = `${newHeight}px`
       refs.collapsedPost.style.opacity = showPosts
       refs.expandedPost.style.height = `${newHeight}px`
@@ -608,16 +625,19 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       }
 
       // Border color + glow if departure/arrival
-      const isDeparture = station.id === departureStationId
-      const isArrival = station.id === arrivalStationId
       const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#505156"
-
-      // Collapsed style
+      
+      // Collapsed style with special handling for selected stations
       refs.collapsedDiv.style.borderColor = borderColor
+      
+      // Special style for departure/arrival stations at any zoom level
       if (isDeparture || isArrival) {
         const glowColor = isDeparture ? "rgba(16, 163, 127, 0.5)" : "rgba(39, 110, 241, 0.5)"
+        const borderWidth = currentZoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px" // thicker border at low zoom
+        refs.collapsedDiv.style.borderWidth = borderWidth
         refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
       } else {
+        refs.collapsedDiv.style.borderWidth = "1.5px"
         refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)"
       }
 
@@ -674,6 +694,16 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     (newTilt: number) => {
       tiltRef.current = newTilt
       options?.onTiltChange?.(newTilt)
+      refreshMarkers()
+    },
+    [options, refreshMarkers],
+  )
+  
+  // Zoom change → re-style markers
+  const updateMarkerZoom = useCallback(
+    (newZoom: number) => {
+      zoomRef.current = newZoom
+      options?.onZoomChange?.(newZoom)
       refreshMarkers()
     },
     [options, refreshMarkers],
@@ -785,6 +815,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   return {
     routeMarkerRef,
     updateMarkerTilt,
+    updateMarkerZoom,
   }
 }
 
