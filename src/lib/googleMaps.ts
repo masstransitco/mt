@@ -54,7 +54,8 @@ export const ensureGoogleMapsLoaded = (): Promise<void> => {
       return window.google?.maps?.DirectionsService &&
         window.google?.maps?.Geocoder &&
         window.google?.maps?.places?.AutocompleteService &&
-        window.google?.maps?.geometry?.spherical;
+        window.google?.maps?.geometry?.spherical &&
+        window.google?.maps?.geometry?.encoding;
     };
     
     /**
@@ -227,6 +228,41 @@ export const getDirections = async (
             resolve(result);
           } else {
             reject(new Error(`Directions request failed: ${status}`));
+          }
+        }
+      );
+    });
+  });
+};
+
+/**
+ * Safely get walking directions between two points
+ * @param origin Starting location
+ * @param destination Ending location
+ * @param options Additional routing options
+ * @returns Promise with walking directions result
+ */
+export const getWalkingDirections = async (
+  origin: google.maps.LatLngLiteral | string,
+  destination: google.maps.LatLngLiteral | string,
+  options: Partial<google.maps.DirectionsRequest> = {}
+): Promise<google.maps.DirectionsResult> => {
+  return withMapsErrorHandling(async () => {
+    const directionsService = await createDirectionsService();
+    
+    return new Promise((resolve, reject) => {
+      directionsService.route(
+        {
+          origin,
+          destination,
+          travelMode: google.maps.TravelMode.WALKING,
+          ...options,
+        },
+        (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            resolve(result);
+          } else {
+            reject(new Error(`Walking directions request failed: ${status}`));
           }
         }
       );
