@@ -134,7 +134,7 @@ async function processStations3DResponse(
   const invalidBuildingIds = new Set<number>();
   
   // Identify buildings with valid polygon coordinates that can be extruded
-  cleanedFeatures.forEach(feature => {
+  cleanedFeatures.forEach((feature: Station3DFeature) => {
     const objectId = feature.properties.ObjectId;
     if (typeof objectId !== 'number') return;
     
