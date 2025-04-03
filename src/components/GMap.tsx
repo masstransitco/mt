@@ -41,7 +41,8 @@ import {
   selectUserLocation, 
   setUserLocation, 
   setSearchLocation,
-  selectSearchLocation 
+  selectSearchLocation,
+  selectWalkingRoute
 } from "@/store/userSlice";
 
 import {
@@ -82,6 +83,7 @@ import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
 import { useCameraAnimationStable } from "@/hooks/useCameraAnimation";
 import { useCircleOverlay } from "@/hooks/useCircleOverlay";
+import { useWalkingRouteOverlay } from "@/hooks/useWalkingRouteOverlay";
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import CarPlate from "@/components/ui/CarPlate";
@@ -127,6 +129,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const departureStationId = useAppSelector(selectDepartureStationId);
   const arrivalStationId = useAppSelector(selectArrivalStationId);
   const scannedCar = useAppSelector(selectScannedCar);
+  const walkingRoute = useAppSelector(selectWalkingRoute);
 
   const isQrScanStation = useAppSelector(selectIsQrScanStation);
   const virtualStationId = useAppSelector(selectQrVirtualStationId);
@@ -462,6 +465,16 @@ const { userCircleRef, searchCircleRef } = useCircleOverlay(actualMap, {
   searchCircleColor: "#276EF1", // Blue color for search location
   searchCircleRadius: 120,
   searchCircleOpacity: 0.12,
+});
+
+// -------------------------
+// Walking Route Overlay Hook
+// -------------------------
+const { walkingRouteRef } = useWalkingRouteOverlay(actualMap, {
+  strokeColor: "#4CAF50", // Green color for walking route
+  strokeOpacity: 0.8,
+  strokeWeight: 4,
+  zIndex: 5, // Above circles but below markers
 });
 
 // -------------------------

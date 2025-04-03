@@ -8,7 +8,15 @@ import ModalPortal from "./ModalPortal"
 import StationListModal from "./StationListModal"
 import NearestStationDisplay from "./ui/NearestStationDisplay"
 import { useAppDispatch, useAppSelector } from "@/store/store"
-import { selectListSelectedStationId, setListSelectedStation } from "@/store/userSlice"
+import { 
+  selectListSelectedStationId, 
+  setListSelectedStation,
+  selectWalkingRouteStatus,
+  selectWalkingDuration,
+  fetchWalkingRoute,
+  clearWalkingRoute,
+  selectWalkingRoute
+} from "@/store/userSlice"
 
 export interface StationListProps {
   stations: StationFeature[]
@@ -39,8 +47,27 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
   const visibleStations = stations.slice(0, 3)
   const hasMoreStations = stations.length > 3
 
+  // Get walking route data from Redux
+  const walkingDuration = useAppSelector(selectWalkingDuration);
+  const walkingRouteStatus = useAppSelector(selectWalkingRouteStatus);
+  const walkingRoute = useAppSelector(selectWalkingRoute);
+  
+  // Track if the walking route is currently shown
+  const [isWalkingRouteShown, setIsWalkingRouteShown] = useState(false);
+  
+  // Sync with Redux - if walkingRoute exists, route is shown
+  useEffect(() => {
+    setIsWalkingRouteShown(walkingRouteStatus === 'succeeded' && !!walkingRoute);
+  }, [walkingRouteStatus, walkingRoute]);
+  
   // Calculate walking time in minutes for the selected station
-  const walkingMinutes = useMemo(() => {
+  const walkingMinutes = useMemo((): number => {
+    // If we have a real walking route from the API, use that duration
+    if (walkingDuration !== null) {
+      return walkingDuration;
+    }
+    
+    // Otherwise, fall back to the estimation
     if (!selectedStationId) return 5 // default value
     
     // IMPORTANT: The source location is determined here, making 
@@ -84,7 +111,7 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
     } catch (e) {
       return 5
     }
-  }, [selectedStationId, stations, userLocation, searchLocation])
+  }, [selectedStationId, stations, userLocation, searchLocation, walkingDuration])
 
   // Set the nearest station as selected only on first render
   // OR when location changes AND user hasn't manually selected a station
@@ -118,11 +145,39 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
     }
   }, [stations, selectedStationId])
 
+  // Handle showing walking route when user clicks on the walking display
+  const handleShowWalkingRoute = () => {
+    if (isWalkingRouteShown) {
+      // Toggle off - clear walking route
+      dispatch(clearWalkingRoute())
+      setIsWalkingRouteShown(false)
+    } else if (selectedStationId) {
+      // Toggle on - fetch walking route
+      const selectedStation = stations.find(s => s.id === selectedStationId)
+      const referenceLocation = searchLocation || userLocation
+      
+      if (selectedStation && referenceLocation) {
+        // Request the walking route from the API
+        dispatch(fetchWalkingRoute({
+          locationFrom: referenceLocation,
+          station: selectedStation
+        }))
+        setIsWalkingRouteShown(true)
+      }
+    }
+  }
+
   const handleStationSelect = (station: StationFeature) => {
     setSelectedStationId(station.id)
     dispatch(setListSelectedStation(station.id))
     // Mark that user has made a manual selection
     setUserHasSelected(true)
+    
+    // Clear walking route when user selects a new station
+    if (isWalkingRouteShown) {
+      dispatch(clearWalkingRoute())
+      setIsWalkingRouteShown(false)
+    }
   }
 
   const handleStationConfirm = (station: StationFeature) => {
@@ -137,6 +192,12 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
     
     // Reset flag after user confirms their selection
     setUserHasSelected(false)
+    
+    // Clear any walking route when station is confirmed
+    if (isWalkingRouteShown) {
+      dispatch(clearWalkingRoute())
+      setIsWalkingRouteShown(false)
+    }
   }
 
   return (
@@ -152,6 +213,9 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
             minutesAway={walkingMinutes}
             locationName={selectedStationId ? stations.find(s => s.id === selectedStationId)?.properties.Place : undefined}
             sourceLocationName={searchLocation ? "search location" : "current location"}
+            isAccurateTime={walkingRouteStatus === 'succeeded'}
+            onShowWalkingRoute={handleShowWalkingRoute}
+            isWalkingRouteShown={isWalkingRouteShown}
           />
           <div className="space-y-1.5 mt-2">
             <AnimatePresence>
