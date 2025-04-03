@@ -75,9 +75,59 @@ export default function LocateMeButton({
         console.error("Geolocation error:", err)
         setIsLocating(false)
         toast.dismiss(toastId)
-        toast.error("Unable to retrieve location.")
+        
+        // Handle specific error codes with more useful messages
+        if (err.code === 1) {
+          toast.error("Location access denied. Please enable location in your browser settings.")
+        } else if (err.code === 2) {
+          // POSITION_UNAVAILABLE - This is the error we're seeing
+          // In development environment, use a fallback location for Hong Kong
+          if (process.env.NODE_ENV === "development") {
+            try {
+              // Create properly typed location object
+              const fallbackLoc: google.maps.LatLngLiteral = { 
+                lat: 22.2988, 
+                lng: 114.1722 
+              };
+              
+              toast.success("Using default location for development")
+              
+              // Mark as found with the fallback
+              setLocationFound(true)
+              setTimeout(() => setLocationFound(false), 2000)
+              
+              // Add a small delay to ensure map is ready before animation
+              setTimeout(() => {
+                // Use the fallback location
+                if (onLocationFound) {
+                  onLocationFound(fallbackLoc);
+                }
+                
+                if (updateReduxState) {
+                  dispatch(setUserLocation(fallbackLoc));
+                  if (updateSearchLocation) {
+                    dispatch(setSearchLocation(fallbackLoc));
+                  }
+                }
+              }, 100);
+            } catch (innerErr) {
+              console.warn("Error using fallback location:", innerErr);
+              toast.error("Unable to use fallback location");
+            }
+          } else {
+            toast.error("Unable to determine your location. Please try again or enter an address.")
+          }
+        } else if (err.code === 3) {
+          toast.error("Location request timed out. Please try again.")
+        } else {
+          toast.error("Unable to retrieve location.")
+        }
       },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000,  // Increased timeout
+        maximumAge: 30000 // Allow slightly older cached positions
+      }
     )
   }
 
