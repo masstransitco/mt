@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, memo, useCallback, useMemo, useRef } from "react"
-import { motion, useReducedMotion } from "framer-motion"
+import { motion, useReducedMotion, useAnimation, AnimatePresence } from "framer-motion"
 
 interface NearestStationDisplayProps {
   /**
@@ -20,6 +20,23 @@ interface NearestStationDisplayProps {
    * Mutually exclusive with each other
    */
   sourceLocationName: "current location" | "search location"
+  
+  /**
+   * Whether the walking time is from accurate route data
+   * or just an estimation
+   */
+  isAccurateTime?: boolean
+  
+  /**
+   * Called when the user clicks on the walking time display
+   * to show the walking route
+   */
+  onShowWalkingRoute?: () => void
+  
+  /**
+   * Whether the walking route is currently shown on the map
+   */
+  isWalkingRouteShown?: boolean
 }
 
 /**
@@ -37,13 +54,50 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
   minutesAway = 5,
   locationName,
   sourceLocationName,
+  isAccurateTime = false,
+  onShowWalkingRoute,
+  isWalkingRouteShown = false,
 }: NearestStationDisplayProps) {
   const [isPressed, setIsPressed] = useState(false)
   const prefersReducedMotion = useReducedMotion()
-
+  
+  // Animation controls
+  const pulseControls = useAnimation()
+  
   // Animation refs
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Start pulsing animation when component mounts and not showing walking route
+  useEffect(() => {
+    if (!isWalkingRouteShown && !prefersReducedMotion) {
+      // Run pulsing animation when in default state
+      pulseControls.start({
+        boxShadow: [
+          "0 0 0 0px rgba(255, 255, 255, 0)",
+          "0 0 0 2px rgba(255, 255, 255, 0.3)",
+          "0 0 0 0px rgba(255, 255, 255, 0)"
+        ],
+        transition: {
+          duration: 3,
+          ease: "easeInOut",
+          times: [0, 0.5, 1],
+          repeat: Infinity,
+          repeatType: "loop"
+        }
+      });
+    } else if (isWalkingRouteShown) {
+      // Show green border when walking route is active
+      pulseControls.stop();
+      pulseControls.set({
+        boxShadow: "0 0 0 2px rgba(76, 175, 80, 0.6)"
+      });
+    }
+    
+    return () => {
+      pulseControls.stop();
+    };
+  }, [isWalkingRouteShown, pulseControls, prefersReducedMotion]);
+  
   // Handle press down to trigger quick scale animation
   const handlePress = useCallback(() => {
     if (isPressed) return
@@ -62,55 +116,89 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
     }
   }, [])
 
-  // Container press variants
+  // Container variants
   const containerVariants = useMemo(
     () => ({
-      pressed: { scale: 0.98, backgroundColor: "#0c0c0c" },
-      normal: { scale: 1, backgroundColor: "#1a1a1a" },
+      pressed: { 
+        scale: 0.98, 
+        backgroundColor: "#0c0c0c",
+      },
+      normal: { 
+        scale: 1, 
+        backgroundColor: "#1a1a1a",
+      },
+      hover: {
+        backgroundColor: "#202020",
+      }
     }),
     [],
   )
 
   return (
     <div className="flex flex-col w-full select-none">
-
-      {/* Card */}
+      {/* Card with pulsing border effect */}
       <div className="w-full flex items-center justify-center">
-        <motion.div
-          className="flex items-center bg-[#1a1a1a] px-4 py-2.5 rounded-xl shadow-md w-full justify-between"
-          animate="normal"
-          variants={containerVariants}
-          transition={{
-            duration: prefersReducedMotion ? 0.1 : 0.2,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          initial="normal"
+        <motion.div 
+          className={`rounded-xl overflow-hidden ${isWalkingRouteShown ? "" : "pulsating-border"}`}
+          animate={pulseControls}
+          initial={{boxShadow: "0 0 0 0px rgba(255, 255, 255, 0)"}}
         >
-          <MinutesDisplay value={minutesAway} isPressed={isPressed} />
-
-          {/* Small pill */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, x: -10 }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-              x: 0,
-              transition: {
-                duration: prefersReducedMotion ? 0.3 : 0.5,
-                delay: prefersReducedMotion ? 0.2 : 0.4,
-                ease: [0.16, 1, 0.3, 1],
-              },
+            className="flex items-center px-4 py-2.5 bg-[#1a1a1a] w-full justify-between cursor-pointer shadow-md"
+            initial="normal"
+            whileHover="hover"
+            animate={isWalkingRouteShown ? "pressed" : "normal"}
+            variants={containerVariants}
+            transition={{
+              duration: 0.2,
+              ease: [0.16, 1, 0.3, 1],
             }}
-            className="bg-[#2a2a2a] rounded-lg px-2.5 py-1"
+            onClick={() => {
+              handlePress();
+              onShowWalkingRoute?.();
+            }}
           >
-            <span className="text-gray-300 font-medium text-xs">
-              {locationName 
-                ? `walk to ${locationName}` 
-                : "walk to station"}
-              {sourceLocationName === "search location" 
-                ? "" 
-                : ""}
-            </span>
+            <MinutesDisplay value={minutesAway} isPressed={isPressed || isWalkingRouteShown} />
+
+            {/* Small pill */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, x: -10 }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                x: 0,
+                transition: {
+                  duration: prefersReducedMotion ? 0.3 : 0.5,
+                  delay: prefersReducedMotion ? 0.2 : 0.4,
+                  ease: [0.16, 1, 0.3, 1],
+                },
+              }}
+              className={`rounded-lg px-2.5 py-1 ${
+                isWalkingRouteShown 
+                  ? 'bg-[#1e4a3a]' 
+                  : isAccurateTime 
+                    ? 'bg-[#2a3a2a]' 
+                    : 'bg-[#2a2a2a]'
+              }`}
+            >
+              <span className={`font-medium text-xs ${
+                isWalkingRouteShown 
+                  ? 'text-green-400' 
+                  : isAccurateTime 
+                    ? 'text-green-300' 
+                    : 'text-gray-300'
+              }`}>
+                {isWalkingRouteShown
+                  ? `${locationName ? `route to ${locationName}` : "route to station"}`
+                  : locationName 
+                    ? `walk to ${locationName}` 
+                    : "walk to station"
+                }
+                {sourceLocationName === "search location" 
+                  ? "" 
+                  : ""}
+              </span>
+            </motion.div>
           </motion.div>
         </motion.div>
       </div>
