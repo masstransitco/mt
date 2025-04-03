@@ -260,10 +260,17 @@ export function useThreeOverlay(
   }, [routeDecoded, departureStationId, arrivalStationId, refreshRouteTube]);
 
   // ------------------------------------------------
-  // 3. Station selection callback
+  // 3. Station selection callback - now uses stationSelectionManager
   // ------------------------------------------------
   const handleStationSelected = useCallback(
     (stationId: number) => {
+      // First use our centralized selection manager
+      import("@/lib/stationSelectionManager").then(module => {
+        const stationSelectionManager = module.default;
+        stationSelectionManager.selectStation(stationId, false);
+      });
+      
+      // Also notify parent through callback for backward compatibility
       if (options?.onStationSelected) {
         options.onStationSelected(stationId);
       }
@@ -357,9 +364,10 @@ export function useThreeOverlay(
       const loader = new GLTFLoader();
       loader.setDRACOLoader(dracoLoaderSingleton);
 
-      // 1) Load user location \"cursor\"
+      // 1) Load user location \"cursor_animated\" with cache-busting
+      const timestamp = Date.now(); // Add timestamp for cache busting
       loader.load(
-        "/models/cursor",
+        `/models/cursor_animated?v=${timestamp}`,
         (gltf) => {
           const originalModel = gltf.scene;
           const cursorGroup = new THREE.Group();
@@ -386,12 +394,43 @@ export function useThreeOverlay(
           overlayRef.current?.requestRedraw();
         },
         undefined,
-        (err) => console.error("[useThreeOverlay] /models/cursor load error:", err)
+        (err) => {
+          console.error("[useThreeOverlay] /models/cursor_animated load error:", err);
+          // Fallback to the original cursor if the animated one fails
+          loader.load(
+            `/models/cursor?v=${timestamp}`,
+            (gltf) => {
+              const fallbackModel = gltf.scene;
+              const fallbackGroup = new THREE.Group();
+              
+              fallbackModel.scale.setScalar(15);
+              const oldEuler = new THREE.Euler(Math.PI / 2, 0, Math.PI, "ZXY");
+              const q = new THREE.Quaternion().setFromEuler(oldEuler);
+              fallbackModel.rotation.copy(new THREE.Euler().setFromQuaternion(q, "XYZ"));
+              
+              fallbackModel.traverse((child) => {
+                if (child instanceof THREE.Mesh && child.material) {
+                  child.material.side = THREE.DoubleSide;
+                  child.material.needsUpdate = true;
+                }
+              });
+              
+              fallbackGroup.add(fallbackModel);
+              fallbackGroup.visible = false;
+              scene.add(fallbackGroup);
+              cursorRef.current = fallbackGroup;
+              
+              overlayRef.current?.requestRedraw();
+            },
+            undefined,
+            (fallbackErr) => console.error("[useThreeOverlay] Fallback /models/cursor load error:", fallbackErr)
+          );
+        }
       );
 
-      // 2) Load \"cursor_navigation\" for step 3 & route animation
+      // 2) Load \"cursor_navigation\" for step 3 & route animation with cache-busting
       loader.load(
-        "/models/cursor_navigation",
+        `/models/cursor_navigation?v=${timestamp}`,
         (gltf) => {
           const originalModel = gltf.scene;
           const navCursorGroup = new THREE.Group();

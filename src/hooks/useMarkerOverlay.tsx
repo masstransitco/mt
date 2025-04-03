@@ -139,19 +139,16 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     [bookingStep, departureStationId, arrivalStationId],
   )
 
-  // UPDATED: fetch booking step from store to avoid stale closure
+  // Now uses stationSelectionManager instead of direct Redux access
   const handleStationClick = useCallback(
     (stationId: number) => {
-      const currentStep = store.getState().booking.step
-      if (currentStep === 1 || currentStep === 2) {
-        dispatch(doSelectDepartureStation(stationId))
-        toast.success(`Departure station #${stationId} selected!`)
-      } else if (currentStep === 3 || currentStep === 4) {
-        dispatch(doSelectArrivalStation(stationId))
-        toast.success(`Arrival station #${stationId} selected!`)
-      }
+      import("@/lib/stationSelectionManager").then(module => {
+        const stationSelectionManager = module.default;
+        const newSheetMode = stationSelectionManager.selectStation(stationId, false);
+        // No need to show toast here as stationSelectionManager handles it
+      });
     },
-    [dispatch],
+    [],
   )
 
   // Build DOM for each station marker, hooking up events
@@ -300,11 +297,13 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         })
         pickupBtn.addEventListener("click", (ev) => {
           ev.stopPropagation()
-          if (store.getState().booking.step === 2) {
-            dispatch(advanceBookingStep(3))
-            toast.success("Departure confirmed! Now choose your arrival station.")
-            options?.onPickupClick?.(station.id)
-          }
+          import("@/lib/stationSelectionManager").then(module => {
+            const stationSelectionManager = module.default;
+            if (stationSelectionManager.getCurrentStep() === 2) {
+              stationSelectionManager.confirmStationSelection();
+              options?.onPickupClick?.(station.id) // keep for backwards compatibility
+            }
+          });
         })
       }
 
