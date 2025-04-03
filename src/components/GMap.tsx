@@ -80,7 +80,8 @@ import PickupGuide from "@/components/ui/PickupGuide";
 import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, MARKER_POST_MAX_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
-import {useCameraAnimationStable} from "@/hooks/useCameraAnimation"
+import { useCameraAnimationStable } from "@/hooks/useCameraAnimation";
+import { useCircleOverlay } from "@/hooks/useCircleOverlay";
 import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import CarPlate from "@/components/ui/CarPlate";
@@ -447,6 +448,20 @@ const { updateMarkerTilt, updateMarkerZoom } = useMarkerOverlay(actualMap, {
   onZoomChange: (zoom) => {
     // optional callback if needed
   },
+});
+
+// -------------------------
+// Location Circles Overlay Hook
+// -------------------------
+
+// Use the hook to create circles for user and search locations
+const { userCircleRef, searchCircleRef } = useCircleOverlay(actualMap, {
+  userCircleColor: "#10A37F", // Green color for user location
+  userCircleRadius: 80,
+  userCircleOpacity: 0.15,
+  searchCircleColor: "#276EF1", // Blue color for search location
+  searchCircleRadius: 120,
+  searchCircleOpacity: 0.12,
 });
 
 // -------------------------
