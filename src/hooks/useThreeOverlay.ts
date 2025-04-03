@@ -562,13 +562,14 @@ export function useThreeOverlay(
       });
 
       // 2) Update user location cursor
+      // 2) Handle user location cursor similar to building models (always update properties, update visibility last)
       if (cursorRef.current) {
         const hasValidLocation =
           userLocation &&
           typeof userLocation.lat === "number" &&
           typeof userLocation.lng === "number";
 
-        cursorRef.current.visible = !!hasValidLocation;
+        // Always update position and animation when location is valid
         if (hasValidLocation) {
           const { lat, lng } = userLocation!;
           const { x, y, z } = latLngAltToVector3(
@@ -591,152 +592,157 @@ export function useThreeOverlay(
             }
           });
         }
+        
+        // Only update visibility at the end after all updates are done
+        // This prevents flickering during property updates
+        const newVisibility = !!hasValidLocation;
+        if (cursorRef.current.visible !== newVisibility) {
+          cursorRef.current.visible = newVisibility;
+        }
       }
 
-      // 3) Step 3 or 4: controlling navigationCursorRef
+      // 3) Step 3 or 4: controlling navigationCursorRef - treat like a persistent 3D model
       if (navigationCursorRef.current) {
+        // Determine visibility state first but don't apply yet
+        // Explicit boolean type to avoid type errors
+        const shouldShowNavigationCursor: boolean = !!(
+          (bookingStep === 3 && departureStationId != null) || 
+          (bookingStep === 4 && routeCurveRef.current)
+        );
+        
+        let shouldUpdateVisibility = false;
+        let newPosition = new THREE.Vector3();
+        
+        // Update position and properties without changing visibility
         if (bookingStep === 3 && departureStationId != null) {
-          // Place the cursor at the side of the building
+          // Find station and related building
           const depStation = allStations.find((s) => s.id === departureStationId);
-          if (depStation) {
-            const buildingGroup = buildingGroupsRef.current.find(
-              (g) => g.userData.stationId === departureStationId
-            );
-            if (buildingGroup) {
-              const boundingCenter = buildingGroup.userData.boundingCenter as THREE.Vector3;
-              const boundingRadius = buildingGroup.userData.boundingRadius || 0;
+          const buildingGroup = depStation ? 
+            buildingGroupsRef.current.find((g) => g.userData.stationId === departureStationId) : null;
+            
+          if (buildingGroup) {
+            // Calculate position relative to the building
+            const boundingCenter = buildingGroup.userData.boundingCenter as THREE.Vector3;
+            const boundingRadius = buildingGroup.userData.boundingRadius || 0;
 
-              let angle = 0;
-              if (userLocation) {
-                const userVec = latLngAltToVector3(
-                  { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
-                  anchor
-                );
-                const dx = userVec.x - boundingCenter.x;
-                const dy = userVec.y - boundingCenter.y;
-                angle = Math.atan2(dy, dx);
+            let angle = 0;
+            if (userLocation) {
+              const userVec = latLngAltToVector3(
+                { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
+                anchor
+              );
+              const dx = userVec.x - boundingCenter.x;
+              const dy = userVec.y - boundingCenter.y;
+              angle = Math.atan2(dy, dx);
+            }
+
+            const margin = 5;
+            const offsetDist = boundingRadius + margin;
+            const offsetX = boundingCenter.x + offsetDist * Math.cos(angle);
+            const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
+
+            // Update position data without changing visibility yet
+            newPosition.set(offsetX, offsetY, 0);
+            navigationCursorRef.current.position.copy(newPosition);
+            shouldUpdateVisibility = true;
+
+            // Update material properties
+            const elapsed = clockRef.current.getElapsedTime();
+            const speed = 1.5;
+            navigationCursorRef.current.traverse((child) => {
+              if (
+                child instanceof THREE.Mesh &&
+                child.material instanceof THREE.MeshStandardMaterial
+              ) {
+                child.material.emissiveIntensity =
+                  0.1 + 0.1 * Math.sin(elapsed * speed);
               }
-
-              const margin = 5;
-              const offsetDist = boundingRadius + margin;
-              const offsetX = boundingCenter.x + offsetDist * Math.cos(angle);
-              const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
-
-              // Safe access to navigationCursorRef (already checked above with the if statement)
-              navigationCursorRef.current.position.set(offsetX, offsetY, 0);
-              navigationCursorRef.current.visible = true;
-
-              // Optional breathing effect
-              const elapsed = clockRef.current.getElapsedTime();
-              const speed = 1.5;
-              navigationCursorRef.current.traverse((child) => {
-                if (
-                  child instanceof THREE.Mesh &&
-                  child.material instanceof THREE.MeshStandardMaterial
-                ) {
-                  child.material.emissiveIntensity =
-                    0.1 + 0.1 * Math.sin(elapsed * speed);
+            });
+          }
+        } else if (bookingStep === 4 && routeCurveRef.current) {
+          // Route animation - don't toggle visibility directly
+          shouldUpdateVisibility = true;
+          
+          // Only initialize animation once
+          if (routeStartTimeRef.current === null && shouldShowNavigationCursor) {
+            routeStartTimeRef.current = performance.now();
+            
+            if (rendererRef.current) {
+              const routeDurationMs = 12000; // total animation time
+              const CAR_FRONT = new THREE.Vector3(0, 1, 0);
+              
+              // Store a stable reference to ensure animation continues with same data
+              const stableRouteRef = routeCurveRef.current;
+              
+              // Create animation loop only once
+              rendererRef.current.setAnimationLoop(() => {
+                // Minimal checks to avoid unnecessary state changes
+                const navCursor = navigationCursorRef.current;
+                if (!navCursor || !stableRouteRef) {
+                  if (rendererRef.current) {
+                    rendererRef.current.setAnimationLoop(null);
+                    return;
+                  }
                 }
+                
+                // Don't check bookingStep here - let the outer code handle visibility
+                const elapsed = performance.now() - (routeStartTimeRef.current || 0);
+                const t = (elapsed % routeDurationMs) / routeDurationMs;
+                
+                if (navCursor && stableRouteRef) {
+                  // Update position
+                  stableRouteRef.getPointAt(t, navCursor.position);
+                  navCursor.position.z += 50; // Altitude offset
+                  
+                  // Update orientation
+                  const tangent = new THREE.Vector3();
+                  stableRouteRef.getTangentAt(t, tangent);
+                  navCursor.quaternion.setFromUnitVectors(
+                    CAR_FRONT,
+                    tangent.normalize()
+                  );
+                }
+                
+                // Request redraw
+                overlayRef.current?.requestRedraw();
               });
             } else {
-              navigationCursorRef.current.visible = false;
-            }
-          } else {
-            navigationCursorRef.current.visible = false;
-          }
-        } else if (bookingStep === 4) {
-          // Animate the navigation cursor along the route with fluid movement
-          const navCursor = navigationCursorRef.current; // Store reference to avoid repeated null checks
-          
-          if (routeCurveRef.current && navCursor) {
-            navCursor.visible = true;
-
-            // Initialize animation time if not already set
-            if (routeStartTimeRef.current === null) {
-              routeStartTimeRef.current = performance.now();
-              
-              // Use renderer's animation loop for smoother animation if renderer exists
-              if (rendererRef.current) {
-                const routeDurationMs = 12000; // total animation time
-                const CAR_FRONT = new THREE.Vector3(0, 1, 0);
-                const routeCurve = routeCurveRef.current; // Store reference locally
+              // Fallback method (without animation loop)
+              try {
+                const navCursor = navigationCursorRef.current;
+                const curve = routeCurveRef.current;
                 
-                // Create dedicated animation loop for smooth movement
-                rendererRef.current.setAnimationLoop(() => {
-                  // Check if animation should continue
-                  if (!navigationCursorRef.current || 
-                      !routeCurveRef.current || 
-                      bookingStep !== 4 ||
-                      !sceneRef.current) {
-                    if (rendererRef.current) {
-                      rendererRef.current.setAnimationLoop(null); // Stop animation
-                      return;
-                    }
-                  }
-                  
-                  // Calculate position along curve based on elapsed time
-                  const elapsed = performance.now() - (routeStartTimeRef.current || 0);
+                if (curve && navCursor) {
+                  const startTime = routeStartTimeRef.current;
+                  const elapsed = performance.now() - startTime;
+                  const routeDurationMs = 12000;
                   const t = (elapsed % routeDurationMs) / routeDurationMs;
                   
-                  // Safe access to refs that were checked above
-                  const navCursorCurrent = navigationCursorRef.current;
-                  const routeCurveCurrent = routeCurveRef.current;
-                  
-                  if (navCursorCurrent && routeCurveCurrent) {
-                    // Update position
-                    routeCurveCurrent.getPointAt(t, navCursorCurrent.position);
-                    navCursorCurrent.position.z += 50; // Altitude offset
-                    
-                    // Update orientation
-                    const tangent = new THREE.Vector3();
-                    routeCurveCurrent.getTangentAt(t, tangent);
-                    navCursorCurrent.quaternion.setFromUnitVectors(
-                      CAR_FRONT,
-                      tangent.normalize()
-                    );
-                  }
-                  
-                  // Request overlay redraw for smooth updates
-                  overlayRef.current?.requestRedraw();
-                });
-                
-                return; // Skip the non-animation-loop method below
-              }
-            }
-            
-            // Fallback method if renderer animation loop couldn't be set up
-            try {
-              const startTime = routeStartTimeRef.current || performance.now();
-              const elapsed = performance.now() - startTime;
-              const routeDurationMs = 12000; // total animation time
-              const t = (elapsed % routeDurationMs) / routeDurationMs;
-              
-              const curve = routeCurveRef.current;
-              
-              if (curve && navCursor) {
-                curve.getPointAt(t, navCursor.position);
-                // Slight altitude offset
-                navCursor.position.z += 50;
-  
-                // Orientation
-                const tangent = new THREE.Vector3();
-                curve.getTangentAt(t, tangent);
-                const CAR_FRONT = new THREE.Vector3(0, 1, 0);
-                navCursor.quaternion.setFromUnitVectors(
-                  CAR_FRONT,
-                  tangent.normalize()
-                );
-              }
-            } catch (error) {
-              console.warn("Error animating navigation cursor:", error);
-              // Hide cursor on error to avoid stuck visuals
-              if (navCursor) {
-                navCursor.visible = false;
+                  curve.getPointAt(t, navCursor.position);
+                  navCursor.position.z += 50;
+
+                  const tangent = new THREE.Vector3();
+                  curve.getTangentAt(t, tangent);
+                  const CAR_FRONT = new THREE.Vector3(0, 1, 0);
+                  navCursor.quaternion.setFromUnitVectors(
+                    CAR_FRONT,
+                    tangent.normalize()
+                  );
+                }
+              } catch (error) {
+                console.warn("Error in route cursor fallback animation:", error);
+                // Don't change visibility on error to avoid flickering
               }
             }
           }
-        } else {
-          navigationCursorRef.current.visible = false;
+        }
+        
+        // Only update visibility once, after all position/property updates
+        if (shouldUpdateVisibility && navigationCursorRef.current) {
+          if (navigationCursorRef.current.visible !== shouldShowNavigationCursor) {
+            // Mark for visibility update
+            navigationCursorRef.current.visible = shouldShowNavigationCursor;
+          }
         }
       }
 
@@ -847,19 +853,24 @@ export function useThreeOverlay(
     }
   }, [userLocation]);
   
-  // Stop animation loop when booking step changes
+  // Manage the animation loop with smoother transitions when booking step changes
   useEffect(() => {
-    // If we're not in step 4 (route navigation), make sure any animation loops are stopped
-    if (bookingStep !== 4 && rendererRef.current) {
-      rendererRef.current.setAnimationLoop(null);
-      routeStartTimeRef.current = null;
-    }
+    // Add debounce to prevent animation loop reset during transitions
+    const transitionTimeout = setTimeout(() => {
+      // Only restart animation if needed - don't immediately stop on state change
+      if (bookingStep !== 4) {
+        // Instead of immediately stopping, check if we're actually transitioning away from step 4
+        // This prevents stopping the animation if we're transitioning to step 4
+        if (routeStartTimeRef.current !== null && rendererRef.current) {
+          // Allow extra time for transition before stopping
+          routeStartTimeRef.current = null;
+        }
+      }
+    }, 100); // Short debounce to prevent flicker during state transitions
     
     // Cleanup function
     return () => {
-      if (rendererRef.current) {
-        rendererRef.current.setAnimationLoop(null);
-      }
+      clearTimeout(transitionTimeout);
     };
   }, [bookingStep]);
 
