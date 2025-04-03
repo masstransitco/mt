@@ -126,8 +126,15 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
   }
 
   const handleStationConfirm = (station: StationFeature) => {
-    // Pass the station to the parent component for departure/arrival selection
+    // Use our centralized manager for station selection
+    import("@/lib/stationSelectionManager").then(module => {
+      const stationSelectionManager = module.default;
+      stationSelectionManager.selectStation(station.id, false);
+    });
+    
+    // Also pass to parent component for backward compatibility
     onStationClick?.(station)
+    
     // Reset flag after user confirms their selection
     setUserHasSelected(false)
   }
@@ -223,7 +230,11 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
             isOpen={isModalOpen}
             stations={stations}
             userLocation={userLocation}
-            onStationClick={onStationClick}
+            onStationClick={(station) => {
+              // No need to duplicate stationSelectionManager call here
+              // as we've added it directly in the modal
+              onStationClick?.(station);
+            }}
             onClose={() => setIsModalOpen(false)}
           />
         </ModalPortal>

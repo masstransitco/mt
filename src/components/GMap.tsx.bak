@@ -16,7 +16,6 @@ import ChevronDown from "@/components/ui/icons/ChevronDown";
 import ChevronUp from "@/components/ui/icons/ChevronUp";
 
 import type { Car } from "@/types/cars";
-import type { SheetMode } from "@/types/map";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   fetchStations,
@@ -53,7 +52,7 @@ import {
   selectIsQrScanStation,
   selectQrVirtualStationId,
   clearQrStationData,
-  selectDepartureStation,
+  selectDepartureStation as selectDepartureStationAction,
   selectArrivalStation,
   clearArrivalStation,
   clearDepartureStation,
@@ -369,11 +368,11 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
       // Step logic
       if (bookingStep === 1) {
-        dispatch(selectDepartureStation(stationId));
+        dispatch(selectDepartureStationAction(stationId));
         dispatch(advanceBookingStep(2));
         toast.success("Departure station selected!");
       } else if (bookingStep === 2) {
-        dispatch(selectDepartureStation(stationId));
+        dispatch(selectDepartureStationAction(stationId));
         toast.success("Departure station re-selected!");
       } else if (bookingStep === 3) {
         dispatch(selectArrivalStation(stationId));
@@ -398,7 +397,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
       removeStation,
       clearQrStationData,
       clearDepartureStation,
-      selectDepartureStation,
+      selectDepartureStationAction,
       selectArrivalStation,
     ]
   );
@@ -515,8 +514,15 @@ useEffect(() => {
 
 
   // -------------------------
-  // QR logic 
+  // QR logic (using stationSelectionManager)
   // -------------------------
+  // Load the station selection manager asynchronously
+  const stationSelectionManagerRef = useRef<any>(null);
+  useEffect(() => {
+    import("@/lib/stationSelectionManager").then(module => {
+      stationSelectionManagerRef.current = module.default;
+    });
+  }, []);
   
   const resetBookingFlowForQrScan = useCallback(() => {
     // Use the manager if available
@@ -570,7 +576,7 @@ useEffect(() => {
       const virtualStation = createVirtualStationFromCar(car, vStationId);
 
       dispatch(addVirtualStation(virtualStation));
-      dispatch(selectDepartureStation(vStationId));
+      dispatch(selectDepartureStationAction(vStationId));
       dispatch(advanceBookingStep(2));
 
       processedCarIdRef.current = car.id;

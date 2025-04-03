@@ -69,6 +69,13 @@ export default function StationListModal({
                 <motion.button
                   key={station.id}
                   onClick={() => {
+                    // First use stationSelectionManager
+                    import("@/lib/stationSelectionManager").then(module => {
+                      const stationSelectionManager = module.default;
+                      stationSelectionManager.selectStation(station.id, false);
+                    });
+                    
+                    // Then call original handlers for backward compatibility
                     onStationClick?.(station)
                     onClose()
                   }}
