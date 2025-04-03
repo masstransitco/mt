@@ -27,6 +27,7 @@ export interface StationFeature {
     totalSpots: number;
     availableSpots: number;
     waitTime?: number;
+    ObjectId?: number;
   };
   distance?: number;
 }
@@ -52,3 +53,6 @@ export interface MapOptions extends google.maps.MapOptions {
   };
   mapId?: string;
 }
+
+// The three modes for controlling the sheet body content
+export type SheetMode = "guide" | "list" | "detail";
