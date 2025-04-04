@@ -8,10 +8,13 @@ import React, {
   useRef,
   Suspense,
 } from "react";
-import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import dynamic from "next/dynamic";
 import * as THREE from "three"; // Potential 3D usage
+import { shallowEqual } from "react-redux";
+import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
+import { throttle } from "lodash";
 import ChevronDown from "@/components/ui/icons/ChevronDown";
 import ChevronUp from "@/components/ui/icons/ChevronUp";
 
@@ -97,12 +100,11 @@ const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal
 
 // SheetMode type is now imported from types/map
 
-interface GMapProps {
-  googleApiKey: string;
-}
-
-export default function GMap({ googleApiKey }: GMapProps) {
+export default function GMap() {
   const dispatch = useAppDispatch();
+
+  // Use the centralized Google Maps provider
+  const { isLoaded, loadError, googleMapsReady, loadingProgress, retryLoading } = useGoogleMaps();
 
   // -------------------------
   // Local UI & Map States
@@ -113,26 +115,41 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const [searchLocation, setLocalSearchLocation] = useState<google.maps.LatLngLiteral | null>(null);
 
   // -------------------------
-  // Redux States
+  // Redux States - Optimized with single selector call
   // -------------------------
-  const stations = useAppSelector(selectStationsWithDistance);
-  const stationsLoading = useAppSelector(selectStationsLoading);
-  const stationsError = useAppSelector(selectStationsError);
-
-  const cars = useAppSelector(selectAllCars);
-  const carsLoading = useAppSelector(selectCarsLoading);
-  const carsError = useAppSelector(selectCarsError);
-
-  const userLocation = useAppSelector(selectUserLocation);
-  const reduxSearchLocation = useAppSelector(selectSearchLocation);
-  const bookingStep = useAppSelector(selectBookingStep);
-  const departureStationId = useAppSelector(selectDepartureStationId);
-  const arrivalStationId = useAppSelector(selectArrivalStationId);
-  const scannedCar = useAppSelector(selectScannedCar);
-  const walkingRoute = useAppSelector(selectWalkingRoute);
-
-  const isQrScanStation = useAppSelector(selectIsQrScanStation);
-  const virtualStationId = useAppSelector(selectQrVirtualStationId);
+  const {
+    stations,
+    stationsLoading,
+    stationsError,
+    cars, 
+    carsLoading,
+    carsError,
+    userLocation,
+    reduxSearchLocation,
+    bookingStep,
+    departureStationId,
+    arrivalStationId,
+    scannedCar,
+    walkingRoute,
+    isQrScanStation,
+    virtualStationId
+  } = useAppSelector(state => ({
+    stations: selectStationsWithDistance(state),
+    stationsLoading: selectStationsLoading(state),
+    stationsError: selectStationsError(state),
+    cars: selectAllCars(state),
+    carsLoading: selectCarsLoading(state),
+    carsError: selectCarsError(state),
+    userLocation: selectUserLocation(state),
+    reduxSearchLocation: selectSearchLocation(state),
+    bookingStep: selectBookingStep(state),
+    departureStationId: selectDepartureStationId(state),
+    arrivalStationId: selectArrivalStationId(state),
+    scannedCar: selectScannedCar(state),
+    walkingRoute: selectWalkingRoute(state),
+    isQrScanStation: selectIsQrScanStation(state),
+    virtualStationId: selectQrVirtualStationId(state)
+  }), shallowEqual);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   const [isSignedIn, setIsSignedIn] = useState(false)
@@ -143,9 +160,6 @@ export default function GMap({ googleApiKey }: GMapProps) {
 
   // For step transitions or animations (if you need them)
   const [isStepTransitioning, setIsStepTransitioning] = useState(false);
-
-  // Google Maps readiness
-  const [googleMapsReady, setGoogleMapsReady] = useState(false);
 
   // QR Scanner
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
@@ -162,30 +176,8 @@ export default function GMap({ googleApiKey }: GMapProps) {
   const disableMinimize = false; // Always allow minimize
 
   // -------------------------
-  // Load Google Maps script
+  // Initialize map options when Google Maps is ready
   // -------------------------
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: googleApiKey,
-    version: "alpha",
-    libraries: LIBRARIES, 
-  });
-
-  useEffect(() => {
-    if (isLoaded) {
-      const timer = setTimeout(async () => {
-        try {
-          await ensureGoogleMapsLoaded();
-          setGoogleMapsReady(true);
-        } catch (err) {
-          console.error("Failed to ensure Google Maps is loaded:", err);
-          toast.error("Map services unavailable. Please refresh the page.");
-        }
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoaded]);
-
   useEffect(() => {
     if (googleMapsReady) {
       setMapOptions(createMapOptions());
@@ -196,7 +188,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
   // Sorting Stations and Location Helpers
   // -------------------------
   const sortStationsByDistanceToPoint = useCallback(
-    (point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
+    throttle((point: google.maps.LatLngLiteral, stationsToSort: StationFeature[]) => {
       if (!googleMapsReady || !window.google?.maps?.geometry?.spherical) {
         return stationsToSort;
       }
@@ -220,7 +212,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
         console.error("Error sorting stations by distance:", error);
         return stationsToSort;
       }
-    },
+    }, 300), // Throttle to run at most once every 300ms
     [googleMapsReady]
   )
 
@@ -242,7 +234,7 @@ export default function GMap({ googleApiKey }: GMapProps) {
     })();
   }, [dispatch]);
 
-  // Hide spinner when loaded
+  // Hide spinner when all resources are loaded
   useEffect(() => {
     if (isLoaded && googleMapsReady && !stationsLoading && !carsLoading) {
       setOverlayVisible(false);
@@ -437,7 +429,12 @@ export default function GMap({ googleApiKey }: GMapProps) {
     [pickStationAsDeparture]
   );
 
-  const { overlayRef } = useThreeOverlay(actualMap, stations, threeOverlayOptions);
+  // Only initialize the Three overlay when the map is ready and stations are loaded
+  const { overlayRef } = useThreeOverlay(
+    googleMapsReady ? actualMap : null, 
+    stations, 
+    threeOverlayOptions
+  );
 
 // -------------------------
 // Advanced Marker Overlay Hook
@@ -656,16 +653,16 @@ useEffect(() => {
           <div className="text-center space-y-2">
             <p className="font-medium">Error loading map data</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={retryLoading} // Use retryLoading instead of page refresh
               className="text-sm underline hover:text-destructive/80"
             >
-              Try reloading
+              Try again
             </button>
           </div>
         </div>
       )}
 
-      {!hasError && overlayVisible && <LoadingSpinner />}
+      {!hasError && overlayVisible && <LoadingSpinner progress={loadingProgress} />}
 
       {!hasError && !overlayVisible && (
         <>

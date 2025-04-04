@@ -4,7 +4,12 @@ import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { LogoSvg } from "@/components/ui/logo/LogoSvg"
 
-export const LoadingSpinner = () => {
+interface LoadingSpinnerProps {
+  progress?: number;
+  message?: string;
+}
+
+export const LoadingSpinner = ({ progress, message }: LoadingSpinnerProps) => {
   const loadingPhrases = [
     "Locating nearby vehicles",
     "Mapping optimal routes",
@@ -113,9 +118,19 @@ export const LoadingSpinner = () => {
             transition={{ duration: 0.3 }}
             className="text-muted-foreground font-sf-pro text-sm"
           >
-            {loadingPhrases[currentPhraseIndex]}
+            {message || loadingPhrases[currentPhraseIndex]}
           </motion.div>
         </div>
+        
+        {/* Progress bar */}
+        {progress !== undefined && (
+          <div className="w-64 h-2 bg-gray-700 rounded-full mt-1 overflow-hidden">
+            <div 
+              className="h-full bg-primary rounded-full transition-all duration-300 ease-out" 
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* SF Pro Font Styles */}
