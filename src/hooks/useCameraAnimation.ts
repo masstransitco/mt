@@ -51,50 +51,162 @@ interface UseCameraAnimationOptions {
 }
 
 /**
- * Helper functions for interpolation (must be defined outside the hook to avoid circular dependencies)
+ * Optimized helper functions for interpolation with minimal computation
  */
 const interpolate = (start: number, end: number, progress: number): number => {
   return start + (end - start) * progress;
 };
 
+// Pre-computed constants for common math operations
+const LONGITUDE_THRESHOLD = 180;
+const FULL_CIRCLE = 360;
+
+// Memoization cache for interpolateLatLng calculations
+const memoLatLngCache = new Map<string, (progress: number) => google.maps.LatLngLiteral>();
+const getCacheKey = (start: google.maps.LatLngLiteral, end: google.maps.LatLngLiteral): string => {
+  return `${start.lat},${start.lng}|${end.lat},${end.lng}`;
+};
+
+/**
+ * Optimized coordinate interpolation with memoization
+ * Creates and returns a memoized function that efficiently calculates
+ * intermediate points without redundant calculations
+ */
+const createInterpolateLatLngFn = (
+  start: google.maps.LatLngLiteral,
+  end: google.maps.LatLngLiteral
+): ((progress: number) => google.maps.LatLngLiteral) => {
+  // Fast-path: If points are very close, use simple direct interpolation
+  const isVeryClose = 
+    Math.abs(start.lat - end.lat) < 0.0001 && 
+    Math.abs(start.lng - end.lng) < 0.0001;
+    
+  if (isVeryClose) {
+    return (progress: number) => ({
+      lat: start.lat + (end.lat - start.lat) * progress,
+      lng: start.lng + (end.lng - start.lng) * progress
+    });
+  }
+
+  // Pre-compute values for longitude wrapping once
+  const lngDiff = end.lng - start.lng;
+  const wrappedLngDiff = Math.abs(lngDiff) > LONGITUDE_THRESHOLD
+    ? (lngDiff > 0 ? lngDiff - FULL_CIRCLE : lngDiff + FULL_CIRCLE)
+    : lngDiff;
+  
+  // Pre-compute lat diff
+  const latDiff = end.lat - start.lat;
+  
+  // Return optimized function that uses pre-computed values
+  return (progress: number) => {
+    const lat = start.lat + latDiff * progress;
+    let lng = start.lng + wrappedLngDiff * progress;
+    
+    // Normalize longitude only once at the end (more efficient)
+    if (lng > LONGITUDE_THRESHOLD) lng -= FULL_CIRCLE;
+    else if (lng < -LONGITUDE_THRESHOLD) lng += FULL_CIRCLE;
+    
+    return { lat, lng };
+  };
+};
+
+/**
+ * Memoized version that returns an optimized function for reuse
+ */
+const getInterpolateLatLngFn = (
+  start: google.maps.LatLngLiteral,
+  end: google.maps.LatLngLiteral
+): ((progress: number) => google.maps.LatLngLiteral) => {
+  const cacheKey = getCacheKey(start, end);
+  
+  // Use cached function if available
+  if (memoLatLngCache.has(cacheKey)) {
+    return memoLatLngCache.get(cacheKey)!;
+  }
+  
+  // Create new function and cache it
+  const interpolateFn = createInterpolateLatLngFn(start, end);
+  
+  // Limit cache size to prevent memory leaks (keep only recent 20 calculations)
+  if (memoLatLngCache.size > 20) {
+    const firstKey = memoLatLngCache.keys().next().value;
+    memoLatLngCache.delete(firstKey);
+  }
+  
+  memoLatLngCache.set(cacheKey, interpolateFn);
+  return interpolateFn;
+};
+
+/**
+ * Wrapper for backward compatibility
+ */
 const interpolateLatLng = (
   start: google.maps.LatLngLiteral,
   end: google.maps.LatLngLiteral,
   progress: number
 ): google.maps.LatLngLiteral => {
-  // Simple direct interpolation for latitude
-  const lat = interpolate(start.lat, end.lat, progress);
+  const fn = getInterpolateLatLngFn(start, end);
+  return fn(progress);
+};
+
+// Pre-computed constants and memoization for heading calculations
+const headingCache = new Map<string, (progress: number) => number>();
+
+const createInterpolateHeadingFn = (start: number, end: number): ((progress: number) => number) => {
+  // Normalize inputs to 0-360 range
+  const normStart = ((start % FULL_CIRCLE) + FULL_CIRCLE) % FULL_CIRCLE;
+  const normEnd = ((end % FULL_CIRCLE) + FULL_CIRCLE) % FULL_CIRCLE;
   
-  // Handle longitude wrapping (for when the shortest path crosses the 180/-180 line)
-  let lngDiff = end.lng - start.lng;
+  // Pre-compute heading difference with optimal direction
+  let diff = normEnd - normStart;
   
-  // Fix wrapping (if difference is greater than 180, go the other way around)
-  if (Math.abs(lngDiff) > 180) {
-    lngDiff = lngDiff > 0 ? lngDiff - 360 : lngDiff + 360;
+  // Fix wrapping for shortest path
+  if (Math.abs(diff) > LONGITUDE_THRESHOLD) {
+    diff = diff > 0 ? diff - FULL_CIRCLE : diff + FULL_CIRCLE;
   }
   
-  const lng = start.lng + lngDiff * progress;
-  
-  // Normalize to -180/180 range
-  return { 
-    lat, 
-    lng: lng > 180 ? lng - 360 : lng < -180 ? lng + 360 : lng 
+  // Return optimized function
+  return (progress: number) => {
+    const heading = normStart + diff * progress;
+    
+    // Normalize to 0-360 range only once at the end
+    return heading >= FULL_CIRCLE 
+      ? heading - FULL_CIRCLE 
+      : heading < 0 
+        ? heading + FULL_CIRCLE 
+        : heading;
   };
 };
 
-const interpolateHeading = (start: number, end: number, progress: number): number => {
-  // Find the shortest path (clockwise or counter-clockwise)
-  let diff = end - start;
+const getHeadingCacheKey = (start: number, end: number): string => {
+  return `${start}|${end}`;
+};
+
+const getInterpolateHeadingFn = (start: number, end: number): ((progress: number) => number) => {
+  const cacheKey = getHeadingCacheKey(start, end);
   
-  // Fix wrapping
-  if (Math.abs(diff) > 180) {
-    diff = diff > 0 ? diff - 360 : diff + 360;
+  if (headingCache.has(cacheKey)) {
+    return headingCache.get(cacheKey)!;
   }
   
-  let heading = start + diff * progress;
+  const headingFn = createInterpolateHeadingFn(start, end);
   
-  // Normalize to 0-360 range
-  return heading >= 360 ? heading - 360 : heading < 0 ? heading + 360 : heading;
+  // Limit cache size to prevent memory leaks
+  if (headingCache.size > 20) {
+    const firstKey = headingCache.keys().next().value;
+    headingCache.delete(firstKey);
+  }
+  
+  headingCache.set(cacheKey, headingFn);
+  return headingFn;
+};
+
+/**
+ * Wrapper for backward compatibility
+ */
+const interpolateHeading = (start: number, end: number, progress: number): number => {
+  const fn = getInterpolateHeadingFn(start, end);
+  return fn(progress);
 };
 
 /**
@@ -149,8 +261,8 @@ export function useCameraAnimationStable({
   );
 
   /**
-   * Enhanced animation sequence with easing functions and frame-rate compensation
-   * Interpolates between keyframes with smooth transitions
+   * Enhanced animation sequence with optimized RAF handling and memoized interpolation
+   * Interpolates between keyframes with smooth transitions and efficient frame scheduling
    */
   const animateSequence = useCallback(
     (keyframes: Array<{
@@ -163,16 +275,164 @@ export function useCameraAnimationStable({
     }>) => {
       if (!map || keyframes.length === 0) return;
       
+      // Animation state tracking
       let currentKeyframe = 0;
       let animationActive = true;
+      let rafId: number | null = null;
       
+      // Animation configuration for current segment
+      interface AnimationConfig {
+        interpolateCenterFn: (progress: number) => google.maps.LatLngLiteral;
+        interpolateHeadingFn: (progress: number) => number;
+        startZoom: number;
+        zoomDiff: number;
+        startTilt: number;
+        tiltDiff: number;
+        startTime: number;
+        duration: number;
+        easingFn: (t: number) => number;
+        onComplete: () => void;
+      }
+      
+      let currentAnimation: AnimationConfig | null = null;
+      
+      // Tracks the time of the previous animation frame
+      let lastFrameTime = 0;
+      // Skip frame optimization - don't render invisible changes
+      const MIN_PERCEPTIBLE_CHANGE = 0.001;
+      // FPS throttling for low-end devices
+      let isLowEndDevice = false;
+      let targetFrameRate = 60; // Default target framerate
+      const targetFrameTime = 1000 / targetFrameRate;
+      
+      // Detect if we're running on a low-end device based on first animation frame timing
+      const detectDevicePerformance = (frameTime: number) => {
+        if (lastFrameTime === 0) {
+          lastFrameTime = frameTime;
+          return false;
+        }
+        
+        const frameDelta = frameTime - lastFrameTime;
+        // If frame time is > 25ms (40fps), consider it a lower-end device
+        if (frameDelta > 25) {
+          isLowEndDevice = true;
+          targetFrameRate = 30; // Reduce target framerate
+        }
+        return isLowEndDevice;
+      };
+      
+      // Optimized animation step with deltaTime and frame skipping
+      const optimizedStep = (timestamp: number) => {
+        if (!animationActive || !currentAnimation) {
+          rafId = null;
+          return;
+        }
+        
+        // FPS throttling for low-end devices
+        if (detectDevicePerformance(timestamp)) {
+          // If we haven't waited long enough for next frame, skip rendering
+          if ((timestamp - lastFrameTime) < targetFrameTime) {
+            rafId = requestAnimationFrame(optimizedStep);
+            return;
+          }
+        }
+        
+        // Update last frame time
+        lastFrameTime = timestamp;
+        
+        // Get current animation params
+        const { 
+          interpolateCenterFn, 
+          interpolateHeadingFn,
+          startZoom, 
+          zoomDiff, 
+          startTilt, 
+          tiltDiff, 
+          startTime, 
+          duration, 
+          easingFn, 
+          onComplete 
+        } = currentAnimation;
+        
+        // Calculate normalized progress (0-1)
+        const elapsed = timestamp - startTime;
+        const rawProgress = Math.min(elapsed / duration, 1);
+        
+        // Apply easing function
+        const progress = easingFn(rawProgress);
+        
+        // Interpolate all values using optimized pre-calculated functions
+        const center = interpolateCenterFn(progress);
+        const zoom = startZoom + zoomDiff * progress;
+        const tilt = startTilt + tiltDiff * progress;
+        const heading = interpolateHeadingFn(progress);
+        
+        // Skip frame if changes are imperceptible (optimization)
+        // Get current map state using appropriate Google Maps API methods
+        // With safety checks to avoid potential API errors
+        let currentZoom = 0;
+        let currentTilt = 0;
+        let currentHeading = 0;
+        
+        try {
+          currentZoom = map.getZoom() || 0;
+          currentTilt = map.getTilt() || 0;
+          currentHeading = map.getHeading() || 0;
+        } catch (error) {
+          // If there's an error getting map state, assume change is perceptible
+          // This prevents animation freeze if Google Maps API changes
+          console.debug("Error getting map state, continuing animation:", error);
+        }
+        
+        const isChangePerceptible = 
+          Math.abs(zoom - currentZoom) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(tilt - currentTilt) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(heading - currentHeading) > MIN_PERCEPTIBLE_CHANGE;
+        
+        // Only update camera if changes are perceptible
+        if (isChangePerceptible) {
+          // Move camera to interpolated position
+          map.moveCamera({
+            center,
+            zoom,
+            tilt,
+            heading
+          });
+          
+          // Request redraw for WebGL overlay
+          maybeRedraw();
+        }
+        
+        // Continue animation if not finished
+        if (rawProgress < 1) {
+          rafId = requestAnimationFrame(optimizedStep);
+        } else {
+          // Final frame - ensure we hit target exactly
+          map.moveCamera({
+            center: interpolateCenterFn(1),
+            zoom: startZoom + zoomDiff,
+            tilt: startTilt + tiltDiff,
+            heading: interpolateHeadingFn(1)
+          });
+          maybeRedraw();
+          
+          // Cleanup
+          rafId = null;
+          currentAnimation = null;
+          
+          // Move to next keyframe
+          onComplete();
+        }
+      };
+      
+      // Function to animate between two keyframes
       const animateBetweenKeyframes = (
         fromFrame: typeof keyframes[0],
         toFrame: typeof keyframes[0],
         onComplete: () => void
       ) => {
-        // If duration is 0, just jump to the target position
-        if (toFrame.durationMs <= 0) {
+        // If duration is 0 or nearly 0, just jump to the target position
+        if (toFrame.durationMs <= 16) { // One frame at 60fps
           map.moveCamera({
             center: toFrame.center,
             zoom: toFrame.zoom,
@@ -184,59 +444,46 @@ export function useCameraAnimationStable({
           return;
         }
         
+        // Cleanup previous animation if any
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        
+        // Setup optimized animation with pre-calculated functions
         const startTime = performance.now();
         const duration = toFrame.durationMs;
         
         // Get easing function (default to easeOutCubic if not specified)
         const easingFunction = Easing[toFrame.easingFn || 'easeOutCubic'];
         
-        // Store starting values
-        const startCenter = { ...fromFrame.center };
-        const startZoom = fromFrame.zoom;
-        const startTilt = fromFrame.tilt;
-        const startHeading = fromFrame.heading;
+        // Pre-calculate interpolation functions for this segment
+        const interpolateCenterFn = getInterpolateLatLngFn(fromFrame.center, toFrame.center);
+        const interpolateHeadingFn = getInterpolateHeadingFn(fromFrame.heading, toFrame.heading);
         
-        // Animation step function
-        const step = (timestamp: number) => {
-          if (!animationActive) return;
-          
-          // Calculate normalized progress (0-1)
-          const elapsed = timestamp - startTime;
-          const rawProgress = Math.min(elapsed / duration, 1);
-          
-          // Apply easing function
-          const progress = easingFunction(rawProgress);
-          
-          // Interpolate all values
-          const center = interpolateLatLng(startCenter, toFrame.center, progress);
-          const zoom = interpolate(startZoom, toFrame.zoom, progress);
-          const tilt = interpolate(startTilt, toFrame.tilt, progress);
-          const heading = interpolateHeading(startHeading, toFrame.heading, progress);
-          
-          // Move camera to interpolated position
-          map.moveCamera({
-            center,
-            zoom,
-            tilt,
-            heading
-          });
-          
-          // Request redraw for WebGL overlay
-          maybeRedraw();
-          
-          // Continue animation if not finished
-          if (rawProgress < 1) {
-            requestAnimationFrame(step);
-          } else {
-            onComplete();
-          }
+        // Pre-calculate diffs for simple linear values
+        const zoomDiff = toFrame.zoom - fromFrame.zoom;
+        const tiltDiff = toFrame.tilt - fromFrame.tilt;
+        
+        // Set current animation config
+        currentAnimation = {
+          interpolateCenterFn,
+          interpolateHeadingFn,
+          startZoom: fromFrame.zoom,
+          zoomDiff,
+          startTilt: fromFrame.tilt,
+          tiltDiff,
+          startTime,
+          duration,
+          easingFn: easingFunction,
+          onComplete
         };
         
-        // Start animation
-        requestAnimationFrame(step);
+        // Start animation using RequestAnimationFrame with proper cleanup
+        rafId = requestAnimationFrame(optimizedStep);
       };
       
-      // Process keyframes sequentially
+      // Process keyframes sequentially with proper cleanup
       const processNextKeyframe = () => {
         if (!animationActive || currentKeyframe >= keyframes.length - 1) {
           return;
@@ -253,9 +500,18 @@ export function useCameraAnimationStable({
         });
       };
       
-      // Function to stop animation
+      // Function to stop animation and clean up resources
       const stopAnimation = () => {
         animationActive = false;
+        
+        // Cancel any pending animation frame
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        
+        // Clear animation state
+        currentAnimation = null;
       };
       
       // Ensure we have at least 2 keyframes
@@ -492,7 +748,7 @@ export function useCameraAnimationStable({
   
   /**
    * Creates a continuous fluid animation using Three.js setAnimationLoop pattern with
-   * advanced easing and motion patterns - optimized for 60FPS performance
+   * optimized easing and motion patterns - designed for efficient WebGL performance
    * @param renderer Three.js WebGLRenderer instance
    * @param options Animation options with camera parameters and motion pattern
    */
@@ -521,57 +777,69 @@ export function useCameraAnimationStable({
     ) => {
       if (!map || !renderer) return;
       
+      // Animation control state
       const startTime = performance.now();
       let animationActive = true;
+      let lastUpdateTime = 0;
+      const MIN_UPDATE_INTERVAL = 16; // ~60fps throttle
+      let lastCameraState = {
+        zoom: 0,
+        tilt: 0,
+        heading: 0
+      };
       
       // Default values
       const startTilt = options.startTilt ?? 0;
       const startHeading = options.startHeading ?? 0;
       const easingFn = options.easingFn ?? 'easeOutCubic';
       
-      // Create animation pattern parameters based on the selected pattern
-      const setupAnimationPattern = () => {
+      // Pre-calculated animation functions for each pattern
+      interface AnimationPattern {
+        type: string;
+        duration: number;
+        isPerceptibleChange?: (last: any, current: any) => boolean;
+        animateFn: (rawProgress: number, easedProgress: number) => google.maps.MapOptions;
+      }
+      
+      // Create optimized animation pattern based on selected type
+      const setupAnimationPattern = (): AnimationPattern => {
         const pattern = options.pattern;
         
-        // Tilt and rotate pattern (like the original example)
+        // Tilt and rotate pattern
         if (pattern.type === 'tiltAndRotate') {
           const duration = pattern.duration ?? 10000; // Default 10 seconds
           
+          // Pre-calculate optimization values
+          const tiltDiff = pattern.maxTilt - startTilt;
+          const headingDiff = ((pattern.maxHeading - startHeading) + FULL_CIRCLE) % FULL_CIRCLE;
+          const shouldWrapHeading = Math.abs(headingDiff) > LONGITUDE_THRESHOLD;
+          const adjustedHeadingDiff = shouldWrapHeading
+            ? (headingDiff > 0 ? headingDiff - FULL_CIRCLE : headingDiff + FULL_CIRCLE)
+            : headingDiff;
+          
+          // Create an optimized animation function
           return {
             type: pattern.type,
-            startValues: {
-              tilt: startTilt,
-              heading: startHeading,
-              zoom: options.zoom,
-              center: { ...options.center }
-            },
-            endValues: {
-              tilt: pattern.maxTilt,
-              heading: pattern.maxHeading,
-              zoom: options.zoom,
-              center: { ...options.center }
-            },
             duration,
-            tiltTransitionPoint: 0.4, // Complete tilt in first 40% of animation
-            animate: (progress: number, eased: number) => {
-              // Separate tilt and heading animations
+            animateFn: (rawProgress: number, easedProgress: number) => {
+              // Separate tilt and heading animations with pre-calculated values
               let tilt, heading;
               
               // Tilt in first phase, then rotate
-              if (progress < 0.4) {
+              if (rawProgress < 0.4) {
                 // Normalize progress for tilt phase (0-0.4 becomes 0-1)
-                const tiltProgress = Easing[easingFn](progress / 0.4);
-                tilt = interpolate(startTilt, pattern.maxTilt, tiltProgress);
+                const tiltProgress = Easing[easingFn](rawProgress / 0.4);
+                tilt = startTilt + tiltDiff * tiltProgress;
                 heading = startHeading;
               } else {
-                // Heading in second phase
-                // Normalize progress for heading phase (0.4-1 becomes 0-1)
-                const headingProgress = Easing[easingFn]((progress - 0.4) / 0.6);
+                // Heading in second phase (pre-calculated for efficiency)
+                const headingProgress = Easing[easingFn]((rawProgress - 0.4) / 0.6);
                 tilt = pattern.maxTilt;
+                heading = startHeading + adjustedHeadingDiff * headingProgress;
                 
-                // Calculate heading with proper wraparound
-                const headingDiff = ((pattern.maxHeading - startHeading) + 360) % 360;
-                heading = (startHeading + headingDiff * headingProgress) % 360;
+                // Normalize heading only once at the end
+                if (heading >= FULL_CIRCLE) heading -= FULL_CIRCLE;
+                else if (heading < 0) heading += FULL_CIRCLE;
               }
               
               return {
@@ -584,27 +852,61 @@ export function useCameraAnimationStable({
           };
         }
         
-        // Orbit pattern
+        // Orbit pattern - pre-calculate orbital values
         else if (pattern.type === 'orbit') {
-          const duration = pattern.duration ?? pattern.cycles * 10000; // Default 10 seconds per cycle
+          const duration = pattern.duration ?? pattern.cycles * 10000;
           const tilt = pattern.tilt;
-          const radius = pattern.radius; // Distance in degrees from center point
+          const radius = pattern.radius;
+          
+          // Pre-calculate constants for orbit calculations
+          const cyclesX360 = pattern.cycles * FULL_CIRCLE;
+          const radiusX07 = radius * 0.7; // Earth's oblateness adjustment
+          const radiansConversion = Math.PI / 180;
+          
+          // Pre-calculate center coordinates for faster access
+          const centerLat = options.center.lat;
+          const centerLng = options.center.lng;
+          
+          // Create lookup tables for sin/cos of common angles to avoid recalculation
+          const sinLookup: Record<number, number> = {};
+          const cosLookup: Record<number, number> = {};
+          
+          // Pre-compute common angles for orbit position
+          for (let i = 0; i < 360; i += 15) {
+            const radians = i * radiansConversion;
+            sinLookup[i] = Math.sin(radians);
+            cosLookup[i] = Math.cos(radians);
+          }
+          
+          // Helper to get sin/cos values (uses lookup where possible)
+          const fastSin = (deg: number): number => {
+            const normDeg = Math.floor(deg % 360);
+            return sinLookup[normDeg] !== undefined 
+              ? sinLookup[normDeg] 
+              : Math.sin(deg * radiansConversion);
+          };
+          
+          const fastCos = (deg: number): number => {
+            const normDeg = Math.floor(deg % 360);
+            return cosLookup[normDeg] !== undefined 
+              ? cosLookup[normDeg] 
+              : Math.cos(deg * radiansConversion);
+          };
           
           return {
             type: pattern.type,
             duration,
-            animate: (progress: number, eased: number) => {
-              // Calculate orbit position - we'll complete 'cycles' number of orbits
-              const angle = startHeading + (progress * pattern.cycles * 360);
+            animateFn: (rawProgress: number) => {
+              // Calculate orbit position using optimized trig functions
+              const angle = startHeading + (rawProgress * cyclesX360);
               
-              // Convert angle and radius to lat/lng offset
-              // This is a simplified calculation - for more precision, consider proper geospatial calculations
-              const lat = options.center.lat + Math.sin(angle * Math.PI / 180) * radius * 0.7; // Adjust for Earth's oblateness
-              const lng = options.center.lng + Math.cos(angle * Math.PI / 180) * radius;
+              // Use fast sin/cos and pre-calculated values
+              const lat = centerLat + fastSin(angle) * radiusX07;
+              const lng = centerLng + fastCos(angle) * radius;
               
               return {
                 tilt,
-                heading: angle % 360, // Keep camera pointed at center
+                heading: angle % FULL_CIRCLE, // Normalized heading
                 zoom: options.zoom,
                 center: { lat, lng }
               };
@@ -612,92 +914,155 @@ export function useCameraAnimationStable({
           };
         }
         
-        // Fly to pattern
+        // Fly to pattern - pre-calculate flight path
         else if (pattern.type === 'flyTo') {
-          const duration = pattern.duration ?? 3000; // Default 3 seconds
+          const duration = pattern.duration ?? 3000;
           
-          // Calculate an arc path with a maximum altitude midway
+          // Pre-calculate path parameters only once
           const startPoint = { ...options.center };
           const endPoint = { ...pattern.target };
-          const distance = Math.sqrt(
-            Math.pow(endPoint.lat - startPoint.lat, 2) + 
-            Math.pow(endPoint.lng - startPoint.lng, 2)
-          );
           
-          // Determine maximum zoom out during flight based on distance
+          // Create optimized interpolation function
+          const interpolateCenterFn = getInterpolateLatLngFn(startPoint, endPoint);
+          
+          // Calculate distance once
+          const latDiff = endPoint.lat - startPoint.lat;
+          const lngDiff = endPoint.lng - startPoint.lng;
+          const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+          
+          // Pre-calculate zoom parameters
           const midZoom = Math.max(options.zoom - distance * 2, 8);
+          const startZoom = options.zoom;
+          const zoomDiff1 = midZoom - startZoom;
+          const zoomDiff2 = pattern.finalZoom - midZoom;
+          
+          // Pre-calculate tilt parameters
+          const tiltMidpoint = startTilt + 10;
+          const tiltDiff1 = tiltMidpoint - startTilt;
+          const tiltDiff2 = pattern.finalTilt - tiltMidpoint;
+          
+          // Pre-calculate heading difference
+          const headingDiff = pattern.finalHeading - startHeading;
           
           return {
             type: pattern.type,
             duration,
-            animate: (progress: number, eased: number) => {
-              // For flyTo, we'll use a different easing for each parameter
-              // For zoom, we want to quickly zoom out, then slowly zoom in (bell curve)
-              const zoomProgress = progress < 0.5 
-                ? Easing.easeOutQuad(progress * 2) // First half
-                : 1 - Easing.easeInQuad((progress - 0.5) * 2); // Second half
-                
-              // Interpolate center position
-              const center = {
-                lat: interpolate(startPoint.lat, endPoint.lat, eased),
-                lng: interpolate(startPoint.lng, endPoint.lng, eased)
-              };
+            animateFn: (rawProgress: number, easedProgress: number) => {
+              // Get center position using pre-calculated function
+              const center = interpolateCenterFn(easedProgress);
               
-              // Zoom follows a bell curve - out then in
-              const zoom = progress < 0.5
-                ? interpolate(options.zoom, midZoom, zoomProgress)
-                : interpolate(midZoom, pattern.finalZoom, (progress - 0.5) * 2);
+              // Calculate phase-specific progress values with pre-computed diffs
+              let zoom, tilt, heading;
               
-              // Tilt and heading change mainly in the second half
-              const tilt = progress < 0.7
-                ? interpolate(startTilt, startTilt + 10, progress / 0.7) // Slight tilt up initially
-                : interpolate(startTilt + 10, pattern.finalTilt, (progress - 0.7) / 0.3);
+              // First half - zoom out
+              if (rawProgress < 0.5) {
+                const zoomProgress = Easing.easeOutQuad(rawProgress * 2);
+                zoom = startZoom + zoomDiff1 * zoomProgress;
+                tilt = rawProgress < 0.7 
+                  ? startTilt + tiltDiff1 * (rawProgress / 0.7)
+                  : tiltMidpoint;
+                heading = startHeading;
+              } 
+              // Second half - zoom in
+              else {
+                const secondHalfProgress = (rawProgress - 0.5) * 2;
+                const zoomProgress = 1 - Easing.easeInQuad(secondHalfProgress);
+                zoom = midZoom + zoomDiff2 * (1 - zoomProgress);
                 
-              const heading = progress < 0.5
-                ? startHeading
-                : interpolate(startHeading, pattern.finalHeading, (progress - 0.5) * 2);
+                tilt = rawProgress < 0.7
+                  ? tiltMidpoint
+                  : tiltMidpoint + tiltDiff2 * ((rawProgress - 0.7) / 0.3);
+                  
+                heading = startHeading + headingDiff * secondHalfProgress;
+              }
               
               return { center, zoom, tilt, heading };
             }
           };
         }
         
-        // Custom path following control points
+        // Custom path following control points - pre-calculate segment interpolation
         else if (pattern.type === 'customPath') {
           const duration = pattern.duration ?? 5000;
           const points = pattern.controlPoints;
           
+          // Skip processing if not enough points
+          if (points.length < 2) {
+            return {
+              type: 'default',
+              duration: 100,
+              animateFn: () => ({
+                tilt: startTilt,
+                heading: startHeading,
+                zoom: options.zoom,
+                center: options.center
+              })
+            };
+          }
+          
+          // Pre-calculate segment interpolation functions
+          type SegmentInterpolators = {
+            centerFn: (progress: number) => google.maps.LatLngLiteral;
+            zoomDiff: number;
+            tiltDiff: number;
+            headingDiff: number;
+            startZoom: number;
+            startTilt: number;
+            startHeading: number;
+          };
+          
+          const segmentInterpolators: SegmentInterpolators[] = [];
+          
+          // Create interpolation functions for each segment
+          for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            
+            segmentInterpolators.push({
+              centerFn: getInterpolateLatLngFn(p1.pos, p2.pos),
+              zoomDiff: p2.zoom - p1.zoom,
+              tiltDiff: p2.tilt - p1.tilt,
+              headingDiff: p2.heading - p1.heading,
+              startZoom: p1.zoom,
+              startTilt: p1.tilt,
+              startHeading: p1.heading
+            });
+          }
+          
+          // Normalize total points for progress calculation
+          const totalSegments = points.length - 1;
+          
           return {
             type: pattern.type,
             duration,
-            animate: (progress: number, eased: number) => {
-              // Find the segment we're in
-              const totalPoints = points.length;
-              if (totalPoints < 2) return {
-                center: options.center,
-                zoom: options.zoom,
-                tilt: startTilt,
-                heading: startHeading
-              };
+            animateFn: (rawProgress: number, easedProgress: number) => {
+              // Find the current segment based on overall progress
+              const segmentIndex = Math.min(
+                Math.floor(rawProgress * totalSegments),
+                totalSegments - 1
+              );
               
-              // Calculate which segment we're in
-              const segment = Math.min(Math.floor(progress * (totalPoints - 1)), totalPoints - 2);
-              const segmentProgress = (progress * (totalPoints - 1)) - segment;
+              // Calculate segment-local progress
+              const segmentProgress = (rawProgress * totalSegments) - segmentIndex;
               const segmentEased = Easing[easingFn](segmentProgress);
               
-              // Get points for this segment
-              const p1 = points[segment];
-              const p2 = points[segment + 1];
+              // Get pre-calculated interpolators for this segment
+              const {
+                centerFn,
+                zoomDiff,
+                tiltDiff,
+                headingDiff,
+                startZoom,
+                startTilt,
+                startHeading
+              } = segmentInterpolators[segmentIndex];
               
-              // Interpolate all values
+              // Calculate all values using optimized functions
               return {
-                center: {
-                  lat: interpolate(p1.pos.lat, p2.pos.lat, segmentEased),
-                  lng: interpolate(p1.pos.lng, p2.pos.lng, segmentEased)
-                },
-                zoom: interpolate(p1.zoom, p2.zoom, segmentEased),
-                tilt: interpolate(p1.tilt, p2.tilt, segmentEased),
-                heading: interpolate(p1.heading, p2.heading, segmentEased)
+                center: centerFn(segmentEased),
+                zoom: startZoom + zoomDiff * segmentEased,
+                tilt: startTilt + tiltDiff * segmentEased,
+                heading: startHeading + headingDiff * segmentEased
               };
             }
           };
@@ -707,7 +1072,7 @@ export function useCameraAnimationStable({
         return {
           type: 'default',
           duration: 3000,
-          animate: (progress: number) => ({
+          animateFn: () => ({
             tilt: startTilt,
             heading: startHeading,
             zoom: options.zoom,
@@ -716,31 +1081,93 @@ export function useCameraAnimationStable({
         };
       };
       
-      // Set up animation pattern
+      // Set up animation pattern once with optimized calculations
       const animationPattern = setupAnimationPattern();
       const duration = animationPattern.duration;
+      const easingFunction = Easing[easingFn];
       
-      // Create animation function for Three.js setAnimationLoop
+      // Perceptible change detection - avoid rendering imperceptible changes
+      const MIN_PERCEPTIBLE_CHANGE = 0.001;
+      
+      const isPerceptibleChange = (
+        current: google.maps.MapOptions, 
+        last: { zoom: number, tilt: number, heading: number }
+      ): boolean => {
+        const currentZoom = current.zoom || 0;
+        const currentTilt = current.tilt || 0;
+        const currentHeading = current.heading || 0;
+        
+        return (
+          Math.abs(currentZoom - last.zoom) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(currentTilt - last.tilt) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(currentHeading - last.heading) > MIN_PERCEPTIBLE_CHANGE
+        );
+      };
+      
+      // Optimized animation loop with throttling and perceptible change detection
       const animationLoop = () => {
         if (!animationActive) return;
         
-        // Calculate elapsed time and progress
-        const elapsed = performance.now() - startTime;
+        const currentTime = performance.now();
+        
+        // Throttle updates for better performance (but only if not near end)
+        const elapsedSinceLastUpdate = currentTime - lastUpdateTime;
+        const isNearCompletion = (currentTime - startTime) > (duration * 0.9);
+        
+        if (!isNearCompletion && elapsedSinceLastUpdate < MIN_UPDATE_INTERVAL) {
+          return; // Skip this frame for performance
+        }
+        
+        // Calculate progress
+        const elapsed = currentTime - startTime;
         const rawProgress = Math.min(elapsed / duration, 1);
         
-        // Use the pattern's animation function to calculate new camera params
-        const easedProgress = Easing[easingFn](rawProgress);
-        const cameraParams = animationPattern.animate(rawProgress, easedProgress);
+        // Apply easing function
+        const easedProgress = easingFunction(rawProgress);
         
-        // Update map camera
-        map.moveCamera(cameraParams);
+        // Get camera parameters using the optimized animation function
+        const cameraParams = animationPattern.animateFn(rawProgress, easedProgress);
         
-        // Redraw the WebGL overlay
-        maybeRedraw();
+        // Get current camera state for perceptibility check with error handling
+        let currentCameraState = {
+          zoom: 0,
+          tilt: 0,
+          heading: 0
+        };
         
-        // Call onUpdate callback if provided
-        if (options.onUpdate) {
-          options.onUpdate(cameraParams);
+        try {
+          currentCameraState = {
+            zoom: map.getZoom() || 0,
+            tilt: map.getTilt() || 0,
+            heading: map.getHeading() || 0
+          };
+        } catch (error) {
+          // If API fails, assume changes are perceptible and continue animation
+          console.debug("Error getting camera state, continuing animation:", error);
+        }
+        
+        // Only update if change is perceptible
+        if (isPerceptibleChange(cameraParams, currentCameraState)) {
+          // Update map camera
+          map.moveCamera(cameraParams);
+          
+          // Redraw the WebGL overlay
+          maybeRedraw();
+          
+          // Update last camera state
+          lastCameraState = {
+            zoom: cameraParams.zoom || 0,
+            tilt: cameraParams.tilt || 0,
+            heading: cameraParams.heading || 0
+          };
+          
+          // Call onUpdate callback if provided
+          if (options.onUpdate) {
+            options.onUpdate(cameraParams);
+          }
+          
+          // Update last update time
+          lastUpdateTime = currentTime;
         }
         
         // Check if animation is complete
@@ -1183,6 +1610,25 @@ export function useCameraAnimationStable({
       animateToLocation(userLocation, 15);
     }
   }, [userLocation, map, acquireAnimationLock, animateToLocation]);
+
+  // Animation cleanup - ensure all animations and timeouts are properly canceled on unmount
+  useEffect(() => {
+    // Create a cleanup function that will run when the component unmounts
+    return () => {
+      // Clean up any animation lock timeout
+      if (resetLockTimeout.current) {
+        clearTimeout(resetLockTimeout.current);
+        resetLockTimeout.current = null;
+      }
+      
+      // Release animation lock
+      animationLockRef.current = null;
+      
+      // Clear caches to prevent memory leaks
+      memoLatLngCache.clear();
+      headingCache.clear();
+    };
+  }, []);
 
   // Return whichever methods you'd like to expose
   return {
