@@ -129,8 +129,10 @@ const getInterpolateLatLngFn = (
   
   // Limit cache size to prevent memory leaks (keep only recent 20 calculations)
   if (memoLatLngCache.size > 20) {
-    const firstKey = memoLatLngCache.keys().next().value;
-    memoLatLngCache.delete(firstKey);
+    const firstKeyResult = memoLatLngCache.keys().next();
+    if (!firstKeyResult.done && firstKeyResult.value) {
+      memoLatLngCache.delete(firstKeyResult.value);
+    }
   }
   
   memoLatLngCache.set(cacheKey, interpolateFn);
@@ -193,8 +195,10 @@ const getInterpolateHeadingFn = (start: number, end: number): ((progress: number
   
   // Limit cache size to prevent memory leaks
   if (headingCache.size > 20) {
-    const firstKey = headingCache.keys().next().value;
-    headingCache.delete(firstKey);
+    const firstKeyResult = headingCache.keys().next();
+    if (!firstKeyResult.done && firstKeyResult.value) {
+      headingCache.delete(firstKeyResult.value);
+    }
   }
   
   headingCache.set(cacheKey, headingFn);
