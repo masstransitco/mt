@@ -405,18 +405,32 @@ export function useCameraAnimationStable({
           
           // Handle center with proper type conversion
           if (center) {
-            if ('lat' in center && 'lng' in center && typeof center.lat === 'number' && typeof center.lng === 'number') {
-              // It's already a LatLngLiteral
-              sequenceMapOptions.center = {
-                lat: center.lat,
-                lng: center.lng
-              };
-            } else if (typeof center.lat === 'function' && typeof center.lng === 'function') {
-              // It's a LatLng object, convert to LatLngLiteral
-              sequenceMapOptions.center = {
-                lat: center.lat(),
-                lng: center.lng()
-              };
+            // Safely handle both LatLngLiteral and LatLng objects
+            try {
+              // Check if it's a LatLngLiteral (has numeric lat/lng properties)
+              if ('lat' in center && 'lng' in center && 
+                  typeof center.lat === 'number' && typeof center.lng === 'number') {
+                // It's already a LatLngLiteral
+                sequenceMapOptions.center = {
+                  lat: center.lat,
+                  lng: center.lng
+                };
+              } else {
+                // Try to handle it as a LatLng object
+                // This uses type assertion to let TypeScript know we expect these to be methods
+                const latMethod = (center as any).lat;
+                const lngMethod = (center as any).lng;
+                
+                if (typeof latMethod === 'function' && typeof lngMethod === 'function') {
+                  sequenceMapOptions.center = {
+                    lat: latMethod.call(center),
+                    lng: lngMethod.call(center)
+                  };
+                }
+              }
+            } catch (e) {
+              // If anything fails, keep current center
+              console.debug("Failed to convert center to LatLngLiteral", e);
             }
           }
           
@@ -431,12 +445,28 @@ export function useCameraAnimationStable({
           // Final frame - ensure we hit target exactly
           const finalCenter = interpolateCenterFn(1);
           // Ensure we're using a proper LatLngLiteral for the final frame
-          const finalLatLng: google.maps.LatLngLiteral = 
-            ('lat' in finalCenter && 'lng' in finalCenter && typeof finalCenter.lat === 'number' && typeof finalCenter.lng === 'number')
-              ? { lat: finalCenter.lat, lng: finalCenter.lng }
-              : (typeof finalCenter.lat === 'function' && typeof finalCenter.lng === 'function')
-                ? { lat: finalCenter.lat(), lng: finalCenter.lng() }
-                : sequenceMapOptions.center; // fallback
+          let finalLatLng: google.maps.LatLngLiteral = sequenceMapOptions.center; // default fallback
+          
+          try {
+            // Check if it's already a LatLngLiteral
+            if ('lat' in finalCenter && 'lng' in finalCenter && 
+                typeof finalCenter.lat === 'number' && typeof finalCenter.lng === 'number') {
+              finalLatLng = { lat: finalCenter.lat, lng: finalCenter.lng };
+            } else {
+              // Try to handle as LatLng object
+              const latMethod = (finalCenter as any).lat;
+              const lngMethod = (finalCenter as any).lng;
+              
+              if (typeof latMethod === 'function' && typeof lngMethod === 'function') {
+                finalLatLng = {
+                  lat: latMethod.call(finalCenter),
+                  lng: lngMethod.call(finalCenter)
+                };
+              }
+            }
+          } catch (e) {
+            console.debug("Failed to convert final center to LatLngLiteral", e);
+          }
           
           const finalCameraOptions: google.maps.CameraOptions = {
             center: finalLatLng,
@@ -828,11 +858,30 @@ export function useCameraAnimationStable({
       
       // Track camera state in mapOptions object as per Google Maps documentation
       // Ensure center is a proper LatLngLiteral
-      const centerLatLng: google.maps.LatLngLiteral = 
-        options.center && 'lat' in options.center && 'lng' in options.center && 
-        typeof options.center.lat === 'number' && typeof options.center.lng === 'number'
-          ? { lat: options.center.lat, lng: options.center.lng }
-          : { lat: 0, lng: 0 };
+      let centerLatLng: google.maps.LatLngLiteral = { lat: 0, lng: 0 }; // default fallback
+      
+      try {
+        if (options.center) {
+          // Check if it's already a LatLngLiteral
+          if ('lat' in options.center && 'lng' in options.center && 
+              typeof options.center.lat === 'number' && typeof options.center.lng === 'number') {
+            centerLatLng = { lat: options.center.lat, lng: options.center.lng };
+          } else {
+            // Try to handle as LatLng object
+            const latMethod = (options.center as any).lat;
+            const lngMethod = (options.center as any).lng;
+            
+            if (typeof latMethod === 'function' && typeof lngMethod === 'function') {
+              centerLatLng = {
+                lat: latMethod.call(options.center),
+                lng: lngMethod.call(options.center)
+              };
+            }
+          }
+        }
+      } catch (e) {
+        console.debug("Failed to convert options.center to LatLngLiteral", e);
+      }
       
       const mapOptions = {
         zoom: options.zoom, 
@@ -1193,22 +1242,32 @@ export function useCameraAnimationStable({
           mapOptions.tilt = newCameraParams.tilt ?? mapOptions.tilt;
           mapOptions.heading = newCameraParams.heading ?? mapOptions.heading;
           
-          // Handle center with type conversion if needed
+          // Handle center with safe type conversion
           if (newCameraParams.center) {
-            // Convert LatLng to LatLngLiteral if needed
-            const center = newCameraParams.center;
-            if ('lat' in center && 'lng' in center && typeof center.lat === 'number' && typeof center.lng === 'number') {
-              // It's already a LatLngLiteral
-              mapOptions.center = {
-                lat: center.lat,
-                lng: center.lng
-              };
-            } else if (typeof center.lat === 'function' && typeof center.lng === 'function') {
-              // It's a LatLng object, convert to LatLngLiteral
-              mapOptions.center = {
-                lat: center.lat(),
-                lng: center.lng()
-              };
+            try {
+              const center = newCameraParams.center;
+              
+              // Check if it's already a LatLngLiteral
+              if ('lat' in center && 'lng' in center && 
+                  typeof center.lat === 'number' && typeof center.lng === 'number') {
+                mapOptions.center = {
+                  lat: center.lat,
+                  lng: center.lng
+                };
+              } else {
+                // Try to handle as LatLng object with type assertion
+                const latMethod = (center as any).lat;
+                const lngMethod = (center as any).lng;
+                
+                if (typeof latMethod === 'function' && typeof lngMethod === 'function') {
+                  mapOptions.center = {
+                    lat: latMethod.call(center),
+                    lng: lngMethod.call(center)
+                  };
+                }
+              }
+            } catch (e) {
+              console.debug("Failed to update mapOptions.center", e);
             }
           }
           
@@ -1229,12 +1288,28 @@ export function useCameraAnimationStable({
           // Force center to be LatLngLiteral
           const finalCenter = finalParams.center;
           if (finalCenter) {
-            const finalLatLng: google.maps.LatLngLiteral = 
-              ('lat' in finalCenter && 'lng' in finalCenter && typeof finalCenter.lat === 'number' && typeof finalCenter.lng === 'number')
-                ? { lat: finalCenter.lat, lng: finalCenter.lng }
-                : (typeof finalCenter.lat === 'function' && typeof finalCenter.lng === 'function')
-                  ? { lat: finalCenter.lat(), lng: finalCenter.lng() }
-                  : mapOptions.center;
+            let finalLatLng: google.maps.LatLngLiteral = mapOptions.center; // default fallback
+            
+            try {
+              // Check if it's already a LatLngLiteral
+              if ('lat' in finalCenter && 'lng' in finalCenter && 
+                  typeof finalCenter.lat === 'number' && typeof finalCenter.lng === 'number') {
+                finalLatLng = { lat: finalCenter.lat, lng: finalCenter.lng };
+              } else {
+                // Try to handle as LatLng object
+                const latMethod = (finalCenter as any).lat;
+                const lngMethod = (finalCenter as any).lng;
+                
+                if (typeof latMethod === 'function' && typeof lngMethod === 'function') {
+                  finalLatLng = {
+                    lat: latMethod.call(finalCenter),
+                    lng: lngMethod.call(finalCenter)
+                  };
+                }
+              }
+            } catch (e) {
+              console.debug("Failed to convert final center to LatLngLiteral", e);
+            }
                   
             // Final camera position with corrected types
             const finalCameraOptions: google.maps.CameraOptions = {
