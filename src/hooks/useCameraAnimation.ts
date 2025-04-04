@@ -402,7 +402,23 @@ export function useCameraAnimationStable({
           sequenceMapOptions.zoom = zoom;
           sequenceMapOptions.tilt = tilt;
           sequenceMapOptions.heading = heading;
-          sequenceMapOptions.center = center;
+          
+          // Handle center with proper type conversion
+          if (center) {
+            if ('lat' in center && 'lng' in center && typeof center.lat === 'number' && typeof center.lng === 'number') {
+              // It's already a LatLngLiteral
+              sequenceMapOptions.center = {
+                lat: center.lat,
+                lng: center.lng
+              };
+            } else if (typeof center.lat === 'function' && typeof center.lng === 'function') {
+              // It's a LatLng object, convert to LatLngLiteral
+              sequenceMapOptions.center = {
+                lat: center.lat(),
+                lng: center.lng()
+              };
+            }
+          }
           
           // Request redraw for WebGL overlay
           maybeRedraw();
@@ -413,13 +429,30 @@ export function useCameraAnimationStable({
           rafId = requestAnimationFrame(optimizedStep);
         } else {
           // Final frame - ensure we hit target exactly
-          map.moveCamera({
-            center: interpolateCenterFn(1),
+          const finalCenter = interpolateCenterFn(1);
+          // Ensure we're using a proper LatLngLiteral for the final frame
+          const finalLatLng: google.maps.LatLngLiteral = 
+            ('lat' in finalCenter && 'lng' in finalCenter && typeof finalCenter.lat === 'number' && typeof finalCenter.lng === 'number')
+              ? { lat: finalCenter.lat, lng: finalCenter.lng }
+              : (typeof finalCenter.lat === 'function' && typeof finalCenter.lng === 'function')
+                ? { lat: finalCenter.lat(), lng: finalCenter.lng() }
+                : sequenceMapOptions.center; // fallback
+          
+          const finalCameraOptions: google.maps.CameraOptions = {
+            center: finalLatLng,
             zoom: startZoom + zoomDiff,
             tilt: startTilt + tiltDiff,
             heading: interpolateHeadingFn(1)
-          });
+          };
+          
+          map.moveCamera(finalCameraOptions);
           maybeRedraw();
+          
+          // Update sequence map options to final state
+          sequenceMapOptions.zoom = finalCameraOptions.zoom || sequenceMapOptions.zoom;
+          sequenceMapOptions.tilt = finalCameraOptions.tilt || sequenceMapOptions.tilt;
+          sequenceMapOptions.heading = finalCameraOptions.heading || sequenceMapOptions.heading;
+          sequenceMapOptions.center = finalLatLng;
           
           // Cleanup
           rafId = null;
@@ -794,11 +827,18 @@ export function useCameraAnimationStable({
       const MIN_UPDATE_INTERVAL = 16; // ~60fps throttle
       
       // Track camera state in mapOptions object as per Google Maps documentation
+      // Ensure center is a proper LatLngLiteral
+      const centerLatLng: google.maps.LatLngLiteral = 
+        options.center && 'lat' in options.center && 'lng' in options.center && 
+        typeof options.center.lat === 'number' && typeof options.center.lng === 'number'
+          ? { lat: options.center.lat, lng: options.center.lng }
+          : { lat: 0, lng: 0 };
+      
       const mapOptions = {
         zoom: options.zoom, 
         tilt: startTilt,
         heading: startHeading,
-        center: options.center
+        center: centerLatLng
       };
       
       // Pre-calculated animation functions for each pattern
@@ -1152,8 +1192,24 @@ export function useCameraAnimationStable({
           mapOptions.zoom = newCameraParams.zoom ?? mapOptions.zoom;
           mapOptions.tilt = newCameraParams.tilt ?? mapOptions.tilt;
           mapOptions.heading = newCameraParams.heading ?? mapOptions.heading;
+          
+          // Handle center with type conversion if needed
           if (newCameraParams.center) {
-            mapOptions.center = newCameraParams.center;
+            // Convert LatLng to LatLngLiteral if needed
+            const center = newCameraParams.center;
+            if ('lat' in center && 'lng' in center && typeof center.lat === 'number' && typeof center.lng === 'number') {
+              // It's already a LatLngLiteral
+              mapOptions.center = {
+                lat: center.lat,
+                lng: center.lng
+              };
+            } else if (typeof center.lat === 'function' && typeof center.lng === 'function') {
+              // It's a LatLng object, convert to LatLngLiteral
+              mapOptions.center = {
+                lat: center.lat(),
+                lng: center.lng()
+              };
+            }
           }
           
           // Call onUpdate callback if provided
@@ -1167,6 +1223,31 @@ export function useCameraAnimationStable({
         
         // Check if animation is complete
         if (rawProgress >= 1) {
+          // Ensure final frame is exact target position
+          const finalParams = animationPattern.animateFn(1, 1);
+          
+          // Force center to be LatLngLiteral
+          const finalCenter = finalParams.center;
+          if (finalCenter) {
+            const finalLatLng: google.maps.LatLngLiteral = 
+              ('lat' in finalCenter && 'lng' in finalCenter && typeof finalCenter.lat === 'number' && typeof finalCenter.lng === 'number')
+                ? { lat: finalCenter.lat, lng: finalCenter.lng }
+                : (typeof finalCenter.lat === 'function' && typeof finalCenter.lng === 'function')
+                  ? { lat: finalCenter.lat(), lng: finalCenter.lng() }
+                  : mapOptions.center;
+                  
+            // Final camera position with corrected types
+            const finalCameraOptions: google.maps.CameraOptions = {
+              center: finalLatLng,
+              zoom: finalParams.zoom,
+              tilt: finalParams.tilt,
+              heading: finalParams.heading
+            };
+            
+            map.moveCamera(finalCameraOptions);
+            maybeRedraw();
+          }
+          
           // Stop the animation loop
           renderer.setAnimationLoop(null);
           
