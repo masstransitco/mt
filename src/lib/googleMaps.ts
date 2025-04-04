@@ -1,4 +1,5 @@
 // lib/googleMaps.ts
+import { throttle } from 'lodash';
 
 /**
  * Improved utility for safely loading and using Google Maps services
@@ -269,3 +270,22 @@ export const getWalkingDirections = async (
     });
   });
 };
+
+/**
+ * Throttled function to calculate distance between two points
+ * Only executes at most once every 100ms to prevent excessive calculations
+ */
+export const calculateDistanceThrottled = throttle(
+  (origin: google.maps.LatLngLiteral, destination: google.maps.LatLngLiteral): number => {
+    if (!window.google?.maps?.geometry?.spherical) {
+      return 0;
+    }
+    
+    return window.google.maps.geometry.spherical.computeDistanceBetween(
+      new window.google.maps.LatLng(origin.lat, origin.lng),
+      new window.google.maps.LatLng(destination.lat, destination.lng)
+    );
+  },
+  100, // Run at most once every 100ms
+  { leading: true, trailing: true }
+);
