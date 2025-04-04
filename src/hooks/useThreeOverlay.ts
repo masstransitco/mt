@@ -21,6 +21,9 @@ import { CatmullRomCurve3 } from "three";
 const dracoLoaderSingleton = new DRACOLoader();
 dracoLoaderSingleton.setDecoderPath("/draco/"); // Adjust path if needed
 
+// Model cache for efficient loading
+const modelCache = new Map<string, THREE.Group>();
+
 interface ThreeOverlayOptions {
   onStationSelected?: (stationId: number) => void;
 }
@@ -72,6 +75,13 @@ export function useThreeOverlay(
   const raycasterRef = useRef<THREE.Raycaster | null>(null);
   const invProjMatrixRef = useRef<THREE.Matrix4 | null>(null);
   const removePointerListenerRef = useRef<() => void>(() => {});
+
+  // Optimization references
+  const dirtyRef = useRef(false);
+  const lastRedrawTimeRef = useRef(0);
+  const animationLoopActiveRef = useRef(false);
+  const animateRoute = useRef<() => void>(() => {});
+  const MIN_REDRAW_INTERVAL = 16; // ~60fps max
 
   // Colors
   const BUILDING_DEFAULT_COLOR = new THREE.Color(0xcccccc);
@@ -165,6 +175,111 @@ export function useThreeOverlay(
   }
 
   // ------------------------------------------------
+  // Helper functions for redraw optimization
+  // ------------------------------------------------
+  const markNeedsRedraw = useCallback(() => {
+    dirtyRef.current = true;
+  }, []);
+  
+  const requestRedrawIfNeeded = useCallback(() => {
+    if (!dirtyRef.current || !overlayRef.current) return;
+    
+    const now = performance.now();
+    if (now - lastRedrawTimeRef.current < MIN_REDRAW_INTERVAL) return;
+    
+    overlayRef.current.requestRedraw();
+    dirtyRef.current = false;
+    lastRedrawTimeRef.current = now;
+  }, []);
+  
+  // ------------------------------------------------
+  // Model loading utility
+  // ------------------------------------------------
+  const loadModel = useCallback((url: string, onLoad: (model: THREE.Group) => void) => {
+    // Check if already in cache
+    if (modelCache.has(url)) {
+      const cachedModel = modelCache.get(url);
+      if (cachedModel) {
+        // Create a clone of the cached model
+        const clone = cachedModel.clone();
+        onLoad(clone);
+        return;
+      }
+    }
+    
+    // If not in cache, load it
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoaderSingleton);
+    
+    loader.load(
+      url,
+      (gltf) => {
+        const model = gltf.scene;
+        // Store in cache
+        modelCache.set(url, model.clone());
+        onLoad(model);
+        markNeedsRedraw();
+      },
+      undefined,
+      (err) => console.error(`[useThreeOverlay] ${url} load error:`, err)
+    );
+  }, [markNeedsRedraw]);
+
+  // ------------------------------------------------
+  // Animation control functions
+  // ------------------------------------------------
+  const startRouteAnimation = useCallback(() => {
+    if (animationLoopActiveRef.current) return;
+    
+    animationLoopActiveRef.current = true;
+    routeStartTimeRef.current = performance.now();
+    
+    // Set up animation loop parameters
+    const routeDurationMs = 12000;
+    const CAR_FRONT = new THREE.Vector3(0, 1, 0);
+    
+    // Create reusable animation function
+    animateRoute.current = () => {
+      if (!animationLoopActiveRef.current) return;
+      
+      const navCursor = navigationCursorRef.current;
+      const curve = routeCurveRef.current;
+      
+      if (navCursor && curve && navCursor.visible) {
+        const elapsed = performance.now() - (routeStartTimeRef.current || 0);
+        const t = (elapsed % routeDurationMs) / routeDurationMs;
+        
+        // Update position
+        curve.getPointAt(t, navCursor.position);
+        navCursor.position.z += 50; // Altitude offset
+        
+        // Update orientation
+        const tangent = new THREE.Vector3();
+        curve.getTangentAt(t, tangent);
+        navCursor.quaternion.setFromUnitVectors(
+          CAR_FRONT,
+          tangent.normalize()
+        );
+        
+        // Mark as needing redraw
+        markNeedsRedraw();
+      }
+      
+      // Request next frame only if animation is still active
+      if (animationLoopActiveRef.current) {
+        requestAnimationFrame(animateRoute.current);
+      }
+    };
+    
+    // Start the animation loop
+    requestAnimationFrame(animateRoute.current);
+  }, [markNeedsRedraw]);
+  
+  const stopRouteAnimation = useCallback(() => {
+    animationLoopActiveRef.current = false;
+  }, []);
+
+  // ------------------------------------------------
   // 2. Refresh or create the route tube
   // ------------------------------------------------
   const refreshRouteTube = useCallback(() => {
@@ -242,12 +357,12 @@ export function useThreeOverlay(
         }
       }
   
-      // Request redraw after updates
-      overlayRef.current.requestRedraw();
+      // Mark for redraw instead of immediate redraw
+      markNeedsRedraw();
     } catch (error) {
       console.warn("Error refreshing route tube:", error);
     }
-  }, [ROUTE_TUBE_COLOR]);
+  }, [ROUTE_TUBE_COLOR, markNeedsRedraw]);
 
   // Watch for routeDecoded changes => store path, refresh tube
   useEffect(() => {
@@ -274,15 +389,31 @@ export function useThreeOverlay(
       if (options?.onStationSelected) {
         options.onStationSelected(stationId);
       }
+      
+      // Mark as dirty since selection state will change
+      markNeedsRedraw();
     },
-    [options]
+    [options, markNeedsRedraw]
   );
 
   // ------------------------------------------------
   // 4. Main useEffect to init & teardown
   // ------------------------------------------------
   useEffect(() => {
+    // If the map changes, reset initialization state
+    if (overlayRef.current) {
+      overlayRef.current.setMap(null);
+      isInitializedRef.current = false;
+      
+      // Clear model references so they're reloaded only when needed
+      cursorRef.current = null;
+      navigationCursorRef.current = null;
+    }
+    
+    // Exit if no map available or already initialized
     if (!googleMap || isInitializedRef.current) return;
+    
+    console.log("[useThreeOverlay] Initializing WebGLOverlayView");
     isInitializedRef.current = true;
 
     const overlay = new google.maps.WebGLOverlayView();
@@ -305,6 +436,45 @@ export function useThreeOverlay(
         anchorRef.current.altitude = 0;
       }
 
+      // 1) Create a simple white circle cursor - CREATED ONCE in onAdd
+      console.log("[useThreeOverlay] Creating simple white circle cursor");
+      
+      // Create a group to hold the cursor
+      const cursorGroup = new THREE.Group();
+      
+      // Create an extruded circle (cylinder with minimal height)
+      const circleGeometry = new THREE.CylinderGeometry(15, 15, 2, 32);
+      const circleMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xFFFFFF,  // White color
+        transparent: true,
+        opacity: 0.8
+      });
+      const circle = new THREE.Mesh(circleGeometry, circleMaterial);
+      
+      // Create a smaller inner circle for contrast
+      const innerCircleGeometry = new THREE.CylinderGeometry(5, 5, 3, 32);
+      const innerCircleMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xFFFFFF,  // Also white
+        transparent: true,
+        opacity: 1.0
+      });
+      const innerCircle = new THREE.Mesh(innerCircleGeometry, innerCircleMaterial);
+      innerCircle.position.set(0, 0, 1); // Slightly above the main circle
+      
+      // Add circles to the group
+      cursorGroup.add(circle);
+      cursorGroup.add(innerCircle);
+      
+      // Initial position and visibility
+      cursorGroup.visible = false;
+      cursorGroup.rotation.set(Math.PI/2, 0, 0); // Align with ground
+      
+      // Add to scene
+      scene.add(cursorGroup);
+      cursorRef.current = cursorGroup;
+      
+      console.log("[useThreeOverlay] Simple circle cursor added to scene");
+      
       // Create extruded buildings
       const validBuildings = buildings3D.filter((b: any) => {
         const coords = b.geometry.coordinates[0];
@@ -361,78 +531,16 @@ export function useThreeOverlay(
       scene.add(directionalLight);
 
       // Reuse the single, global DracoLoader
+      // Create a loader with a reference in the ref so it can persist between renders
+      // This helps avoid creating redundant loaders and avoids unnecessary loading operations
       const loader = new GLTFLoader();
       loader.setDRACOLoader(dracoLoaderSingleton);
 
-      // 1) Load user location \"cursor_animated\" with cache-busting
-      const timestamp = Date.now(); // Add timestamp for cache busting
-      loader.load(
-        `/models/cursor_animated?v=${timestamp}`,
-        (gltf) => {
-          const originalModel = gltf.scene;
-          const cursorGroup = new THREE.Group();
+      // The user location cursor is now created once in onAdd
 
-          // Scale, rotation
-          originalModel.scale.setScalar(15);
-          const oldEuler = new THREE.Euler(Math.PI / 2, 0, Math.PI, "ZXY");
-          const q = new THREE.Quaternion().setFromEuler(oldEuler);
-          originalModel.rotation.copy(new THREE.Euler().setFromQuaternion(q, "XYZ"));
-
-          // Double-sided, no extra transparency
-          originalModel.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.material) {
-              child.material.side = THREE.DoubleSide;
-              child.material.needsUpdate = true;
-            }
-          });
-
-          cursorGroup.add(originalModel);
-          cursorGroup.visible = false;
-          scene.add(cursorGroup);
-          cursorRef.current = cursorGroup;
-
-          overlayRef.current?.requestRedraw();
-        },
-        undefined,
-        (err) => {
-          console.error("[useThreeOverlay] /models/cursor_animated load error:", err);
-          // Fallback to the original cursor if the animated one fails
-          loader.load(
-            `/models/cursor?v=${timestamp}`,
-            (gltf) => {
-              const fallbackModel = gltf.scene;
-              const fallbackGroup = new THREE.Group();
-              
-              fallbackModel.scale.setScalar(15);
-              const oldEuler = new THREE.Euler(Math.PI / 2, 0, Math.PI, "ZXY");
-              const q = new THREE.Quaternion().setFromEuler(oldEuler);
-              fallbackModel.rotation.copy(new THREE.Euler().setFromQuaternion(q, "XYZ"));
-              
-              fallbackModel.traverse((child) => {
-                if (child instanceof THREE.Mesh && child.material) {
-                  child.material.side = THREE.DoubleSide;
-                  child.material.needsUpdate = true;
-                }
-              });
-              
-              fallbackGroup.add(fallbackModel);
-              fallbackGroup.visible = false;
-              scene.add(fallbackGroup);
-              cursorRef.current = fallbackGroup;
-              
-              overlayRef.current?.requestRedraw();
-            },
-            undefined,
-            (fallbackErr) => console.error("[useThreeOverlay] Fallback /models/cursor load error:", fallbackErr)
-          );
-        }
-      );
-
-      // 2) Load \"cursor_navigation\" for step 3 & route animation with cache-busting
-      loader.load(
-        `/models/cursor_navigation?v=${timestamp}`,
-        (gltf) => {
-          const originalModel = gltf.scene;
+      // 2) Load cursor_navigation for step 3 & route animation - use cached model loader
+      if (!navigationCursorRef.current) {
+        loadModel('/map/cursor_navigation.glb', (originalModel) => {
           const navCursorGroup = new THREE.Group();
 
           originalModel.scale.setScalar(50);
@@ -453,12 +561,9 @@ export function useThreeOverlay(
           scene.add(navCursorGroup);
           navigationCursorRef.current = navCursorGroup;
 
-          overlayRef.current?.requestRedraw();
-        },
-        undefined,
-        (err) =>
-          console.error("[useThreeOverlay] /models/cursor_navigation load error:", err)
-      );
+          markNeedsRedraw();
+        });
+      }
 
       // Set up raycasting
       raycasterRef.current = new THREE.Raycaster();
@@ -561,187 +666,127 @@ export function useThreeOverlay(
         }
       });
 
-      // 2) Update user location cursor
-      // 2) Handle user location cursor similar to building models (always update properties, update visibility last)
+      // 2) Update user location cursor - simple positioning without animation
       if (cursorRef.current) {
         const hasValidLocation =
           userLocation &&
           typeof userLocation.lat === "number" &&
           typeof userLocation.lng === "number";
-
-        // Always update position and animation when location is valid
-        if (hasValidLocation) {
-          const { lat, lng } = userLocation!;
-          const { x, y, z } = latLngAltToVector3(
-            { lat, lng, altitude: 10 },
-            anchor
-          );
-          cursorRef.current.position.set(x, y, z);
-
-          // Subtle breathing animation
-          const elapsed = clockRef.current.getElapsedTime();
-          const breathingSpeed = 1.5;
-          cursorRef.current.traverse((child) => {
-            if (
-              child instanceof THREE.Mesh &&
-              child.material instanceof THREE.MeshStandardMaterial
-            ) {
-              // example: a mild pulsing
-              child.material.emissiveIntensity =
-                0.1 + 0.1 * Math.sin(elapsed * breathingSpeed);
-            }
-          });
-        }
         
-        // Only update visibility at the end after all updates are done
-        // This prevents flickering during property updates
-        const newVisibility = !!hasValidLocation;
-        if (cursorRef.current.visible !== newVisibility) {
-          cursorRef.current.visible = newVisibility;
+        // Position cursor only when we have a valid location
+        if (hasValidLocation) {
+          // Position update - only if location changed or not initialized
+          if (!cursorRef.current.userData.initialPositionSet || 
+              cursorRef.current.userData.lastLat !== userLocation.lat ||
+              cursorRef.current.userData.lastLng !== userLocation.lng) {
+            
+            // Update position
+            const { lat, lng } = userLocation;
+            const { x, y, z } = latLngAltToVector3(
+              { lat, lng, altitude: 10 },
+              anchor
+            );
+            cursorRef.current.position.set(x, y, z);
+            
+            // Store location for change detection
+            cursorRef.current.userData.lastLat = userLocation.lat;
+            cursorRef.current.userData.lastLng = userLocation.lng;
+            cursorRef.current.userData.initialPositionSet = true;
+            
+            // Mark for redraw
+            markNeedsRedraw();
+          }
+          
+          // Only update visibility when needed
+          if (!cursorRef.current.visible) {
+            cursorRef.current.visible = true;
+            markNeedsRedraw();
+          }
+        } else if (cursorRef.current.visible) {
+          // Hide cursor if no valid location
+          cursorRef.current.visible = false;
+          markNeedsRedraw();
         }
       }
 
-      // 3) Step 3 or 4: controlling navigationCursorRef - treat like a persistent 3D model
+      // 3) Step 3 or 4: controlling navigationCursorRef - with optimized visibility handling
       if (navigationCursorRef.current) {
         // Determine visibility state first but don't apply yet
-        // Explicit boolean type to avoid type errors
-        const shouldShowNavigationCursor: boolean = !!(
+        const shouldShowNavigationCursor = !!(
           (bookingStep === 3 && departureStationId != null) || 
           (bookingStep === 4 && routeCurveRef.current)
         );
         
-        let shouldUpdateVisibility = false;
-        let newPosition = new THREE.Vector3();
-        
-        // Update position and properties without changing visibility
+        // If it's booking step 3 with a departure station, update position
         if (bookingStep === 3 && departureStationId != null) {
-          // Find station and related building
-          const depStation = allStations.find((s) => s.id === departureStationId);
-          const buildingGroup = depStation ? 
-            buildingGroupsRef.current.find((g) => g.userData.stationId === departureStationId) : null;
-            
-          if (buildingGroup) {
-            // Calculate position relative to the building
-            const boundingCenter = buildingGroup.userData.boundingCenter as THREE.Vector3;
-            const boundingRadius = buildingGroup.userData.boundingRadius || 0;
-
-            let angle = 0;
-            if (userLocation) {
-              const userVec = latLngAltToVector3(
-                { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
-                anchor
-              );
-              const dx = userVec.x - boundingCenter.x;
-              const dy = userVec.y - boundingCenter.y;
-              angle = Math.atan2(dy, dx);
-            }
-
-            const margin = 5;
-            const offsetDist = boundingRadius + margin;
-            const offsetX = boundingCenter.x + offsetDist * Math.cos(angle);
-            const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
-
-            // Update position data without changing visibility yet
-            newPosition.set(offsetX, offsetY, 0);
-            navigationCursorRef.current.position.copy(newPosition);
-            shouldUpdateVisibility = true;
-
-            // Update material properties
-            const elapsed = clockRef.current.getElapsedTime();
-            const speed = 1.5;
-            navigationCursorRef.current.traverse((child) => {
-              if (
-                child instanceof THREE.Mesh &&
-                child.material instanceof THREE.MeshStandardMaterial
-              ) {
-                child.material.emissiveIntensity =
-                  0.1 + 0.1 * Math.sin(elapsed * speed);
+          // Only process position updates when cursor should be visible
+          if (shouldShowNavigationCursor) {
+            // Find station and related building
+            const depStation = allStations.find((s) => s.id === departureStationId);
+            const buildingGroup = depStation ? 
+              buildingGroupsRef.current.find((g) => g.userData.stationId === departureStationId) : null;
+              
+            if (buildingGroup) {
+              // Calculate position relative to the building
+              const boundingCenter = buildingGroup.userData.boundingCenter as THREE.Vector3;
+              const boundingRadius = buildingGroup.userData.boundingRadius || 0;
+  
+              let angle = 0;
+              if (userLocation) {
+                const userVec = latLngAltToVector3(
+                  { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
+                  anchor
+                );
+                const dx = userVec.x - boundingCenter.x;
+                const dy = userVec.y - boundingCenter.y;
+                angle = Math.atan2(dy, dx);
               }
-            });
+  
+              const margin = 5;
+              const offsetDist = boundingRadius + margin;
+              const offsetX = boundingCenter.x + offsetDist * Math.cos(angle);
+              const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
+  
+              // Update position
+              navigationCursorRef.current.position.set(offsetX, offsetY, 0);
+              markNeedsRedraw();
+  
+              // Update material properties - only when visible to save performance
+              const elapsed = clockRef.current.getElapsedTime();
+              const speed = 1.5;
+              const animationTime = elapsed * speed;
+              
+              // Only update materials ~5 times per second to save CPU
+              if (animationTime % 0.2 < 0.02) {
+                navigationCursorRef.current.traverse((child) => {
+                  if (
+                    child instanceof THREE.Mesh &&
+                    child.material instanceof THREE.MeshStandardMaterial
+                  ) {
+                    child.material.emissiveIntensity =
+                      0.1 + 0.1 * Math.sin(animationTime);
+                  }
+                });
+              }
+            }
           }
         } else if (bookingStep === 4 && routeCurveRef.current) {
-          // Route animation - don't toggle visibility directly
-          shouldUpdateVisibility = true;
-          
-          // Only initialize animation once
+          // Use the optimized animation manager instead of creating new animation loops
           if (routeStartTimeRef.current === null && shouldShowNavigationCursor) {
-            routeStartTimeRef.current = performance.now();
-            
-            if (rendererRef.current) {
-              const routeDurationMs = 12000; // total animation time
-              const CAR_FRONT = new THREE.Vector3(0, 1, 0);
-              
-              // Store a stable reference to ensure animation continues with same data
-              const stableRouteRef = routeCurveRef.current;
-              
-              // Create animation loop only once
-              rendererRef.current.setAnimationLoop(() => {
-                // Minimal checks to avoid unnecessary state changes
-                const navCursor = navigationCursorRef.current;
-                if (!navCursor || !stableRouteRef) {
-                  if (rendererRef.current) {
-                    rendererRef.current.setAnimationLoop(null);
-                    return;
-                  }
-                }
-                
-                // Don't check bookingStep here - let the outer code handle visibility
-                const elapsed = performance.now() - (routeStartTimeRef.current || 0);
-                const t = (elapsed % routeDurationMs) / routeDurationMs;
-                
-                if (navCursor && stableRouteRef) {
-                  // Update position
-                  stableRouteRef.getPointAt(t, navCursor.position);
-                  navCursor.position.z += 50; // Altitude offset
-                  
-                  // Update orientation
-                  const tangent = new THREE.Vector3();
-                  stableRouteRef.getTangentAt(t, tangent);
-                  navCursor.quaternion.setFromUnitVectors(
-                    CAR_FRONT,
-                    tangent.normalize()
-                  );
-                }
-                
-                // Request redraw
-                overlayRef.current?.requestRedraw();
-              });
-            } else {
-              // Fallback method (without animation loop)
-              try {
-                const navCursor = navigationCursorRef.current;
-                const curve = routeCurveRef.current;
-                
-                if (curve && navCursor) {
-                  const startTime = routeStartTimeRef.current;
-                  const elapsed = performance.now() - startTime;
-                  const routeDurationMs = 12000;
-                  const t = (elapsed % routeDurationMs) / routeDurationMs;
-                  
-                  curve.getPointAt(t, navCursor.position);
-                  navCursor.position.z += 50;
-
-                  const tangent = new THREE.Vector3();
-                  curve.getTangentAt(t, tangent);
-                  const CAR_FRONT = new THREE.Vector3(0, 1, 0);
-                  navCursor.quaternion.setFromUnitVectors(
-                    CAR_FRONT,
-                    tangent.normalize()
-                  );
-                }
-              } catch (error) {
-                console.warn("Error in route cursor fallback animation:", error);
-                // Don't change visibility on error to avoid flickering
-              }
-            }
+            startRouteAnimation();
           }
         }
         
-        // Only update visibility once, after all position/property updates
-        if (shouldUpdateVisibility && navigationCursorRef.current) {
-          if (navigationCursorRef.current.visible !== shouldShowNavigationCursor) {
-            // Mark for visibility update
-            navigationCursorRef.current.visible = shouldShowNavigationCursor;
+        // Update visibility only when it changes
+        if (navigationCursorRef.current.visible !== shouldShowNavigationCursor) {
+          navigationCursorRef.current.visible = shouldShowNavigationCursor;
+          markNeedsRedraw();
+          
+          // Start/stop animation based on visibility
+          if (shouldShowNavigationCursor && bookingStep === 4) {
+            startRouteAnimation();
+          } else if (!shouldShowNavigationCursor && animationLoopActiveRef.current) {
+            stopRouteAnimation();
           }
         }
       }
@@ -751,8 +796,10 @@ export function useThreeOverlay(
         routeTubeRef.current.position.z = 10;
       }
 
+      // Schedule the next redraw only if needed
+      requestAnimationFrame(requestRedrawIfNeeded);
+      
       // Render
-      overlay.requestRedraw();
       renderer.setViewport(0, 0, gl.canvas.width, gl.canvas.height);
       renderer.render(scene, camera);
       renderer.resetState();
@@ -768,6 +815,9 @@ export function useThreeOverlay(
     overlay.onRemove = () => {
       const scene = sceneRef.current;
 
+      // Stop any running animations first
+      stopRouteAnimation();
+      
       removePointerListenerRef.current();
 
       // Cleanup route tube
@@ -815,6 +865,11 @@ export function useThreeOverlay(
         navigationCursorRef.current = null;
       }
 
+      // Reset animation and dirty flag state
+      animationLoopActiveRef.current = false;
+      dirtyRef.current = false;
+      routeStartTimeRef.current = null;
+      
       // Cleanup scene
       if (sceneRef.current) {
         sceneRef.current.clear();
@@ -841,38 +896,79 @@ export function useThreeOverlay(
     bookingStep,
   ]);
 
-  // Force redraw if station IDs change
+  // Mark for redraw when key state changes
   useEffect(() => {
-    overlayRef.current?.requestRedraw();
-  }, [departureStationId, arrivalStationId]);
+    markNeedsRedraw();
+  }, [departureStationId, arrivalStationId, markNeedsRedraw]);
 
-  // Redraw if userLocation changes
+  // Track whether animation should be running for route
   useEffect(() => {
-    if (overlayRef.current && userLocation) {
-      overlayRef.current.requestRedraw();
-    }
-  }, [userLocation]);
-  
-  // Manage the animation loop with smoother transitions when booking step changes
-  useEffect(() => {
-    // Add debounce to prevent animation loop reset during transitions
-    const transitionTimeout = setTimeout(() => {
-      // Only restart animation if needed - don't immediately stop on state change
-      if (bookingStep !== 4) {
-        // Instead of immediately stopping, check if we're actually transitioning away from step 4
-        // This prevents stopping the animation if we're transitioning to step 4
-        if (routeStartTimeRef.current !== null && rendererRef.current) {
-          // Allow extra time for transition before stopping
-          routeStartTimeRef.current = null;
-        }
-      }
-    }, 100); // Short debounce to prevent flicker during state transitions
+    // Determine if animation should run
+    const shouldAnimateRoute = bookingStep === 4 && !!routeCurveRef.current;
     
-    // Cleanup function
+    // Start or stop the animation based on visibility
+    if (shouldAnimateRoute) {
+      startRouteAnimation();
+    } else {
+      stopRouteAnimation();
+    }
+    
     return () => {
-      clearTimeout(transitionTimeout);
+      stopRouteAnimation();
     };
-  }, [bookingStep]);
+  }, [bookingStep, startRouteAnimation, stopRouteAnimation]);
+
+  // Force cursor updates when location is updated from LocateMe button
+  useEffect(() => {
+    // Listen for the custom location update event 
+    const handleLocationUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent<import("@/lib/UserLocation").LocationUpdateEvent>;
+      
+      // Only update if the source is a locate-me click
+      if (customEvent.detail.source === "locate-me-button") {
+        console.log("[useThreeOverlay] Handling locate-me button event");
+        
+        // Reset cursor data to force a fresh position update
+        if (cursorRef.current) {
+          // Clear cached location data to force update on next render
+          cursorRef.current.userData.initialPositionSet = false;
+          cursorRef.current.userData.lastLat = undefined;
+          cursorRef.current.userData.lastLng = undefined;
+          
+          // Immediately update position for responsive UI
+          const location = customEvent.detail.location;
+          if (location) {
+            const { x, y, z } = latLngAltToVector3(
+              { lat: location.lat, lng: location.lng, altitude: 10 },
+              anchorRef.current
+            );
+            
+            // Update cursor position
+            cursorRef.current.position.set(x, y, z);
+            cursorRef.current.visible = true;
+            
+            console.log("[useThreeOverlay] Cursor positioned at:", location);
+          }
+        }
+        
+        // Ensure scene redraws
+        markNeedsRedraw();
+      }
+    };
+    
+    // Add listener for custom event
+    window.addEventListener("user-location-updated", handleLocationUpdate);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener("user-location-updated", handleLocationUpdate);
+    };
+  }, [markNeedsRedraw]);
+  
+  // Mark scene as dirty when key data changes
+  useEffect(() => {
+    markNeedsRedraw();
+  }, [userLocation, bookingStep, departureStationId, arrivalStationId, markNeedsRedraw]);
 
   return { overlayRef };
 }
