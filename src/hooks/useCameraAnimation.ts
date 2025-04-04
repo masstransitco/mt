@@ -325,6 +325,14 @@ export function useCameraAnimationStable({
         return isLowEndDevice;
       };
       
+      // Track map options within the sequence function scope
+      const sequenceMapOptions = {
+        zoom: 0,
+        tilt: 0,
+        heading: 0,
+        center: { lat: 0, lng: 0 }
+      };
+      
       // Optimized animation step with deltaTime and frame skipping
       const optimizedStep = (timestamp: number) => {
         if (!animationActive || !currentAnimation) {
@@ -371,37 +379,30 @@ export function useCameraAnimationStable({
         const tilt = startTilt + tiltDiff * progress;
         const heading = interpolateHeadingFn(progress);
         
-        // Skip frame if changes are imperceptible (optimization)
-        // Get current map state using appropriate Google Maps API methods
-        // With safety checks to avoid potential API errors
-        let currentZoom = 0;
-        let currentTilt = 0;
-        let currentHeading = 0;
-        
-        try {
-          currentZoom = map.getZoom() || 0;
-          currentTilt = map.getTilt() || 0;
-          currentHeading = map.getHeading() || 0;
-        } catch (error) {
-          // If there's an error getting map state, assume change is perceptible
-          // This prevents animation freeze if Google Maps API changes
-          console.debug("Error getting map state, continuing animation:", error);
-        }
-        
+        // Skip frame if changes are imperceptible using mapOptions pattern
         const isChangePerceptible = 
-          Math.abs(zoom - currentZoom) > MIN_PERCEPTIBLE_CHANGE ||
-          Math.abs(tilt - currentTilt) > MIN_PERCEPTIBLE_CHANGE ||
-          Math.abs(heading - currentHeading) > MIN_PERCEPTIBLE_CHANGE;
+          Math.abs(zoom - sequenceMapOptions.zoom) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(tilt - sequenceMapOptions.tilt) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(heading - sequenceMapOptions.heading) > MIN_PERCEPTIBLE_CHANGE;
         
         // Only update camera if changes are perceptible
         if (isChangePerceptible) {
-          // Move camera to interpolated position
-          map.moveCamera({
+          // Build camera options (ensuring correct type)
+          const cameraOptions: google.maps.CameraOptions = {
             center,
             zoom,
             tilt,
             heading
-          });
+          };
+          
+          // Move camera to interpolated position
+          map.moveCamera(cameraOptions);
+          
+          // Update our tracked map options
+          sequenceMapOptions.zoom = zoom;
+          sequenceMapOptions.tilt = tilt;
+          sequenceMapOptions.heading = heading;
+          sequenceMapOptions.center = center;
           
           // Request redraw for WebGL overlay
           maybeRedraw();
@@ -781,28 +782,31 @@ export function useCameraAnimationStable({
     ) => {
       if (!map || !renderer) return;
       
-      // Animation control state
-      const startTime = performance.now();
-      let animationActive = true;
-      let lastUpdateTime = 0;
-      const MIN_UPDATE_INTERVAL = 16; // ~60fps throttle
-      let lastCameraState = {
-        zoom: 0,
-        tilt: 0,
-        heading: 0
-      };
-      
       // Default values
       const startTilt = options.startTilt ?? 0;
       const startHeading = options.startHeading ?? 0;
       const easingFn = options.easingFn ?? 'easeOutCubic';
+      
+      // Animation control state - follow Google Maps documentation pattern
+      const startTime = performance.now();
+      let animationActive = true;
+      let lastUpdateTime = 0;
+      const MIN_UPDATE_INTERVAL = 16; // ~60fps throttle
+      
+      // Track camera state in mapOptions object as per Google Maps documentation
+      const mapOptions = {
+        zoom: options.zoom, 
+        tilt: startTilt,
+        heading: startHeading,
+        center: options.center
+      };
       
       // Pre-calculated animation functions for each pattern
       interface AnimationPattern {
         type: string;
         duration: number;
         isPerceptibleChange?: (last: any, current: any) => boolean;
-        animateFn: (rawProgress: number, easedProgress: number) => google.maps.MapOptions;
+        animateFn: (rawProgress: number, easedProgress: number) => google.maps.CameraOptions;
       }
       
       // Create optimized animation pattern based on selected type
@@ -1093,22 +1097,25 @@ export function useCameraAnimationStable({
       // Perceptible change detection - avoid rendering imperceptible changes
       const MIN_PERCEPTIBLE_CHANGE = 0.001;
       
+      // Check if camera changes are significant enough to warrant an update
       const isPerceptibleChange = (
-        current: google.maps.MapOptions, 
-        last: { zoom: number, tilt: number, heading: number }
+        newParams: google.maps.CameraOptions, 
+        currentMapOptions: typeof mapOptions
       ): boolean => {
-        const currentZoom = current.zoom || 0;
-        const currentTilt = current.tilt || 0;
-        const currentHeading = current.heading || 0;
+        // Using nullable coalescing to handle undefined values safely
+        const newZoom = newParams.zoom ?? 0;
+        const newTilt = newParams.tilt ?? 0;
+        const newHeading = newParams.heading ?? 0;
         
         return (
-          Math.abs(currentZoom - last.zoom) > MIN_PERCEPTIBLE_CHANGE ||
-          Math.abs(currentTilt - last.tilt) > MIN_PERCEPTIBLE_CHANGE ||
-          Math.abs(currentHeading - last.heading) > MIN_PERCEPTIBLE_CHANGE
+          Math.abs(newZoom - currentMapOptions.zoom) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(newTilt - currentMapOptions.tilt) > MIN_PERCEPTIBLE_CHANGE ||
+          Math.abs(newHeading - currentMapOptions.heading) > MIN_PERCEPTIBLE_CHANGE
         );
       };
       
       // Optimized animation loop with throttling and perceptible change detection
+      // Following Google Maps WebGL documentation pattern
       const animationLoop = () => {
         if (!animationActive) return;
         
@@ -1130,44 +1137,28 @@ export function useCameraAnimationStable({
         const easedProgress = easingFunction(rawProgress);
         
         // Get camera parameters using the optimized animation function
-        const cameraParams = animationPattern.animateFn(rawProgress, easedProgress);
-        
-        // Get current camera state for perceptibility check with error handling
-        let currentCameraState = {
-          zoom: 0,
-          tilt: 0,
-          heading: 0
-        };
-        
-        try {
-          currentCameraState = {
-            zoom: map.getZoom() || 0,
-            tilt: map.getTilt() || 0,
-            heading: map.getHeading() || 0
-          };
-        } catch (error) {
-          // If API fails, assume changes are perceptible and continue animation
-          console.debug("Error getting camera state, continuing animation:", error);
-        }
+        const newCameraParams = animationPattern.animateFn(rawProgress, easedProgress);
         
         // Only update if change is perceptible
-        if (isPerceptibleChange(cameraParams, currentCameraState)) {
-          // Update map camera
-          map.moveCamera(cameraParams);
+        if (isPerceptibleChange(newCameraParams, mapOptions)) {
+          // Update the camera to new position
+          map.moveCamera(newCameraParams);
           
           // Redraw the WebGL overlay
           maybeRedraw();
           
-          // Update last camera state
-          lastCameraState = {
-            zoom: cameraParams.zoom || 0,
-            tilt: cameraParams.tilt || 0,
-            heading: cameraParams.heading || 0
-          };
+          // Update mapOptions to reflect current camera state
+          // This follows the pattern shown in Google Maps documentation
+          mapOptions.zoom = newCameraParams.zoom ?? mapOptions.zoom;
+          mapOptions.tilt = newCameraParams.tilt ?? mapOptions.tilt;
+          mapOptions.heading = newCameraParams.heading ?? mapOptions.heading;
+          if (newCameraParams.center) {
+            mapOptions.center = newCameraParams.center;
+          }
           
           // Call onUpdate callback if provided
           if (options.onUpdate) {
-            options.onUpdate(cameraParams);
+            options.onUpdate(newCameraParams);
           }
           
           // Update last update time
