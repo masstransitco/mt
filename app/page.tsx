@@ -54,7 +54,7 @@ export default function Page() {
       <main className="h-screen w-full overflow-hidden relative">
         {/* GMap takes full size of main */}
         <div className="absolute inset-0">
-          <GMapWithErrorBoundary googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""} />
+          <GMapWithErrorBoundary />
         </div>
 
         {/* Header overlaps the map */}

@@ -14,6 +14,7 @@ import PwaMetaTags from "@/components/PwaMetaTags";
 
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
+import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
 import { useAppDispatch, useAppSelector } from "@/store/store";
 import {
   signOutUser,
@@ -215,7 +216,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <DisablePinchZoom />
         <Analytics/>
         <ReduxProvider>
-          <LayoutInner>{children}</LayoutInner>
+          <GoogleMapsProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
+            <LayoutInner>{children}</LayoutInner>
+          </GoogleMapsProvider>
         </ReduxProvider>
       </body>
     </html>
