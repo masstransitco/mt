@@ -6,6 +6,7 @@ import { useAppSelector, useAppDispatch, store } from "@/store/store"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectStations3D } from "@/store/stations3DSlice"
 import { DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, MARKER_POST_MAX_ZOOM } from "@/constants/map"
+import { debounce, throttle } from "lodash"
 
 import {
   selectBookingStep,
@@ -25,6 +26,188 @@ import { selectListSelectedStationId } from "@/store/userSlice"
 
 // Declare google as any to avoid TypeScript errors
 declare var google: any
+
+// --------------------------------------
+// DOM Element Pool for Marker Recycling
+// --------------------------------------
+class MarkerPool {
+  private collapsedMarkers: HTMLElement[] = [];
+  private expandedMarkers: HTMLElement[] = [];
+  private maxPoolSize = 50; // Limit pool size to prevent memory leaks
+
+  getCollapsedMarker(): HTMLElement {
+    if (this.collapsedMarkers.length > 0) {
+      return this.collapsedMarkers.pop()!;
+    }
+    return this.createCollapsedMarker();
+  }
+
+  getExpandedMarker(): HTMLElement {
+    if (this.expandedMarkers.length > 0) {
+      return this.expandedMarkers.pop()!;
+    }
+    return this.createExpandedMarker();
+  }
+
+  recycleCollapsedMarker(element: HTMLElement): void {
+    if (this.collapsedMarkers.length < this.maxPoolSize) {
+      // Reset any state or classes
+      element.className = 'collapsed-view';
+      element.textContent = "⚑";
+      // Clear any event listeners
+      const newElement = element.cloneNode(true) as HTMLElement;
+      this.collapsedMarkers.push(newElement);
+    }
+  }
+
+  recycleExpandedMarker(element: HTMLElement): void {
+    if (this.expandedMarkers.length < this.maxPoolSize) {
+      // Reset any state or classes
+      element.className = 'expanded-view';
+      // Clear any event listeners
+      const newElement = element.cloneNode(true) as HTMLElement;
+      this.expandedMarkers.push(newElement);
+    }
+  }
+
+  private createCollapsedMarker(): HTMLElement {
+    const collapsedDiv = document.createElement("div");
+    collapsedDiv.classList.add("collapsed-view");
+    collapsedDiv.style.cssText = `
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1C1C1E, #2C2C2E);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #F2F2F7;
+      font-size: 14px;
+      border: 1.5px solid #505156;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      pointer-events: auto;
+      transform-origin: center;
+      will-change: transform, border-color, box-shadow;
+      transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    `;
+    collapsedDiv.textContent = "⚑";
+    return collapsedDiv;
+  }
+
+  private createExpandedMarker(): HTMLElement {
+    const expandedDiv = document.createElement("div");
+    expandedDiv.classList.add("expanded-view");
+    expandedDiv.style.cssText = `
+      width: 180px;
+      background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
+      color: #F2F2F7;
+      border: 1.5px solid #505156;
+      border-radius: 10px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.45);
+      padding: 10px;
+      cursor: pointer;
+      pointer-events: auto;
+      transform-origin: center;
+      will-change: transform, border-color, box-shadow;
+      transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+    `;
+    expandedDiv.innerHTML = `
+      <div class="expanded-info-section" style="margin-bottom: 6px;"></div>
+      <button class="pickup-btn" style="
+        display: inline-block;
+        padding: 6px 10px;
+        background: #10A37F;
+        color: #FFFFFF;
+        font-size: 13px;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.18s ease-in-out;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        width: 100%;
+        letter-spacing: 0.2px;
+        min-height: 30px;
+      ">
+        Pickup car here
+      </button>
+    `;
+    return expandedDiv;
+  }
+}
+
+// -----------------------
+// Spatial Indexing System
+// -----------------------
+class SpatialIndex {
+  private grid = new Map<string, Set<number>>();
+  private cellSize = 0.01; // ~1km at equator
+  private stationPositions = new Map<number, { lat: number, lng: number }>();
+
+  constructor() {
+    this.clear();
+  }
+
+  clear(): void {
+    this.grid.clear();
+    this.stationPositions.clear();
+  }
+
+  addStation(lat: number, lng: number, stationId: number): void {
+    const cellKey = this.getCellKey(lat, lng);
+    if (!this.grid.has(cellKey)) {
+      this.grid.set(cellKey, new Set());
+    }
+    this.grid.get(cellKey)!.add(stationId);
+    this.stationPositions.set(stationId, { lat, lng });
+  }
+
+  getVisibleStations(bounds: google.maps.LatLngBounds): number[] {
+    if (!bounds) return [];
+
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    
+    const minLat = sw.lat();
+    const maxLat = ne.lat();
+    const minLng = sw.lng();
+    const maxLng = ne.lng();
+    
+    const result: number[] = [];
+    
+    // For each cell that intersects the bounds
+    for (let lat = minLat; lat <= maxLat; lat += this.cellSize) {
+      for (let lng = minLng; lng <= maxLng; lng += this.cellSize) {
+        const cellKey = this.getCellKey(lat, lng);
+        const stationsInCell = this.grid.get(cellKey);
+        
+        if (stationsInCell) {
+          stationsInCell.forEach(stationId => {
+            if (!result.includes(stationId)) {
+              result.push(stationId);
+            }
+          });
+        }
+      }
+    }
+    
+    return result;
+  }
+
+  isStationInBounds(stationId: number, bounds: google.maps.LatLngBounds): boolean {
+    const position = this.stationPositions.get(stationId);
+    if (!position) return false;
+    
+    return bounds.contains(new google.maps.LatLng(position.lat, position.lng));
+  }
+
+  private getCellKey(lat: number, lng: number): string {
+    const latCell = Math.floor(lat / this.cellSize);
+    const lngCell = Math.floor(lng / this.cellSize);
+    return `${latCell}:${lngCell}`;
+  }
+}
 
 function decodePolyline(encoded: string): google.maps.LatLngLiteral[] {
   if (!window.google?.maps?.geometry?.encoding) {
@@ -67,6 +250,21 @@ function computeRouteMidpoint(routeCoords: google.maps.LatLngLiteral[]): google.
   return routeCoords[Math.floor(routeCoords.length / 2)]
 }
 
+// Marker states for virtual DOM comparison
+interface MarkerState {
+  expanded: boolean;
+  visible: boolean;
+  isForceVisible: boolean;
+  isDeparture: boolean;
+  isArrival: boolean;
+  isListSelected: boolean;
+  postHeight: number;
+  address: string;
+  place: string;
+  pickupMins: number | null;
+  showPickupBtn: boolean;
+}
+
 interface UseMarkerOverlayOptions {
   onPickupClick?: (stationId: number) => void
   onTiltChange?: (tilt: number) => void
@@ -90,6 +288,17 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // The route from departure -> arrival
   const bookingRoute = useAppSelector(selectBookingRoute)
 
+  // Keep track of current tilt and zoom
+  const tiltRef = useRef(0)
+  const zoomRef = useRef(DEFAULT_ZOOM)
+
+  // Marker management instances
+  const markerPoolRef = useRef<MarkerPool>(new MarkerPool());
+  const spatialIndexRef = useRef<SpatialIndex>(new SpatialIndex());
+  
+  // Track pending update frames for batching
+  const pendingAnimationFrameRef = useRef<number | null>(null);
+  
   // Station "candidates" with geometry + station ID.
   const candidateStationsRef = useRef<
     {
@@ -98,15 +307,12 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       stationData?: StationFeature
       refs?: ReturnType<typeof buildMarkerContainer>
       marker?: google.maps.marker.AdvancedMarkerElement | null
+      markerState?: MarkerState // Track virtual state for diffing
     }[]
   >([])
 
   // Single route marker for the departure->arrival route
   const routeMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null)
-
-  // Keep track of current tilt and zoom
-  const tiltRef = useRef(0)
-  const zoomRef = useRef(DEFAULT_ZOOM)
 
   // For the departure station, show "Pickup in X minutes"
   const pickupMins = useMemo(() => {
@@ -115,13 +321,41 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     return Math.ceil(drivingMins + 15)
   }, [dispatchRoute])
 
+  // Memoize station states to reduce re-renders
+  const stationStates = useMemo(() => {
+    const result = new Map<number, {
+      isForceVisible: boolean;
+      isExpanded: boolean;
+      isDeparture: boolean;
+      isArrival: boolean;
+      isListSelected: boolean;
+    }>();
+    
+    stations.forEach(station => {
+      const stationId = station.id;
+      const isDeparture = stationId === departureStationId;
+      const isArrival = stationId === arrivalStationId;
+      const isListSelected = stationId === listSelectedStationId;
+      
+      result.set(stationId, {
+        isForceVisible: isDeparture || isArrival || isListSelected,
+        isExpanded: (bookingStep < 3) ? isDeparture : (isDeparture || isArrival),
+        isDeparture,
+        isArrival,
+        isListSelected
+      });
+    });
+    
+    return result;
+  }, [stations, bookingStep, departureStationId, arrivalStationId, listSelectedStationId]);
+
   // Decide if a station marker is forced visible (departure, arrival, or list selected)
   const isForceVisible = useCallback(
-    (stationId: number): boolean => 
-      stationId === departureStationId || 
-      stationId === arrivalStationId || 
-      stationId === listSelectedStationId,
-    [departureStationId, arrivalStationId, listSelectedStationId],
+    (stationId: number): boolean => {
+      const state = stationStates.get(stationId);
+      return state?.isForceVisible || false;
+    },
+    [stationStates],
   )
 
   // Which station(s) are expanded?
@@ -129,14 +363,10 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // - Step >= 3: expand both departure and arrival (if chosen).
   const isExpanded = useCallback(
     (stationId: number): boolean => {
-      const isDeparture = stationId === departureStationId
-      const isArrival = stationId === arrivalStationId
-      if (bookingStep < 3) {
-        return isDeparture
-      }
-      return isDeparture || isArrival
+      const state = stationStates.get(stationId);
+      return state?.isExpanded || false;
     },
-    [bookingStep, departureStationId, arrivalStationId],
+    [stationStates],
   )
 
   // Now uses stationSelectionManager instead of direct Redux access
@@ -151,7 +381,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     [],
   )
 
-  // Build DOM for each station marker, hooking up events
+  // Build DOM for each station marker, hooking up events - optimized version
   const buildMarkerContainer = useCallback(
     (station: StationFeature) => {
       const container = document.createElement("div")
@@ -160,6 +390,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         position: relative;
         pointer-events: auto;
         transform-origin: center bottom;
+        will-change: transform, opacity;
         transition: transform 0.28s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.25s ease;
         transform: scale(0);
         opacity: 1;
@@ -173,29 +404,12 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         flex-direction: column;
         align-items: center;
         pointer-events: none;
+        will-change: opacity, transform;
         transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0, 0.2, 1);
       `
 
-      const collapsedDiv = document.createElement("div")
-      collapsedDiv.classList.add("collapsed-view")
-      collapsedDiv.style.cssText = `
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1C1C1E, #2C2C2E);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #F2F2F7;
-  font-size: 14px;
-  border: 1.5px solid #505156;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-  pointer-events: auto;
-  transform-origin: center;
-  transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-`
-      collapsedDiv.textContent = "⚑"
+      // Use pool for collapsed marker
+      const collapsedDiv = markerPoolRef.current.getCollapsedMarker()
 
       // Marker click → station selection
       collapsedDiv.addEventListener("click", (ev) => {
@@ -220,6 +434,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         background: linear-gradient(to bottom, rgba(170,170,170,0.9), rgba(170,170,170,0.2));
         margin-top: 2px;
         pointer-events: none;
+        will-change: height, opacity;
         transition: height 0.3s ease, opacity 0.3s ease;
       `
       collapsedWrapper.appendChild(collapsedDiv)
@@ -232,45 +447,12 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         display: none;
         flex-direction: column;
         align-items: center;
+        will-change: opacity, transform;
         transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0, 0.2, 1);
       `
 
-      const expandedDiv = document.createElement("div")
-      expandedDiv.classList.add("expanded-view")
-      expandedDiv.style.cssText = `
-  width: 180px;
-  background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
-  color: #F2F2F7;
-  border: 1.5px solid #505156;
-  border-radius: 10px;
-  box-shadow: 0 6px 12px rgba(0,0,0,0.45);
-  padding: 10px;
-  cursor: pointer;
-  pointer-events: auto;
-  transform-origin: center;
-  transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.25s ease;
-`
-      expandedDiv.innerHTML = `
-        <div class="expanded-info-section" style="margin-bottom: 6px;"></div>
-        <button class="pickup-btn" style="
-  display: inline-block;
-  padding: 6px 10px;
-  background: #10A37F;
-  color: #FFFFFF;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.18s ease-in-out;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  width: 100%;
-  letter-spacing: 0.2px;
-  min-height: 30px;
-">
-  Pickup car here
-</button>
-      `
+      // Use pool for expanded marker
+      const expandedDiv = markerPoolRef.current.getExpandedMarker()
 
       // Hover effect
       expandedDiv.addEventListener("mouseenter", () => {
@@ -320,6 +502,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         background: linear-gradient(to bottom, rgba(170,170,170,0.9), rgba(170,170,170,0.2));
         margin-top: 2px;
         pointer-events: none;
+        will-change: height, opacity;
         transition: height 0.3s ease, opacity 0.3s ease;
       `
       expandedWrapper.appendChild(expandedDiv)
@@ -407,6 +590,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         position: relative;
         transform: scale(0);
         opacity: 0;
+        will-change: transform, opacity;
         transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
       `
 
@@ -446,6 +630,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         background: linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.2));
         margin-top: 2px;
         pointer-events: none;
+        will-change: height;
         transition: height 0.3s ease;
       `
 
@@ -494,7 +679,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     }
   }, [googleMap, bookingRoute, bookingStep, arrivalStationId, computePostHeight])
 
-  // Build candidate station list once
+  // Build candidate station list once and populate spatial index
   const initializeCandidateStations = useCallback(() => {
     if (!candidateStationsRef.current.length) {
       const stationByObjectId = new Map<number, StationFeature>()
@@ -506,6 +691,10 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       })
 
       const candidateList: typeof candidateStationsRef.current = []
+      
+      // Clear spatial index before rebuilding
+      spatialIndexRef.current.clear();
+      
       buildings3D.forEach((bld) => {
         const objId = bld.properties?.ObjectId
         if (!objId) return
@@ -534,13 +723,16 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
           stationData: station,
           marker: null,
         })
+        
+        // Add to spatial index for efficient lookups
+        spatialIndexRef.current.addStation(centerLat, centerLng, station.id);
       })
 
       candidateStationsRef.current = candidateList
     }
   }, [stations, buildings3D])
 
-  // Create an AdvancedMarker for a station
+  // Create an AdvancedMarker for a station - now with state tracking
   const createStationMarker = useCallback(
     (entry: (typeof candidateStationsRef.current)[number]) => {
       if (!googleMap) return
@@ -565,287 +757,370 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       ;(entry.marker as any)._refs = entry.refs
       ;(entry.marker as any)._stationData = entry.stationData
 
-      // Animate in
-      container.style.transitionDelay = `${Math.random() * 300}ms`
+      // Initialize marker state for diffing
+      const isDeparture = entry.stationId === departureStationId;
+      const isArrival = entry.stationId === arrivalStationId;
+      const isListSelected = entry.stationId === listSelectedStationId;
+      
+      entry.markerState = {
+        expanded: false,
+        visible: true,
+        isForceVisible: isDeparture || isArrival || isListSelected,
+        isDeparture,
+        isArrival,
+        isListSelected,
+        postHeight: 0,
+        address: entry.stationData?.properties.Address || "",
+        place: entry.stationData?.properties.Place || "",
+        pickupMins: null,
+        showPickupBtn: bookingStep === 2
+      };
+
+      // Animate in - use requestAnimationFrame for better performance
+      container.style.transitionDelay = `${Math.random() * 150}ms` // Reduced from 300ms
       requestAnimationFrame(() => {
         container.style.transform = "scale(1)"
       })
     },
-    [googleMap, buildMarkerContainer],
+    [googleMap, buildMarkerContainer, departureStationId, arrivalStationId, listSelectedStationId, bookingStep],
   )
 
-  // Master refresh logic for markers
-  const refreshMarkers = useCallback(() => {
-    const currentTilt = tiltRef.current
-    const currentZoom = zoomRef.current
-
-    candidateStationsRef.current.forEach((entry) => {
-      if (!entry.marker) return
-
-      const marker = entry.marker
-      const station = (marker as any)._stationData as StationFeature
-      const refs = (marker as any)._refs
-      if (!refs) return
-
-      const forceVis = isForceVisible(station.id)
-      marker.collisionBehavior = forceVis ? ("REQUIRED" as any) : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any)
-
-      if (marker.element) {
-        marker.element.style.zIndex = forceVis ? "9999" : "1"
-      }
-
-      // Expanded/collapsed logic based on station selection and zoom level
-      const isDeparture = station.id === departureStationId
-      const isArrival = station.id === arrivalStationId
-      const expanded = isExpanded(station.id) && currentZoom >= MARKER_POST_MIN_ZOOM
+  // Batch update markers - new implementation that uses virtual DOM pattern
+  const batchUpdateMarker = useCallback((entry: (typeof candidateStationsRef.current)[number], forceUpdate = false) => {
+    if (!entry.marker || !entry.refs || !entry.stationData) return;
+    
+    const station = entry.stationData;
+    const { marker, refs } = entry;
+    
+    // Calculate new state
+    const isDeparture = station.id === departureStationId;
+    const isArrival = station.id === arrivalStationId;
+    const isListSelected = station.id === listSelectedStationId;
+    const forceVis = isForceVisible(station.id);
+    const currentTilt = tiltRef.current;
+    const currentZoom = zoomRef.current;
+    const expanded = isExpanded(station.id) && currentZoom >= MARKER_POST_MIN_ZOOM;
+    const newPostHeight = computePostHeight(35, currentTilt, currentZoom);
+    const showPosts = newPostHeight > 4 ? "1" : "0";
+    
+    // New marker state
+    const newState: MarkerState = {
+      expanded,
+      visible: true,
+      isForceVisible: forceVis,
+      isDeparture,
+      isArrival,
+      isListSelected,
+      postHeight: newPostHeight,
+      address: station.properties.Address || "No address available",
+      place: station.properties.Place || `Station ${station.id}`,
+      pickupMins: isDeparture ? pickupMins : null,
+      showPickupBtn: bookingStep === 2
+    };
+    
+    // Compare with previous state
+    const prevState = entry.markerState;
+    if (!forceUpdate && prevState && 
+        prevState.expanded === newState.expanded &&
+        prevState.isForceVisible === newState.isForceVisible &&
+        prevState.isDeparture === newState.isDeparture &&
+        prevState.isArrival === newState.isArrival &&
+        prevState.isListSelected === newState.isListSelected &&
+        Math.abs(prevState.postHeight - newState.postHeight) < 0.5 &&
+        prevState.showPickupBtn === newState.showPickupBtn &&
+        prevState.pickupMins === newState.pickupMins) {
+      // No significant changes - skip update
+      return;
+    }
+    
+    // Update state reference
+    entry.markerState = newState;
+    
+    // Update marker collision behavior based on importance
+    marker.collisionBehavior = forceVis ? ("REQUIRED" as any) : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any);
+    
+    if (marker.element) {
+      marker.element.style.zIndex = forceVis ? "9999" : "1";
+    }
+    
+    // Update visibility of expanded/collapsed views
+    if (expanded) {
+      refs.collapsedWrapper.style.opacity = "0";
+      refs.collapsedWrapper.style.transform = "scale(0.8)";
+      refs.expandedWrapper.style.display = "flex";
+      requestAnimationFrame(() => {
+        refs.expandedWrapper.style.opacity = "1";
+        refs.expandedWrapper.style.transform = "scale(1)";
+      });
+    } else {
+      refs.collapsedWrapper.style.opacity = "1";
+      refs.collapsedWrapper.style.transform = "scale(1)";
+      refs.expandedWrapper.style.opacity = "0";
+      refs.expandedWrapper.style.transform = "scale(0.95)";
+      setTimeout(() => {
+        refs.expandedWrapper.style.display = "none";
+      }, 250);
+    }
+    
+    // Update post heights for both views
+    refs.collapsedPost.style.height = `${newPostHeight}px`;
+    refs.collapsedPost.style.opacity = showPosts;
+    refs.expandedPost.style.height = `${newPostHeight}px`;
+    refs.expandedPost.style.opacity = showPosts;
+    
+    // Update pickup button visibility
+    if (refs.pickupBtn) {
+      refs.pickupBtn.style.display = bookingStep === 2 ? "inline-block" : "none";
+    }
+    
+    // Update styling for selected stations
+    const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : isListSelected ? "#FFFFFF" : "#505156";
+    
+    // Collapsed style with special handling for selected stations
+    refs.collapsedDiv.style.borderColor = borderColor;
+    
+    // Special styling for important stations
+    if (isDeparture || isArrival || isListSelected) {
+      const glowColor = isDeparture 
+        ? "rgba(16, 163, 127, 0.5)" 
+        : isArrival 
+          ? "rgba(39, 110, 241, 0.5)" 
+          : "rgba(255, 255, 255, 0.7)";
       
-      // When below zoom threshold, always use collapsed view for all markers
-      if (expanded) {
-        refs.collapsedWrapper.style.opacity = "0"
-        refs.collapsedWrapper.style.transform = "scale(0.8)"
-        refs.expandedWrapper.style.display = "flex"
-        requestAnimationFrame(() => {
-          refs.expandedWrapper.style.opacity = "1"
-          refs.expandedWrapper.style.transform = "scale(1)"
-        })
-      } else {
-        refs.collapsedWrapper.style.opacity = "1"
-        refs.collapsedWrapper.style.transform = "scale(1)"
-        refs.expandedWrapper.style.opacity = "0"
-        refs.expandedWrapper.style.transform = "scale(0.95)"
-        setTimeout(() => {
-          refs.expandedWrapper.style.display = "none"
-        }, 250)
-      }
-
-      // Post heights - consider both tilt and zoom
-      const newHeight = computePostHeight(35, currentTilt, currentZoom)
-      const showPosts = newHeight > 4 ? "1" : "0"
-      refs.collapsedPost.style.height = `${newHeight}px`
-      refs.collapsedPost.style.opacity = showPosts
-      refs.expandedPost.style.height = `${newHeight}px`
-      refs.expandedPost.style.opacity = showPosts
-
-      // "Pickup car here" only in step 2
-      if (refs.pickupBtn) {
-        refs.pickupBtn.style.display = bookingStep === 2 ? "inline-block" : "none"
-      }
-
-      // Check if this is the list-selected station
-      const isListSelected = station.id === listSelectedStationId
+      const borderWidth = currentZoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px";
+      refs.collapsedDiv.style.borderWidth = borderWidth;
+      refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`;
       
-      // Border color + glow if departure/arrival
-      const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : isListSelected ? "#FFFFFF" : "#505156"
+      if (isListSelected && !isDeparture && !isArrival) {
+        refs.collapsedDiv.style.border = `2px solid #FFFFFF`;
+      }
+    } else {
+      refs.collapsedDiv.style.borderWidth = "1.5px";
+      refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)";
+    }
+    
+    // Expanded style updates
+    refs.expandedDiv.style.borderColor = borderColor;
+    if (isDeparture || isArrival || isListSelected) {
+      const glowColor = isDeparture 
+        ? "rgba(16, 163, 127, 0.5)" 
+        : isArrival 
+          ? "rgba(39, 110, 241, 0.5)" 
+          : "rgba(255, 255, 255, 0.7)";
+      refs.expandedDiv.style.boxShadow = `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`;
       
-      // Collapsed style with special handling for selected stations
-      refs.collapsedDiv.style.borderColor = borderColor
-      
-      // Special style for departure/arrival stations or list-selected at any zoom level
-      if (isDeparture || isArrival || isListSelected) {
-        const glowColor = isDeparture 
-          ? "rgba(16, 163, 127, 0.5)" 
-          : isArrival 
-            ? "rgba(39, 110, 241, 0.5)" 
-            : "rgba(255, 255, 255, 0.7)"
-        
-        const borderWidth = currentZoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px" // thicker border at low zoom
-        refs.collapsedDiv.style.borderWidth = borderWidth
-        refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`
-        
-        // Extra border for list-selected but not the departure or arrival station
-        if (isListSelected && !isDeparture && !isArrival) {
-          refs.collapsedDiv.style.border = `2px solid #FFFFFF`
-        }
-      } else {
-        refs.collapsedDiv.style.borderWidth = "1.5px"
-        refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)"
+      if (isListSelected && !isDeparture && !isArrival) {
+        refs.expandedDiv.style.border = `2px solid #FFFFFF`;
       }
-
-      // Expanded style
-      refs.expandedDiv.style.borderColor = borderColor
-      if (isDeparture || isArrival || isListSelected) {
-        const glowColor = isDeparture 
-          ? "rgba(16, 163, 127, 0.5)" 
-          : isArrival 
-            ? "rgba(39, 110, 241, 0.5)" 
-            : "rgba(255, 255, 255, 0.7)"
-        refs.expandedDiv.style.boxShadow = `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`
-        
-        // Extra style for list-selected expanded view
-        if (isListSelected && !isDeparture && !isArrival) {
-          refs.expandedDiv.style.border = `2px solid #FFFFFF`
-        }
-      } else {
-        refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)"
-      }
-
-      // Info section
-      if (!refs.expandedInfoSection) return
-      if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
-        refs.expandedInfoSection.innerHTML = `
-  <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: #10A37F; letter-spacing: 0.1px;">
-    Pickup in ${pickupMins} minutes
-  </div>
-  <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
-    ${station.properties.Address || "No address available"}
-  </div>
-`
-      } else {
-        const placeName = station.properties.Place || `Station ${station.id}`
-        const address = station.properties.Address || "No address available"
-        const titleColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#F2F2F7"
-        refs.expandedInfoSection.innerHTML = `
-  <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: ${titleColor}; letter-spacing: 0.1px;">
-    ${placeName}
-  </div>
-  <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
-    ${address}
-  </div>
-`
-      }
-    })
-
-    // Refresh route marker too
-    createOrUpdateRouteMarker()
+    } else {
+      refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)";
+    }
+    
+    // Update info section content
+    if (!refs.expandedInfoSection) return;
+    
+    if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
+      refs.expandedInfoSection.innerHTML = `
+        <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: #10A37F; letter-spacing: 0.1px;">
+          Pickup in ${pickupMins} minutes
+        </div>
+        <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
+          ${station.properties.Address || "No address available"}
+        </div>
+      `;
+    } else {
+      const placeName = station.properties.Place || `Station ${station.id}`;
+      const address = station.properties.Address || "No address available";
+      const titleColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#F2F2F7";
+      refs.expandedInfoSection.innerHTML = `
+        <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: ${titleColor}; letter-spacing: 0.1px;">
+          ${placeName}
+        </div>
+        <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
+          ${address}
+        </div>
+      `;
+    }
   }, [
     bookingStep,
     departureStationId,
     arrivalStationId,
     pickupMins,
-    computePostHeight,
-    createOrUpdateRouteMarker,
     isForceVisible,
     isExpanded,
-  ])
+    computePostHeight,
+    listSelectedStationId
+  ]);
 
-  // Tilt change → re-style markers
-  const updateMarkerTilt = useCallback(
-    (newTilt: number) => {
-      tiltRef.current = newTilt
-      options?.onTiltChange?.(newTilt)
-      refreshMarkers()
-    },
-    [options, refreshMarkers],
-  )
-  
-  // Zoom change → re-style markers
-  const updateMarkerZoom = useCallback(
-    (newZoom: number) => {
-      zoomRef.current = newZoom
-      options?.onZoomChange?.(newZoom)
-      refreshMarkers()
-    },
-    [options, refreshMarkers],
-  )
+  // Batch update function to be used with requestAnimationFrame
+  const performBatchedMarkerUpdates = useCallback(() => {
+    pendingAnimationFrameRef.current = null;
+    
+    // First pass: update all visible markers
+    candidateStationsRef.current.forEach(entry => {
+      if (entry.marker && entry.marker.map) {
+        batchUpdateMarker(entry);
+      }
+    });
+    
+    // Update route marker
+    createOrUpdateRouteMarker();
+  }, [batchUpdateMarker, createOrUpdateRouteMarker]);
 
-  // Initialize candidate stations only once
-  useEffect(() => {
-    initializeCandidateStations()
-  }, [initializeCandidateStations])
+  // Debounced trigger for marker updates
+  const debouncedRefreshMarkers = useMemo(() => {
+    return debounce(() => {
+      if (pendingAnimationFrameRef.current === null) {
+        pendingAnimationFrameRef.current = requestAnimationFrame(performBatchedMarkerUpdates);
+      }
+    }, 16); // ~60fps
+  }, [performBatchedMarkerUpdates]);
 
   // The function that handles map bounds changes (which markers to add/remove)
   const handleMapBoundsChange = useCallback(() => {
-    if (!googleMap) return
-    const bounds = googleMap.getBounds()
-    if (!bounds) return
-
+    if (!googleMap) return;
+    const bounds = googleMap.getBounds();
+    if (!bounds) return;
+    
+    // Use spatial index for efficient lookup of potentially visible stations
+    const visibleStationIds = spatialIndexRef.current.getVisibleStations(bounds);
+    
     candidateStationsRef.current.forEach((entry) => {
-      const { stationId, position, marker } = entry
-
-      // Forced visible?
+      const { stationId, position, marker } = entry;
+      
+      // Always show important stations regardless of bounds
       if (isForceVisible(stationId)) {
         if (!marker) {
-          createStationMarker(entry)
+          createStationMarker(entry);
         } else if (!marker.map) {
-          marker.map = googleMap
+          marker.map = googleMap;
         }
-        return
+        return;
       }
-
-      // Is the station center in the viewport?
-      const isInBounds = bounds.contains({ lat: position.lat, lng: position.lng })
-      if (isInBounds) {
+      
+      // Is the station visible according to spatial index?
+      const isVisible = visibleStationIds.includes(stationId);
+      
+      if (isVisible) {
         if (!marker) {
-          createStationMarker(entry)
+          createStationMarker(entry);
         } else if (!marker.map) {
-          marker.map = googleMap
+          marker.map = googleMap;
         }
       } else {
         // Out of view → remove
         if (marker?.map) {
-          marker.map = null
+          marker.map = null;
         }
       }
-    })
+    });
+    
+    // Schedule a batched update of marker styles
+    debouncedRefreshMarkers();
+  }, [googleMap, isForceVisible, createStationMarker, debouncedRefreshMarkers]);
 
-    // Re-style after potential new markers appear
-    refreshMarkers()
-  }, [googleMap, isForceVisible, createStationMarker, refreshMarkers])
+  // Tilt change → schedule marker updates
+  const updateMarkerTilt = useCallback(
+    (newTilt: number) => {
+      tiltRef.current = newTilt;
+      options?.onTiltChange?.(newTilt);
+      debouncedRefreshMarkers();
+    },
+    [options, debouncedRefreshMarkers],
+  );
+  
+  // Zoom change → schedule marker updates
+  const updateMarkerZoom = useCallback(
+    (newZoom: number) => {
+      zoomRef.current = newZoom;
+      options?.onZoomChange?.(newZoom);
+      debouncedRefreshMarkers();
+    },
+    [options, debouncedRefreshMarkers],
+  );
+
+  // Initialize candidate stations only once
+  useEffect(() => {
+    initializeCandidateStations();
+  }, [initializeCandidateStations]);
 
   // Add map bounds listener with the current handleMapBoundsChange
   useEffect(() => {
-    if (!googleMap) return
-    const listener = googleMap.addListener("idle", () => {
-      handleMapBoundsChange()
-    })
+    if (!googleMap) return;
+    
+    // Throttle the bounds change handler for better performance
+    const throttledHandler = throttle(() => {
+      handleMapBoundsChange();
+    }, 100);
+    
+    const listener = googleMap.addListener("idle", throttledHandler);
+    
+    // Initial update
+    handleMapBoundsChange();
+    
     return () => {
-      google.maps.event.removeListener(listener)
-    }
-  }, [googleMap, handleMapBoundsChange])
+      google.maps.event.removeListener(listener);
+    };
+  }, [googleMap, handleMapBoundsChange]);
 
   // Re-run styling whenever booking step, route, or list selection changes
   useEffect(() => {
-    refreshMarkers()
+    debouncedRefreshMarkers();
   }, [
     bookingStep,
     departureStationId,
     arrivalStationId,
-    listSelectedStationId, // update when list selection changes
-    dispatchRoute, // updates pickupMins
-    bookingRoute, // route marker
-    refreshMarkers,
-  ])
+    listSelectedStationId,
+    dispatchRoute,
+    bookingRoute,
+    debouncedRefreshMarkers,
+  ]);
 
   // Cleanup: fade out on unmount
   useEffect(() => {
     return () => {
+      // Cancel any pending animation frames
+      if (pendingAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(pendingAnimationFrameRef.current);
+        pendingAnimationFrameRef.current = null;
+      }
+      
       candidateStationsRef.current.forEach((entry) => {
         if (entry.marker) {
-          const refs = (entry.marker as any)._refs
+          const refs = (entry.marker as any)._refs;
           if (refs?.container) {
-            refs.container.style.transform = "scale(0)"
-            refs.container.style.opacity = "0"
+            refs.container.style.transform = "scale(0)";
+            refs.container.style.opacity = "0";
           }
         }
-      })
+      });
 
       if (routeMarkerRef.current) {
-        const content = routeMarkerRef.current.content as HTMLElement
+        const content = routeMarkerRef.current.content as HTMLElement;
         if (content) {
-          content.style.transform = "scale(0)"
-          content.style.opacity = "0"
+          content.style.transform = "scale(0)";
+          content.style.opacity = "0";
         }
       }
 
       setTimeout(() => {
         candidateStationsRef.current.forEach((entry) => {
           if (entry.marker) {
-            entry.marker.map = null
-            entry.marker = null
+            entry.marker.map = null;
+            entry.marker = null;
           }
-        })
+        });
         if (routeMarkerRef.current) {
-          routeMarkerRef.current.map = null
-          routeMarkerRef.current = null
+          routeMarkerRef.current.map = null;
+          routeMarkerRef.current = null;
         }
-      }, 300)
-    }
-  }, [])
+      }, 300);
+    };
+  }, []);
 
   return {
     routeMarkerRef,
     updateMarkerTilt,
     updateMarkerZoom,
-  }
+  };
 }
-
