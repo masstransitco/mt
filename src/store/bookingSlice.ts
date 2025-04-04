@@ -44,7 +44,8 @@ export const fetchRoute = createAsyncThunk<
   "booking/fetchRoute",
   async ({ departure, arrival }, { rejectWithValue }) => {
     try {
-      await ensureGoogleMapsLoaded();
+      // No need to await ensureGoogleMapsLoaded() anymore,
+      // our GoogleMapsProvider ensures Maps API is available
       const [depLng, depLat] = departure.geometry.coordinates;
       const [arrLng, arrLat] = arrival.geometry.coordinates;
 
@@ -370,7 +371,8 @@ export const selectRouteDecoded = createSelector([selectRoute], (route) => {
   if (!route || !route.polyline) return [];
   try {
     if (!window.google?.maps?.geometry?.encoding) {
-      ensureGoogleMapsLoaded();
+      // Skip decoding if Google Maps API is not available - 
+      // our GoogleMapsProvider will ensure it's loaded when needed
       return [];
     }
     const decodedPath = window.google.maps.geometry.encoding.decodePath(route.polyline);

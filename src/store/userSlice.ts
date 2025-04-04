@@ -82,7 +82,8 @@ export const fetchWalkingRoute = createAsyncThunk<
   "user/fetchWalkingRoute",
   async ({ locationFrom, station }, { rejectWithValue }) => {
     try {
-      await ensureGoogleMapsLoaded();
+      // No need to await ensureGoogleMapsLoaded() anymore,
+      // our GoogleMapsProvider ensures Maps API is available
       const [stationLng, stationLat] = station.geometry.coordinates;
       
       const result = await getWalkingDirections(
