@@ -10,6 +10,7 @@ export const USER_LOCATION_UPDATED_EVENT = "user-location-updated";
 export interface LocationUpdateEvent {
   location: google.maps.LatLngLiteral;
   source: "locate-me-button" | "system" | "fallback";
+  forceAnimation?: boolean;
 }
 
 interface UserLocationOptions {
@@ -17,6 +18,7 @@ interface UserLocationOptions {
   timeout?: number;
   maximumAge?: number;
   updateSearchLocation?: boolean;
+  forceAnimation?: boolean;  // Add parameter to force animation even if location hasn't changed
   onLocationFound?: (loc: google.maps.LatLngLiteral) => void;
   onLocationError?: (error: GeolocationPositionError) => void;
 }
@@ -57,8 +59,13 @@ export async function getUserLocation(options: UserLocationOptions = {}): Promis
       store.dispatch(setSearchLocation(cachedPosition));
     }
     
-    // Dispatch custom event (with cache source)
-    dispatchLocationEvent(cachedPosition, "system");
+    // Determine the correct source to simulate behavior
+    // If we explicitly want to force animation (from locate-me button),
+    // use locate-me-button as source even for cached positions
+    const source = options.forceAnimation ? "locate-me-button" : "system";
+    
+    // Dispatch custom event with appropriate source
+    dispatchLocationEvent(cachedPosition, source, options.forceAnimation);
     
     // Call callback
     onLocationFound?.(cachedPosition);
@@ -98,8 +105,8 @@ export async function getUserLocation(options: UserLocationOptions = {}): Promis
       store.dispatch(setSearchLocation(location));
     }
     
-    // Dispatch custom event with locate-me source
-    dispatchLocationEvent(location, "locate-me-button");
+    // Dispatch custom event with locate-me source and animation flag
+    dispatchLocationEvent(location, "locate-me-button", options.forceAnimation);
 
     // Call success callback
     onLocationFound?.(location);
@@ -118,10 +125,11 @@ export async function getUserLocation(options: UserLocationOptions = {}): Promis
  */
 function dispatchLocationEvent(
   location: google.maps.LatLngLiteral,
-  source: LocationUpdateEvent["source"]
+  source: LocationUpdateEvent["source"],
+  forceAnimation?: boolean
 ) {
   const event = new CustomEvent<LocationUpdateEvent>(USER_LOCATION_UPDATED_EVENT, {
-    detail: { location, source }
+    detail: { location, source, forceAnimation }
   });
   window.dispatchEvent(event);
 }

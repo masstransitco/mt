@@ -256,7 +256,8 @@ function processMockVehicles(params: FetchVehicleListParams): any[] {
     const lat = vehicle.location?.latitude ?? 0;
     const lng = vehicle.location?.longitude ?? 0;
     const locationUpdated = vehicle.location?.updated ?? null;
-    const positionDescription = vehicle.location?.position_description ?? null;
+    // Mock data doesn't have position_description, so we create it
+    const positionDescription = null;
 
     // Convert odometer from meters to kilometers (it's already in km in our mock)
     const odometerKm = vehicle.odometer;
@@ -287,11 +288,12 @@ function processMockVehicles(params: FetchVehicleListParams): any[] {
       ignition: vehicle.ignition ?? false,
       idling: vehicle.idling ?? false,
       altitude: vehicle.altitude ?? 0,
-      temp1: vehicle.temp1 ?? null,
-      dynamic1: vehicle.dynamic1 ?? null,
-      dynamic2: vehicle.dynamic2 ?? null,
-      dynamic3: vehicle.dynamic3 ?? null,
-      dynamic4: vehicle.dynamic4 ?? null,
+      // These fields don't exist in the mock data, so we add them with defaults
+      temp1: null,
+      dynamic1: null,
+      dynamic2: null,
+      dynamic3: null,
+      dynamic4: null,
     };
   });
 }

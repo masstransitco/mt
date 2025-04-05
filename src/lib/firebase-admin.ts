@@ -66,8 +66,10 @@ if (process.env.NODE_ENV === 'development') {
     bucket: () => ({
       file: () => ({
         save: async () => true,
-        download: async () => [Buffer.from("mock data")]
-      })
+        download: async () => [Buffer.from("mock data")],
+        exists: async () => [false]
+      }),
+      getFiles: async () => [[]]
     })
   };
 } else {
@@ -103,23 +105,33 @@ if (process.env.NODE_ENV === 'development') {
 // Export primary admin references that the app might need
 export { db, auth, storage };
 
-// Create a more complete mock admin object for development
-const mockAdmin = {
-  firestore: {
-    FieldValue: {
-      serverTimestamp: () => new Date()
-    }
-  },
+// Create FirebaseTimestamp and FieldValue mocks
+const FirestoreTimestamp = {
+  now: () => new Date()
+};
+
+const FirestoreFieldValue = {
+  serverTimestamp: () => new Date(),
+  delete: () => null
+};
+
+// Create a complete mock admin object for development with the right structure
+const mockAdmin: any = {
+  // For development mode, firestore() must be a function that returns the db object
+  firestore: function() { return db; },
+  // Also add static properties for FieldValue and Timestamp
   apps: [],
   initializeApp: () => {},
   credential: {
     cert: () => ({})
   },
-  storage: () => ({
-    bucket: () => ({})
-  }),
-  auth: () => ({})
+  storage: () => storage,
+  auth: () => auth
 };
+
+// Add static Timestamp and FieldValue properties to the admin object
+mockAdmin.firestore.Timestamp = FirestoreTimestamp;
+mockAdmin.firestore.FieldValue = FirestoreFieldValue;
 
 // Conditionally export the real or mock admin
 export default process.env.NODE_ENV === 'development' ? mockAdmin : admin;
