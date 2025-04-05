@@ -1,66 +1,111 @@
-// File: src/app/api/admin/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
-
 // Add dynamic routing to prevent build-time eval
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-import admin from "@/lib/firebase-admin";
+// --- Firebase Admin Initialization ---
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
-// The Admin SDK can override Firestore rules:
-const db = admin.firestore();
-const storage = admin.storage();
-
-export async function POST(request: NextRequest) {
-  // Skip processing during build time to avoid JSON parse errors
-  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
-    return NextResponse.json({ success: false, error: "API not available during build" });
+if (!getApps().length) {
+  if (process.env.SERVICE_ACCOUNT_KEY) {
+    // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
+    const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
+    initializeApp({
+      credential: cert(serviceAccount),
+      storageBucket: "masstransitcompany.firebasestorage.app", // specify your bucket
+    });
+  } else {
+    // Option B: Use separate env variables for projectId, privateKey, clientEmail
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        // Remember to replace escaped \\n newlines in privateKey
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+      storageBucket: "masstransitcompany.firebasestorage.app", // specify your bucket
+    });
   }
-  
+}
+
+const db = getFirestore();
+const storage = getStorage();
+
+/**
+ * POST /api/admin
+ * Receives an operation and adminPassword, then runs the requested handler.
+ */
+export async function POST(request: NextRequest) {
+  // Skip processing during build time
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PHASE === "phase-production-build"
+  ) {
+    return NextResponse.json({
+      success: false,
+      error: "API not available during build",
+    });
+  }
+
   try {
     // Parse incoming JSON safely
-    let body;
+    let body: any;
     try {
       body = await request.json();
-    } catch (jsonError) {
+    } catch {
       return NextResponse.json(
         { success: false, error: "Invalid JSON in request body" },
         { status: 400 }
       );
     }
-    
+
     const { op, adminPassword } = body; // e.g. "fetchUsers", "viewDocument", etc.
 
     // 1) Simple static password check
     if (adminPassword !== "20230301") {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     // 2) Switch on the requested operation
     switch (op) {
       case "fetchUsers":
         return await handleFetchUsers();
+
       case "viewDocument":
         return await handleViewDocument(body.userId, body.docType);
+
       case "approveDocument":
         return await handleApproveDocument(body.userId, body.docType);
+
       case "rejectDocument":
         return await handleRejectDocument(body.userId, body.docType, body.reason);
+
       case "saveJson":
         return await handleSaveJson(body.userId, body.docType, body.jsonContent);
 
       // ------------------ ADDRESS OPS ------------------
       case "approveAddress":
         return await handleApproveAddress(body.userId);
+
       case "rejectAddress":
         return await handleRejectAddress(body.userId, body.reason);
 
       default:
-        return NextResponse.json({ success: false, error: "Invalid operation" }, { status: 400 });
+        return NextResponse.json(
+          { success: false, error: "Invalid operation" },
+          { status: 400 }
+        );
     }
   } catch (error: any) {
     console.error("Admin route error:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -68,7 +113,7 @@ export async function POST(request: NextRequest) {
 
 async function handleFetchUsers() {
   const snapshot = await db.collection("users").get();
-  const userData = snapshot.docs.map((doc: any) => ({
+  const userData = snapshot.docs.map((doc) => ({
     userId: doc.id,
     ...doc.data(),
   }));
@@ -81,10 +126,13 @@ async function handleViewDocument(userId: string, docType: string) {
   // 1) Read user doc from Firestore
   const userDoc = await db.collection("users").doc(userId).get();
   if (!userDoc.exists) {
-    return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { success: false, error: "User not found" },
+      { status: 404 }
+    );
   }
 
-  const userData = userDoc.data();
+  const userData = userDoc.data() || {};
 
   // 2) Read the JSON from Cloud Storage if it exists
   try {
@@ -92,7 +140,7 @@ async function handleViewDocument(userId: string, docType: string) {
     const [contents] = await fileRef.download();
     const json = JSON.parse(contents.toString());
     return NextResponse.json({ success: true, userData, ocrJson: json });
-  } catch (err) {
+  } catch {
     // If no JSON file, still return user data
     return NextResponse.json({ success: true, userData, ocrJson: null });
   }
@@ -101,7 +149,7 @@ async function handleViewDocument(userId: string, docType: string) {
 async function handleApproveDocument(userId: string, docType: string) {
   await db.collection("users").doc(userId).update({
     [`documents.${docType}.verified`]: true,
-    [`documents.${docType}.verifiedAt`]: admin.firestore.Timestamp.now(),
+    [`documents.${docType}.verifiedAt`]: FieldValue.serverTimestamp(),
     [`documents.${docType}.rejectionReason`]: null,
     [`documents.${docType}.rejectionDetail`]: null,
   });
@@ -120,7 +168,7 @@ async function handleRejectDocument(userId: string, docType: string, reason: str
     [`documents.${docType}.verified`]: false,
     [`documents.${docType}.rejectionReason`]: reason,
     [`documents.${docType}.rejectionDetail`]: reasonDescriptions[reason] || "",
-    [`documents.${docType}.rejectedAt`]: admin.firestore.Timestamp.now(),
+    [`documents.${docType}.rejectedAt`]: FieldValue.serverTimestamp(),
   });
   return NextResponse.json({ success: true });
 }
@@ -129,16 +177,16 @@ async function handleSaveJson(userId: string, docType: string, jsonContent: stri
   try {
     // Validate that jsonContent is valid JSON
     JSON.parse(jsonContent);
-    
+
     // Write the updated JSON to Cloud Storage
     const fileRef = storage.bucket().file(`ocrResults/${userId}/${docType}.json`);
     await fileRef.save(jsonContent, { contentType: "application/json" });
     return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({ 
-      success: false, 
-      error: "Invalid JSON content provided" 
-    }, { status: 400 });
+  } catch {
+    return NextResponse.json(
+      { success: false, error: "Invalid JSON content provided" },
+      { status: 400 }
+    );
   }
 }
 
@@ -148,13 +196,13 @@ async function handleApproveAddress(userId: string) {
   // Mark address as verified, clear any rejection reason
   await db.collection("users").doc(userId).update({
     "documents.address.verified": true,
-    "documents.address.rejectionReason": admin.firestore.FieldValue.delete(), // or set to null
+    "documents.address.rejectionReason": FieldValue.delete(), // or set to null
   });
   return NextResponse.json({ success: true });
 }
 
 async function handleRejectAddress(userId: string, reason: string) {
-  // You can store a reason for rejecting the address
+  // Store a reason for rejecting the address
   await db.collection("users").doc(userId).update({
     "documents.address.verified": false,
     "documents.address.rejectionReason": reason,
