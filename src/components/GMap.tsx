@@ -84,7 +84,7 @@ import PickupGuide from "@/components/ui/PickupGuide";
 import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, MARKER_POST_MAX_ZOOM, createMapOptions } from "@/constants/map";
 import { useThreeOverlay } from "@/hooks/useThreeOverlay";
 import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
-import { useCameraAnimationStable } from "@/hooks/useCameraAnimation";
+import { useSimpleCameraAnimations } from "@/hooks/useCameraAnimation";
 import { useCircleOverlay } from "@/hooks/useCircleOverlay";
 import { useWalkingRouteOverlay } from "@/hooks/useWalkingRouteOverlay";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
@@ -435,8 +435,9 @@ export default function GMap() {
 // Advanced Marker Overlay Hook
 // -------------------------
 
-// 1) Call the hook at the top level of your component
-const { updateMarkerTilt, updateMarkerZoom } = useMarkerOverlay(actualMap, {
+// Call the hook at the top level of your component
+// The hook now handles all tilt/zoom changes internally
+useMarkerOverlay(actualMap, {
   onTiltChange: (tilt) => {
     // optional callback if needed
   },
@@ -472,66 +473,43 @@ const { walkingRouteRef } = useWalkingRouteOverlay(actualMap, {
 // -------------------------
 // Camera Animation Hook
 // -------------------------
-const cameraControls = useCameraAnimationStable({
+const cameraControls = useSimpleCameraAnimations({
   map: actualMap,
   stations,
-  overlayRef, // from useThreeOverlay
 });
 
-// ...
-// Hook into tilt and zoom changes for marker animations
+// Hook into heading changes for 3D overlay only
 useEffect(() => {
   if (!actualMap) return;
 
-  // We let Google handle the camera. But if we want
-  // to dynamically update any markers' "post" size on tilt:
-  const handleTiltChanged = () => {
-    const newTilt = actualMap.getTilt?.() ?? 0;
-    updateMarkerTilt(newTilt);
-    // If you also want to re-render a 3D overlay:
-    overlayRef.current?.requestRedraw();
-  };
-
-  // Similarly, for heading changes:
+  // Only keep the heading change handler for 3D overlay
   const handleHeadingChanged = () => {
     overlayRef.current?.requestRedraw();
   };
 
-  // Add zoom change handler
-  const handleZoomChanged = () => {
-    const newZoom = actualMap.getZoom?.() ?? DEFAULT_ZOOM;
-    updateMarkerZoom(newZoom);
-    // We may also want to redraw the overlay on zoom
+  // Listen for camera/map changes to update 3D overlay
+  const handleMapIdle = () => {
     overlayRef.current?.requestRedraw();
   };
 
   // Attach events
-  const tiltListener = google.maps.event.addListener(
-    actualMap,
-    "tilt_changed",
-    handleTiltChanged
-  );
   const headingListener = google.maps.event.addListener(
     actualMap,
     "heading_changed",
     handleHeadingChanged
   );
-  const zoomListener = google.maps.event.addListener(
+  
+  const idleListener = google.maps.event.addListener(
     actualMap,
-    "zoom_changed",
-    handleZoomChanged
+    "idle",
+    handleMapIdle
   );
 
-  // Initial reads
-  handleTiltChanged();
-  handleZoomChanged();
-
   return () => {
-    google.maps.event.removeListener(tiltListener);
     google.maps.event.removeListener(headingListener);
-    google.maps.event.removeListener(zoomListener);
+    google.maps.event.removeListener(idleListener);
   };
-}, [actualMap, updateMarkerTilt, updateMarkerZoom, overlayRef]);
+}, [actualMap, overlayRef]);
 
 
   // -------------------------
