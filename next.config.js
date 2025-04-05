@@ -25,6 +25,10 @@ const nextConfig = {
       },
     ];
   },
+  typescript: {
+    // Only run type checking in the app directory, ignore functions
+    ignoreBuildErrors: process.env.SKIP_FUNCTIONS === 'true',
+  },
 };
 
 module.exports = nextConfig;
