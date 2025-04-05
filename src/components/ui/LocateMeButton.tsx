@@ -42,6 +42,7 @@ export default function LocateMeButton({
         timeout: 10000,
         maximumAge: 30000,
         updateSearchLocation,
+        forceAnimation: true, // Always force animation when locate-me button is clicked
         onLocationFound: (loc) => {
           // Call callback first before UI updates
           onLocationFound?.(loc)

@@ -1,10 +1,11 @@
 "use client"
 
 import { Suspense, useRef, useEffect, memo, useState, useMemo } from "react"
-import { Canvas } from "@react-three/fiber"
-import { OrbitControls, useGLTF, Html, Environment, AdaptiveDpr, AdaptiveEvents, useProgress } from "@react-three/drei"
+import { Canvas, useFrame } from "@react-three/fiber"
+import { OrbitControls, Html, Environment, AdaptiveDpr, AdaptiveEvents } from "@react-three/drei"
 import * as THREE from "three"
 import LoadingOverlay from "@/components/ui/loading-overlay"
+import ModelManager from "@/lib/modelManager"
 
 /* -------------------------------------
    Type & Props
@@ -22,7 +23,13 @@ interface Car3DViewerProps {
    Loading indicator while model loads
 ------------------------------------- */
 const LoadingScreen = memo(() => {
-  const { progress } = useProgress()
+  const [progress, setProgress] = useState(0)
+  
+  useFrame(({ clock }) => {
+    // Simulate loading progress for better UX
+    setProgress(prev => Math.min(prev + 2, 99))
+  })
+  
   return (
     <Html center>
       <LoadingOverlay message={`${progress.toFixed(0)}%`} />
@@ -32,70 +39,52 @@ const LoadingScreen = memo(() => {
 LoadingScreen.displayName = "LoadingScreen"
 
 /* -------------------------------------
-   useOptimizedGLTF Hook
-   - Uses useGLTF for loading (which caches internally)
-   - Clones and optimizes the scene
-   - Disposes resources on unmount
+   MemoizedCarModel Component
+   - Uses singleton ModelManager for efficient loading
 ------------------------------------- */
-function useOptimizedGLTF(url: string, interactive: boolean) {
-  const { scene } = useGLTF(url, "/draco/", true) as any
-  const optimizedScene = useMemo(() => {
-    if (!scene) return null
-    // Deep clone the scene
-    const clone = scene.clone(true)
-    // Apply one-time modifications: rotate and optimize materials
-    clone.rotation.y = Math.PI / 2.2
-    clone.position.y = -0.2 // Slightly lower the model in the viewport
-    clone.traverse((child: THREE.Object3D) => {
-      if (child instanceof THREE.Mesh) {
-        if (!child.geometry.boundingBox) child.geometry.computeBoundingBox()
-        if (!child.geometry.boundingSphere) child.geometry.computeBoundingSphere()
-        if (child.material instanceof THREE.MeshStandardMaterial) {
-          child.material.roughness = 0.4
-          child.material.metalness = 0.8
-          // For non-interactive, lower texture resolution
-          if (!interactive && child.material.map) {
-            child.material.map.minFilter = THREE.LinearFilter
-            child.material.map.generateMipmaps = false
-          }
-        }
-      }
-    })
-    return clone
-  }, [scene, interactive])
-
+const MemoizedCarModel = memo(({ url, interactive }: { url: string; interactive: boolean }) => {
+  const modelRef = useRef<THREE.Group>(null)
+  const [model, setModel] = useState<THREE.Group | null>(null)
+  const modelManager = ModelManager.getInstance()
+  
   useEffect(() => {
-    // On unmount, dispose of geometries and materials in the cloned scene
-    return () => {
-      if (optimizedScene) {
-        optimizedScene.traverse((child: any) => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry?.dispose()
-            if (child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach((mat: THREE.Material) => mat.dispose())
-              } else {
-                child.material.dispose()
+    let mounted = true
+    
+    // Get model from manager
+    modelManager.getModel(url)
+      .then(loadedModel => {
+        if (!mounted) return
+        
+        // Apply standard rotations and positions
+        loadedModel.rotation.y = Math.PI / 2.2
+        loadedModel.position.y = -0.2
+        
+        // Apply optimizations for non-interactive mode
+        if (!interactive) {
+          loadedModel.traverse((child: THREE.Object3D) => {
+            if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+              if (child.material.map) {
+                child.material.map.minFilter = THREE.LinearFilter
+                child.material.map.generateMipmaps = false
               }
             }
-          }
-        })
-      }
+          })
+        }
+        
+        setModel(loadedModel)
+      })
+      .catch(err => console.error(`Error loading model ${url}:`, err))
+    
+    // Release the model when unmounting
+    return () => {
+      mounted = false
+      modelManager.releaseModel(url)
     }
-  }, [optimizedScene])
-
-  return optimizedScene
-}
-
-/* -------------------------------------
-   CarModel Component
-   - Renders the optimized 3D model
-------------------------------------- */
-const CarModel = memo(({ url, interactive }: { url: string; interactive: boolean }) => {
-  const optimizedScene = useOptimizedGLTF(url, interactive)
-  return optimizedScene ? <primitive object={optimizedScene} /> : null
+  }, [url, interactive, modelManager])
+  
+  return model ? <primitive ref={modelRef} object={model} /> : null
 })
-CarModel.displayName = "CarModel"
+MemoizedCarModel.displayName = "MemoizedCarModel"
 
 /* -------------------------------------
    Camera Setup (OrbitControls)
@@ -138,7 +127,6 @@ SceneLighting.displayName = "SceneLighting"
 ------------------------------------- */
 function Car3DViewer({
   modelUrl,
-  imageUrl,
   width = "100%",
   height = "100%",
   isVisible = true,
@@ -146,34 +134,40 @@ function Car3DViewer({
 }: Car3DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [frameloop, setFrameloop] = useState<"always" | "demand">("demand")
-  const [isRendered, setIsRendered] = useState(false)
-
-  // Adjust frameloop for interactive vs. non-interactive
+  
+  // Optimize frameloop strategy
   useEffect(() => {
     if (isVisible) {
+      // Use "always" only for interactive mode
       setFrameloop(interactive ? "always" : "demand")
-      if (!interactive && !isRendered) {
-        // Force a one-time render
-        const timer = setTimeout(() => setIsRendered(true), 100)
-        return () => clearTimeout(timer)
-      }
     } else {
       setFrameloop("demand")
     }
-  }, [isVisible, interactive, isRendered])
-
-  // Enable THREE.Cache for texture efficiency
+  }, [isVisible, interactive])
+  
+  // Preload models at component mount
   useEffect(() => {
-    THREE.Cache.enabled = true
+    // Preload common models
+    ModelManager.getInstance().preloadModels([
+      "/cars/kona.glb", 
+      "/cars/defaultModel.glb"
+    ])
+    
+    // Clean unused models periodically
+    const cleanupInterval = setInterval(() => {
+      ModelManager.getInstance().cleanUnusedModels(60000) // 1 minute
+    }, 60000)
+    
+    return () => clearInterval(cleanupInterval)
   }, [])
-
+  
   // Determine device pixel ratio based on interactivity
   const dpr = useMemo<number | [number, number]>(() => {
     return interactive ? [1, 1.5] : [0.8, 1]
   }, [interactive])
-
+  
   if (!isVisible) return null
-
+  
   return (
     <div className="h-full w-full relative overflow-hidden contain-strict" style={{ width, height }}>
       <Canvas
@@ -204,7 +198,7 @@ function Car3DViewer({
         <Environment preset="studio" background={false} />
         <Suspense fallback={<LoadingScreen />}>
           <CameraSetup interactive={interactive} />
-          <CarModel url={modelUrl} interactive={interactive} />
+          <MemoizedCarModel url={modelUrl} interactive={interactive} />
         </Suspense>
       </Canvas>
     </div>
@@ -214,4 +208,3 @@ function Car3DViewer({
 export default memo(Car3DViewer, (prev, next) => {
   return prev.modelUrl === next.modelUrl && prev.isVisible === next.isVisible && prev.interactive === next.interactive
 })
-

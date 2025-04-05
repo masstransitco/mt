@@ -226,14 +226,14 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
           dispatch(selectCar(displayedCar.id))
         }
       }}
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, x: 15 }}
       animate={{
         opacity: 1,
-        y: 0,
+        x: 0,
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="relative overflow-hidden rounded-xl bg-black/90 text-white border border-white/10 shadow-lg transition-all cursor-pointer mb-3 w-full h-28 backdrop-blur-sm"
+      className="relative overflow-hidden rounded-xl bg-black/90 text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-28 backdrop-blur-sm"
       style={{
         contain: "content",
       }}
