@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState, useRef, useCallback, memo } from "react"
+import { useEffect, useMemo, useState, useRef, useCallback, memo, MutableRefObject } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAppDispatch, useAppSelector } from "@/store/store"
 import { fetchCars } from "@/store/carSlice"
-import { fetchDispatchLocations, selectDispatchRadius } from "@/store/dispatchSlice"
+import { fetchDispatchLocations, selectDispatchRadius, fetchAvailabilityFromFirestore } from "@/store/dispatchSlice"
 import { selectCar } from "@/store/userSlice"
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager"
 import CarCardGroup, { type CarGroup } from "./CarCardGroup"
@@ -78,7 +78,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     return isQrScanStation && scannedCar ? [scannedCar] : availableCarsForDispatch
   }, [isQrScanStation, scannedCar, availableCarsForDispatch])
   
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null) as MutableRefObject<HTMLDivElement | null>
   const fetchDataTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isMountedRef = useRef(true)
   
@@ -236,6 +236,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     <div 
       className={`w-full relative ${className}`} 
       ref={(el) => {
+        // Update mutable ref and connect with InView
         containerRef.current = el
         inViewRef(el) // Connect with inView
       }}
