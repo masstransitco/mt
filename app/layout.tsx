@@ -7,7 +7,6 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot, getFirestore } from "firebase/firestore";
 import { toast } from "react-hot-toast";
 import { Analytics } from '@vercel/analytics/next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
 
 import { auth } from "@/lib/firebase";
 import Spinner from "@/components/ui/spinner";
@@ -216,7 +215,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} h-full overflow-x-hidden bg-background`}>
         <DisablePinchZoom />
         <Analytics/>
-        <SpeedInsights />
         <ReduxProvider>
           <GoogleMapsProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}>
             <LayoutInner>{children}</LayoutInner>

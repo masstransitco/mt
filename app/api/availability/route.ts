@@ -1,89 +1,34 @@
-// app/api/availability/route.ts
+// app/api/dispatch/availability/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase-admin"; // Import db directly instead of admin
+import admin from "@/lib/firebase-admin"; // Ensure your path is correct
 import { z } from "zod";
 
+const db = admin.firestore();
 const DISPATCH_DOC_PATH = "dispatch/global";
 
-// Cache data with TTL
-let cachedData: {
-  availableCarIds: number[];
-  timestamp: number;
-} = {
-  availableCarIds: [],
-  timestamp: 0
-};
-
-const CACHE_TTL = 15000; // 15 seconds
-
 /**
- * GET /api/availability
- * Optimized with in-memory caching and proper cache control headers
+ * GET /api/dispatch/availability
  */
 export async function GET(req: NextRequest) {
   try {
-    const now = Date.now();
-    
-    // Return cached data if available and fresh
-    if (cachedData.timestamp > 0 && now - cachedData.timestamp < CACHE_TTL) {
-      return NextResponse.json(
-        { 
-          success: true, 
-          availableCarIds: cachedData.availableCarIds,
-          fromCache: true
-        },
-        {
-          headers: {
-            'Cache-Control': 'public, max-age=15, s-maxage=15',
-            'X-Cache-Hit': 'true'
-          }
-        }
-      );
-    }
-    
-    // Read from Firestore if cache is stale or empty
+    // Read "dispatch/global" from Firestore
     const docRef = db.doc(DISPATCH_DOC_PATH);
     const snapshot = await docRef.get();
-    
+
     if (!snapshot.exists) {
       // If the document doesn't exist yet, return an empty array
-      cachedData = {
-        availableCarIds: [],
-        timestamp: now
-      };
-      
-      return NextResponse.json(
-        { success: true, availableCarIds: [] },
-        { 
-          headers: {
-            'Cache-Control': 'public, max-age=15, s-maxage=15', 
-          }
-        }
-      );
+      return NextResponse.json({ availableCarIds: [], success: true });
     }
-    
+
     const data = snapshot.data() ?? {};
     const availableCarIds: number[] = data.availableCarIds ?? [];
-    
-    // Update cache
-    cachedData = {
+
+    return NextResponse.json({
+      success: true,
       availableCarIds,
-      timestamp: now
-    };
-    
-    return NextResponse.json(
-      {
-        success: true,
-        availableCarIds,
-      },
-      { 
-        headers: {
-          'Cache-Control': 'public, max-age=15, s-maxage=15',
-        }
-      }
-    );
+    });
   } catch (error: any) {
-    console.error("GET /api/availability error:", error);
+    console.error("GET /api/dispatch/availability error:", error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -101,57 +46,39 @@ async function updateAvailability(body: unknown) {
     availableCarIds: z.array(z.number()),
     adminPassword: z.string().optional(),
   });
-  
-  try {
-    const parsed = schema.parse(body);
-    const { availableCarIds, adminPassword } = parsed;
+  const parsed = schema.parse(body);
+  const { availableCarIds, adminPassword } = parsed;
 
-    // Simple auth check (skip in development mode)
-    if (process.env.NODE_ENV !== 'development' && adminPassword !== "20230301") {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    // Update Firestore document with availableCarIds
-    const docRef = db.doc(DISPATCH_DOC_PATH);
-    await docRef.set(
-      {
-        availableCarIds,
-        updatedAt: new Date(),
-      },
-      { merge: true }
-    );
-    
-    // Reset the cache
-    cachedData = {
-      availableCarIds,
-      timestamp: Date.now()
-    };
-
-    return NextResponse.json({ 
-      success: true,
-      availableCarIds: availableCarIds
-    });
-  } catch (error: any) {
-    console.error("Error updating availability:", error);
+  // Simple auth check
+  if (adminPassword !== "20230301") {
     return NextResponse.json(
-      { success: false, error: error.message || "Invalid request" },
-      { status: 400 }
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
     );
   }
+
+  // Update Firestore document with availableCarIds
+  const docRef = db.doc(DISPATCH_DOC_PATH);
+  await docRef.set(
+    {
+      availableCarIds,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return NextResponse.json({ success: true });
 }
 
 /**
- * PATCH /api/availability
+ * PATCH /api/dispatch/availability
  */
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
     return await updateAvailability(body);
   } catch (error: any) {
-    console.error("PATCH /api/availability error:", error);
+    console.error("PATCH /api/dispatch/availability error:", error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
@@ -160,14 +87,14 @@ export async function PATCH(req: NextRequest) {
 }
 
 /**
- * POST /api/availability
+ * POST /api/dispatch/availability
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     return await updateAvailability(body);
   } catch (error: any) {
-    console.error("POST /api/availability error:", error);
+    console.error("POST /api/dispatch/availability error:", error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }
