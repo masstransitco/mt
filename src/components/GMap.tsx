@@ -87,16 +87,11 @@ import { useMarkerOverlay } from "@/hooks/useMarkerOverlay";
 import { useCameraAnimationStable } from "@/hooks/useCameraAnimation";
 import { useCircleOverlay } from "@/hooks/useCircleOverlay";
 import { useWalkingRouteOverlay } from "@/hooks/useWalkingRouteOverlay";
-import { ensureGoogleMapsLoaded } from "@/lib/googleMaps";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import CarPlate from "@/components/ui/CarPlate";
 import PickupTime from "@/components/ui/PickupTime";
 import FareDisplay from "@/components/ui/FareDisplay";
 
-// Lazy-load GaussianSplatModal
-const GaussianSplatModal = dynamic(() => import("@/components/GaussianSplatModal"), {
-  suspense: true,
-});
 
 // SheetMode type is now imported from types/map
 
@@ -868,22 +863,6 @@ useEffect(() => {
   onScanSuccess={(car) => handleQrScanSuccess(car)}
   currentVirtualStationId={virtualStationId}
 />
-
-{/* Gaussian Splat Modal */}
-<Suspense
-  fallback={
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-      <div className="bg-gray-800 p-4 rounded-lg">Loading modal...</div>
-    </div>
-  }
->
-  {isSplatModalOpen && (
-    <GaussianSplatModal
-      isOpen={isSplatModalOpen}
-      onClose={() => setIsSplatModalOpen(false)}
-    />
-  )}
-</Suspense>
 
 {/* Sign-In Modal */}
 <SignInModal
