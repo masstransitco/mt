@@ -1,36 +1,12 @@
+// File: app/api/admin/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 // Add dynamic routing to prevent build-time eval
 export const dynamic = "force-dynamic";
 
-// --- Firebase Admin Initialization ---
-import { initializeApp, cert, getApps } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
-
-if (!getApps().length) {
-  if (process.env.SERVICE_ACCOUNT_KEY) {
-    // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
-    const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
-    initializeApp({
-      credential: cert(serviceAccount),
-      storageBucket: "masstransitcompany.firebasestorage.app", // specify your bucket
-    });
-  } else {
-    // Option B: Use separate env variables for projectId, privateKey, clientEmail
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // Remember to replace escaped \\n newlines in privateKey
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-      storageBucket: "masstransitcompany.firebasestorage.app", // specify your bucket
-    });
-  }
-}
-
-const db = getFirestore();
-const storage = getStorage();
+// Use db, storage from your firebase-admin helper
+import { db, storage } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * POST /api/admin
@@ -50,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Parse incoming JSON safely
-    let body: any;
+    let body;
     try {
       body = await request.json();
     } catch {
@@ -161,7 +137,7 @@ async function handleRejectDocument(userId: string, docType: string, reason: str
     unclear: "The uploaded document is unclear or blurry.",
     mismatch: "Document info doesn't match our records.",
     expired: "The document appears to be expired.",
-    // add more if you want
+    // add more if needed
   };
 
   await db.collection("users").doc(userId).update({
