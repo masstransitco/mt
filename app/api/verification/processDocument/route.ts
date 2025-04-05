@@ -1,6 +1,6 @@
 // /src/app/api/verification/processDocument/route.ts
 
-// @ts-expect-error no type defs
+// @ts-ignore no type defs
 import tencentcloud from "tencentcloud-sdk-nodejs-intl-en";
 import { Storage } from "@google-cloud/storage";
 import { db } from "@/lib/firebase-admin";

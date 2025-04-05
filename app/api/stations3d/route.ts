@@ -1,6 +1,9 @@
 // app/api/stations3d/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
+
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
 import fs from "fs";
 import path from "path";
 

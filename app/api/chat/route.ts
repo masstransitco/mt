@@ -1,6 +1,9 @@
 import { Anthropic } from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
+
 const anthropic = new Anthropic({
   apiKey: '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'
 });

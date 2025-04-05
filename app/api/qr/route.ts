@@ -1,6 +1,9 @@
 // src/app/api/qr/route.ts
 
 import { NextResponse } from 'next/server';
+
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
 import QRCode from 'qrcode';
 import { generateCarQrUrl } from '@/lib/stationUtils';
 

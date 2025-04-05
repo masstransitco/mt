@@ -1,16 +1,34 @@
 // File: src/app/api/admin/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/lib/firebase-admin"; // Make sure your file name & path match
+
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
+
+import admin from "@/lib/firebase-admin";
 
 // The Admin SDK can override Firestore rules:
 const db = admin.firestore();
 const storage = admin.storage();
 
 export async function POST(request: NextRequest) {
+  // Skip processing during build time to avoid JSON parse errors
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+    return NextResponse.json({ success: false, error: "API not available during build" });
+  }
+  
   try {
-    // Parse incoming JSON
-    const body = await request.json();
+    // Parse incoming JSON safely
+    let body;
+    try {
+      body = await request.json();
+    } catch (jsonError) {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+    
     const { op, adminPassword } = body; // e.g. "fetchUsers", "viewDocument", etc.
 
     // 1) Simple static password check
@@ -50,7 +68,7 @@ export async function POST(request: NextRequest) {
 
 async function handleFetchUsers() {
   const snapshot = await db.collection("users").get();
-  const userData = snapshot.docs.map((doc) => ({
+  const userData = snapshot.docs.map((doc: any) => ({
     userId: doc.id,
     ...doc.data(),
   }));
@@ -108,10 +126,20 @@ async function handleRejectDocument(userId: string, docType: string, reason: str
 }
 
 async function handleSaveJson(userId: string, docType: string, jsonContent: string) {
-  // Write the updated JSON to Cloud Storage
-  const fileRef = storage.bucket().file(`ocrResults/${userId}/${docType}.json`);
-  await fileRef.save(jsonContent, { contentType: "application/json" });
-  return NextResponse.json({ success: true });
+  try {
+    // Validate that jsonContent is valid JSON
+    JSON.parse(jsonContent);
+    
+    // Write the updated JSON to Cloud Storage
+    const fileRef = storage.bucket().file(`ocrResults/${userId}/${docType}.json`);
+    await fileRef.save(jsonContent, { contentType: "application/json" });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ 
+      success: false, 
+      error: "Invalid JSON content provided" 
+    }, { status: 400 });
+  }
 }
 
 // ------------------ ADDRESS HANDLERS ------------------

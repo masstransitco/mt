@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { Booking } from '@/types/booking';
 
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/bookings
  * Creates a new booking (car/station/departure date, etc.).

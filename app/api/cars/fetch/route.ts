@@ -1,10 +1,14 @@
 // File: app/api/cars/fetch/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/lib/firebase-admin";
+
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
+
+import admin, { storage } from "@/lib/firebase-admin";
 
 export async function GET(request: NextRequest) {
   try {
-    const bucket = admin.storage().bucket();
+    const bucket = storage.bucket();
 
     // 1) List all files under "cars/"
     const [files] = await bucket.getFiles({ prefix: "cars/" });

@@ -1,5 +1,9 @@
 // src/app/api/user-balance/route.ts
 import { NextRequest, NextResponse } from "next/server";
+
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
+
 import { auth as adminAuth, db } from "@/lib/firebase-admin";
 import Stripe from "stripe";
 
@@ -94,6 +98,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Skip processing during build time to avoid JSON parse errors
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'phase-production-build') {
+    return NextResponse.json({ success: false, error: "API not available during build" });
+  }
+
   try {
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
@@ -111,7 +120,17 @@ export async function POST(req: NextRequest) {
     }
     const decoded = await adminAuth.verifyIdToken(token);
 
-    const body = await req.json();
+    // Parse JSON safely
+    let body;
+    try {
+      body = await req.json();
+    } catch (jsonError) {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
+    
     const { action, userId, amount } = body;
     if (!userId || decoded.uid !== userId) {
       return NextResponse.json(

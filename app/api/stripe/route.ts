@@ -254,7 +254,7 @@ async function handleSavePaymentMethod({
       //     and update the user doc's defaultPaymentMethodId
       const batch = db.batch();
 
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         if (docSnap.id !== paymentMethodId) {
           batch.update(docSnap.ref, { isDefault: false });
         }
@@ -367,7 +367,7 @@ async function handleSetDefaultPaymentMethod(userId: string, docId: string) {
 
     let newDefaultStripeId: string | null = null;
 
-    allSnap.forEach((docSnap) => {
+    allSnap.forEach((docSnap: any) => {
       const pmData = docSnap.data() as PaymentMethod;
       if (docSnap.id === docId) {
         batch.update(docSnap.ref, { isDefault: true });
@@ -420,7 +420,7 @@ async function handleGetPaymentMethods(userId: string) {
 
     const paymentMethodsRef = db.collection(`users/${userId}/paymentMethods`);
     const snapshot = await paymentMethodsRef.orderBy('createdAt', 'desc').get();
-    const paymentMethods = snapshot.docs.map((doc) => ({
+    const paymentMethods = snapshot.docs.map((doc: any) => ({
       docId: doc.id,
       ...doc.data(),
     }));

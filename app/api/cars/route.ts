@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import admin from "@/lib/firebase-admin";
+
+// Add dynamic routing to prevent build-time eval
+export const dynamic = 'force-dynamic';
+
+import admin, { storage } from "@/lib/firebase-admin";
 import { fetchVehicleList } from "@/lib/cartrack";
 
 export async function GET(request: NextRequest) {
@@ -8,7 +12,7 @@ export async function GET(request: NextRequest) {
     const vehicles = await fetchVehicleList();
 
     // Prepare the bucket reference
-    const bucket = admin.storage().bucket();
+    const bucket = storage.bucket();
 
     // Use today's date in "YYYY-MM-DD" format
     const today = new Date().toISOString().split("T")[0];
