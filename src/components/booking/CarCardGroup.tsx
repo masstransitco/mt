@@ -233,7 +233,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="relative overflow-hidden rounded-xl bg-black/90 text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-28 backdrop-blur-sm"
+      className="relative overflow-hidden rounded-xl bg-[#1a1a1a] text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-28 backdrop-blur-sm"
       style={{
         contain: "content",
       }}
