@@ -13,7 +13,6 @@
     "@googlemaps/js-api-loader": "^1.16.8",
     "@googlemaps/three": "^4.0.13",
     "@hugeicons/react-pro": "^0.3.2",
-    "@lumaai/luma-web": "^0.2.2",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-label": "^2.1.2",
