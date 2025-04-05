@@ -6,7 +6,7 @@ import { useAppSelector, useAppDispatch, store } from "@/store/store"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectStations3D } from "@/store/stations3DSlice"
 import { DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, MARKER_POST_MAX_ZOOM } from "@/constants/map"
-import { debounce, throttle } from "lodash"
+import { debounce } from "lodash"
 
 import {
   selectBookingStep,
@@ -288,10 +288,6 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // The route from departure -> arrival
   const bookingRoute = useAppSelector(selectBookingRoute)
 
-  // Keep track of current tilt and zoom
-  const tiltRef = useRef(0)
-  const zoomRef = useRef(DEFAULT_ZOOM)
-
   // Marker management instances
   const markerPoolRef = useRef<MarkerPool>(new MarkerPool());
   const spatialIndexRef = useRef<SpatialIndex>(new SpatialIndex());
@@ -544,7 +540,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   }, [])
 
   // Create or update the route marker for DEPARTURE->ARRIVAL
-  const createOrUpdateRouteMarker = useCallback(() => {
+  const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: number}) => {
     if (!googleMap) return
     if (!window.google?.maps?.marker?.AdvancedMarkerElement) return
 
@@ -672,8 +668,8 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         textDiv.innerHTML = `${driveMins} mins drive`
       }
       const post = c.querySelector<HTMLDivElement>(".route-post")
-      if (post) {
-        const newHeight = computePostHeight(28, tiltRef.current, zoomRef.current)
+      if (post && camera) {
+        const newHeight = computePostHeight(28, camera.tilt, camera.zoom)
         post.style.height = `${newHeight}px`
       }
     }
@@ -785,22 +781,24 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     [googleMap, buildMarkerContainer, departureStationId, arrivalStationId, listSelectedStationId, bookingStep],
   )
 
-  // Batch update markers - new implementation that uses virtual DOM pattern
-  const batchUpdateMarker = useCallback((entry: (typeof candidateStationsRef.current)[number], forceUpdate = false) => {
+  // Batch update markers with the unified camera info
+  const batchUpdateMarker = useCallback((
+    entry: (typeof candidateStationsRef.current)[number], 
+    camera: {tilt: number, zoom: number},
+    forceUpdate = false
+  ) => {
     if (!entry.marker || !entry.refs || !entry.stationData) return;
     
     const station = entry.stationData;
     const { marker, refs } = entry;
     
-    // Calculate new state
+    // Calculate new state using camera info
     const isDeparture = station.id === departureStationId;
     const isArrival = station.id === arrivalStationId;
     const isListSelected = station.id === listSelectedStationId;
     const forceVis = isForceVisible(station.id);
-    const currentTilt = tiltRef.current;
-    const currentZoom = zoomRef.current;
-    const expanded = isExpanded(station.id) && currentZoom >= MARKER_POST_MIN_ZOOM;
-    const newPostHeight = computePostHeight(35, currentTilt, currentZoom);
+    const expanded = isExpanded(station.id) && camera.zoom >= MARKER_POST_MIN_ZOOM;
+    const newPostHeight = computePostHeight(35, camera.tilt, camera.zoom);
     const showPosts = newPostHeight > 4 ? "1" : "0";
     
     // New marker state
@@ -887,7 +885,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
           ? "rgba(39, 110, 241, 0.5)" 
           : "rgba(255, 255, 255, 0.7)";
       
-      const borderWidth = currentZoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px";
+      const borderWidth = camera.zoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px";
       refs.collapsedDiv.style.borderWidth = borderWidth;
       refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`;
       
@@ -952,120 +950,92 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     listSelectedStationId
   ]);
 
-  // Batch update function to be used with requestAnimationFrame
-  const performBatchedMarkerUpdates = useCallback(() => {
-    pendingAnimationFrameRef.current = null;
-    
-    // First pass: update all visible markers
-    candidateStationsRef.current.forEach(entry => {
-      if (entry.marker && entry.marker.map) {
-        batchUpdateMarker(entry);
-      }
-    });
-    
-    // Update route marker
-    createOrUpdateRouteMarker();
-  }, [batchUpdateMarker, createOrUpdateRouteMarker]);
-
-  // Debounced trigger for marker updates
-  const debouncedRefreshMarkers = useMemo(() => {
-    return debounce(() => {
-      if (pendingAnimationFrameRef.current === null) {
-        pendingAnimationFrameRef.current = requestAnimationFrame(performBatchedMarkerUpdates);
-      }
-    }, 16); // ~60fps
-  }, [performBatchedMarkerUpdates]);
-
-  // The function that handles map bounds changes (which markers to add/remove)
-  const handleMapBoundsChange = useCallback(() => {
+  // Unified map update handler that combines tilt, zoom, and bounds changes
+  const handleMapUpdate = useCallback(() => {
     if (!googleMap) return;
+    
+    // Get current camera state using individual methods
+    const tilt = googleMap.getTilt() || 0;
+    const zoom = googleMap.getZoom() || DEFAULT_ZOOM;
+    
+    // Notify callbacks if provided
+    options?.onTiltChange?.(tilt);
+    options?.onZoomChange?.(zoom);
+    
+    // Get bounds for visibility determination
     const bounds = googleMap.getBounds();
     if (!bounds) return;
     
     // Use spatial index for efficient lookup of potentially visible stations
     const visibleStationIds = spatialIndexRef.current.getVisibleStations(bounds);
     
+    // First pass: update marker visibility
     candidateStationsRef.current.forEach((entry) => {
-      const { stationId, position, marker } = entry;
+      const { stationId, marker } = entry;
       
       // Always show important stations regardless of bounds
-      if (isForceVisible(stationId)) {
+      const shouldBeVisible = isForceVisible(stationId) || visibleStationIds.includes(stationId);
+      
+      if (shouldBeVisible) {
         if (!marker) {
           createStationMarker(entry);
         } else if (!marker.map) {
           marker.map = googleMap;
         }
-        return;
-      }
-      
-      // Is the station visible according to spatial index?
-      const isVisible = visibleStationIds.includes(stationId);
-      
-      if (isVisible) {
-        if (!marker) {
-          createStationMarker(entry);
-        } else if (!marker.map) {
-          marker.map = googleMap;
-        }
-      } else {
-        // Out of view → remove
-        if (marker?.map) {
-          marker.map = null;
-        }
+      } else if (marker?.map) {
+        // Remove if not visible
+        marker.map = null;
       }
     });
     
-    // Schedule a batched update of marker styles
-    debouncedRefreshMarkers();
-  }, [googleMap, isForceVisible, createStationMarker, debouncedRefreshMarkers]);
-
-  // Tilt change → schedule marker updates
-  const updateMarkerTilt = useCallback(
-    (newTilt: number) => {
-      tiltRef.current = newTilt;
-      options?.onTiltChange?.(newTilt);
-      debouncedRefreshMarkers();
-    },
-    [options, debouncedRefreshMarkers],
-  );
+    // Second pass: batch update all visible markers with unified camera info
+    const cameraInfo = { tilt, zoom };
+    candidateStationsRef.current.forEach(entry => {
+      if (entry.marker && entry.marker.map) {
+        batchUpdateMarker(entry, cameraInfo);
+      }
+    });
+    
+    // Update route marker with the same camera info
+    createOrUpdateRouteMarker(cameraInfo);
+    
+  }, [googleMap, createStationMarker, batchUpdateMarker, createOrUpdateRouteMarker, isForceVisible]);
   
-  // Zoom change → schedule marker updates
-  const updateMarkerZoom = useCallback(
-    (newZoom: number) => {
-      zoomRef.current = newZoom;
-      options?.onZoomChange?.(newZoom);
-      debouncedRefreshMarkers();
-    },
-    [options, debouncedRefreshMarkers],
-  );
+  // Debounced map update handler
+  const debouncedMapUpdate = useMemo(() => {
+    return debounce(() => {
+      if (pendingAnimationFrameRef.current === null) {
+        pendingAnimationFrameRef.current = requestAnimationFrame(() => {
+          pendingAnimationFrameRef.current = null;
+          handleMapUpdate();
+        });
+      }
+    }, 16); // ~60fps
+  }, [handleMapUpdate]);
 
   // Initialize candidate stations only once
   useEffect(() => {
     initializeCandidateStations();
   }, [initializeCandidateStations]);
 
-  // Add map bounds listener with the current handleMapBoundsChange
+  // Add unified map listener for camera changes
   useEffect(() => {
     if (!googleMap) return;
     
-    // Throttle the bounds change handler for better performance
-    const throttledHandler = throttle(() => {
-      handleMapBoundsChange();
-    }, 100);
-    
-    const listener = googleMap.addListener("idle", throttledHandler);
-    
-    // Initial update
-    handleMapBoundsChange();
-    
+    // Rely solely on 'idle' for marker updates
+    const idleListener = googleMap.addListener("idle", debouncedMapUpdate);
+  
+    // Run initial marker update
+    handleMapUpdate();
+  
     return () => {
-      google.maps.event.removeListener(listener);
+      google.maps.event.removeListener(idleListener);
     };
-  }, [googleMap, handleMapBoundsChange]);
+  }, [googleMap, handleMapUpdate, debouncedMapUpdate]);
 
   // Re-run styling whenever booking step, route, or list selection changes
   useEffect(() => {
-    debouncedRefreshMarkers();
+    debouncedMapUpdate();
   }, [
     bookingStep,
     departureStationId,
@@ -1073,7 +1043,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     listSelectedStationId,
     dispatchRoute,
     bookingRoute,
-    debouncedRefreshMarkers,
+    debouncedMapUpdate,
   ]);
 
   // Cleanup: fade out on unmount
@@ -1117,6 +1087,18 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       }, 300);
     };
   }, []);
+
+  // For backwards compatibility, provide these methods
+  // They now trigger the unified update cycle
+  const updateMarkerTilt = useCallback((newTilt: number) => {
+    options?.onTiltChange?.(newTilt);
+    debouncedMapUpdate();
+  }, [options, debouncedMapUpdate]);
+  
+  const updateMarkerZoom = useCallback((newZoom: number) => {
+    options?.onZoomChange?.(newZoom);
+    debouncedMapUpdate();
+  }, [options, debouncedMapUpdate]);
 
   return {
     routeMarkerRef,
