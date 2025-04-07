@@ -32,7 +32,7 @@ export default function SideSheet({
   return (
     <div
       className={`
-        fixed inset-0 z-50 flex
+        fixed inset-0 z-[10000] flex
         transition-opacity
         ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
       `}

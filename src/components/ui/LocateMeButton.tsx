@@ -16,13 +16,16 @@ interface LocateMeButtonProps {
   animateToLocation?: boolean
   // Whether to also update search location - to ensure consistent station sorting
   updateSearchLocation?: boolean
+  // Direct reference to camera animation function - for explicit animation triggering
+  onAnimateToLocation?: (loc: google.maps.LatLngLiteral, zoom?: number) => void
 }
 
 export default function LocateMeButton({ 
   onLocationFound,
   updateReduxState = true,
   animateToLocation = true,
-  updateSearchLocation = false
+  updateSearchLocation = false,
+  onAnimateToLocation
 }: LocateMeButtonProps) {
   const [isLocating, setIsLocating] = useState(false)
   const [locationFound, setLocationFound] = useState(false)
@@ -56,6 +59,13 @@ export default function LocateMeButton({
       if (location) {
         toast.dismiss(toastId)
         toast.success("Location found!")
+        
+        // Directly call the animation function if provided
+        // This ensures animation happens even if the location hasn't changed
+        if (onAnimateToLocation) {
+          console.log("Directly triggering camera animation to user location")
+          onAnimateToLocation(location, 15) // Zoom level 15 matches the default
+        }
         
         // Mark success state for 2s
         setLocationFound(true)
