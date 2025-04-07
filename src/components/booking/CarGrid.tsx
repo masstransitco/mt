@@ -8,6 +8,7 @@ import { fetchDispatchLocations, selectDispatchRadius, fetchAvailabilityFromFire
 import { selectCar } from "@/store/userSlice"
 import { useAvailableCarsForDispatch } from "@/lib/dispatchManager"
 import CarCardGroup, { type CarGroup } from "./CarCardGroup"
+import CarCard from "./CarCard"
 import EmptyCarState from "@/components/EmptyCarState"
 import type { Car } from "@/types/cars"
 import { useInView } from "react-intersection-observer"
@@ -288,12 +289,23 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="w-full"
               >
-                <CarCardGroup 
-                  group={groupedByModel[currentGroupIndex]} 
-                  isVisible={inView} 
-                  rootRef={containerRef} 
-                  isQrScanStation={isQrScanStation} 
-                />
+                {/* Use dedicated CarCard for scanned cars, CarCardGroup for regular stations */}
+                {isQrScanStation && scannedCar ? (
+                  <CarCard 
+                    car={scannedCar}
+                    selected={selectedCarId === scannedCar.id}
+                    onClick={() => dispatch(selectCar(scannedCar.id))}
+                    isVisible={inView}
+                    isQrScanStation={true}
+                  />
+                ) : (
+                  <CarCardGroup 
+                    group={groupedByModel[currentGroupIndex]} 
+                    isVisible={inView} 
+                    rootRef={containerRef} 
+                    isQrScanStation={isQrScanStation} 
+                  />
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
