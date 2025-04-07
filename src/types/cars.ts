@@ -21,6 +21,7 @@ export interface Car {
   model?: string;
   year?: number;
   odometer?: number;
+  registration?: string;
 
   engine_type?: string;
   bearing?: number;
