@@ -12,6 +12,16 @@ import type { Car } from "@/types/cars"
 import { PaymentSummary } from "@/components/ui/PaymentComponents"
 import React from "react"
 
+// Lazy-load components
+const CarPlate = dynamic(() => import("@/components/ui/CarPlate"), {
+  loading: () => (
+    <div className="h-16 w-full bg-[#1a1a1a] rounded-md flex items-center justify-center">
+      <div className="text-xs text-gray-400">Loading...</div>
+    </div>
+  ),
+  ssr: false,
+})
+
 // Lazy-load the CarGrid
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: () => (
@@ -198,7 +208,32 @@ function StationDetail({
         // For step 2 or other steps needing a vehicle list
         showCarGrid && (
           <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
-            <CarGrid className="w-full" isVisible scannedCar={scannedCar} />
+            {isVirtualCarLocation && scannedCar ? (
+              // Custom component for scanned car with car plate
+              <div className="w-full flex flex-col items-center">
+                <div className="text-sm text-white font-medium mb-1">Ready to Drive</div>
+                {/* Use the CarPlate component */}
+                <div className="w-full mt-2">
+                  <CarPlate 
+                    plateNumber={scannedCar.registration || ""}
+                    vehicleModel={scannedCar.model || "Electric Vehicle"}
+                  />
+                </div>
+                
+                {/* Only show a confirm button for QR stations in step 2 */}
+                {bookingStep === 2 && (
+                  <button
+                    onClick={onConfirm}
+                    className="mt-4 w-full py-2.5 bg-[#E82127] hover:bg-[#C91C22] text-white rounded-md text-sm font-medium transition-colors"
+                  >
+                    START DRIVING HERE
+                  </button>
+                )}
+              </div>
+            ) : (
+              // Regular car grid for normal stations
+              <CarGrid className="w-full" isVisible scannedCar={scannedCar} isQrScanStation={isVirtualCarLocation} />
+            )}
           </div>
         )
       )}
