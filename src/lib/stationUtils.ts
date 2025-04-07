@@ -26,7 +26,9 @@ export function createVirtualStationFromCar(car: Car, virtualId: number): Statio
       ObjectId: virtualId,
       drivingTime: 0,
       isVirtualCarLocation: true, // Mark this as a special virtual station
-      carId: car.id // Reference to the car for easier lookup
+      carId: car.id, // Reference to the car for easier lookup
+      registration: car.registration, // Add the car's registration for QR code scanned cars
+      plateNumber: car.registration // Alternative field for registration
     },
     distance: 0, // It's right there
     walkTime: 0, // It's right there
