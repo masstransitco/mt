@@ -406,11 +406,21 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     return result;
   }, [stations, bookingStep, departureStationId, arrivalStationId, listSelectedStationId]);
 
-  // Decide if a station marker is forced visible (departure, arrival, or list selected)
+  // Decide if a station marker is forced visible (departure, arrival, list selected, or virtual car)
   const isForceVisible = useCallback(
     (stationId: number): boolean => {
+      // Get from state first
       const state = stationStates.get(stationId);
-      return state?.isForceVisible || false;
+      if (state?.isForceVisible) return true;
+      
+      // Check if this is a virtual car station (always force visible)
+      const stationEntry = candidateStationsRef.current.find(entry => entry.stationId === stationId);
+      if (stationEntry?.stationData?.properties.isVirtualCarLocation) {
+        console.log('[useMarkerOverlay] Force showing virtual car station:', stationId);
+        return true;
+      }
+      
+      return false;
     },
     [stationStates],
   )
@@ -418,10 +428,21 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // Which station(s) are expanded?
   // - Step < 3: only departure station is expanded (once chosen).
   // - Step >= 3: expand both departure and arrival (if chosen).
+  // - Virtual car stations are always expanded for better visibility
   const isExpanded = useCallback(
     (stationId: number): boolean => {
+      // First check if it's expanded based on state
       const state = stationStates.get(stationId);
-      return state?.isExpanded || false;
+      if (state?.isExpanded) return true;
+      
+      // Always expand virtual car stations
+      const stationEntry = candidateStationsRef.current.find(entry => entry.stationId === stationId);
+      if (stationEntry?.stationData?.properties.isVirtualCarLocation) {
+        console.log('[useMarkerOverlay] Always expanding virtual car station:', stationId);
+        return true;
+      }
+      
+      return false;
     },
     [stationStates],
   )
@@ -455,6 +476,15 @@ const buildMarkerContainer = useCallback(
 
     // Check if this is a virtual car station
     const isVirtualCarStation = station.properties.isVirtualCarLocation === true
+    
+    console.log('[useMarkerOverlay] Building marker for station:', station.id, 'isVirtualCarStation:', isVirtualCarStation)
+    if (isVirtualCarStation) {
+      console.log('[useMarkerOverlay] Virtual car details:', {
+        registration: station.properties.registration,
+        plateNumber: station.properties.plateNumber,
+        place: station.properties.Place
+      })
+    }
 
     // Collapsed marker
     const collapsedWrapper = document.createElement("div")
@@ -905,54 +935,97 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
 
   // Build candidate station list once and populate spatial index
   const initializeCandidateStations = useCallback(() => {
-    if (!candidateStationsRef.current.length) {
-      const stationByObjectId = new Map<number, StationFeature>()
-      stations.forEach((st) => {
-        const objId = st.properties.ObjectId
-        if (typeof objId === "number") {
-          stationByObjectId.set(objId, st)
-        }
+    // Always rebuild (don't check !candidateStationsRef.current.length)
+    // to ensure we capture any newly created virtual car stations
+    const stationByObjectId = new Map<number, StationFeature>()
+    
+    // First collect all stations by ObjectId
+    stations.forEach((st) => {
+      const objId = st.properties.ObjectId
+      if (typeof objId === "number") {
+        stationByObjectId.set(objId, st)
+      }
+    })
+
+    const candidateList: typeof candidateStationsRef.current = []
+    
+    // Clear spatial index before rebuilding
+    spatialIndexRef.current.clear();
+    
+    // Process regular 3D building stations
+    buildings3D.forEach((bld) => {
+      const objId = bld.properties?.ObjectId
+      if (!objId) return
+      const station = stationByObjectId.get(objId)
+      if (!station) return
+
+      // Approx polygon center
+      const coords = bld.geometry?.coordinates?.[0] as [number, number][] | undefined
+      if (!coords || coords.length < 3) return
+
+      let totalLat = 0
+      let totalLng = 0
+      coords.forEach(([lng, lat]) => {
+        totalLat += lat
+        totalLng += lng
       })
+      const centerLat = totalLat / coords.length
+      const centerLng = totalLng / coords.length
 
-      const candidateList: typeof candidateStationsRef.current = []
+      const topHeight = bld.properties?.topHeight ?? 250
+      const altitude = topHeight + 5
+
+      candidateList.push({
+        stationId: station.id,
+        position: { lat: centerLat, lng: centerLng, altitude },
+        stationData: station,
+        marker: null,
+      })
       
-      // Clear spatial index before rebuilding
-      spatialIndexRef.current.clear();
+      // Add to spatial index for efficient lookups
+      spatialIndexRef.current.addStation(centerLat, centerLng, station.id);
+    })
+    
+    // Add virtual car stations that might not be in buildings3D
+    // These are created when QR codes are scanned
+    stations.forEach((station) => {
+      // Skip stations that are already processed
+      if (candidateList.some(c => c.stationId === station.id)) {
+        return
+      }
       
-      buildings3D.forEach((bld) => {
-        const objId = bld.properties?.ObjectId
-        if (!objId) return
-        const station = stationByObjectId.get(objId)
-        if (!station) return
-
-        // Approx polygon center
-        const coords = bld.geometry?.coordinates?.[0] as [number, number][] | undefined
-        if (!coords || coords.length < 3) return
-
-        let totalLat = 0
-        let totalLng = 0
-        coords.forEach(([lng, lat]) => {
-          totalLat += lat
-          totalLng += lng
-        })
-        const centerLat = totalLat / coords.length
-        const centerLng = totalLng / coords.length
-
-        const topHeight = bld.properties?.topHeight ?? 250
-        const altitude = topHeight + 5
-
+      // Check if this is a virtual car location (QR scanned car)
+      if ((station.properties as any).isVirtualCarLocation === true) {
+        console.log('[useMarkerOverlay] Found virtual car station to add:', station.id);
+        
+        // Extract coordinates
+        const [lng, lat] = station.geometry.coordinates;
+        const altitude = 300; // Position higher for visibility
+        
         candidateList.push({
           stationId: station.id,
-          position: { lat: centerLat, lng: centerLng, altitude },
+          position: { lat, lng, altitude },
           stationData: station,
           marker: null,
-        })
+        });
         
-        // Add to spatial index for efficient lookups
-        spatialIndexRef.current.addStation(centerLat, centerLng, station.id);
-      })
-
-      candidateStationsRef.current = candidateList
+        // Add to spatial index
+        spatialIndexRef.current.addStation(lat, lng, station.id);
+      }
+    });
+    
+    if (candidateList.length > 0) {
+      // Check if we have virtual car stations
+      const virtualStations = candidateList.filter(
+        c => (c.stationData?.properties as any).isVirtualCarLocation === true
+      );
+      
+      if (virtualStations.length > 0) {
+        console.log('[useMarkerOverlay] Added virtual car stations:', virtualStations.length);
+      }
+      
+      // Only replace the reference if we have stations to avoid clearing existing markers
+      candidateStationsRef.current = candidateList;
     }
   }, [stations, buildings3D])
 
@@ -970,10 +1043,18 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       const { container } = entry.refs || {}
       if (!container) return
 
+      // Check if this is a virtual car station (QR code scanned car)
+      const isVirtualCarStation = entry.stationData?.properties.isVirtualCarLocation === true
+      
+      if (isVirtualCarStation) {
+        console.log('[useMarkerOverlay] Creating marker for virtual car station:', entry.stationId)
+      }
+
       const { AdvancedMarkerElement } = window.google.maps.marker
       entry.marker = new AdvancedMarkerElement({
         position: entry.position,
-        collisionBehavior: "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
+        // Use REQUIRED collision behavior for virtual car stations to ensure visibility
+        collisionBehavior: isVirtualCarStation ? "REQUIRED" as any : "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
         gmpClickable: true,
         content: container,
         map: googleMap,
@@ -987,9 +1068,11 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       const isListSelected = entry.stationId === listSelectedStationId;
       
       entry.markerState = {
-        expanded: false,
+        // Always expand virtual car stations
+        expanded: isVirtualCarStation ? true : false,
         visible: true,
-        isForceVisible: isDeparture || isArrival || isListSelected,
+        // Always force visibility for virtual car stations
+        isForceVisible: isVirtualCarStation || isDeparture || isArrival || isListSelected,
         isDeparture,
         isArrival,
         isListSelected,
@@ -1001,10 +1084,28 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       };
 
       // Animate in - use requestAnimationFrame for better performance
-      container.style.transitionDelay = `${Math.random() * 150}ms` // Reduced from 300ms
+      // No delay for virtual car stations to ensure immediate visibility
+      container.style.transitionDelay = isVirtualCarStation ? "0ms" : `${Math.random() * 150}ms`
       requestAnimationFrame(() => {
         container.style.transform = "scale(1)"
+        
+        // Set z-index higher for virtual car stations
+        if (isVirtualCarStation && entry.marker && entry.marker.element) {
+          entry.marker.element.style.zIndex = "10000"
+        }
       })
+      
+      // Immediately expand virtual car stations
+      if (isVirtualCarStation && entry.refs) {
+        const { collapsedWrapper, expandedWrapper } = entry.refs
+        
+        // Show expanded view immediately for virtual car stations
+        collapsedWrapper.style.opacity = "0"
+        collapsedWrapper.style.transform = "scale(0.8)"
+        expandedWrapper.style.display = "flex"
+        expandedWrapper.style.opacity = "1"
+        expandedWrapper.style.transform = "scale(1)"
+      }
     },
     [googleMap, buildMarkerContainer, departureStationId, arrivalStationId, listSelectedStationId, bookingStep],
   )
@@ -1294,32 +1395,63 @@ const batchUpdateMarker = useCallback((
     // Use spatial index for efficient lookup of potentially visible stations
     const visibleStationIds = spatialIndexRef.current.getVisibleStations(bounds);
     
-    // First pass: update marker visibility
-    candidateStationsRef.current.forEach((entry) => {
-      const { stationId, marker } = entry;
-      
-      // Always show important stations regardless of bounds
-      const shouldBeVisible = isForceVisible(stationId) || visibleStationIds.includes(stationId);
-      
-      if (shouldBeVisible) {
-        if (!marker) {
-          createStationMarker(entry);
-        } else if (!marker.map) {
-          marker.map = googleMap;
-        }
-      } else if (marker?.map) {
-        // Remove if not visible
-        marker.map = null;
+    // First identify any virtual car stations (QR scanned cars)
+    const virtualCarStations = candidateStationsRef.current.filter(
+      entry => entry.stationData?.properties.isVirtualCarLocation === true
+    );
+    
+    if (virtualCarStations.length > 0) {
+      console.log('[useMarkerOverlay] Found virtual car stations:', virtualCarStations.length);
+    }
+    
+    // Process virtual car stations first (higher priority)
+    virtualCarStations.forEach((entry) => {
+      if (!entry.marker) {
+        createStationMarker(entry);
+      } else if (!entry.marker.map) {
+        entry.marker.map = googleMap;
       }
     });
     
+    // First pass: update marker visibility for regular stations
+    candidateStationsRef.current
+      .filter(entry => !entry.stationData?.properties.isVirtualCarLocation)
+      .forEach((entry) => {
+        const { stationId, marker } = entry;
+        
+        // Always show important stations regardless of bounds
+        const shouldBeVisible = isForceVisible(stationId) || visibleStationIds.includes(stationId);
+        
+        if (shouldBeVisible) {
+          if (!marker) {
+            createStationMarker(entry);
+          } else if (!marker.map) {
+            marker.map = googleMap;
+          }
+        } else if (marker?.map) {
+          // Remove if not visible
+          marker.map = null;
+        }
+      });
+    
     // Second pass: batch update all visible markers with unified camera info
     const cameraInfo = { tilt, zoom };
-    candidateStationsRef.current.forEach(entry => {
-      if (entry.marker && entry.marker.map) {
-        batchUpdateMarker(entry, cameraInfo);
+    
+    // Update virtual car stations first with force update
+    virtualCarStations.forEach(entry => {
+      if (entry.marker) {
+        batchUpdateMarker(entry, cameraInfo, true); // Force update
       }
     });
+    
+    // Then update regular stations
+    candidateStationsRef.current
+      .filter(entry => !entry.stationData?.properties.isVirtualCarLocation)
+      .forEach(entry => {
+        if (entry.marker && entry.marker.map) {
+          batchUpdateMarker(entry, cameraInfo);
+        }
+      });
     
     // Update route marker with the same camera info
     createOrUpdateRouteMarker(cameraInfo);
