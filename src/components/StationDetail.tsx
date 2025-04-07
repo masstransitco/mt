@@ -22,6 +22,16 @@ const CarPlate = dynamic(() => import("@/components/ui/CarPlate"), {
   ssr: false,
 })
 
+// Lazy-load CarCard for scanned cars
+const LazyCarCard = dynamic(() => import("./booking/CarCard"), {
+  loading: () => (
+    <div className="h-28 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
+      <div className="text-xs text-gray-400">Loading vehicle...</div>
+    </div>
+  ),
+  ssr: false,
+})
+
 // Lazy-load the CarGrid
 const CarGrid = dynamic(() => import("./booking/CarGrid"), {
   loading: () => (
@@ -209,14 +219,18 @@ function StationDetail({
         showCarGrid && (
           <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
             {isVirtualCarLocation && scannedCar ? (
-              // Custom component for scanned car with car plate
-              <div className="w-full flex flex-col items-center">
-                <div className="text-sm text-white font-medium mb-1">Ready to Drive</div>
-                {/* Use the CarPlate component */}
-                <div className="w-full mt-2">
-                  <CarPlate 
-                    plateNumber={scannedCar.registration || ""}
-                    vehicleModel={scannedCar.model || "Electric Vehicle"}
+              // Use CarCard for scanned car display
+              <div className="w-full flex flex-col items-center space-y-4">
+                <div className="text-sm text-white font-medium">Ready to Drive</div>
+                
+                {/* Import and use the CarCard component */}
+                <div className="w-full">
+                  <LazyCarCard
+                    car={scannedCar}
+                    selected={true}
+                    onClick={() => {}}
+                    isVisible={true}
+                    isQrScanStation={true}
                   />
                 </div>
                 
@@ -224,7 +238,7 @@ function StationDetail({
                 {bookingStep === 2 && (
                   <button
                     onClick={onConfirm}
-                    className="mt-4 w-full py-2.5 bg-[#E82127] hover:bg-[#C91C22] text-white rounded-md text-sm font-medium transition-colors"
+                    className="w-full py-2.5 bg-[#E82127] hover:bg-[#C91C22] text-white rounded-md text-sm font-medium transition-colors"
                   >
                     START DRIVING HERE
                   </button>
