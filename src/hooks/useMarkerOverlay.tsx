@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useCallback, useMemo } from "react"
+import { useEffect, useRef, useCallback, useMemo, useState } from "react"
 import { toast } from "react-hot-toast"
 import { useAppSelector, useAppDispatch, store } from "@/store/store"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
@@ -53,7 +53,7 @@ class MarkerPool {
     if (this.collapsedMarkers.length < this.maxPoolSize) {
       // Reset any state or classes
       element.className = 'collapsed-view';
-      element.textContent = "⚑";
+      element.innerHTML = ''; // Empty for solid circle
       // Clear any event listeners
       const newElement = element.cloneNode(true) as HTMLElement;
       this.collapsedMarkers.push(newElement);
@@ -70,69 +70,95 @@ class MarkerPool {
     }
   }
 
-  private createCollapsedMarker(): HTMLElement {
+  // Update the collapsed marker style for a more Tesla/Apple minimalist look
+  private createCollapsedMarker = (): HTMLElement => {
     const collapsedDiv = document.createElement("div");
     collapsedDiv.classList.add("collapsed-view");
     collapsedDiv.style.cssText = `
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #1C1C1E, #2C2C2E);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #F2F2F7;
-      font-size: 14px;
-      border: 1.5px solid #505156;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-      pointer-events: auto;
-      transform-origin: center;
-      will-change: transform, border-color, box-shadow;
-      transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    `;
-    collapsedDiv.textContent = "⚑";
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(23, 23, 23, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05);
+    pointer-events: auto;
+    transform-origin: center;
+    will-change: transform, background-color, box-shadow;
+    transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+  `;
+    // Empty inner HTML - just a solid circle with border
     return collapsedDiv;
   }
 
-  private createExpandedMarker(): HTMLElement {
+  // Update the expanded marker style for a more Tesla/Apple minimalist look
+  private createExpandedMarker = (): HTMLElement => {
     const expandedDiv = document.createElement("div");
     expandedDiv.classList.add("expanded-view");
     expandedDiv.style.cssText = `
-      width: 180px;
-      background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
-      color: #F2F2F7;
-      border: 1.5px solid #505156;
-      border-radius: 10px;
-      box-shadow: 0 6px 12px rgba(0,0,0,0.45);
-      padding: 10px;
-      cursor: pointer;
-      pointer-events: auto;
-      transform-origin: center;
-      will-change: transform, border-color, box-shadow;
-      transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.25s ease;
-    `;
+    width: 170px;
+    background: rgba(23, 23, 23, 0.98);
+    backdrop-filter: blur(12px);
+    color: #FFFFFF;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    padding: 7px;
+    cursor: pointer;
+    pointer-events: auto;
+    transform-origin: center;
+    will-change: transform, border-color, box-shadow;
+    transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
+  `;
     expandedDiv.innerHTML = `
-      <div class="expanded-info-section" style="margin-bottom: 6px;"></div>
-      <button class="pickup-btn" style="
-        display: inline-block;
-        padding: 6px 10px;
-        background: #10A37F;
-        color: #FFFFFF;
-        font-size: 13px;
-        font-weight: 600;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.18s ease-in-out;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        width: 100%;
-        letter-spacing: 0.2px;
-        min-height: 30px;
-      ">
-        Pickup car here
-      </button>
-    `;
+    <div class="expanded-info-section" style="margin-bottom: 5px;"></div>
+    
+    <!-- Add animation progress indicator - Tesla style -->
+    <div class="animation-progress" style="
+      height: 22px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 5px;
+    ">
+      <div style="
+        width: 14px;
+        height: 14px;
+        border: 1.5px solid #E82127;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: camera-spin 1s linear infinite;
+      "></div>
+      <span style="margin-left: 5px; font-size: 11px; color: #FFFFFF; font-weight: 400; letter-spacing: 0.5px; opacity: 0.9;">SCANNING LOCATION</span>
+    </div>
+    
+    <button class="pickup-btn" style="
+      display: inline-block;
+      width: 100%;
+      padding: 7px 0;
+      background: #E82127;
+      color: #FFFFFF;
+      font-size: 11px;
+      font-weight: 500;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    ">
+      SELECT LOCATION
+    </button>
+    
+    <style>
+      @keyframes camera-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  `;
     return expandedDiv;
   }
 }
@@ -316,6 +342,41 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     const drivingMins = dispatchRoute.duration / 60
     return Math.ceil(drivingMins + 15)
   }, [dispatchRoute])
+  
+  // Animation state tracking
+  const [circlingAnimationActive, setCirclingAnimationActive] = useState(false);
+  const [circlingTargetStation, setCirclingTargetStation] = useState<number | null>(null);
+  
+  // Subscribe to animation state manager
+  useEffect(() => {
+    import("@/lib/animationStateManager").then(module => {
+      const animationStateManager = module.default;
+      
+      // Log initial state
+      console.log('[useMarkerOverlay] Initial animation state:', animationStateManager.getState());
+      
+      // Subscribe to animation state changes
+      const unsubscribe = animationStateManager.subscribe((state) => {
+        console.log('[useMarkerOverlay] Animation state update:', state);
+        if (state.type === 'CAMERA_CIRCLING' || state.type === null) {
+          setCirclingAnimationActive(state.isAnimating);
+          setCirclingTargetStation(state.targetId);
+          
+          // Force immediate marker update on animation status change
+          if (pendingAnimationFrameRef.current) {
+            cancelAnimationFrame(pendingAnimationFrameRef.current);
+          }
+          
+          pendingAnimationFrameRef.current = requestAnimationFrame(() => {
+            handleMapUpdate();
+            pendingAnimationFrameRef.current = null;
+          });
+        }
+      });
+      
+      return unsubscribe;
+    });
+  }, []); // Will need to use handleMapUpdate once defined
 
   // Memoize station states to reduce re-renders
   const stationStates = useMemo(() => {
@@ -377,151 +438,152 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     [],
   )
 
-  // Build DOM for each station marker, hooking up events - optimized version
-  const buildMarkerContainer = useCallback(
-    (station: StationFeature) => {
-      const container = document.createElement("div")
-      container.classList.add("marker-container")
-      container.style.cssText = `
-        position: relative;
-        pointer-events: auto;
-        transform-origin: center bottom;
-        will-change: transform, opacity;
-        transition: transform 0.28s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.25s ease;
-        transform: scale(0);
-        opacity: 1;
-      `
+  // Build DOM for each station marker, hooking up events - optimized version with Apple-inspired aesthetics
+const buildMarkerContainer = useCallback(
+  (station: StationFeature) => {
+    const container = document.createElement("div")
+    container.classList.add("marker-container")
+    container.style.cssText = `
+      position: relative;
+      pointer-events: auto;
+      transform-origin: center bottom;
+      will-change: transform, opacity;
+      transition: transform 0.25s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.2s ease;
+      transform: scale(0);
+      opacity: 1;
+    `
 
-      // Collapsed marker
-      const collapsedWrapper = document.createElement("div")
-      collapsedWrapper.classList.add("collapsed-wrapper")
-      collapsedWrapper.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        pointer-events: none;
-        will-change: opacity, transform;
-        transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0, 0.2, 1);
-      `
+    // Collapsed marker
+    const collapsedWrapper = document.createElement("div")
+    collapsedWrapper.classList.add("collapsed-wrapper")
+    collapsedWrapper.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+      will-change: opacity, transform;
+      transition: opacity 0.2s ease-out, transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+    `
 
-      // Use pool for collapsed marker
-      const collapsedDiv = markerPoolRef.current.getCollapsedMarker()
+    // Use pool for collapsed marker
+    const collapsedDiv = markerPoolRef.current.getCollapsedMarker()
 
-      // Marker click → station selection
-      collapsedDiv.addEventListener("click", (ev) => {
+    // Marker click → station selection
+    collapsedDiv.addEventListener("click", (ev) => {
+      ev.stopPropagation()
+      handleStationClick(station.id)
+    })
+
+    // Hover effect - Tesla-inspired clean and subtle
+    collapsedDiv.addEventListener("mouseenter", () => {
+      collapsedDiv.style.transform = "scale(1.05)"
+      collapsedDiv.style.borderColor = "rgba(255, 255, 255, 1)"
+      collapsedDiv.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)"
+    })
+    collapsedDiv.addEventListener("mouseleave", () => {
+      collapsedDiv.style.transform = ""
+      collapsedDiv.style.borderColor = "rgba(255, 255, 255, 0.9)"
+      collapsedDiv.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)"
+    })
+
+    const collapsedPost = document.createElement("div")
+    collapsedPost.style.cssText = `
+      width: 1px;
+      height: 28px;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.1));
+      margin-top: 1px;
+      pointer-events: none;
+      will-change: height, opacity;
+      transition: height 0.25s ease, opacity 0.25s ease;
+    `
+    collapsedWrapper.appendChild(collapsedDiv)
+    collapsedWrapper.appendChild(collapsedPost)
+
+    // Expanded marker
+    const expandedWrapper = document.createElement("div")
+    expandedWrapper.classList.add("expanded-wrapper")
+    expandedWrapper.style.cssText = `
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      will-change: opacity, transform;
+      transition: opacity 0.2s ease-out, transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+    `
+
+    // Use pool for expanded marker
+    const expandedDiv = markerPoolRef.current.getExpandedMarker()
+
+    // Hover effect - Tesla-inspired minimal and precise
+    expandedDiv.addEventListener("mouseenter", () => {
+      expandedDiv.style.transform = "scale(1.01) translateY(-1px)"
+      expandedDiv.style.borderColor = "rgba(255, 255, 255, 0.18)"
+      expandedDiv.style.boxShadow = "0 5px 12px rgba(0,0,0,0.18)"
+    })
+    expandedDiv.addEventListener("mouseleave", () => {
+      expandedDiv.style.transform = ""
+      expandedDiv.style.borderColor = "rgba(255, 255, 255, 0.12)"
+      expandedDiv.style.boxShadow = "0 4px 10px rgba(0,0,0,0.15)"
+    })
+
+    // "Pickup car here" button → only in step 2
+    const pickupBtn = expandedDiv.querySelector<HTMLButtonElement>(".pickup-btn")
+    if (pickupBtn) {
+      pickupBtn.addEventListener("mouseenter", () => {
+        pickupBtn.style.background = "#C91C22" // Slightly darker Tesla red on hover
+        pickupBtn.style.transform = "translateY(-1px)"
+        pickupBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.15)"
+        pickupBtn.style.letterSpacing = "0.6px" // Subtle letter spacing change on hover
+      })
+      pickupBtn.addEventListener("mouseleave", () => {
+        pickupBtn.style.background = "#E82127" // Tesla red
+        pickupBtn.style.transform = ""
+        pickupBtn.style.boxShadow = ""
+        pickupBtn.style.letterSpacing = "0.5px"
+      })
+      pickupBtn.addEventListener("click", (ev) => {
         ev.stopPropagation()
-        handleStationClick(station.id)
+        import("@/lib/stationSelectionManager").then(module => {
+          const stationSelectionManager = module.default;
+          if (stationSelectionManager.getCurrentStep() === 2) {
+            stationSelectionManager.confirmStationSelection();
+            options?.onPickupClick?.(station.id) // keep for backwards compatibility
+          }
+        });
       })
+    }
 
-      // Hover effect
-      collapsedDiv.addEventListener("mouseenter", () => {
-        collapsedDiv.style.transform = "scale(1.1)"
-        collapsedDiv.style.boxShadow = "0 4px 12px rgba(0,0,0,0.6)"
-      })
-      collapsedDiv.addEventListener("mouseleave", () => {
-        collapsedDiv.style.transform = ""
-        collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)"
-      })
+    const expandedPost = document.createElement("div")
+    expandedPost.style.cssText = `
+      width: 1px;
+      height: 28px;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.1));
+      margin-top: 1px;
+      pointer-events: none;
+      will-change: height, opacity;
+      transition: height 0.25s ease, opacity 0.25s ease;
+    `
+    expandedWrapper.appendChild(expandedDiv)
+    expandedWrapper.appendChild(expandedPost)
 
-      const collapsedPost = document.createElement("div")
-      collapsedPost.style.cssText = `
-        width: 2.5px;
-        height: 35px;
-        background: linear-gradient(to bottom, rgba(170,170,170,0.9), rgba(170,170,170,0.2));
-        margin-top: 2px;
-        pointer-events: none;
-        will-change: height, opacity;
-        transition: height 0.3s ease, opacity 0.3s ease;
-      `
-      collapsedWrapper.appendChild(collapsedDiv)
-      collapsedWrapper.appendChild(collapsedPost)
+    // Combine
+    container.appendChild(collapsedWrapper)
+    container.appendChild(expandedWrapper)
 
-      // Expanded marker
-      const expandedWrapper = document.createElement("div")
-      expandedWrapper.classList.add("expanded-wrapper")
-      expandedWrapper.style.cssText = `
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        will-change: opacity, transform;
-        transition: opacity 0.25s ease-out, transform 0.25s cubic-bezier(0.2, 0, 0.2, 1);
-      `
-
-      // Use pool for expanded marker
-      const expandedDiv = markerPoolRef.current.getExpandedMarker()
-
-      // Hover effect
-      expandedDiv.addEventListener("mouseenter", () => {
-        expandedDiv.style.transform = "scale(1.015)"
-        expandedDiv.style.boxShadow = "0 8px 20px rgba(0,0,0,0.55)"
-      })
-      expandedDiv.addEventListener("mouseleave", () => {
-        expandedDiv.style.transform = ""
-        expandedDiv.style.boxShadow = "0 6px 12px rgba(0,0,0,0.45)"
-      })
-
-      // "Pickup car here" button → only in step 2
-      const pickupBtn = expandedDiv.querySelector<HTMLButtonElement>(".pickup-btn")
-      if (pickupBtn) {
-        pickupBtn.addEventListener("mouseenter", () => {
-          pickupBtn.style.background = "#0D8C6D"
-          pickupBtn.style.transform = "translateY(-1px)"
-          pickupBtn.style.boxShadow = "0 3px 6px rgba(0,0,0,0.35)"
-        })
-        pickupBtn.addEventListener("mouseleave", () => {
-          pickupBtn.style.background = "#10A37F"
-          pickupBtn.style.transform = ""
-          pickupBtn.style.boxShadow = "0 2px 4px rgba(0,0,0,0.3)"
-        })
-        pickupBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation()
-          import("@/lib/stationSelectionManager").then(module => {
-            const stationSelectionManager = module.default;
-            if (stationSelectionManager.getCurrentStep() === 2) {
-              stationSelectionManager.confirmStationSelection();
-              options?.onPickupClick?.(station.id) // keep for backwards compatibility
-            }
-          });
-        })
-      }
-
-      // Clicking the expanded area also selects the station
-      expandedDiv.addEventListener("click", (ev) => {
-        ev.stopPropagation()
-        handleStationClick(station.id)
-      })
-
-      const expandedPost = document.createElement("div")
-      expandedPost.style.cssText = `
-        width: 2.5px;
-        height: 35px;
-        background: linear-gradient(to bottom, rgba(170,170,170,0.9), rgba(170,170,170,0.2));
-        margin-top: 2px;
-        pointer-events: none;
-        will-change: height, opacity;
-        transition: height 0.3s ease, opacity 0.3s ease;
-      `
-      expandedWrapper.appendChild(expandedDiv)
-      expandedWrapper.appendChild(expandedPost)
-
-      // Combine
-      container.appendChild(collapsedWrapper)
-      container.appendChild(expandedWrapper)
-
-      return {
-        container,
-        collapsedWrapper,
-        collapsedDiv,
-        collapsedPost,
-        expandedWrapper,
-        expandedDiv,
-        expandedPost,
-        pickupBtn,
-        expandedInfoSection: expandedDiv.querySelector<HTMLDivElement>(".expanded-info-section"),
-      }
-    },
-    [dispatch, handleStationClick, options],
-  )
+    return {
+      container,
+      collapsedWrapper,
+      collapsedDiv,
+      collapsedPost,
+      expandedWrapper,
+      expandedDiv,
+      expandedPost,
+      pickupBtn,
+      animationProgress: expandedDiv.querySelector<HTMLDivElement>(".animation-progress"),
+      expandedInfoSection: expandedDiv.querySelector<HTMLDivElement>(".expanded-info-section"),
+    }
+  },
+  [dispatch, handleStationClick, options],
+)
 
   // Adjust post height based on tilt and zoom
   const computePostHeight = useCallback((baseHeight: number, tilt: number, zoom: number) => {
@@ -540,140 +602,141 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   }, [])
 
   // Create or update the route marker for DEPARTURE->ARRIVAL
-  const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: number}) => {
-    if (!googleMap) return
-    if (!window.google?.maps?.marker?.AdvancedMarkerElement) return
+const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: number}) => {
+  if (!googleMap) return
+  if (!window.google?.maps?.marker?.AdvancedMarkerElement) return
 
-    const hasRoute = bookingRoute?.polyline && bookingRoute.duration
-    const showMarker = bookingStep === 4 && arrivalStationId != null && hasRoute
+  const hasRoute = bookingRoute?.polyline && bookingRoute.duration
+  const showMarker = bookingStep === 4 && arrivalStationId != null && hasRoute
 
-    if (!showMarker) {
-      // Fade out if not needed
-      if (routeMarkerRef.current) {
-        const content = routeMarkerRef.current.content as HTMLElement
-        if (content) {
-          content.style.transform = "scale(0)"
-          content.style.opacity = "0"
-          setTimeout(() => {
-            if (routeMarkerRef.current) {
-              routeMarkerRef.current.map = null
-              routeMarkerRef.current = null
-            }
-          }, 300)
-        } else {
-          routeMarkerRef.current.map = null
-          routeMarkerRef.current = null
-        }
-      }
-      return
-    }
-
-    // Decode the polyline
-    const path = decodePolyline(bookingRoute.polyline)
-    if (path.length < 2) return
-
-    // Compute route midpoint
-    const midpoint = computeRouteMidpoint(path)
-    const altitude = 15
-    const driveMins = Math.ceil(bookingRoute.duration / 60)
-
-    const { AdvancedMarkerElement } = window.google.maps.marker
-
-    if (!routeMarkerRef.current) {
-      // Create new route marker
-      const container = document.createElement("div")
-      container.style.cssText = `
-        position: relative;
-        transform: scale(0);
-        opacity: 0;
-        will-change: transform, opacity;
-        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
-      `
-
-      const wrapper = document.createElement("div")
-      wrapper.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        pointer-events: none;
-      `
-
-      const boxDiv = document.createElement("div")
-      boxDiv.classList.add("route-box")
-      boxDiv.style.cssText = `
-  width: 110px;
-  background: linear-gradient(145deg, #1C1C1E, #2C2C2E);
-  color: #FFFFFF;
-  border: 1.5px solid #FFFFFF;
-  border-radius: 8px;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.45);
-  padding: 6px;
-  text-align: center;
-  pointer-events: auto;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: default;
-  transition: transform 0.2s ease;
-  letter-spacing: 0.2px;
-`
-      boxDiv.innerHTML = `${driveMins} mins drive`
-
-      const postDiv = document.createElement("div")
-      postDiv.classList.add("route-post")
-      postDiv.style.cssText = `
-        width: 2.5px;
-        height: 35px;
-        background: linear-gradient(to bottom, rgba(255,255,255,0.9), rgba(255,255,255,0.2));
-        margin-top: 2px;
-        pointer-events: none;
-        will-change: height;
-        transition: height 0.3s ease;
-      `
-
-      wrapper.appendChild(boxDiv)
-      wrapper.appendChild(postDiv)
-      container.appendChild(wrapper)
-
-      const rMarker = new AdvancedMarkerElement({
-        map: googleMap,
-        position: {
-          lat: midpoint.lat,
-          lng: midpoint.lng,
-          altitude,
-        } as google.maps.LatLngAltitudeLiteral,
-        collisionBehavior: "REQUIRED" as any, // stay on top
-        gmpClickable: false,
-        content: container,
-      })
-
-      routeMarkerRef.current = rMarker
-
-      // Animate in
-      requestAnimationFrame(() => {
-        container.style.transform = "scale(1)"
-        container.style.opacity = "1"
-      })
-    } else {
-      // Update existing
-      routeMarkerRef.current.position = { lat: midpoint.lat, lng: midpoint.lng, altitude }
-      routeMarkerRef.current.collisionBehavior = "REQUIRED" as any
-    }
-
-    // Update text & post height
-    const rm = routeMarkerRef.current!
-    const c = rm.content as HTMLDivElement
-    if (c) {
-      const textDiv = c.querySelector<HTMLDivElement>(".route-box")
-      if (textDiv) {
-        textDiv.innerHTML = `${driveMins} mins drive`
-      }
-      const post = c.querySelector<HTMLDivElement>(".route-post")
-      if (post && camera) {
-        const newHeight = computePostHeight(28, camera.tilt, camera.zoom)
-        post.style.height = `${newHeight}px`
+  if (!showMarker) {
+    // Fade out if not needed
+    if (routeMarkerRef.current) {
+      const content = routeMarkerRef.current.content as HTMLElement
+      if (content) {
+        content.style.transform = "scale(0)"
+        content.style.opacity = "0"
+        setTimeout(() => {
+          if (routeMarkerRef.current) {
+            routeMarkerRef.current.map = null
+            routeMarkerRef.current = null
+          }
+        }, 300)
+      } else {
+        routeMarkerRef.current.map = null
+        routeMarkerRef.current = null
       }
     }
-  }, [googleMap, bookingRoute, bookingStep, arrivalStationId, computePostHeight])
+    return
+  }
+
+  // Decode the polyline
+  const path = decodePolyline(bookingRoute.polyline)
+  if (path.length < 2) return
+
+  // Compute route midpoint
+  const midpoint = computeRouteMidpoint(path)
+  const altitude = 15
+  const driveMins = Math.ceil(bookingRoute.duration / 60)
+
+  const { AdvancedMarkerElement } = window.google.maps.marker
+
+  if (!routeMarkerRef.current) {
+    // Create new route marker
+    const container = document.createElement("div")
+    container.style.cssText = `
+      position: relative;
+      transform: scale(0);
+      opacity: 0;
+      will-change: transform, opacity;
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+    `
+
+    const wrapper = document.createElement("div")
+    wrapper.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+    `
+
+    const boxDiv = document.createElement("div")
+    boxDiv.classList.add("route-box")
+    boxDiv.style.cssText = `
+      width: 120px;
+      background: rgba(28, 28, 30, 0.85);
+      backdrop-filter: blur(8px);
+      color: #FFFFFF;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      padding: 8px 12px;
+      text-align: center;
+      pointer-events: auto;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: default;
+      transition: transform 0.2s ease;
+      letter-spacing: 0.2px;
+    `
+    boxDiv.innerHTML = `${driveMins} mins drive`
+
+    const postDiv = document.createElement("div")
+    postDiv.classList.add("route-post")
+    postDiv.style.cssText = `
+      width: 1px;
+      height: 35px;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+      margin-top: 2px;
+      pointer-events: none;
+      will-change: height;
+      transition: height 0.3s ease;
+    `
+
+    wrapper.appendChild(boxDiv)
+    wrapper.appendChild(postDiv)
+    container.appendChild(wrapper)
+
+    const rMarker = new AdvancedMarkerElement({
+      map: googleMap,
+      position: {
+        lat: midpoint.lat,
+        lng: midpoint.lng,
+        altitude,
+      } as google.maps.LatLngAltitudeLiteral,
+      collisionBehavior: "REQUIRED" as any, // stay on top
+      gmpClickable: false,
+      content: container,
+    })
+
+    routeMarkerRef.current = rMarker
+
+    // Animate in
+    requestAnimationFrame(() => {
+      container.style.transform = "scale(1)"
+      container.style.opacity = "1"
+    })
+  } else {
+    // Update existing
+    routeMarkerRef.current.position = { lat: midpoint.lat, lng: midpoint.lng, altitude }
+    routeMarkerRef.current.collisionBehavior = "REQUIRED" as any
+  }
+
+  // Update text & post height
+  const rm = routeMarkerRef.current!
+  const c = rm.content as HTMLDivElement
+  if (c) {
+    const textDiv = c.querySelector<HTMLDivElement>(".route-box")
+    if (textDiv) {
+      textDiv.innerHTML = `${driveMins} mins drive`
+    }
+    const post = c.querySelector<HTMLDivElement>(".route-post")
+    if (post && camera) {
+      const newHeight = computePostHeight(28, camera.tilt, camera.zoom)
+      post.style.height = `${newHeight}px`
+    }
+  }
+}, [googleMap, bookingRoute, bookingStep, arrivalStationId, computePostHeight])
 
   // Build candidate station list once and populate spatial index
   const initializeCandidateStations = useCallback(() => {
@@ -782,173 +845,270 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   )
 
   // Batch update markers with the unified camera info
-  const batchUpdateMarker = useCallback((
-    entry: (typeof candidateStationsRef.current)[number], 
-    camera: {tilt: number, zoom: number},
-    forceUpdate = false
-  ) => {
-    if (!entry.marker || !entry.refs || !entry.stationData) return;
+const batchUpdateMarker = useCallback((
+  entry: (typeof candidateStationsRef.current)[number], 
+  camera: {tilt: number, zoom: number},
+  forceUpdate = false
+) => {
+  if (!entry.marker || !entry.refs || !entry.stationData) return;
+  
+  const station = entry.stationData;
+  const { marker, refs } = entry;
+  
+  // Calculate new state using camera info
+  const isDeparture = station.id === departureStationId;
+  const isArrival = station.id === arrivalStationId;
+  const isListSelected = station.id === listSelectedStationId;
+  const forceVis = isForceVisible(station.id);
+  const expanded = isExpanded(station.id) && camera.zoom >= MARKER_POST_MIN_ZOOM;
+  const newPostHeight = computePostHeight(35, camera.tilt, camera.zoom);
+  const showPosts = newPostHeight > 4 ? "1" : "0";
+  
+  // New marker state
+  const newState: MarkerState = {
+    expanded,
+    visible: true,
+    isForceVisible: forceVis,
+    isDeparture,
+    isArrival,
+    isListSelected,
+    postHeight: newPostHeight,
+    address: station.properties.Address || "No address available",
+    place: station.properties.Place || `Station ${station.id}`,
+    pickupMins: isDeparture ? pickupMins : null,
+    showPickupBtn: bookingStep === 2
+  };
+  
+  // Compare with previous state
+  const prevState = entry.markerState;
+  if (!forceUpdate && prevState && 
+      prevState.expanded === newState.expanded &&
+      prevState.isForceVisible === newState.isForceVisible &&
+      prevState.isDeparture === newState.isDeparture &&
+      prevState.isArrival === newState.isArrival &&
+      prevState.isListSelected === newState.isListSelected &&
+      Math.abs(prevState.postHeight - newState.postHeight) < 0.5 &&
+      prevState.showPickupBtn === newState.showPickupBtn &&
+      prevState.pickupMins === newState.pickupMins) {
+    // No significant changes - skip update
+    return;
+  }
+  
+  // Update state reference
+  entry.markerState = newState;
+  
+  // Update marker collision behavior based on importance
+  marker.collisionBehavior = forceVis ? ("REQUIRED" as any) : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any);
+  
+  if (marker.element) {
+    marker.element.style.zIndex = forceVis ? "9999" : "1";
+  }
+  
+  // Update visibility of expanded/collapsed views
+  if (expanded) {
+    refs.collapsedWrapper.style.opacity = "0";
+    refs.collapsedWrapper.style.transform = "scale(0.8)";
+    refs.expandedWrapper.style.display = "flex";
+    requestAnimationFrame(() => {
+      refs.expandedWrapper.style.opacity = "1";
+      refs.expandedWrapper.style.transform = "scale(1)";
+    });
+  } else {
+    refs.collapsedWrapper.style.opacity = "1";
+    refs.collapsedWrapper.style.transform = "scale(1)";
+    refs.expandedWrapper.style.opacity = "0";
+    refs.expandedWrapper.style.transform = "scale(0.95)";
+    setTimeout(() => {
+      refs.expandedWrapper.style.display = "none";
+    }, 250);
+  }
+  
+  // Update post heights for both views
+  refs.collapsedPost.style.height = `${newPostHeight}px`;
+  refs.collapsedPost.style.opacity = showPosts;
+  refs.expandedPost.style.height = `${newPostHeight}px`;
+  refs.expandedPost.style.opacity = showPosts;
+  
+  // Show/hide animation progress indicator and pickup button
+  // Force-check animation state to ensure we're using the most up-to-date information
+  let isAnimatingThisStation = circlingAnimationActive && circlingTargetStation === station.id;
+  const isRelevantStation = bookingStep === 2 && station.id === departureStationId;
+  
+  // Double-check directly with animation manager if this is a departure station
+  if (isRelevantStation) {
+    // Check if we're in a browser environment 
+    if (typeof window !== 'undefined') {
+      // Force-check the animation state to be extra safe
+      try {
+        // Use a global reference if it's been created
+        const w = window as any;
+        if (w.__animationStateManager) {
+          const state = w.__animationStateManager.getState();
+          isAnimatingThisStation = state.isAnimating && state.targetId === station.id;
+        }
+      } catch (e) {
+        console.error('Error checking animation state:', e);
+      }
+    }
+  }
+
+  // Animation progress indicator
+  if (refs.animationProgress) {
+    refs.animationProgress.style.display = isAnimatingThisStation ? "flex" : "none";
+  }
+  
+  // Update pickup button visibility - simplified condition
+  if (refs.pickupBtn) {
+    // Just use booking step 2 and departureStationId for simplicity
+    const shouldShowPickupBtn = bookingStep === 2 && station.id === departureStationId;
     
-    const station = entry.stationData;
-    const { marker, refs } = entry;
-    
-    // Calculate new state using camera info
-    const isDeparture = station.id === departureStationId;
-    const isArrival = station.id === arrivalStationId;
-    const isListSelected = station.id === listSelectedStationId;
-    const forceVis = isForceVisible(station.id);
-    const expanded = isExpanded(station.id) && camera.zoom >= MARKER_POST_MIN_ZOOM;
-    const newPostHeight = computePostHeight(35, camera.tilt, camera.zoom);
-    const showPosts = newPostHeight > 4 ? "1" : "0";
-    
-    // New marker state
-    const newState: MarkerState = {
-      expanded,
-      visible: true,
-      isForceVisible: forceVis,
-      isDeparture,
-      isArrival,
-      isListSelected,
-      postHeight: newPostHeight,
-      address: station.properties.Address || "No address available",
-      place: station.properties.Place || `Station ${station.id}`,
-      pickupMins: isDeparture ? pickupMins : null,
-      showPickupBtn: bookingStep === 2
-    };
-    
-    // Compare with previous state
-    const prevState = entry.markerState;
-    if (!forceUpdate && prevState && 
-        prevState.expanded === newState.expanded &&
-        prevState.isForceVisible === newState.isForceVisible &&
-        prevState.isDeparture === newState.isDeparture &&
-        prevState.isArrival === newState.isArrival &&
-        prevState.isListSelected === newState.isListSelected &&
-        Math.abs(prevState.postHeight - newState.postHeight) < 0.5 &&
-        prevState.showPickupBtn === newState.showPickupBtn &&
-        prevState.pickupMins === newState.pickupMins) {
-      // No significant changes - skip update
-      return;
+    // First, update animation progress visibility
+    if (refs.animationProgress) {
+      refs.animationProgress.style.display = isAnimatingThisStation ? "flex" : "none";
     }
     
-    // Update state reference
-    entry.markerState = newState;
-    
-    // Update marker collision behavior based on importance
-    marker.collisionBehavior = forceVis ? ("REQUIRED" as any) : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any);
-    
-    if (marker.element) {
-      marker.element.style.zIndex = forceVis ? "9999" : "1";
-    }
-    
-    // Update visibility of expanded/collapsed views
-    if (expanded) {
-      refs.collapsedWrapper.style.opacity = "0";
-      refs.collapsedWrapper.style.transform = "scale(0.8)";
-      refs.expandedWrapper.style.display = "flex";
-      requestAnimationFrame(() => {
-        refs.expandedWrapper.style.opacity = "1";
-        refs.expandedWrapper.style.transform = "scale(1)";
-      });
-    } else {
-      refs.collapsedWrapper.style.opacity = "1";
-      refs.collapsedWrapper.style.transform = "scale(1)";
-      refs.expandedWrapper.style.opacity = "0";
-      refs.expandedWrapper.style.transform = "scale(0.95)";
-      setTimeout(() => {
-        refs.expandedWrapper.style.display = "none";
-      }, 250);
-    }
-    
-    // Update post heights for both views
-    refs.collapsedPost.style.height = `${newPostHeight}px`;
-    refs.collapsedPost.style.opacity = showPosts;
-    refs.expandedPost.style.height = `${newPostHeight}px`;
-    refs.expandedPost.style.opacity = showPosts;
-    
-    // Update pickup button visibility
-    if (refs.pickupBtn) {
-      refs.pickupBtn.style.display = bookingStep === 2 ? "inline-block" : "none";
-    }
-    
-    // Update styling for selected stations
-    const borderColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : isListSelected ? "#FFFFFF" : "#505156";
-    
-    // Collapsed style with special handling for selected stations
-    refs.collapsedDiv.style.borderColor = borderColor;
-    
-    // Special styling for important stations
-    if (isDeparture || isArrival || isListSelected) {
-      const glowColor = isDeparture 
-        ? "rgba(16, 163, 127, 0.5)" 
-        : isArrival 
-          ? "rgba(39, 110, 241, 0.5)" 
-          : "rgba(255, 255, 255, 0.7)";
+    // Then update pickup button
+    if (shouldShowPickupBtn) {
+      // Always show the button in step 2 for departure station
+      refs.pickupBtn.style.display = isAnimatingThisStation ? "none" : "inline-block";
       
-      const borderWidth = camera.zoom < MARKER_POST_MIN_ZOOM ? "3px" : "1.5px";
-      refs.collapsedDiv.style.borderWidth = borderWidth;
-      refs.collapsedDiv.style.boxShadow = `0 2px 8px rgba(0,0,0,0.5), 0 0 12px ${glowColor}`;
-      
-      if (isListSelected && !isDeparture && !isArrival) {
-        refs.collapsedDiv.style.border = `2px solid #FFFFFF`;
+      // If we just completed animation, add a nice fade-in effect
+      if (!isAnimatingThisStation && circlingTargetStation === station.id) {
+        refs.pickupBtn.style.opacity = "0";
+        refs.pickupBtn.style.transform = "translateY(5px)";
+        
+        // Store a reference to the button to use in the timeout
+        const pickupBtn = refs.pickupBtn;
+        
+        // Slight delay for fade-in
+        setTimeout(() => {
+          // Check that the button still exists
+          if (pickupBtn) {
+            pickupBtn.style.opacity = "1";
+            pickupBtn.style.transform = "translateY(0)";
+            pickupBtn.style.transition = "opacity 0.3s ease-out, transform 0.3s ease-out";
+          }
+        }, 100);
       }
     } else {
-      refs.collapsedDiv.style.borderWidth = "1.5px";
-      refs.collapsedDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)";
+      refs.pickupBtn.style.display = "none";
     }
+  }
+  
+  // Tesla-style marker styling with minimalist colors
+  let borderColor, textColor, markerBackground, markerBorderColor;
+  
+  if (isDeparture) {
+    // Tesla Red
+    borderColor = "#E82127";
+    textColor = "#E82127";
+    markerBackground = "rgba(23, 23, 23, 0.95)";
+    markerBorderColor = "#E82127";
+  } else if (isArrival) {
+    // Tesla Blue
+    borderColor = "#3E6AE1";
+    textColor = "#3E6AE1";
+    markerBackground = "rgba(23, 23, 23, 0.95)";
+    markerBorderColor = "#3E6AE1";
+  } else if (isListSelected) {
+    // Tesla Silver/Gray
+    borderColor = "rgba(220, 220, 220, 0.9)";
+    textColor = "#FFFFFF";
+    markerBackground = "rgba(23, 23, 23, 0.95)";
+    markerBorderColor = "rgba(220, 220, 220, 0.9)";
+  } else {
+    // Default dark with white border
+    borderColor = "rgba(255, 255, 255, 0.15)";
+    textColor = "#FFFFFF";
+    markerBackground = "rgba(23, 23, 23, 0.95)";
+    markerBorderColor = "rgba(255, 255, 255, 0.7)";
+  }
+  
+  // Set the marker styling
+  refs.collapsedDiv.style.background = markerBackground;
+  refs.collapsedDiv.style.borderColor = markerBorderColor;
+  
+  // Special styling for important stations - Tesla-like precision
+  if (isDeparture || isArrival || isListSelected) {
+    refs.collapsedDiv.style.transform = "scale(1.05)";
     
-    // Expanded style updates
-    refs.expandedDiv.style.borderColor = borderColor;
-    if (isDeparture || isArrival || isListSelected) {
-      const glowColor = isDeparture 
-        ? "rgba(16, 163, 127, 0.5)" 
-        : isArrival 
-          ? "rgba(39, 110, 241, 0.5)" 
-          : "rgba(255, 255, 255, 0.7)";
-      refs.expandedDiv.style.boxShadow = `0 8px 16px rgba(0,0,0,0.5), 0 0 16px ${glowColor}`;
-      
-      if (isListSelected && !isDeparture && !isArrival) {
-        refs.expandedDiv.style.border = `2px solid #FFFFFF`;
-      }
-    } else {
-      refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.5)";
-    }
+    // Premium subtle glow effect for selected markers
+    const glowColor = isDeparture 
+      ? "rgba(232, 33, 39, 0.4)" 
+      : isArrival 
+        ? "rgba(62, 106, 225, 0.4)" 
+        : "rgba(220, 220, 220, 0.4)";
     
-    // Update info section content
-    if (!refs.expandedInfoSection) return;
+    refs.collapsedDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.15), 0 0 6px ${glowColor}`;
+    refs.collapsedDiv.style.borderWidth = "2px";
+  } else {
+    refs.collapsedDiv.style.transform = "";
+    refs.collapsedDiv.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)";
+    refs.collapsedDiv.style.borderWidth = "1.5px";
+  }
+  
+  // Expanded style updates
+  refs.expandedDiv.style.borderColor = borderColor;
+  if (isDeparture || isArrival || isListSelected) {
+    const glowColor = isDeparture 
+      ? "rgba(16, 163, 127, 0.6)" 
+      : isArrival 
+        ? "rgba(39, 110, 241, 0.6)" 
+        : "rgba(255, 255, 255, 0.4)";
     
-    if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
-      refs.expandedInfoSection.innerHTML = `
-        <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: #10A37F; letter-spacing: 0.1px;">
-          Pickup in ${pickupMins} minutes
-        </div>
-        <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
-          ${station.properties.Address || "No address available"}
-        </div>
-      `;
-    } else {
-      const placeName = station.properties.Place || `Station ${station.id}`;
-      const address = station.properties.Address || "No address available";
-      const titleColor = isDeparture ? "#10A37F" : isArrival ? "#276EF1" : "#F2F2F7";
-      refs.expandedInfoSection.innerHTML = `
-        <div style="font-size: 15px; font-weight: 600; margin-bottom: 3px; color: ${titleColor}; letter-spacing: 0.1px;">
-          ${placeName}
-        </div>
-        <div style="font-size: 13px; opacity: 0.85; line-height: 1.3;">
-          ${address}
-        </div>
-      `;
-    }
-  }, [
-    bookingStep,
-    departureStationId,
-    arrivalStationId,
-    pickupMins,
-    isForceVisible,
-    isExpanded,
-    computePostHeight,
-    listSelectedStationId
-  ]);
+    refs.expandedDiv.style.boxShadow = `0 8px 20px rgba(0,0,0,0.3), 0 0 20px ${glowColor}`;
+    refs.expandedDiv.style.borderWidth = "2px";
+  } else {
+    refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.25)";
+    refs.expandedDiv.style.borderWidth = "1px";
+  }
+  
+  // Update info section content with Tesla-style typography
+  if (!refs.expandedInfoSection) return;
+  
+  if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
+    refs.expandedInfoSection.innerHTML = `
+      <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase;">
+        ESTIMATED PICKUP
+      </div>
+      <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
+        ${pickupMins} min
+      </div>
+      <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
+        ${station.properties.Address || "No address available"}
+      </div>
+    `;
+  } else {
+    const placeName = station.properties.Place || `Station ${station.id}`;
+    const address = station.properties.Address || "No address available";
+    
+    // Use DESTINATION title for arrival stations, PICKUP LOCATION for others
+    const titleText = isArrival ? "DESTINATION" : "PICKUP LOCATION";
+    
+    refs.expandedInfoSection.innerHTML = `
+      <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase;">
+        ${titleText}
+      </div>
+      <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
+        ${placeName}
+      </div>
+      <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
+        ${address}
+      </div>
+    `;
+  }
+}, [
+  bookingStep,
+  departureStationId,
+  arrivalStationId,
+  pickupMins,
+  isForceVisible,
+  isExpanded,
+  computePostHeight,
+  listSelectedStationId,
+  circlingAnimationActive,
+  circlingTargetStation
+]);
 
   // Unified map update handler that combines tilt, zoom, and bounds changes
   const handleMapUpdate = useCallback(() => {

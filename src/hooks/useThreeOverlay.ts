@@ -85,8 +85,7 @@ export function useThreeOverlay(
 
   // Colors
   const BUILDING_DEFAULT_COLOR = new THREE.Color(0xcccccc);
-  const BUILDING_DEPARTURE_COLOR = new THREE.Color(0x00ff00);
-  const BUILDING_ARRIVAL_COLOR = new THREE.Color(0x0000ff);
+  const BUILDING_SELECTED_COLOR = new THREE.Color(0xffffff);
   const ROUTE_TUBE_COLOR = new THREE.Color(0xffffff);
 
   // Clock ref for simple animation (used for "breathing" effect)
@@ -657,10 +656,8 @@ export function useThreeOverlay(
         const mesh = group.children[0] as THREE.Mesh;
         const mat = mesh.material as THREE.MeshBasicMaterial;
 
-        if (stationId === departureStationId) {
-          mat.color.copy(BUILDING_DEPARTURE_COLOR);
-        } else if (stationId === arrivalStationId) {
-          mat.color.copy(BUILDING_ARRIVAL_COLOR);
+        if (stationId === departureStationId || stationId === arrivalStationId) {
+          mat.color.copy(BUILDING_SELECTED_COLOR);
         } else {
           mat.color.copy(BUILDING_DEFAULT_COLOR);
         }

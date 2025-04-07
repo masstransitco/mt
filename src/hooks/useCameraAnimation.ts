@@ -197,6 +197,17 @@ export function useSimpleCameraAnimations({
       }
       const [lng, lat] = station.geometry.coordinates;
 
+      // Mark animation as started and update animation state manager
+      isAnimatingRef.current = true;
+      setUserGestureEnabled(false);
+      
+      // Update animation state in the manager
+      import("@/lib/animationStateManager").then(module => {
+        const animationStateManager = module.default;
+        // 4500ms total duration (reduced from 8000ms)
+        animationStateManager.startAnimation('CAMERA_CIRCLING', stationId, 4500);
+      });
+
       // Step 1: smoothly move from current camera to revolve start
       const revolveStart = {
         center: { lat, lng },
@@ -205,7 +216,7 @@ export function useSimpleCameraAnimations({
         tilt: 0,
       };
 
-      animateCameraTo(revolveStart, 1200, () => {
+      animateCameraTo(revolveStart, 800, () => {
         // Step 2: revolve
         let tilt = 0;
         let heading = 0;
@@ -223,16 +234,16 @@ export function useSimpleCameraAnimations({
 
           if (phase === 1) {
             // Increase tilt up to ~67.5 in increments
-            tilt += 0.5;
+            tilt += 0.9; // Increased from 0.5 for faster tilt
             if (tilt >= 67.5) {
               tilt = 67.5;
               phase = 2;
             }
           } else {
-            // Phase 2: revolve heading from 0 → 360
-            heading += 0.8; // a bit slower for a nice revolve
-            if (heading >= 360) {
-              heading = 360;
+            // Phase 2: revolve heading from 0 → 180 (reduced from 360)
+            heading += 1.5; // Increased from 0.8 for faster rotation
+            if (heading >= 180) {
+              heading = 180;
             }
           }
 
@@ -244,7 +255,7 @@ export function useSimpleCameraAnimations({
           });
           onCameraChanged?.();
 
-          if (phase === 2 && heading >= 360) {
+          if (phase === 2 && heading >= 180) {
             stop();
             return;
           }
@@ -255,7 +266,22 @@ export function useSimpleCameraAnimations({
           cancelAnimationFrame(rafId);
           isAnimatingRef.current = false;
           setUserGestureEnabled(true);
-          onComplete?.();
+          
+          // Notify animation state manager of completion
+          import("@/lib/animationStateManager").then(module => {
+            const animationStateManager = module.default;
+            console.log(`[useCameraAnimation] Animation complete for station ${stationId}, notifying manager`);
+            animationStateManager.completeAnimation();
+            
+            // Force a slight delay to ensure state updates propagate
+            setTimeout(() => {
+              console.log(`[useCameraAnimation] Animation state after completion:`, animationStateManager.getState());
+            }, 50);
+          });
+          
+          if (onComplete) {
+            onComplete();
+          }
         };
 
         rafId = requestAnimationFrame(animateRevolve);
