@@ -32,6 +32,8 @@ export interface StationFeature {
     ObjectId: number; // for any unique ID usage
     isVirtualCarLocation?: boolean; // Flag for virtual stations created from cars
     carId?: number; // Reference to the car for easier lookup
+    registration?: string; // Car registration for virtual car stations
+    plateNumber?: string; // Alternative field for registration
   };
   distance?: number; 
   walkTime?: number; // in minutes
