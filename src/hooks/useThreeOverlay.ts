@@ -84,8 +84,8 @@ export function useThreeOverlay(
   const MIN_REDRAW_INTERVAL = 16; // ~60fps max
 
   // Colors
-  const BUILDING_DEFAULT_COLOR = new THREE.Color(0xcccccc);
-  const BUILDING_SELECTED_COLOR = new THREE.Color(0xffffff);
+  const BUILDING_DEFAULT_COLOR = new THREE.Color(0x888888); // Darker gray for better contrast
+  const BUILDING_SELECTED_COLOR = new THREE.Color(0xffffff); // Pure white for selected stations
   const ROUTE_TUBE_COLOR = new THREE.Color(0xffffff);
 
   // Clock ref for simple animation (used for "breathing" effect)

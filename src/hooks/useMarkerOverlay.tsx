@@ -453,6 +453,9 @@ const buildMarkerContainer = useCallback(
       opacity: 1;
     `
 
+    // Check if this is a virtual car station
+    const isVirtualCarStation = station.properties.isVirtualCarLocation === true
+
     // Collapsed marker
     const collapsedWrapper = document.createElement("div")
     collapsedWrapper.classList.add("collapsed-wrapper")
@@ -510,24 +513,188 @@ const buildMarkerContainer = useCallback(
       transition: opacity 0.2s ease-out, transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
     `
 
-    // Use pool for expanded marker
-    const expandedDiv = markerPoolRef.current.getExpandedMarker()
+    // Create a custom expanded div for scanned car stations
+    let expandedDiv: HTMLElement
+    
+    if (isVirtualCarStation) {
+      // Create custom expanded marker for scanned car
+      expandedDiv = document.createElement("div")
+      expandedDiv.classList.add("expanded-view")
+      expandedDiv.style.cssText = `
+        width: 200px;
+        background: rgba(16, 16, 16, 0.98);
+        backdrop-filter: blur(12px);
+        color: #FFFFFF;
+        border: 2px solid #E82127;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15), 0 0 15px rgba(232, 33, 39, 0.3);
+        padding: 8px;
+        cursor: pointer;
+        pointer-events: auto;
+        transform-origin: center;
+        will-change: transform, border-color, box-shadow;
+        transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
+      `
+      
+      // Get the car registration if available
+      const registration = station.properties.registration || station.properties.plateNumber || '';
+      
+      expandedDiv.innerHTML = `
+        <div class="expanded-info-section" style="margin-bottom: 5px;">
+          <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #E82127; text-transform: uppercase;">
+            SCANNED CAR
+          </div>
+          <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
+            ${station.properties.Place || 'Electric Vehicle'}
+          </div>
+          <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
+            ${station.properties.Address || 'Current location'}
+          </div>
+        </div>
+        
+        <!-- Car Plate - similar to CarPlate.tsx -->
+        ${registration ? `
+        <div class="car-plate-container" style="
+          margin: 8px 0;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        ">
+          <div style="
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+          ">
+            <!-- Plate border -->
+            <div style="
+              position: absolute;
+              inset: 0;
+              border-radius: 0.75rem;
+              border: 2px solid black;
+              z-index: 2;
+            "></div>
+            
+            <!-- Plate background -->
+            <div style="
+              width: 100%;
+              height: 100%;
+              border-radius: 0.75rem;
+              background-color: #f3f4f6;
+              padding: 0.75rem 1.25rem;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 1;
+            ">
+              <div style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.25rem;
+              ">
+                ${registration.split('').map(char => `
+                  <span style="
+                    color: black;
+                    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 1.5rem;
+                    font-weight: bold;
+                    ${char === ' ' ? 'width: 0.5rem;' : ''}
+                  ">${char !== ' ' ? char : ''}</span>
+                `).join('')}
+              </div>
+            </div>
+            
+            <!-- Plate shadow -->
+            <div style="
+              position: absolute;
+              bottom: -0.25rem;
+              left: 0.25rem;
+              right: 0.25rem;
+              height: 0.5rem;
+              background: black;
+              opacity: 0.2;
+              filter: blur(3px);
+              border-radius: 9999px;
+              z-index: 0;
+            "></div>
+          </div>
+        </div>
+        ` : ''}
+        
+        <!-- Animation progress indicator - Tesla style -->
+        <div class="animation-progress" style="
+          height: 22px;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 5px;
+        ">
+          <div style="
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid #E82127;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: camera-spin 1s linear infinite;
+          "></div>
+          <span style="margin-left: 5px; font-size: 11px; color: #FFFFFF; font-weight: 400; letter-spacing: 0.5px; opacity: 0.9;">SCANNING LOCATION</span>
+        </div>
+        
+        <button class="pickup-btn" style="
+          display: inline-block;
+          width: 100%;
+          padding: 8px 0;
+          background: #E82127;
+          color: #FFFFFF;
+          font-size: 12px;
+          font-weight: 500;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+        ">
+          START DRIVING HERE
+        </button>
+        
+        <style>
+          @keyframes camera-spin {
+            to { transform: rotate(360deg); }
+          }
+        </style>
+      `
+    } else {
+      // Use pool for regular stations
+      expandedDiv = markerPoolRef.current.getExpandedMarker()
+    }
 
     // Hover effect - Tesla-inspired minimal and precise
     expandedDiv.addEventListener("mouseenter", () => {
       expandedDiv.style.transform = "scale(1.01) translateY(-1px)"
-      expandedDiv.style.borderColor = "rgba(255, 255, 255, 0.18)"
-      expandedDiv.style.boxShadow = "0 5px 12px rgba(0,0,0,0.18)"
+      expandedDiv.style.borderColor = isVirtualCarStation ? "rgba(232, 33, 39, 1)" : "rgba(255, 255, 255, 0.18)"
+      expandedDiv.style.boxShadow = isVirtualCarStation 
+        ? "0 5px 12px rgba(0,0,0,0.18), 0 0 20px rgba(232, 33, 39, 0.4)" 
+        : "0 5px 12px rgba(0,0,0,0.18)"
     })
     expandedDiv.addEventListener("mouseleave", () => {
       expandedDiv.style.transform = ""
-      expandedDiv.style.borderColor = "rgba(255, 255, 255, 0.12)"
-      expandedDiv.style.boxShadow = "0 4px 10px rgba(0,0,0,0.15)"
+      expandedDiv.style.borderColor = isVirtualCarStation ? "#E82127" : "rgba(255, 255, 255, 0.12)"
+      expandedDiv.style.boxShadow = isVirtualCarStation 
+        ? "0 4px 10px rgba(0,0,0,0.15), 0 0 15px rgba(232, 33, 39, 0.3)" 
+        : "0 4px 10px rgba(0,0,0,0.15)"
     })
 
     // "Pickup car here" button → only in step 2
     const pickupBtn = expandedDiv.querySelector<HTMLButtonElement>(".pickup-btn")
     if (pickupBtn) {
+      // Set different text for virtual car stations
+      if (isVirtualCarStation) {
+        pickupBtn.textContent = "START DRIVING HERE"
+      }
+      
       pickupBtn.addEventListener("mouseenter", () => {
         pickupBtn.style.background = "#C91C22" // Slightly darker Tesla red on hover
         pickupBtn.style.transform = "translateY(-1px)"
