@@ -593,7 +593,7 @@ const buildMarkerContainer = useCallback(
                 justify-content: center;
                 gap: 0.25rem;
               ">
-                ${(registration || station.properties.name || "").split('').map(char => `
+                ${(registration || station.properties.Place || "").split('').map(char => `
                   <span style="
                     color: black;
                     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
