@@ -428,28 +428,37 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // Which station(s) are expanded?
   // - Step < 3: only departure station is expanded (once chosen).
   // - Step >= 3: expand both departure and arrival (if chosen).
-  // - Virtual car stations are expanded only if they are selected as departure/arrival
+  // - Virtual car stations are expanded if: 
+  //   1. They're selected as departure/arrival, OR
+  //   2. They are the list selected station (just clicked)
   const isExpanded = useCallback(
     (stationId: number): boolean => {
       // First check if it's expanded based on state
       const state = stationStates.get(stationId);
       if (state?.isExpanded) return true;
       
-      // For virtual car stations, only expand if they're selected as departure/arrival
+      // Always expand the list selected station (just clicked)
+      if (stationId === listSelectedStationId) {
+        console.log('[useMarkerOverlay] Expanding list selected station:', stationId);
+        return true;
+      }
+      
+      // For virtual car stations, special handling
       const stationEntry = candidateStationsRef.current.find(entry => entry.stationId === stationId);
       if (stationEntry?.stationData?.properties.isVirtualCarLocation) {
-        // Only expand if it's selected as departure or arrival
+        // Expand if it's selected as departure or arrival
         if (stationId === departureStationId || stationId === arrivalStationId) {
-          console.log('[useMarkerOverlay] Expanding selected virtual car station:', stationId);
+          console.log('[useMarkerOverlay] Expanding virtual car station (departure/arrival):', stationId);
           return true;
         }
+        
         // Otherwise, keep collapsed so user can click to select
         return false;
       }
       
       return false;
     },
-    [stationStates, departureStationId, arrivalStationId],
+    [stationStates, departureStationId, arrivalStationId, listSelectedStationId],
   )
 
   // Now uses stationSelectionManager instead of direct Redux access
