@@ -14,6 +14,7 @@ import {
   clearDepartureStation,
   clearArrivalStation,
   clearQrStationData,
+  setQrStationData,
   selectIsQrScanStation,
   selectQrVirtualStationId,
   clearRoute,
