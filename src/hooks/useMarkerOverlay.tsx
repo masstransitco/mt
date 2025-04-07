@@ -428,23 +428,28 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
   // Which station(s) are expanded?
   // - Step < 3: only departure station is expanded (once chosen).
   // - Step >= 3: expand both departure and arrival (if chosen).
-  // - Virtual car stations are always expanded for better visibility
+  // - Virtual car stations are expanded only if they are selected as departure/arrival
   const isExpanded = useCallback(
     (stationId: number): boolean => {
       // First check if it's expanded based on state
       const state = stationStates.get(stationId);
       if (state?.isExpanded) return true;
       
-      // Always expand virtual car stations
+      // For virtual car stations, only expand if they're selected as departure/arrival
       const stationEntry = candidateStationsRef.current.find(entry => entry.stationId === stationId);
       if (stationEntry?.stationData?.properties.isVirtualCarLocation) {
-        console.log('[useMarkerOverlay] Always expanding virtual car station:', stationId);
-        return true;
+        // Only expand if it's selected as departure or arrival
+        if (stationId === departureStationId || stationId === arrivalStationId) {
+          console.log('[useMarkerOverlay] Expanding selected virtual car station:', stationId);
+          return true;
+        }
+        // Otherwise, keep collapsed so user can click to select
+        return false;
       }
       
       return false;
     },
-    [stationStates],
+    [stationStates, departureStationId, arrivalStationId],
   )
 
   // Now uses stationSelectionManager instead of direct Redux access
@@ -1000,7 +1005,7 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         
         // Extract coordinates
         const [lng, lat] = station.geometry.coordinates;
-        const altitude = 300; // Position higher for visibility
+        const altitude = 5; // Position at ground level like route markers
         
         candidateList.push({
           stationId: station.id,
@@ -1068,8 +1073,8 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       const isListSelected = entry.stationId === listSelectedStationId;
       
       entry.markerState = {
-        // Always expand virtual car stations
-        expanded: isVirtualCarStation ? true : false,
+        // Only expand virtual car stations if they're selected as departure or arrival
+        expanded: isVirtualCarStation ? (isDeparture || isArrival) : false,
         visible: true,
         // Always force visibility for virtual car stations
         isForceVisible: isVirtualCarStation || isDeparture || isArrival || isListSelected,
@@ -1095,16 +1100,28 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         }
       })
       
-      // Immediately expand virtual car stations
+      // Immediately expand virtual car stations only if they're selected as departure or arrival
       if (isVirtualCarStation && entry.refs) {
+        const isDepartureOrArrival = entry.stationId === departureStationId || entry.stationId === arrivalStationId;
         const { collapsedWrapper, expandedWrapper } = entry.refs
         
-        // Show expanded view immediately for virtual car stations
-        collapsedWrapper.style.opacity = "0"
-        collapsedWrapper.style.transform = "scale(0.8)"
-        expandedWrapper.style.display = "flex"
-        expandedWrapper.style.opacity = "1"
-        expandedWrapper.style.transform = "scale(1)"
+        if (isDepartureOrArrival) {
+          // Show expanded view for selected virtual car stations
+          collapsedWrapper.style.opacity = "0"
+          collapsedWrapper.style.transform = "scale(0.8)"
+          expandedWrapper.style.display = "flex"
+          expandedWrapper.style.opacity = "1"
+          expandedWrapper.style.transform = "scale(1)"
+        } else {
+          // Show collapsed view for non-selected virtual car stations
+          collapsedWrapper.style.opacity = "1"
+          collapsedWrapper.style.transform = "scale(1)"
+          expandedWrapper.style.opacity = "0"
+          expandedWrapper.style.transform = "scale(0.95)"
+          setTimeout(() => {
+            expandedWrapper.style.display = "none"
+          }, 250)
+        }
       }
     },
     [googleMap, buildMarkerContainer, departureStationId, arrivalStationId, listSelectedStationId, bookingStep],
