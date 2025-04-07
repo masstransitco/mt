@@ -77,12 +77,37 @@ class StationSelectionManager {
     const step = state.booking.step;
     const isQrScanStation = state.booking.isQrScanStation;
     const virtualStationId = state.booking.qrVirtualStationId;
+    const departureStationId = state.booking.departureStationId;
+
+    // Get the station object to check if selected station is a virtual car station
+    const stations = selectStationsWithDistance(state);
+    const selectedStation = stations.find(s => s.id === stationId);
+    const isSelectedStationVirtual = selectedStation?.properties?.isVirtualCarLocation === true;
+    
+    console.log(`[stationSelectionManager] Selecting station ${stationId}, isVirtual: ${isSelectedStationVirtual}`);
+    console.log(`[stationSelectionManager] Current state: isQrScanStation=${isQrScanStation}, virtualStationId=${virtualStationId}`);
 
     // If we had a prior QR-based station, remove it if it's different
     if (isQrScanStation && virtualStationId && stationId !== virtualStationId) {
+      console.log(`[stationSelectionManager] Clearing previous QR station ${virtualStationId}`);
       store.dispatch(clearDepartureStation());
       store.dispatch(removeStation(virtualStationId));
       store.dispatch(clearQrStationData());
+      store.dispatch(setScannedCar(null));
+      this.processedCarIdRef = null;
+    }
+    
+    // If we're selecting a regular station but had a QR station as departure,
+    // clear the QR station even if we're in step 3+
+    if (!isSelectedStationVirtual && isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
+      console.log(`[stationSelectionManager] Regular station selected, clearing QR departure station ${virtualStationId}`);
+      // Don't clear departure if we're in step 3+ as it would reset the flow
+      if (step <= 2) {
+        store.dispatch(clearDepartureStation());
+      }
+      store.dispatch(removeStation(virtualStationId));
+      store.dispatch(clearQrStationData());
+      store.dispatch(setScannedCar(null));
       this.processedCarIdRef = null;
     }
 
@@ -107,6 +132,15 @@ class StationSelectionManager {
 
     // Update list selected station in Redux
     store.dispatch(setListSelectedStation(stationId));
+
+    // If this is a new QR station, mark it as such in redux
+    if (isSelectedStationVirtual && viaScan) {
+      console.log(`[stationSelectionManager] Setting QR station data for ${stationId}`);
+      store.dispatch(setQrStationData({
+        isQrScanStation: true,
+        qrVirtualStationId: stationId
+      }));
+    }
 
     // Return the new sheet mode
     return "detail";
@@ -135,23 +169,49 @@ class StationSelectionManager {
    */
   public handleQrScanSuccess(car: Car): SheetMode {
     if (!car) return "guide";
-    console.log("handleQrScanSuccess with car ID:", car.id);
+    console.log("[stationSelectionManager] handleQrScanSuccess with car ID:", car.id);
 
+    // Get current state to check for existing QR station
+    const state = store.getState();
+    const isQrScanStation = state.booking.isQrScanStation;
+    const virtualStationId = state.booking.qrVirtualStationId;
+
+    // Clear any departure/arrival stations and routes
     store.dispatch(clearDepartureStation());
     store.dispatch(clearArrivalStation());
     store.dispatch(clearDispatchRoute());
     store.dispatch(clearRoute());
 
+    // Clean up previous QR station if it exists
+    if (isQrScanStation && virtualStationId) {
+      console.log(`[stationSelectionManager] Removing previous QR station ${virtualStationId}`);
+      store.dispatch(removeStation(virtualStationId));
+      store.dispatch(clearQrStationData());
+    }
+
+    // Create a new virtual station with a timestamp-based ID
     const vStationId = Date.now();
     const virtualStation = createVirtualStationFromCar(car, vStationId);
+    console.log(`[stationSelectionManager] Created new virtual station ${vStationId} for car ${car.id}`);
 
+    // Add the virtual station and mark as QR station
     store.dispatch(addVirtualStation(virtualStation));
+    store.dispatch(setQrStationData({
+      isQrScanStation: true,
+      qrVirtualStationId: vStationId
+    }));
+
+    // Set as departure and advance to step 2
     store.dispatch(selectDepartureStation(vStationId));
     store.dispatch(advanceBookingStep(2));
+    
+    // Set the car in the car slice so other components can access it
+    store.dispatch(setScannedCar(car));
 
+    // Track the car ID we processed
     this.processedCarIdRef = car.id;
     
-    toast.success(`Car ${car.id} selected as departure`);
+    toast.success(`${car.model || 'Car'} ${car.registration || car.id} selected as departure`);
     return "detail";
   }
 
