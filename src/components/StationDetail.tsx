@@ -221,7 +221,7 @@ function StationDetail({
             {isVirtualCarLocation && scannedCar ? (
               // Use CarCard for scanned car display
               <div className="w-full flex flex-col items-center space-y-4">
-                <div className="text-sm text-white font-medium">Ready to Drive</div>
+                <div className="text-sm text-[#10A37F] font-medium">QR Scanned Vehicle</div>
                 
                 {/* Import and use the CarCard component */}
                 <div className="w-full">
@@ -234,15 +234,7 @@ function StationDetail({
                   />
                 </div>
                 
-                {/* Only show a confirm button for QR stations in step 2 */}
-                {bookingStep === 2 && (
-                  <button
-                    onClick={onConfirm}
-                    className="w-full py-2.5 bg-[#E82127] hover:bg-[#C91C22] text-white rounded-md text-sm font-medium transition-colors"
-                  >
-                    START DRIVING HERE
-                  </button>
-                )}
+                {/* We no longer need this button as it's already in the marker */}
               </div>
             ) : (
               // Regular car grid for normal stations

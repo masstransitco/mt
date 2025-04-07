@@ -6,7 +6,13 @@ import { X, AlertCircle, Search, Maximize2 } from "lucide-react"
 import { toast } from "react-hot-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { useAppDispatch, useAppSelector } from "@/store/store"
-import { selectBookingStep, selectDepartureStationId, selectArrivalStationId, selectRoute } from "@/store/bookingSlice"
+import { 
+  selectBookingStep, 
+  selectDepartureStationId, 
+  selectArrivalStationId, 
+  selectRoute,
+  selectIsQrScanStation
+} from "@/store/bookingSlice"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectScannedCar } from "@/store/carSlice"
 import { clearDispatchRoute } from "@/store/dispatchSlice"
@@ -41,60 +47,79 @@ interface IconProps {
   step: number
 }
 
-const DepartureIcon = React.memo(({ highlight, step }: IconProps) => (
-  <div className="transition-all duration-300">
-    {step === 1 ? (
-      // Search state
-      <Search className="w-5 h-5 text-gray-200" />
-    ) : (
-      // Tesla-style circle with border
-      <div 
-        className={cn(
-          "w-5 h-5 rounded-full flex items-center justify-center",
-          "border-2 transition-all duration-300",
-          highlight ? "border-[#E82127]" : "border-gray-500"
-        )}
-        style={{
-          background: "rgba(23, 23, 23, 0.95)",
-          boxShadow: highlight ? "0 0 6px rgba(232, 33, 39, 0.4)" : "none"
-        }}
-      >
-        {step >= 3 && (
-          // Inner dot for selected state
-          <div className="w-2 h-2 rounded-full bg-[#E82127]"></div>
-        )}
-      </div>
-    )}
-  </div>
-))
+const DepartureIcon = React.memo(({ highlight, step }: IconProps & { isQrScan?: boolean }) => {
+  // Get QR status from Redux
+  const isQrScanStation = useAppSelector(selectIsQrScanStation);
+  
+  // BLUE for regular departure, GREEN for QR scanned departure
+  const borderColor = isQrScanStation ? "#10A37F" : "#3E6AE1";
+  const glowColor = isQrScanStation ? "rgba(16, 163, 127, 0.4)" : "rgba(62, 106, 225, 0.4)";
+  const dotColor = isQrScanStation ? "#10A37F" : "#3E6AE1";
+  
+  return (
+    <div className="transition-all duration-300">
+      {step === 1 ? (
+        // Search state
+        <Search className="w-5 h-5 text-gray-200" />
+      ) : (
+        // Circle with border using our new color scheme
+        <div 
+          className={cn(
+            "w-5 h-5 rounded-full flex items-center justify-center",
+            "border-2 transition-all duration-300",
+            highlight ? `border-[${borderColor}]` : "border-gray-500"
+          )}
+          style={{
+            background: "rgba(23, 23, 23, 0.95)",
+            boxShadow: highlight ? `0 0 6px ${glowColor}` : "none",
+            borderColor: highlight ? borderColor : "rgb(107, 114, 128)"
+          }}
+        >
+          {step >= 3 && (
+            // Inner dot for selected state
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }}></div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+})
 DepartureIcon.displayName = "DepartureIcon"
 
-const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => (
-  <div className="transition-all duration-300">
-    {step === 3 ? (
-      // Search state
-      <Search className="w-5 h-5 text-gray-200" />
-    ) : (
-      // Tesla-style circle with border
-      <div 
-        className={cn(
-          "w-5 h-5 rounded-full flex items-center justify-center", 
-          "border-2 transition-all duration-300",
-          highlight ? "border-[#3E6AE1]" : "border-gray-500"
-        )}
-        style={{
-          background: "rgba(23, 23, 23, 0.95)",
-          boxShadow: highlight ? "0 0 6px rgba(62, 106, 225, 0.4)" : "none"
-        }}
-      >
-        {step >= 4 && (
-          // Inner dot for selected state
-          <div className="w-2 h-2 rounded-full bg-[#3E6AE1]"></div>
-        )}
-      </div>
-    )}
-  </div>
-))
+const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => {
+  // RED for arrival
+  const borderColor = "#E82127";
+  const glowColor = "rgba(232, 33, 39, 0.4)";
+  const dotColor = "#E82127";
+  
+  return (
+    <div className="transition-all duration-300">
+      {step === 3 ? (
+        // Search state
+        <Search className="w-5 h-5 text-gray-200" />
+      ) : (
+        // Circle with border for arrival (RED)
+        <div 
+          className={cn(
+            "w-5 h-5 rounded-full flex items-center justify-center", 
+            "border-2 transition-all duration-300",
+            highlight ? `border-[${borderColor}]` : "border-gray-500"
+          )}
+          style={{
+            background: "rgba(23, 23, 23, 0.95)",
+            boxShadow: highlight ? `0 0 6px ${glowColor}` : "none",
+            borderColor: highlight ? borderColor : "rgb(107, 114, 128)"
+          }}
+        >
+          {step >= 4 && (
+            // Inner dot for selected state
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: dotColor }}></div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+})
 ArrivalIcon.displayName = "ArrivalIcon"
 
 /* -----------------------------------------------------------
@@ -539,7 +564,7 @@ function StationSelector({
               transition={{ duration: 0.2 }}
               className={cn(
                 "flex items-center gap-2 px-2.5 py-2 transition-all duration-300 rounded-xl",
-                highlightDeparture ? "bg-[rgba(232,33,39,0.08)]" : "bg-[#1a1a1a]",
+                highlightDeparture ? (isQrScanStation ? "bg-[rgba(16,163,127,0.08)]" : "bg-[rgba(62,106,225,0.08)]") : "bg-[#1a1a1a]",
                 arrivalStation ? "border-b border-[#2a2a2a]" : "",
               )}
             >
@@ -590,7 +615,7 @@ function StationSelector({
                   transition={{ duration: 0.3 }}
                   className={cn(
                     "flex items-center gap-2 px-2.5 py-2 transition-all duration-300 rounded-xl",
-                    highlightArrival ? "bg-[rgba(62,106,225,0.08)]" : "bg-[#1a1a1a]",
+                    highlightArrival ? "bg-[rgba(232,33,39,0.08)]" : "bg-[#1a1a1a]",
                   )}
                 >
                   <ArrivalIcon highlight={highlightArrival} step={step} />
@@ -641,7 +666,7 @@ function StationSelector({
                   animate={{ opacity: 1, scale: 1 }}
                   className={cn(
                     "text-xs font-medium text-white px-2 py-0.5 rounded-lg",
-                    step >= 3 ? "bg-[#3E6AE1]" : "bg-[#E82127]",
+                    step >= 3 ? "bg-[#E82127]" : (isQrScanStation ? "bg-[#10A37F]" : "bg-[#3E6AE1]"),
                   )}
                 >
                   {distanceInKm} km
@@ -653,7 +678,7 @@ function StationSelector({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="text-xs font-medium text-white px-2 py-0.5 rounded-lg bg-[#E82127]"
+                  className={`text-xs font-medium text-white px-2 py-0.5 rounded-lg ${isQrScanStation ? "bg-[#10A37F]" : "bg-[#3E6AE1]"}`}
                 >
                   Pickup in {pickupMins} minutes
                 </motion.div>
