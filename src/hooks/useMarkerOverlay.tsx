@@ -127,7 +127,7 @@ class MarkerPool {
       <div style="
         width: 14px;
         height: 14px;
-        border: 1.5px solid #E82127;
+        border: 1.5px solid #3E6AE1;
         border-top-color: transparent;
         border-radius: 50%;
         animation: camera-spin 1s linear infinite;
@@ -139,7 +139,7 @@ class MarkerPool {
       display: inline-block;
       width: 100%;
       padding: 7px 0;
-      background: #E82127;
+      background: #4A4A4A;
       color: #FFFFFF;
       font-size: 11px;
       font-weight: 500;
@@ -676,7 +676,7 @@ const buildMarkerContainer = useCallback(
           <div style="
             width: 14px;
             height: 14px;
-            border: 1.5px solid #E82127;
+            border: 1.5px solid #10A37F;
             border-top-color: transparent;
             border-radius: 50%;
             animation: camera-spin 1s linear infinite;
@@ -688,7 +688,7 @@ const buildMarkerContainer = useCallback(
           display: inline-block;
           width: 100%;
           padding: 8px 0;
-          background: #E82127;
+          background: #4A4A4A;
           color: #FFFFFF;
           font-size: 12px;
           font-weight: 500;
@@ -738,13 +738,13 @@ const buildMarkerContainer = useCallback(
       }
       
       pickupBtn.addEventListener("mouseenter", () => {
-        pickupBtn.style.background = "#C91C22" // Slightly darker Tesla red on hover
+        pickupBtn.style.background = "#3A3A3A" // Slightly darker gray on hover
         pickupBtn.style.transform = "translateY(-1px)"
         pickupBtn.style.boxShadow = "0 2px 5px rgba(0,0,0,0.15)"
         pickupBtn.style.letterSpacing = "0.6px" // Subtle letter spacing change on hover
       })
       pickupBtn.addEventListener("mouseleave", () => {
-        pickupBtn.style.background = "#E82127" // Tesla red
+        pickupBtn.style.background = "#4A4A4A" // Gray
         pickupBtn.style.transform = ""
         pickupBtn.style.boxShadow = ""
         pickupBtn.style.letterSpacing = "0.5px"
@@ -1287,23 +1287,32 @@ const batchUpdateMarker = useCallback((
     }
   }
   
-  // Tesla-style marker styling with minimalist colors
+  // Minimalist marker styling with new color scheme
   let borderColor, textColor, markerBackground, markerBorderColor;
   
-  if (isDeparture) {
-    // Tesla Red
-    borderColor = "#E82127";
-    textColor = "#E82127";
+  // Check if this is a QR scanned virtual car station
+  const isVirtualCarStation = station.properties.isVirtualCarLocation === true;
+  
+  if (isDeparture && isVirtualCarStation) {
+    // GREEN for QR code scanned departure
+    borderColor = "#10A37F"; // Green
+    textColor = "#10A37F";
     markerBackground = "rgba(23, 23, 23, 0.95)";
-    markerBorderColor = "#E82127";
-  } else if (isArrival) {
-    // Tesla Blue
-    borderColor = "#3E6AE1";
+    markerBorderColor = "#10A37F";
+  } else if (isDeparture) {
+    // BLUE for regular departure
+    borderColor = "#3E6AE1"; // Blue
     textColor = "#3E6AE1";
     markerBackground = "rgba(23, 23, 23, 0.95)";
     markerBorderColor = "#3E6AE1";
+  } else if (isArrival) {
+    // RED for arrival
+    borderColor = "#E82127"; // Red
+    textColor = "#E82127";
+    markerBackground = "rgba(23, 23, 23, 0.95)";
+    markerBorderColor = "#E82127";
   } else if (isListSelected) {
-    // Tesla Silver/Gray
+    // Silver/Gray for selected but not departure/arrival
     borderColor = "rgba(220, 220, 220, 0.9)";
     textColor = "#FFFFFF";
     markerBackground = "rgba(23, 23, 23, 0.95)";
@@ -1325,11 +1334,13 @@ const batchUpdateMarker = useCallback((
     refs.collapsedDiv.style.transform = "scale(1.05)";
     
     // Premium subtle glow effect for selected markers
-    const glowColor = isDeparture 
-      ? "rgba(232, 33, 39, 0.4)" 
-      : isArrival 
-        ? "rgba(62, 106, 225, 0.4)" 
-        : "rgba(220, 220, 220, 0.4)";
+    const glowColor = isDeparture && isVirtualCarStation
+      ? "rgba(16, 163, 127, 0.4)" // Green glow for QR scanned car
+      : isDeparture
+        ? "rgba(62, 106, 225, 0.4)" // Blue glow for departure
+        : isArrival
+          ? "rgba(232, 33, 39, 0.4)" // Red glow for arrival
+          : "rgba(220, 220, 220, 0.4)"; // Silver/gray for other selections
     
     refs.collapsedDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.15), 0 0 6px ${glowColor}`;
     refs.collapsedDiv.style.borderWidth = "2px";
@@ -1342,11 +1353,13 @@ const batchUpdateMarker = useCallback((
   // Expanded style updates
   refs.expandedDiv.style.borderColor = borderColor;
   if (isDeparture || isArrival || isListSelected) {
-    const glowColor = isDeparture 
-      ? "rgba(16, 163, 127, 0.6)" 
-      : isArrival 
-        ? "rgba(39, 110, 241, 0.6)" 
-        : "rgba(255, 255, 255, 0.4)";
+    const glowColor = isDeparture && isVirtualCarStation
+      ? "rgba(16, 163, 127, 0.6)" // Green glow for QR scanned car
+      : isDeparture
+        ? "rgba(62, 106, 225, 0.6)" // Blue glow for departure
+        : isArrival
+          ? "rgba(232, 33, 39, 0.6)" // Red glow for arrival
+          : "rgba(255, 255, 255, 0.4)"; // Silver/gray for other selections
     
     refs.expandedDiv.style.boxShadow = `0 8px 20px rgba(0,0,0,0.3), 0 0 20px ${glowColor}`;
     refs.expandedDiv.style.borderWidth = "2px";
