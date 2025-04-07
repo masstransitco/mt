@@ -545,15 +545,14 @@ const buildMarkerContainer = useCallback(
             SCANNED CAR
           </div>
           <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
-            ${station.properties.Place || 'Electric Vehicle'}
+            ${(station.properties.Place || 'Electric Vehicle').replace(/\[.*\]/, '')} <!-- Remove brackets if they exist -->
           </div>
           <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
             ${station.properties.Address || 'Current location'}
           </div>
         </div>
         
-        <!-- Car Plate - similar to CarPlate.tsx -->
-        ${registration ? `
+        <!-- Car Plate - similar to CarPlate.tsx - ALWAYS show for virtual car stations -->
         <div class="car-plate-container" style="
           margin: 8px 0;
           display: flex;
@@ -594,7 +593,7 @@ const buildMarkerContainer = useCallback(
                 justify-content: center;
                 gap: 0.25rem;
               ">
-                ${registration.split('').map(char => `
+                ${(registration || station.properties.name || "").split('').map(char => `
                   <span style="
                     color: black;
                     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -621,7 +620,6 @@ const buildMarkerContainer = useCallback(
             "></div>
           </div>
         </div>
-        ` : ''}
         
         <!-- Animation progress indicator - Tesla style -->
         <div class="animation-progress" style="
