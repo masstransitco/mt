@@ -679,6 +679,7 @@ useEffect(() => {
                 setSheetMinimized(false);
               }
             }}
+            animateToLocation={cameraControls?.animateToLocation}
             onClearDeparture={() => {
               // Use the manager if available
               if (stationSelectionManagerRef.current) {

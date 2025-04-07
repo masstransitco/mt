@@ -34,7 +34,7 @@ const Google3DMapCard = dynamic(() => import("@/components/3DMapCard"), {
 })
 
 /* -----------------------------------------------------------
-   Icons for departure/arrival
+   Circle markers for departure/arrival - Tesla style
 ----------------------------------------------------------- */
 interface IconProps {
   highlight: boolean
@@ -42,24 +42,57 @@ interface IconProps {
 }
 
 const DepartureIcon = React.memo(({ highlight, step }: IconProps) => (
-  <div className={cn("transition-all duration-300", highlight ? "text-[#10a37f]" : "text-gray-400")}>
+  <div className="transition-all duration-300">
     {step === 1 ? (
+      // Search state
       <Search className="w-5 h-5 text-gray-200" />
-    ) : step >= 3 ? (
-      // Green circle indicator for step 3 and beyond
-      <div className="w-5 h-5 rounded-full bg-[#10a37f] flex items-center justify-center">
-        <div className="w-3 h-3 rounded-full bg-[#0d8c6d] border border-[#0a7259]"></div>
-      </div>
     ) : (
-      <MapPinDown className="w-5 h-5" />
+      // Tesla-style circle with border
+      <div 
+        className={cn(
+          "w-5 h-5 rounded-full flex items-center justify-center",
+          "border-2 transition-all duration-300",
+          highlight ? "border-[#E82127]" : "border-gray-500"
+        )}
+        style={{
+          background: "rgba(23, 23, 23, 0.95)",
+          boxShadow: highlight ? "0 0 6px rgba(232, 33, 39, 0.4)" : "none"
+        }}
+      >
+        {step >= 3 && (
+          // Inner dot for selected state
+          <div className="w-2 h-2 rounded-full bg-[#E82127]"></div>
+        )}
+      </div>
     )}
   </div>
 ))
 DepartureIcon.displayName = "DepartureIcon"
 
 const ArrivalIcon = React.memo(({ highlight, step }: IconProps) => (
-  <div className={cn("transition-all duration-300", highlight ? "text-[#276EF1]" : "text-gray-400")}>
-    {step === 3 ? <Search className="w-5 h-5 text-gray-200" /> : <MapPinUp className="w-5 h-5" />}
+  <div className="transition-all duration-300">
+    {step === 3 ? (
+      // Search state
+      <Search className="w-5 h-5 text-gray-200" />
+    ) : (
+      // Tesla-style circle with border
+      <div 
+        className={cn(
+          "w-5 h-5 rounded-full flex items-center justify-center", 
+          "border-2 transition-all duration-300",
+          highlight ? "border-[#3E6AE1]" : "border-gray-500"
+        )}
+        style={{
+          background: "rgba(23, 23, 23, 0.95)",
+          boxShadow: highlight ? "0 0 6px rgba(62, 106, 225, 0.4)" : "none"
+        }}
+      >
+        {step >= 4 && (
+          // Inner dot for selected state
+          <div className="w-2 h-2 rounded-full bg-[#3E6AE1]"></div>
+        )}
+      </div>
+    )}
   </div>
 ))
 ArrivalIcon.displayName = "ArrivalIcon"
@@ -400,6 +433,7 @@ interface StationSelectorProps {
   isQrScanStation?: boolean
   virtualStationId?: number | null
   scannedCar?: Car | null
+  animateToLocation?: (loc: google.maps.LatLngLiteral, zoom?: number) => void // for camera animation
 }
 
 function StationSelector({
@@ -410,6 +444,7 @@ function StationSelector({
   isQrScanStation = false,
   virtualStationId = null,
   scannedCar = null,
+  animateToLocation,
 }: StationSelectorProps) {
   const dispatch = useAppDispatch()
   const step = useAppSelector(selectBookingStep)
@@ -473,7 +508,7 @@ function StationSelector({
 
   return (
     <>
-      <div className="station-selector relative z-50 w-full max-w-screen-md mx-auto px-3 pt-3">
+      <div className="station-selector relative z-40 w-full max-w-screen-md mx-auto px-3 pt-3">
         <div className="flex flex-col w-full select-none">
           <motion.div
             initial={{ opacity: 0, y: -5 }}
@@ -504,7 +539,7 @@ function StationSelector({
               transition={{ duration: 0.2 }}
               className={cn(
                 "flex items-center gap-2 px-2.5 py-2 transition-all duration-300 rounded-xl",
-                highlightDeparture ? "bg-[#222222]" : "bg-[#1a1a1a]",
+                highlightDeparture ? "bg-[rgba(232,33,39,0.08)]" : "bg-[#1a1a1a]",
                 arrivalStation ? "border-b border-[#2a2a2a]" : "",
               )}
             >
@@ -555,7 +590,7 @@ function StationSelector({
                   transition={{ duration: 0.3 }}
                   className={cn(
                     "flex items-center gap-2 px-2.5 py-2 transition-all duration-300 rounded-xl",
-                    highlightArrival ? "bg-[#222222]" : "bg-[#1a1a1a]",
+                    highlightArrival ? "bg-[rgba(62,106,225,0.08)]" : "bg-[#1a1a1a]",
                   )}
                 >
                   <ArrivalIcon highlight={highlightArrival} step={step} />
@@ -597,31 +632,33 @@ function StationSelector({
           </motion.div>
 
           {/* Info Bar: distance + pickup time + locate me */}
-          <div className="inline-flex items-center gap-2 mt-1.5 px-1 w-auto">
-            {/* Distance indicator */}
-            {departureStation && arrivalStation && distanceInKm && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={cn(
-                  "text-xs font-medium text-white px-2 py-0.5 rounded-lg",
-                  step >= 3 ? "bg-[#276EF1]" : "bg-[#10a37f]",
-                )}
-              >
-                {distanceInKm} km
-              </motion.div>
-            )}
+          <div className="flex items-center justify-between gap-2 mt-1.5 px-1 w-full">
+            <div className="flex items-center gap-2">
+              {/* Distance indicator */}
+              {departureStation && arrivalStation && distanceInKm && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    "text-xs font-medium text-white px-2 py-0.5 rounded-lg",
+                    step >= 3 ? "bg-[#3E6AE1]" : "bg-[#E82127]",
+                  )}
+                >
+                  {distanceInKm} km
+                </motion.div>
+              )}
 
-            {/* Pickup time indicator on step 2 */}
-            {step === 2 && pickupMins !== null && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-xs font-medium text-white px-2 py-0.5 rounded-lg bg-[#10a37f]"
-              >
-                Pickup in {pickupMins} minutes
-              </motion.div>
-            )}
+              {/* Pickup time indicator on step 2 */}
+              {step === 2 && pickupMins !== null && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-xs font-medium text-white px-2 py-0.5 rounded-lg bg-[#E82127]"
+                >
+                  Pickup in {pickupMins} minutes
+                </motion.div>
+              )}
+            </div>
 
             {/* Use LocateMeButton with clean separation of concerns */}
             {step === 1 && (
@@ -632,9 +669,10 @@ function StationSelector({
                 updateSearchLocation={true}
                 onLocationFound={(loc) => {
                   // This updates UI and triggers station sorting
-                  // The animation will be handled by the useCameraAnimation hook
                   onAddressSearch(loc)
-                }} 
+                }}
+                // Pass the direct animation function
+                onAnimateToLocation={animateToLocation}
               />
             )}
           </div>
