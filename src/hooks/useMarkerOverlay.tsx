@@ -276,11 +276,11 @@ function computeRouteMidpoint(routeCoords: google.maps.LatLngLiteral[]): google.
   return routeCoords[Math.floor(routeCoords.length / 2)]
 }
 
-// Marker states for virtual DOM comparison
-interface MarkerState {
-  expanded: boolean;
-  visible: boolean;
-  isForceVisible: boolean;
+// MarkerViewModel - A unified model for marker state
+interface MarkerViewModel {
+  isVisible: boolean;
+  isExpanded: boolean;
+  style: "normal" | "selected" | "virtual" | "qr"; 
   isDeparture: boolean;
   isArrival: boolean;
   isListSelected: boolean;
@@ -329,7 +329,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       stationData?: StationFeature
       refs?: ReturnType<typeof buildMarkerContainer>
       marker?: google.maps.marker.AdvancedMarkerElement | null
-      markerState?: MarkerState // Track virtual state for diffing
+      markerState?: MarkerViewModel // Track view model for diffing
     }[]
   >([])
 
@@ -352,12 +352,17 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     import("@/lib/animationStateManager").then(module => {
       const animationStateManager = module.default;
       
-      // Log initial state
-      console.log('[useMarkerOverlay] Initial animation state:', animationStateManager.getState());
+      // Only log in development mode
+      if (process.env.NODE_ENV === "development") {
+        console.log('[useMarkerOverlay] Initial animation state:', animationStateManager.getState());
+      }
       
       // Subscribe to animation state changes
       const unsubscribe = animationStateManager.subscribe((state) => {
-        console.log('[useMarkerOverlay] Animation state update:', state);
+        if (process.env.NODE_ENV === "development") {
+          console.log('[useMarkerOverlay] Animation state update:', state);
+        }
+        
         if (state.type === 'CAMERA_CIRCLING' || state.type === null) {
           setCirclingAnimationActive(state.isAnimating);
           setCirclingTargetStation(state.targetId);
@@ -367,8 +372,12 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
             cancelAnimationFrame(pendingAnimationFrameRef.current);
           }
           
+          // Need to use debouncedMapUpdate here since handleMapUpdate isn't defined yet
           pendingAnimationFrameRef.current = requestAnimationFrame(() => {
-            handleMapUpdate();
+            // Will be defined at runtime
+            if (typeof handleMapUpdate === 'function') {
+              handleMapUpdate();
+            }
             pendingAnimationFrameRef.current = null;
           });
         }
@@ -376,90 +385,76 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
       
       return unsubscribe;
     });
-  }, []); // Will need to use handleMapUpdate once defined
+  }, []); // Avoid dependency cycle with handleMapUpdate
 
-  // Memoize station states to reduce re-renders
-  const stationStates = useMemo(() => {
-    const result = new Map<number, {
-      isForceVisible: boolean;
-      isExpanded: boolean;
-      isDeparture: boolean;
-      isArrival: boolean;
-      isListSelected: boolean;
-    }>();
-    
-    stations.forEach(station => {
-      const stationId = station.id;
+  // Compute marker view model for a station
+  const computeMarkerViewModel = useCallback(
+    (stationId: number, camera?: {tilt: number; zoom: number}): MarkerViewModel => {
+      // Get core station information
       const isDeparture = stationId === departureStationId;
       const isArrival = stationId === arrivalStationId;
       const isListSelected = stationId === listSelectedStationId;
       
-      result.set(stationId, {
-        isForceVisible: isDeparture || isArrival || isListSelected,
-        isExpanded: (bookingStep < 3) ? isDeparture : (isDeparture || isArrival),
+      // Find the station entry
+      const entry = candidateStationsRef.current.find(e => e.stationId === stationId);
+      const isVirtualCarStation = !!entry?.stationData?.properties?.isVirtualCarLocation;
+      
+      // Station data
+      const stationData = entry?.stationData;
+      const address = stationData?.properties?.Address || "No address available";
+      const place = stationData?.properties?.Place || `Station ${stationId}`;
+      
+      // Single condition for station visibility:
+      // Either is departure, arrival, list selected, or it's a virtual station
+      const isVisible = isDeparture || isArrival || isListSelected || isVirtualCarStation;
+      
+      // Single condition for expansion:
+      // Station is chosen for departure, arrival, or is the currently "list selected" station
+      // Only expand if we're at a zoom level where markers should be expanded
+      const cameraZoom = camera?.zoom || DEFAULT_ZOOM;
+      const isExpanded = (isDeparture || isArrival || isListSelected) && 
+                         cameraZoom >= MARKER_POST_MIN_ZOOM;
+      
+      // Compute post height based on camera
+      const cameraTilt = camera?.tilt || 0;
+      const newPostHeight = computePostHeight(35, cameraTilt, cameraZoom);
+      
+      // Determine marker style
+      let style: MarkerViewModel["style"] = "normal";
+      if (isVirtualCarStation) {
+        style = isDeparture ? "qr" : "virtual";
+      } else if (isDeparture || isArrival || isListSelected) {
+        style = "selected";
+      }
+      
+      // Pickup time info
+      const showPickupMins = isDeparture && bookingStep >= 3;
+      
+      return {
+        isVisible,
+        isExpanded,
+        style,
         isDeparture,
         isArrival,
-        isListSelected
-      });
-    });
-    
-    return result;
-  }, [stations, bookingStep, departureStationId, arrivalStationId, listSelectedStationId]);
-
-  // Decide if a station marker is forced visible (departure, arrival, list selected, or virtual car)
-  const isForceVisible = useCallback(
-    (stationId: number): boolean => {
-      // Get from state first
-      const state = stationStates.get(stationId);
-      if (state?.isForceVisible) return true;
-      
-      // Check if this is a virtual car station (always force visible)
-      const stationEntry = candidateStationsRef.current.find(entry => entry.stationId === stationId);
-      if (stationEntry?.stationData?.properties.isVirtualCarLocation) {
-        console.log('[useMarkerOverlay] Force showing virtual car station:', stationId);
-        return true;
-      }
-      
-      return false;
+        isListSelected,
+        postHeight: newPostHeight,
+        address,
+        place,
+        pickupMins: showPickupMins ? pickupMins : null,
+        showPickupBtn: bookingStep === 2 && isDeparture
+      };
     },
-    [stationStates],
-  )
+    [
+      departureStationId,
+      arrivalStationId,
+      listSelectedStationId,
+      bookingStep,
+      pickupMins
+      // computePostHeight is now a regular function, not a dependency
+    ]
+  );
 
-  // Which station(s) are expanded?
-  // - Step < 3: only departure station is expanded (once chosen).
-  // - Step >= 3: expand both departure and arrival (if chosen).
-  // - Virtual car stations are expanded if: 
-  //   1. They're selected as departure/arrival, OR
-  //   2. They are the list selected station (just clicked)
-  const isExpanded = useCallback(
-    (stationId: number): boolean => {
-      // First check if it's expanded based on state
-      const state = stationStates.get(stationId);
-      if (state?.isExpanded) return true;
-      
-      // Always expand the list selected station (just clicked)
-      if (stationId === listSelectedStationId) {
-        console.log('[useMarkerOverlay] Expanding list selected station:', stationId);
-        return true;
-      }
-      
-      // For virtual car stations, special handling
-      const stationEntry = candidateStationsRef.current.find(entry => entry.stationId === stationId);
-      if (stationEntry?.stationData?.properties.isVirtualCarLocation) {
-        // Expand if it's selected as departure or arrival
-        if (stationId === departureStationId || stationId === arrivalStationId) {
-          console.log('[useMarkerOverlay] Expanding virtual car station (departure/arrival):', stationId);
-          return true;
-        }
-        
-        // Otherwise, keep collapsed so user can click to select
-        return false;
-      }
-      
-      return false;
-    },
-    [stationStates, departureStationId, arrivalStationId, listSelectedStationId],
-  )
+  // Note: isForceVisible and isExpanded have been replaced with computeMarkerViewModel
 
   // Now uses stationSelectionManager instead of direct Redux access
   const handleStationClick = useCallback(
@@ -491,13 +486,15 @@ const buildMarkerContainer = useCallback(
     // Check if this is a virtual car station
     const isVirtualCarStation = station.properties.isVirtualCarLocation === true
     
-    console.log('[useMarkerOverlay] Building marker for station:', station.id, 'isVirtualCarStation:', isVirtualCarStation)
-    if (isVirtualCarStation) {
-      console.log('[useMarkerOverlay] Virtual car details:', {
-        registration: station.properties.registration,
-        plateNumber: station.properties.plateNumber,
-        place: station.properties.Place
-      })
+    if (process.env.NODE_ENV === "development") {
+      console.log('[useMarkerOverlay] Building marker for station:', station.id, 'isVirtualCarStation:', isVirtualCarStation)
+      if (isVirtualCarStation) {
+        console.log('[useMarkerOverlay] Virtual car details:', {
+          registration: station.properties.registration,
+          plateNumber: station.properties.plateNumber,
+          place: station.properties.Place
+        })
+      }
     }
 
     // Collapsed marker
@@ -795,7 +792,8 @@ const buildMarkerContainer = useCallback(
 )
 
   // Adjust post height based on tilt and zoom
-  const computePostHeight = useCallback((baseHeight: number, tilt: number, zoom: number) => {
+  // Function to calculate post height based on tilt and zoom
+  const computePostHeight = (baseHeight: number, tilt: number, zoom: number): number => {
     // First calculate tilt fraction (0-1)
     const tiltFraction = Math.min(Math.max(tilt / 45, 0), 1)
     
@@ -808,7 +806,7 @@ const buildMarkerContainer = useCallback(
     // Combine both factors - post is only visible when both conditions are met
     // Multiply by 1.5 to increase the length of the vertical post
     return baseHeight * tiltFraction * zoomFraction * 1.5
-  }, [])
+  }
 
   // Create or update the route marker for DEPARTURE->ARRIVAL
 const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: number}) => {
@@ -1010,7 +1008,9 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       
       // Check if this is a virtual car location (QR scanned car)
       if ((station.properties as any).isVirtualCarLocation === true) {
-        console.log('[useMarkerOverlay] Found virtual car station to add:', station.id);
+        if (process.env.NODE_ENV === "development") {
+          console.log('[useMarkerOverlay] Found virtual car station to add:', station.id);
+        }
         
         // Extract coordinates
         const [lng, lat] = station.geometry.coordinates;
@@ -1034,7 +1034,7 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         c => (c.stationData?.properties as any).isVirtualCarLocation === true
       );
       
-      if (virtualStations.length > 0) {
+      if (virtualStations.length > 0 && process.env.NODE_ENV === "development") {
         console.log('[useMarkerOverlay] Added virtual car stations:', virtualStations.length);
       }
       
@@ -1043,7 +1043,7 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     }
   }, [stations, buildings3D])
 
-  // Create an AdvancedMarker for a station - now with state tracking
+  // Create an AdvancedMarker for a station using the new ViewModel
   const createStationMarker = useCallback(
     (entry: (typeof candidateStationsRef.current)[number]) => {
       if (!googleMap) return
@@ -1057,18 +1057,20 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       const { container } = entry.refs || {}
       if (!container) return
 
-      // Check if this is a virtual car station (QR code scanned car)
-      const isVirtualCarStation = entry.stationData?.properties.isVirtualCarLocation === true
+      // Compute initial view model
+      const viewModel = computeMarkerViewModel(entry.stationId);
       
-      if (isVirtualCarStation) {
-        console.log('[useMarkerOverlay] Creating marker for virtual car station:', entry.stationId)
+      if (viewModel.style === "qr" || viewModel.style === "virtual") {
+        console.log('[useMarkerOverlay] Creating marker for virtual car station:', entry.stationId);
       }
 
       const { AdvancedMarkerElement } = window.google.maps.marker
       entry.marker = new AdvancedMarkerElement({
         position: entry.position,
-        // Use REQUIRED collision behavior for virtual car stations to ensure visibility
-        collisionBehavior: isVirtualCarStation ? "REQUIRED" as any : "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
+        // Use REQUIRED collision behavior for virtual/QR stations to ensure visibility
+        collisionBehavior: (viewModel.style === "qr" || viewModel.style === "virtual") 
+          ? "REQUIRED" as any 
+          : "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any,
         gmpClickable: true,
         content: container,
         map: googleMap,
@@ -1076,53 +1078,37 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
       ;(entry.marker as any)._refs = entry.refs
       ;(entry.marker as any)._stationData = entry.stationData
 
-      // Initialize marker state for diffing
-      const isDeparture = entry.stationId === departureStationId;
-      const isArrival = entry.stationId === arrivalStationId;
-      const isListSelected = entry.stationId === listSelectedStationId;
-      
-      entry.markerState = {
-        // Only expand virtual car stations if they're selected as departure or arrival
-        expanded: isVirtualCarStation ? (isDeparture || isArrival) : false,
-        visible: true,
-        // Always force visibility for virtual car stations
-        isForceVisible: isVirtualCarStation || isDeparture || isArrival || isListSelected,
-        isDeparture,
-        isArrival,
-        isListSelected,
-        postHeight: 0,
-        address: entry.stationData?.properties.Address || "",
-        place: entry.stationData?.properties.Place || "",
-        pickupMins: null,
-        showPickupBtn: bookingStep === 2
-      };
+      // Store the view model for diffing
+      entry.markerState = viewModel;
 
       // Animate in - use requestAnimationFrame for better performance
       // No delay for virtual car stations to ensure immediate visibility
-      container.style.transitionDelay = isVirtualCarStation ? "0ms" : `${Math.random() * 150}ms`
+      container.style.transitionDelay = (viewModel.style === "qr" || viewModel.style === "virtual") 
+        ? "0ms" 
+        : `${Math.random() * 150}ms`
+      
       requestAnimationFrame(() => {
         container.style.transform = "scale(1)"
         
         // Set z-index higher for virtual car stations
-        if (isVirtualCarStation && entry.marker && entry.marker.element) {
+        if ((viewModel.style === "qr" || viewModel.style === "virtual") && entry.marker && entry.marker.element) {
           entry.marker.element.style.zIndex = "10000"
         }
       })
       
-      // Immediately expand virtual car stations only if they're selected as departure or arrival
-      if (isVirtualCarStation && entry.refs) {
-        const isDepartureOrArrival = entry.stationId === departureStationId || entry.stationId === arrivalStationId;
+      // Set initial state of expanded/collapsed view based on view model
+      if (entry.refs) {
         const { collapsedWrapper, expandedWrapper } = entry.refs
         
-        if (isDepartureOrArrival) {
-          // Show expanded view for selected virtual car stations
+        if (viewModel.isExpanded) {
+          // Show expanded view
           collapsedWrapper.style.opacity = "0"
           collapsedWrapper.style.transform = "scale(0.8)"
           expandedWrapper.style.display = "flex"
           expandedWrapper.style.opacity = "1"
           expandedWrapper.style.transform = "scale(1)"
         } else {
-          // Show collapsed view for non-selected virtual car stations
+          // Show collapsed view
           collapsedWrapper.style.opacity = "1"
           collapsedWrapper.style.transform = "scale(1)"
           expandedWrapper.style.opacity = "0"
@@ -1133,287 +1119,272 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         }
       }
     },
-    [googleMap, buildMarkerContainer, departureStationId, arrivalStationId, listSelectedStationId, bookingStep],
+    [googleMap, buildMarkerContainer, computeMarkerViewModel],
   )
 
-  // Batch update markers with the unified camera info
-const batchUpdateMarker = useCallback((
-  entry: (typeof candidateStationsRef.current)[number], 
-  camera: {tilt: number, zoom: number},
-  forceUpdate = false
-) => {
-  if (!entry.marker || !entry.refs || !entry.stationData) return;
-  
-  const station = entry.stationData;
-  const { marker, refs } = entry;
-  
-  // Calculate new state using camera info
-  const isDeparture = station.id === departureStationId;
-  const isArrival = station.id === arrivalStationId;
-  const isListSelected = station.id === listSelectedStationId;
-  const forceVis = isForceVisible(station.id);
-  const expanded = isExpanded(station.id) && camera.zoom >= MARKER_POST_MIN_ZOOM;
-  const newPostHeight = computePostHeight(35, camera.tilt, camera.zoom);
-  const showPosts = newPostHeight > 4 ? "1" : "0";
-  
-  // New marker state
-  const newState: MarkerState = {
-    expanded,
-    visible: true,
-    isForceVisible: forceVis,
-    isDeparture,
-    isArrival,
-    isListSelected,
-    postHeight: newPostHeight,
-    address: station.properties.Address || "No address available",
-    place: station.properties.Place || `Station ${station.id}`,
-    pickupMins: isDeparture ? pickupMins : null,
-    showPickupBtn: bookingStep === 2
+  // Helper function to get marker style configuration based on view model
+  const getMarkerStyleConfig = (viewModel: MarkerViewModel) => {
+    // Base style configurations for different marker types
+    const styleConfigs = {
+      qr: {
+        borderColor: "#10A37F", // Green
+        textColor: "#10A37F",
+        markerBackground: "rgba(23, 23, 23, 0.95)",
+        markerBorderColor: "#10A37F",
+        expandedGlowColor: "rgba(16, 163, 127, 0.6)",
+        collapsedGlowColor: "rgba(16, 163, 127, 0.4)",
+        titleText: "QR SCANNED VEHICLE"
+      },
+      virtual: {
+        borderColor: "rgba(16, 163, 127, 0.7)", // Lighter green
+        textColor: "#10A37F",
+        markerBackground: "rgba(23, 23, 23, 0.95)",
+        markerBorderColor: "rgba(16, 163, 127, 0.7)",
+        expandedGlowColor: "rgba(16, 163, 127, 0.5)",
+        collapsedGlowColor: "rgba(16, 163, 127, 0.3)",
+        titleText: "SCANNED VEHICLE"
+      },
+      departure: {
+        borderColor: "#3E6AE1", // Blue
+        textColor: "#3E6AE1",
+        markerBackground: "rgba(23, 23, 23, 0.95)",
+        markerBorderColor: "#3E6AE1",
+        expandedGlowColor: "rgba(62, 106, 225, 0.6)",
+        collapsedGlowColor: "rgba(62, 106, 225, 0.4)",
+        titleText: viewModel.pickupMins !== null ? "ESTIMATED PICKUP" : "PICKUP LOCATION"
+      },
+      arrival: {
+        borderColor: "#E82127", // Red
+        textColor: "#E82127",
+        markerBackground: "rgba(23, 23, 23, 0.95)",
+        markerBorderColor: "#E82127",
+        expandedGlowColor: "rgba(232, 33, 39, 0.6)",
+        collapsedGlowColor: "rgba(232, 33, 39, 0.4)",
+        titleText: "DESTINATION"
+      },
+      listSelected: {
+        borderColor: "rgba(220, 220, 220, 0.9)",
+        textColor: "#FFFFFF",
+        markerBackground: "rgba(23, 23, 23, 0.95)",
+        markerBorderColor: "rgba(220, 220, 220, 0.9)",
+        expandedGlowColor: "rgba(255, 255, 255, 0.4)",
+        collapsedGlowColor: "rgba(220, 220, 220, 0.4)",
+        titleText: "SELECTED LOCATION"
+      },
+      normal: {
+        borderColor: "rgba(255, 255, 255, 0.15)",
+        textColor: "#FFFFFF",
+        markerBackground: "rgba(23, 23, 23, 0.95)",
+        markerBorderColor: "rgba(255, 255, 255, 0.7)",
+        expandedGlowColor: "rgba(255, 255, 255, 0.3)",
+        collapsedGlowColor: "rgba(255, 255, 255, 0.1)",
+        titleText: "PICKUP LOCATION"
+      }
+    };
+    
+    // Determine which style to use based on the view model
+    if (viewModel.style === "qr") {
+      return styleConfigs.qr;
+    } else if (viewModel.style === "virtual") {
+      return styleConfigs.virtual;
+    } else if (viewModel.isDeparture) {
+      return styleConfigs.departure;
+    } else if (viewModel.isArrival) {
+      return styleConfigs.arrival;
+    } else if (viewModel.isListSelected) {
+      return styleConfigs.listSelected;
+    } else {
+      return styleConfigs.normal;
+    }
   };
-  
-  // Compare with previous state
-  const prevState = entry.markerState;
-  if (!forceUpdate && prevState && 
-      prevState.expanded === newState.expanded &&
-      prevState.isForceVisible === newState.isForceVisible &&
-      prevState.isDeparture === newState.isDeparture &&
-      prevState.isArrival === newState.isArrival &&
-      prevState.isListSelected === newState.isListSelected &&
-      Math.abs(prevState.postHeight - newState.postHeight) < 0.5 &&
-      prevState.showPickupBtn === newState.showPickupBtn &&
-      prevState.pickupMins === newState.pickupMins) {
-    // No significant changes - skip update
-    return;
-  }
-  
-  // Update state reference
-  entry.markerState = newState;
-  
-  // Update marker collision behavior based on importance
-  marker.collisionBehavior = forceVis ? ("REQUIRED" as any) : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any);
-  
-  if (marker.element) {
-    marker.element.style.zIndex = forceVis ? "9999" : "1";
-  }
-  
-  // Update visibility of expanded/collapsed views
-  if (expanded) {
-    refs.collapsedWrapper.style.opacity = "0";
-    refs.collapsedWrapper.style.transform = "scale(0.8)";
-    refs.expandedWrapper.style.display = "flex";
-    requestAnimationFrame(() => {
-      refs.expandedWrapper.style.opacity = "1";
-      refs.expandedWrapper.style.transform = "scale(1)";
-    });
-  } else {
-    refs.collapsedWrapper.style.opacity = "1";
-    refs.collapsedWrapper.style.transform = "scale(1)";
-    refs.expandedWrapper.style.opacity = "0";
-    refs.expandedWrapper.style.transform = "scale(0.95)";
-    setTimeout(() => {
-      refs.expandedWrapper.style.display = "none";
-    }, 250);
-  }
-  
-  // Update post heights for both views
-  refs.collapsedPost.style.height = `${newPostHeight}px`;
-  refs.collapsedPost.style.opacity = showPosts;
-  refs.expandedPost.style.height = `${newPostHeight}px`;
-  refs.expandedPost.style.opacity = showPosts;
-  
-  // Show/hide animation progress indicator and pickup button
-  // Force-check animation state to ensure we're using the most up-to-date information
-  let isAnimatingThisStation = circlingAnimationActive && circlingTargetStation === station.id;
-  const isRelevantStation = bookingStep === 2 && station.id === departureStationId;
-  
-  // Double-check directly with animation manager if this is a departure station
-  if (isRelevantStation) {
-    // Check if we're in a browser environment 
-    if (typeof window !== 'undefined') {
-      // Force-check the animation state to be extra safe
-      try {
-        // Use a global reference if it's been created
-        const w = window as any;
-        if (w.__animationStateManager) {
-          const state = w.__animationStateManager.getState();
-          isAnimatingThisStation = state.isAnimating && state.targetId === station.id;
+
+  // Batch update markers with the unified camera info using the ViewModel
+  const batchUpdateMarker = useCallback((
+    entry: (typeof candidateStationsRef.current)[number], 
+    camera: {tilt: number, zoom: number},
+    forceUpdate = false
+  ) => {
+    if (!entry.marker || !entry.refs || !entry.stationData) return;
+    
+    const station = entry.stationData;
+    const { marker, refs } = entry;
+    
+    // Compute new view model with the current camera settings
+    const viewModel = computeMarkerViewModel(station.id, camera);
+    
+    // Show post only if it has sufficient height
+    const showPosts = viewModel.postHeight > 4 ? "1" : "0";
+    
+    // Compare with previous state
+    const prevState = entry.markerState;
+    if (!forceUpdate && prevState && 
+        prevState.isExpanded === viewModel.isExpanded &&
+        prevState.isVisible === viewModel.isVisible &&
+        prevState.isDeparture === viewModel.isDeparture &&
+        prevState.isArrival === viewModel.isArrival &&
+        prevState.isListSelected === viewModel.isListSelected &&
+        Math.abs(prevState.postHeight - viewModel.postHeight) < 0.5 &&
+        prevState.showPickupBtn === viewModel.showPickupBtn &&
+        prevState.pickupMins === viewModel.pickupMins) {
+      // No significant changes - skip update
+      return;
+    }
+    
+    // Update state reference
+    entry.markerState = viewModel;
+    
+    // Update marker collision behavior based on importance
+    marker.collisionBehavior = viewModel.isVisible 
+      ? ("REQUIRED" as any) 
+      : ("OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any);
+    
+    if (marker.element) {
+      marker.element.style.zIndex = viewModel.isVisible ? "9999" : "1";
+    }
+    
+    // Update visibility of expanded/collapsed views
+    if (viewModel.isExpanded) {
+      refs.collapsedWrapper.style.opacity = "0";
+      refs.collapsedWrapper.style.transform = "scale(0.8)";
+      refs.expandedWrapper.style.display = "flex";
+      requestAnimationFrame(() => {
+        refs.expandedWrapper.style.opacity = "1";
+        refs.expandedWrapper.style.transform = "scale(1)";
+      });
+    } else {
+      refs.collapsedWrapper.style.opacity = "1";
+      refs.collapsedWrapper.style.transform = "scale(1)";
+      refs.expandedWrapper.style.opacity = "0";
+      refs.expandedWrapper.style.transform = "scale(0.95)";
+      setTimeout(() => {
+        refs.expandedWrapper.style.display = "none";
+      }, 250);
+    }
+    
+    // Update post heights for both views
+    refs.collapsedPost.style.height = `${viewModel.postHeight}px`;
+    refs.collapsedPost.style.opacity = showPosts;
+    refs.expandedPost.style.height = `${viewModel.postHeight}px`;
+    refs.expandedPost.style.opacity = showPosts;
+    
+    // Check animation state from a single source
+    let isAnimatingThisStation = false;
+    // Only check animation state if relevant (for performance)
+    if ((viewModel.isDeparture || viewModel.style === "qr") && typeof window !== 'undefined') {
+      // First check our local state
+      isAnimatingThisStation = circlingAnimationActive && circlingTargetStation === station.id;
+      
+      // For departure stations, also consult the animation state manager directly
+      if (viewModel.showPickupBtn) {
+        try {
+          const w = window as any;
+          if (w.__animationStateManager) {
+            const state = w.__animationStateManager.getState();
+            isAnimatingThisStation = state.isAnimating && state.targetId === station.id;
+          }
+        } catch (e) {
+          if (process.env.NODE_ENV === "development") {
+            console.error('Error checking animation state:', e);
+          }
         }
-      } catch (e) {
-        console.error('Error checking animation state:', e);
       }
     }
-  }
 
-  // Animation progress indicator
-  if (refs.animationProgress) {
-    refs.animationProgress.style.display = isAnimatingThisStation ? "flex" : "none";
-  }
-  
-  // Update pickup button visibility - simplified condition
-  if (refs.pickupBtn) {
-    // Just use booking step 2 and departureStationId for simplicity
-    const shouldShowPickupBtn = bookingStep === 2 && station.id === departureStationId;
-    
-    // First, update animation progress visibility
+    // Animation progress indicator
     if (refs.animationProgress) {
       refs.animationProgress.style.display = isAnimatingThisStation ? "flex" : "none";
     }
     
-    // Then update pickup button
-    if (shouldShowPickupBtn) {
-      // Always show the button in step 2 for departure station
-      refs.pickupBtn.style.display = isAnimatingThisStation ? "none" : "inline-block";
-      
-      // If we just completed animation, add a nice fade-in effect
-      if (!isAnimatingThisStation && circlingTargetStation === station.id) {
-        refs.pickupBtn.style.opacity = "0";
-        refs.pickupBtn.style.transform = "translateY(5px)";
+    // Update pickup button visibility based on view model and animation state
+    if (refs.pickupBtn) {
+      if (viewModel.showPickupBtn) {
+        // Show button only if not animating
+        refs.pickupBtn.style.display = isAnimatingThisStation ? "none" : "inline-block";
         
-        // Store a reference to the button to use in the timeout
-        const pickupBtn = refs.pickupBtn;
-        
-        // Slight delay for fade-in
-        setTimeout(() => {
-          // Check that the button still exists
-          if (pickupBtn) {
-            pickupBtn.style.opacity = "1";
-            pickupBtn.style.transform = "translateY(0)";
-            pickupBtn.style.transition = "opacity 0.3s ease-out, transform 0.3s ease-out";
-          }
-        }, 100);
+        // If we just completed animation, add a nice fade-in effect
+        if (!isAnimatingThisStation && circlingTargetStation === station.id) {
+          refs.pickupBtn.style.opacity = "0";
+          refs.pickupBtn.style.transform = "translateY(5px)";
+          
+          // Store a reference to the button to use in the timeout
+          const pickupBtn = refs.pickupBtn;
+          
+          // Slight delay for fade-in
+          setTimeout(() => {
+            // Check that the button still exists
+            if (pickupBtn) {
+              pickupBtn.style.opacity = "1";
+              pickupBtn.style.transform = "translateY(0)";
+              pickupBtn.style.transition = "opacity 0.3s ease-out, transform 0.3s ease-out";
+            }
+          }, 100);
+        }
+      } else {
+        refs.pickupBtn.style.display = "none";
       }
-    } else {
-      refs.pickupBtn.style.display = "none";
     }
-  }
-  
-  // Minimalist marker styling with new color scheme
-  let borderColor, textColor, markerBackground, markerBorderColor;
-  
-  // Check if this is a QR scanned virtual car station
-  const isVirtualCarStation = station.properties.isVirtualCarLocation === true;
-  
-  if (isDeparture && isVirtualCarStation) {
-    // GREEN for QR code scanned departure
-    borderColor = "#10A37F"; // Green
-    textColor = "#10A37F";
-    markerBackground = "rgba(23, 23, 23, 0.95)";
-    markerBorderColor = "#10A37F";
-  } else if (isDeparture) {
-    // BLUE for regular departure
-    borderColor = "#3E6AE1"; // Blue
-    textColor = "#3E6AE1";
-    markerBackground = "rgba(23, 23, 23, 0.95)";
-    markerBorderColor = "#3E6AE1";
-  } else if (isArrival) {
-    // RED for arrival
-    borderColor = "#E82127"; // Red
-    textColor = "#E82127";
-    markerBackground = "rgba(23, 23, 23, 0.95)";
-    markerBorderColor = "#E82127";
-  } else if (isListSelected) {
-    // Silver/Gray for selected but not departure/arrival
-    borderColor = "rgba(220, 220, 220, 0.9)";
-    textColor = "#FFFFFF";
-    markerBackground = "rgba(23, 23, 23, 0.95)";
-    markerBorderColor = "rgba(220, 220, 220, 0.9)";
-  } else {
-    // Default dark with white border
-    borderColor = "rgba(255, 255, 255, 0.15)";
-    textColor = "#FFFFFF";
-    markerBackground = "rgba(23, 23, 23, 0.95)";
-    markerBorderColor = "rgba(255, 255, 255, 0.7)";
-  }
-  
-  // Set the marker styling
-  refs.collapsedDiv.style.background = markerBackground;
-  refs.collapsedDiv.style.borderColor = markerBorderColor;
-  
-  // Special styling for important stations - Tesla-like precision
-  if (isDeparture || isArrival || isListSelected) {
-    refs.collapsedDiv.style.transform = "scale(1.05)";
     
-    // Premium subtle glow effect for selected markers
-    const glowColor = isDeparture && isVirtualCarStation
-      ? "rgba(16, 163, 127, 0.4)" // Green glow for QR scanned car
-      : isDeparture
-        ? "rgba(62, 106, 225, 0.4)" // Blue glow for departure
-        : isArrival
-          ? "rgba(232, 33, 39, 0.4)" // Red glow for arrival
-          : "rgba(220, 220, 220, 0.4)"; // Silver/gray for other selections
+    // Get marker style configuration based on view model
+    const styleConfig = getMarkerStyleConfig(viewModel);
     
-    refs.collapsedDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.15), 0 0 6px ${glowColor}`;
-    refs.collapsedDiv.style.borderWidth = "2px";
-  } else {
-    refs.collapsedDiv.style.transform = "";
-    refs.collapsedDiv.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)";
-    refs.collapsedDiv.style.borderWidth = "1.5px";
-  }
-  
-  // Expanded style updates
-  refs.expandedDiv.style.borderColor = borderColor;
-  if (isDeparture || isArrival || isListSelected) {
-    const glowColor = isDeparture && isVirtualCarStation
-      ? "rgba(16, 163, 127, 0.6)" // Green glow for QR scanned car
-      : isDeparture
-        ? "rgba(62, 106, 225, 0.6)" // Blue glow for departure
-        : isArrival
-          ? "rgba(232, 33, 39, 0.6)" // Red glow for arrival
-          : "rgba(255, 255, 255, 0.4)"; // Silver/gray for other selections
+    // Apply styles to collapsed marker
+    refs.collapsedDiv.style.background = styleConfig.markerBackground;
+    refs.collapsedDiv.style.borderColor = styleConfig.markerBorderColor;
     
-    refs.expandedDiv.style.boxShadow = `0 8px 20px rgba(0,0,0,0.3), 0 0 20px ${glowColor}`;
-    refs.expandedDiv.style.borderWidth = "2px";
-  } else {
-    refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.25)";
-    refs.expandedDiv.style.borderWidth = "1px";
-  }
-  
-  // Update info section content with Tesla-style typography
-  if (!refs.expandedInfoSection) return;
-  
-  if (isDeparture && bookingStep >= 3 && pickupMins !== null) {
-    refs.expandedInfoSection.innerHTML = `
-      <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase;">
-        ESTIMATED PICKUP
-      </div>
-      <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
-        ${pickupMins} min
-      </div>
-      <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
-        ${station.properties.Address || "No address available"}
-      </div>
-    `;
-  } else {
-    const placeName = station.properties.Place || `Station ${station.id}`;
-    const address = station.properties.Address || "No address available";
+    // Special styling for important stations
+    if (viewModel.isDeparture || viewModel.isArrival || viewModel.isListSelected) {
+      refs.collapsedDiv.style.transform = "scale(1.05)";
+      refs.collapsedDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.15), 0 0 6px ${styleConfig.collapsedGlowColor}`;
+      refs.collapsedDiv.style.borderWidth = "2px";
+    } else {
+      refs.collapsedDiv.style.transform = "";
+      refs.collapsedDiv.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)";
+      refs.collapsedDiv.style.borderWidth = "1.5px";
+    }
     
-    // Use DESTINATION title for arrival stations, PICKUP LOCATION for others
-    const titleText = isArrival ? "DESTINATION" : "PICKUP LOCATION";
+    // Apply styles to expanded marker
+    refs.expandedDiv.style.borderColor = styleConfig.borderColor;
+    if (viewModel.isDeparture || viewModel.isArrival || viewModel.isListSelected) {
+      refs.expandedDiv.style.boxShadow = `0 8px 20px rgba(0,0,0,0.3), 0 0 20px ${styleConfig.expandedGlowColor}`;
+      refs.expandedDiv.style.borderWidth = "2px";
+    } else {
+      refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.25)";
+      refs.expandedDiv.style.borderWidth = "1px";
+    }
     
-    refs.expandedInfoSection.innerHTML = `
-      <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase;">
-        ${titleText}
-      </div>
-      <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
-        ${placeName}
-      </div>
-      <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
-        ${address}
-      </div>
-    `;
-  }
-}, [
-  bookingStep,
-  departureStationId,
-  arrivalStationId,
-  pickupMins,
-  isForceVisible,
-  isExpanded,
-  computePostHeight,
-  listSelectedStationId,
-  circlingAnimationActive,
-  circlingTargetStation
-]);
+    // Update info section content
+    if (!refs.expandedInfoSection) return;
+    
+    if (viewModel.isDeparture && viewModel.pickupMins !== null) {
+      refs.expandedInfoSection.innerHTML = `
+        <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase;">
+          ${styleConfig.titleText}
+        </div>
+        <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
+          ${viewModel.pickupMins} min
+        </div>
+        <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
+          ${viewModel.address}
+        </div>
+      `;
+    } else {
+      refs.expandedInfoSection.innerHTML = `
+        <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase;">
+          ${styleConfig.titleText}
+        </div>
+        <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
+          ${viewModel.place}
+        </div>
+        <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
+          ${viewModel.address}
+        </div>
+      `;
+    }
+  }, [
+    computeMarkerViewModel,
+    circlingAnimationActive,
+    circlingTargetStation
+  ]);
 
   // Unified map update handler that combines tilt, zoom, and bounds changes
   const handleMapUpdate = useCallback(() => {
@@ -1434,68 +1405,52 @@ const batchUpdateMarker = useCallback((
     // Use spatial index for efficient lookup of potentially visible stations
     const visibleStationIds = spatialIndexRef.current.getVisibleStations(bounds);
     
-    // First identify any virtual car stations (QR scanned cars)
-    const virtualCarStations = candidateStationsRef.current.filter(
-      entry => entry.stationData?.properties.isVirtualCarLocation === true
-    );
-    
-    if (virtualCarStations.length > 0) {
-      console.log('[useMarkerOverlay] Found virtual car stations:', virtualCarStations.length);
-    }
-    
-    // Process virtual car stations first (higher priority)
-    virtualCarStations.forEach((entry) => {
-      if (!entry.marker) {
-        createStationMarker(entry);
-      } else if (!entry.marker.map) {
-        entry.marker.map = googleMap;
-      }
-    });
-    
-    // First pass: update marker visibility for regular stations
-    candidateStationsRef.current
-      .filter(entry => !entry.stationData?.properties.isVirtualCarLocation)
-      .forEach((entry) => {
-        const { stationId, marker } = entry;
-        
-        // Always show important stations regardless of bounds
-        const shouldBeVisible = isForceVisible(stationId) || visibleStationIds.includes(stationId);
-        
-        if (shouldBeVisible) {
-          if (!marker) {
-            createStationMarker(entry);
-          } else if (!marker.map) {
-            marker.map = googleMap;
-          }
-        } else if (marker?.map) {
-          // Remove if not visible
-          marker.map = null;
-        }
-      });
-    
-    // Second pass: batch update all visible markers with unified camera info
+    // Current camera info for view model
     const cameraInfo = { tilt, zoom };
     
-    // Update virtual car stations first with force update
-    virtualCarStations.forEach(entry => {
-      if (entry.marker) {
-        batchUpdateMarker(entry, cameraInfo, true); // Force update
+    // Single unified pass: process all stations in one loop with view model-driven decisions
+    candidateStationsRef.current.forEach(entry => {
+      const { stationId, marker } = entry;
+      
+      // Always compute the view model first - single source of truth
+      const viewModel = computeMarkerViewModel(stationId, cameraInfo);
+      
+      // Combined visibility check - either the view model marks it as important,
+      // or it's in the visible bounds (optimized via spatial index)
+      const shouldBeVisible = viewModel.isVisible || visibleStationIds.includes(stationId);
+      
+      if (viewModel.style === "qr" || viewModel.style === "virtual") {
+        if (process.env.NODE_ENV === "development") {
+          console.log('[useMarkerOverlay] Processing virtual car station:', stationId);
+        }
+      }
+      
+      // First handle marker existence/visibility
+      if (shouldBeVisible) {
+        if (!marker) {
+          // Create new marker if needed
+          createStationMarker(entry);
+        } else if (!marker.map) {
+          // Add to map if not already visible
+          marker.map = googleMap;
+        }
+        
+        // Now that we have a valid marker, update its styling
+        if (entry.marker) {
+          // Force update for QR/virtual car stations for reliable visibility
+          const forceUpdate = viewModel.style === "qr" || viewModel.style === "virtual";
+          batchUpdateMarker(entry, cameraInfo, forceUpdate);
+        }
+      } else if (marker && marker.map) {
+        // Remove marker if it should not be visible
+        marker.map = null;
       }
     });
-    
-    // Then update regular stations
-    candidateStationsRef.current
-      .filter(entry => !entry.stationData?.properties.isVirtualCarLocation)
-      .forEach(entry => {
-        if (entry.marker && entry.marker.map) {
-          batchUpdateMarker(entry, cameraInfo);
-        }
-      });
     
     // Update route marker with the same camera info
     createOrUpdateRouteMarker(cameraInfo);
     
-  }, [googleMap, createStationMarker, batchUpdateMarker, createOrUpdateRouteMarker, isForceVisible]);
+  }, [googleMap, createStationMarker, batchUpdateMarker, createOrUpdateRouteMarker, computeMarkerViewModel]);
   
   // Debounced map update handler
   const debouncedMapUpdate = useMemo(() => {
@@ -1509,10 +1464,36 @@ const batchUpdateMarker = useCallback((
     }, 16); // ~60fps
   }, [handleMapUpdate]);
 
-  // Initialize candidate stations only once
+  // Create a ref outside the effect to track previous lengths
+  const prevLengthsRef = useRef<{stations: number; buildings3D: number}>({
+    stations: -1, 
+    buildings3D: -1
+  });
+  
+  // Initialize candidate stations only when stations or buildings3D change
   useEffect(() => {
-    initializeCandidateStations();
-  }, [initializeCandidateStations]);
+    // Store current lengths to compare with previous values
+    const currentStationsLength = stations.length;
+    const currentBuildings3DLength = buildings3D.length;
+    
+    // Only reinitialize if the arrays have changed length
+    if (prevLengthsRef.current.stations !== currentStationsLength ||
+        prevLengthsRef.current.buildings3D !== currentBuildings3DLength) {
+      
+      // Update the stored lengths
+      prevLengthsRef.current = {
+        stations: currentStationsLength,
+        buildings3D: currentBuildings3DLength
+      };
+      
+      if (process.env.NODE_ENV === "development") {
+        console.log('[useMarkerOverlay] Reinitializing candidate stations due to data change');
+      }
+      
+      // Now reinitialize the stations
+      initializeCandidateStations();
+    }
+  }, [stations, buildings3D, initializeCandidateStations]);
 
   // Add unified map listener for camera changes
   useEffect(() => {
