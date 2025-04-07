@@ -85,34 +85,60 @@ class StationSelectionManager {
     const selectedStation = stations.find(s => s.id === stationId);
     const isSelectedStationVirtual = selectedStation?.properties?.isVirtualCarLocation === true;
     
-    console.log(`[stationSelectionManager] Selecting station ${stationId}, isVirtual: ${isSelectedStationVirtual}`);
+    console.log(`[stationSelectionManager] Selecting station ${stationId}, isVirtual: ${isSelectedStationVirtual}, step: ${step}`);
     console.log(`[stationSelectionManager] Current state: isQrScanStation=${isQrScanStation}, virtualStationId=${virtualStationId}`);
 
-    // If we had a prior QR-based station, remove it if it's different
-    if (isQrScanStation && virtualStationId && stationId !== virtualStationId) {
-      console.log(`[stationSelectionManager] Clearing previous QR station ${virtualStationId}`);
-      store.dispatch(clearDepartureStation());
-      store.dispatch(removeStation(virtualStationId));
-      store.dispatch(clearQrStationData());
-      store.dispatch(setScannedCar(null));
-      this.processedCarIdRef = null;
+    // If the selected station is a virtual car station, always mark it as the QR station
+    // This restores QR station state if it was somehow lost
+    if (isSelectedStationVirtual) {
+      console.log(`[stationSelectionManager] Setting QR station data for ${stationId}`);
+      store.dispatch(setQrStationData({
+        isQrScanStation: true,
+        qrVirtualStationId: stationId
+      }));
     }
-    
-    // If we're selecting a regular station but had a QR station as departure,
-    // clear the QR station even if we're in step 3+
-    if (!isSelectedStationVirtual && isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
-      console.log(`[stationSelectionManager] Regular station selected, clearing QR departure station ${virtualStationId}`);
-      // Don't clear departure if we're in step 3+ as it would reset the flow
+
+    // If we have both a current QR station AND a new QR station being selected, 
+    // remove the old one if they're different
+    if (isQrScanStation && virtualStationId && isSelectedStationVirtual && stationId !== virtualStationId) {
+      console.log(`[stationSelectionManager] Replacing old QR station ${virtualStationId} with new one ${stationId}`);
+      // Only clear departure if we're in step 1-2
       if (step <= 2) {
         store.dispatch(clearDepartureStation());
       }
       store.dispatch(removeStation(virtualStationId));
-      store.dispatch(clearQrStationData());
+      store.dispatch(setQrStationData({
+        isQrScanStation: true,
+        qrVirtualStationId: stationId
+      }));
       store.dispatch(setScannedCar(null));
       this.processedCarIdRef = null;
     }
+    
+    // ONLY remove QR station data if selecting a regular station in step 1-2
+    // In steps 3-4, we need to keep the departure station intact
+    if (!isSelectedStationVirtual && isQrScanStation && virtualStationId) {
+      if (step <= 2) {
+        console.log(`[stationSelectionManager] Step ${step}: Regular station selected, clearing QR station ${virtualStationId}`);
+        store.dispatch(clearDepartureStation());
+        store.dispatch(removeStation(virtualStationId));
+        store.dispatch(clearQrStationData());
+        store.dispatch(setScannedCar(null));
+        this.processedCarIdRef = null;
+      } else {
+        console.log(`[stationSelectionManager] Step ${step}: Keeping QR departure station ${virtualStationId}`);
+        // In steps 3-4, we want to KEEP the QR station as departure
+        // Just make sure state is consistent
+        if (departureStationId === virtualStationId) {
+          store.dispatch(setQrStationData({
+            isQrScanStation: true,
+            qrVirtualStationId: virtualStationId
+          }));
+        }
+      }
+    }
 
-    // Step logic
+    // Step logic - CRUCIAL CHANGE: handle selection based on step without resetting
     if (step === 1) {
       store.dispatch(selectDepartureStation(stationId));
       store.dispatch(advanceBookingStep(2));
@@ -121,10 +147,12 @@ class StationSelectionManager {
       store.dispatch(selectDepartureStation(stationId));
       toast.success("Departure station re-selected!");
     } else if (step === 3) {
+      // For step 3, we're selecting an arrival station - DO NOT reset QR departure station
       store.dispatch(selectArrivalStation(stationId));
       store.dispatch(advanceBookingStep(4));
       toast.success("Arrival station selected!");
     } else if (step === 4) {
+      // For step 4, we're re-selecting an arrival station - DO NOT reset QR departure station
       store.dispatch(selectArrivalStation(stationId));
       toast.success("Arrival station re-selected!");
     } else {
@@ -133,15 +161,6 @@ class StationSelectionManager {
 
     // Update list selected station in Redux
     store.dispatch(setListSelectedStation(stationId));
-
-    // If this is a new QR station, mark it as such in redux
-    if (isSelectedStationVirtual && viaScan) {
-      console.log(`[stationSelectionManager] Setting QR station data for ${stationId}`);
-      store.dispatch(setQrStationData({
-        isQrScanStation: true,
-        qrVirtualStationId: stationId
-      }));
-    }
 
     // Return the new sheet mode
     return "detail";
@@ -152,10 +171,27 @@ class StationSelectionManager {
    * @returns The new sheet mode
    */
   public confirmStationSelection(): SheetMode {
-    const step = this.getCurrentStep();
+    const state = store.getState();
+    const step = state.booking.step;
+    const isQrScanStation = state.booking.isQrScanStation;
+    const virtualStationId = state.booking.qrVirtualStationId;
+    const departureStationId = state.booking.departureStationId;
     
+    console.log(`[stationSelectionManager] Confirming selection at step ${step}`);
+    console.log(`[stationSelectionManager] isQrScanStation=${isQrScanStation}, virtualStationId=${virtualStationId}`);
+
     // For example: if step 2 is confirmed, move on to step 3
     if (step === 2) {
+      // Make sure QR station data is preserved when advancing to step 3
+      if (isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
+        console.log(`[stationSelectionManager] Preserving QR station data for ${virtualStationId} when advancing to step 3`);
+        // Re-set the QR station data to ensure it's not lost
+        store.dispatch(setQrStationData({
+          isQrScanStation: true,
+          qrVirtualStationId: virtualStationId
+        }));
+      }
+      
       store.dispatch(advanceBookingStep(3));
       toast.success("Departure confirmed! Now choose your arrival station.");
     }
