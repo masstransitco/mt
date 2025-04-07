@@ -8,6 +8,11 @@ import type { StationFeature } from '@/store/stationsSlice';
  * to use as a departure point in the booking flow
  */
 export function createVirtualStationFromCar(car: Car, virtualId: number): StationFeature {
+  // Add registration to car name for display
+  const formattedCarName = car.registration ? 
+    `${car.model || 'Car'} [${car.registration}]` : 
+    `Car ${car.name}`;
+    
   return {
     type: "Feature",
     id: virtualId,
@@ -17,7 +22,7 @@ export function createVirtualStationFromCar(car: Car, virtualId: number): Statio
     },
     properties: {
       walkTime: 0, // It's right there
-      Place: `Car ${car.name}`,
+      Place: formattedCarName, // Include registration in the place name
       Address: car.location_position_description || "Current location",
       maxPower: 0,
       totalSpots: 1,
@@ -27,8 +32,8 @@ export function createVirtualStationFromCar(car: Car, virtualId: number): Statio
       drivingTime: 0,
       isVirtualCarLocation: true, // Mark this as a special virtual station
       carId: car.id, // Reference to the car for easier lookup
-      registration: car.registration, // Add the car's registration for QR code scanned cars
-      plateNumber: car.registration // Alternative field for registration
+      registration: car.registration || car.name, // Add the car's registration for QR code scanned cars
+      plateNumber: car.registration || car.name // Alternative field for registration
     },
     distance: 0, // It's right there
     walkTime: 0, // It's right there
