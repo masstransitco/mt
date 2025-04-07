@@ -346,11 +346,30 @@ export default function GMap() {
   }, [reduxSearchLocation, userLocation]);
 
   // -------------------------
+  // Station Selection Manager
+  // -------------------------
+  // Load the station selection manager asynchronously if not already loaded
+  const stationSelectionManagerRef = useRef<any>(null);
+  useEffect(() => {
+    import("@/lib/stationSelectionManager").then(module => {
+      stationSelectionManagerRef.current = module.default;
+    });
+  }, []);
+
+  // -------------------------
   // One function for station selection (using stationSelectionManager)
   // -------------------------
   const pickStationAsDeparture = useCallback(
     (stationId: number, viaScan = false) => {
-      // If we had a prior QR-based station, remove it if it’s different
+      // Use the stationSelectionManager if available
+      if (stationSelectionManagerRef.current) {
+        const newSheetMode = stationSelectionManagerRef.current.selectStation(stationId, viaScan);
+        setSheetMode(newSheetMode);
+        setSheetMinimized(false);
+        return;
+      }
+      
+      // Fallback to original behavior if manager not available
       if (isQrScanStation && virtualStationId && stationId !== virtualStationId) {
         dispatch(clearDepartureStation());
         dispatch(removeStation(virtualStationId));
@@ -400,17 +419,6 @@ export default function GMap() {
     },
     [pickStationAsDeparture]
   );
-
-  // -------------------------
-  // Station Selection Manager
-  // -------------------------
-  // Load the station selection manager asynchronously if not already loaded
-  const stationSelectionManagerRef = useRef<any>(null);
-  useEffect(() => {
-    import("@/lib/stationSelectionManager").then(module => {
-      stationSelectionManagerRef.current = module.default;
-    });
-  }, []);
   
   // -------------------------
   // ThreeJs Overlay Hook
@@ -436,15 +444,8 @@ export default function GMap() {
 // -------------------------
 
 // Call the hook at the top level of your component
-// The hook now handles all tilt/zoom changes internally
-useMarkerOverlay(actualMap, {
-  onTiltChange: (tilt) => {
-    // optional callback if needed
-  },
-  onZoomChange: (zoom) => {
-    // optional callback if needed
-  },
-});
+// The hook now handles all marker state and styling internally with the ViewModel pattern
+useMarkerOverlay(actualMap);
 
 // -------------------------
 // Location Circles Overlay Hook
@@ -608,7 +609,7 @@ useEffect(() => {
 
   let stationToShow: StationFeature | null = null;
   if (hasStationSelected) {
-    // If it’s a QR-based virtual station
+    // If it's a QR-based virtual station
     if (isQrScanStation && virtualStationId === hasStationSelected) {
       stationToShow = stations.find((s) => s.id === virtualStationId) || null;
     } else {
