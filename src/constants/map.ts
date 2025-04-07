@@ -26,12 +26,12 @@ export const LIBRARIES: Libraries = [
   "maps3d" as any,
 ];
 
-// Map boundaries for Hong Kong
+// Map boundaries for Hong Kong (expanded)
 export const HK_BOUNDS = {
-  north: 22.6,
-  south: 22.1,
-  east: 114.4,
-  west: 113.8,
+  north: 22.8,  // Expanded north bound
+  south: 21.9,  // Expanded south bound
+  east: 114.6,  // Expanded east bound
+  west: 113.6,  // Expanded west bound
 };
 
 
