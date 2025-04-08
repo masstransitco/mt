@@ -67,18 +67,18 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
   // Animation refs
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Start pulsing animation when component mounts and not showing walking route
+  // More subtle Tesla-like animation effects
   useEffect(() => {
     if (!isWalkingRouteShown && !prefersReducedMotion) {
-      // Run pulsing animation when in default state
+      // Run very subtle pulsing animation when in default state
       pulseControls.start({
         boxShadow: [
           "0 0 0 0px rgba(255, 255, 255, 0)",
-          "0 0 0 2px rgba(255, 255, 255, 0.3)",
+          "0 0 0 1px rgba(255, 255, 255, 0.15)",
           "0 0 0 0px rgba(255, 255, 255, 0)"
         ],
         transition: {
-          duration: 3,
+          duration: 4,
           ease: "easeInOut",
           times: [0, 0.5, 1],
           repeat: Infinity,
@@ -86,10 +86,10 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
         }
       });
     } else if (isWalkingRouteShown) {
-      // Show green border when walking route is active
+      // Show subtle green border when walking route is active
       pulseControls.stop();
       pulseControls.set({
-        boxShadow: "0 0 0 2px rgba(76, 175, 80, 0.6)"
+        boxShadow: "0 0 0 1px rgba(16, 163, 127, 0.4)"
       });
     }
     
@@ -116,19 +116,19 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
     }
   }, [])
 
-  // Container variants
+  // Container variants - Tesla-inspired subtle styling
   const containerVariants = useMemo(
     () => ({
       pressed: { 
-        scale: 0.98, 
-        backgroundColor: "#0c0c0c",
+        scale: 1, 
+        backgroundColor: "#131313",
       },
       normal: { 
         scale: 1, 
-        backgroundColor: "#1a1a1a",
+        backgroundColor: "#181818",
       },
       hover: {
-        backgroundColor: "#202020",
+        backgroundColor: "#1D1D1D",
       }
     }),
     [],
@@ -136,67 +136,51 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
 
   return (
     <div className="flex flex-col w-full select-none">
-      {/* Card with pulsing border effect */}
+      {/* Card with sleeker Tesla-inspired design */}
       <div className="w-full flex items-center justify-center">
         <motion.div 
-          className={`rounded-xl overflow-hidden ${isWalkingRouteShown ? "" : "pulsating-border"}`}
+          className={`rounded-sm overflow-hidden w-full ${isWalkingRouteShown ? "" : "pulsating-border"}`}
           animate={pulseControls}
           initial={{boxShadow: "0 0 0 0px rgba(255, 255, 255, 0)"}}
         >
           <motion.div
-            className="flex items-center px-4 py-2.5 bg-[#1a1a1a] w-full justify-between cursor-pointer shadow-md"
+            className="flex items-center px-3 py-2 bg-[#181818] w-full justify-between shadow-sm"
             initial="normal"
-            whileHover="hover"
             animate={isWalkingRouteShown ? "pressed" : "normal"}
             variants={containerVariants}
             transition={{
               duration: 0.2,
               ease: [0.16, 1, 0.3, 1],
             }}
-            onClick={() => {
-              handlePress();
-              onShowWalkingRoute?.();
-            }}
           >
             <MinutesDisplay value={minutesAway} isPressed={isPressed || isWalkingRouteShown} />
 
-            {/* Small pill */}
+            {/* Minimal Tesla-inspired label */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, x: -10 }}
+              initial={{ opacity: 0, scale: 0.9, x: -5 }}
               animate={{
                 opacity: 1,
                 scale: 1,
                 x: 0,
                 transition: {
-                  duration: prefersReducedMotion ? 0.3 : 0.5,
-                  delay: prefersReducedMotion ? 0.2 : 0.4,
+                  duration: prefersReducedMotion ? 0.2 : 0.3,
+                  delay: prefersReducedMotion ? 0.1 : 0.2,
                   ease: [0.16, 1, 0.3, 1],
                 },
               }}
-              className={`rounded-lg px-2.5 py-1 ${
+              className={`rounded-sm px-2 py-0.5 ${
                 isWalkingRouteShown 
                   ? 'bg-[#1e4a3a]' 
                   : isAccurateTime 
                     ? 'bg-[#2a3a2a]' 
-                    : 'bg-[#2a2a2a]'
+                    : 'bg-[#232323]'
               }`}
             >
-              <span className={`font-medium text-xs ${
-                isWalkingRouteShown 
-                  ? 'text-green-400' 
-                  : isAccurateTime 
-                    ? 'text-green-300' 
-                    : 'text-gray-300'
-              }`}>
-                {isWalkingRouteShown
-                  ? `${locationName ? `route to ${locationName}` : "route to station"}`
-                  : locationName 
-                    ? `walk to ${locationName}` 
-                    : "walk to station"
+              <span className="font-medium text-xs text-neutral-300">
+                {locationName 
+                  ? `walk to ${locationName}` 
+                  : "walk to nearest station"
                 }
-                {sourceLocationName === "search location" 
-                  ? "" 
-                  : ""}
               </span>
             </motion.div>
           </motion.div>
@@ -271,7 +255,7 @@ const MinutesDisplay = memo(function MinutesDisplay({
   return (
     <motion.div variants={numberVariants} initial="initial" animate="animate" className="font-medium text-xl tracking-tight flex items-center text-white">
       <span>{displayValue}</span>
-      <span className="ml-2 text-sm text-gray-300 font-normal">minutes</span>
+      <span className="ml-1 text-sm text-gray-300 font-normal">mins</span>
     </motion.div>
   )
 })

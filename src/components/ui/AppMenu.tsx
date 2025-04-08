@@ -112,9 +112,16 @@ export default function AppMenu({
     >
       {/* Header */}
       <header className="h-16 border-b border-gray-800 flex items-center justify-between px-4">
-        <h2 className="text-base font-medium text-white">
-          Menu
-        </h2>
+        <div className="h-8 flex items-center">
+          <Image 
+            src="/brand/logo.png" 
+            alt="Logo" 
+            width={100} 
+            height={32} 
+            className="object-contain h-full" 
+            priority
+          />
+        </div>
 
         {/* Close Button (X) calls onClose */}
         <button

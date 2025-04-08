@@ -39,20 +39,21 @@ export default function LocateMeButton({
     const toastId = toast.loading("Finding your location...")
 
     try {
+      // IMPORTANT: Log that this is a user-initiated locate-me action
+      console.log("[LocateMeButton] User clicked locate-me, requesting location")
+      
       // Use centralized location service to get position
       const location = await getUserLocation({
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 30000,
-        updateSearchLocation,
+        maximumAge: 5000, // Shorter cache time for button clicks (5 seconds)
+        updateSearchLocation: true, // Always update search location in Redux for consistent behavior
         forceAnimation: true, // Always force animation when locate-me button is clicked
         onLocationFound: (loc) => {
-          // Call callback first before UI updates
+          console.log("[LocateMeButton] Location found:", loc)
+          
+          // IMPORTANT: Call the callback to ensure GMap gets notified DIRECTLY
           onLocationFound?.(loc)
-        },
-        onLocationError: (error) => {
-          // Error already handled by the service
-          console.log("Location error handled by service:", error.code)
         }
       })
 
@@ -60,14 +61,13 @@ export default function LocateMeButton({
         toast.dismiss(toastId)
         toast.success("Location found!")
         
-        // Directly call the animation function if provided
-        // This ensures animation happens even if the location hasn't changed
+        // Directly trigger camera animation for a smoother experience
         if (onAnimateToLocation) {
-          console.log("Directly triggering camera animation to user location")
+          console.log("[LocateMeButton] Triggering camera animation to location")
           onAnimateToLocation(location, 15) // Zoom level 15 matches the default
         }
         
-        // Mark success state for 2s
+        // Show success state for 2s
         setLocationFound(true)
         setTimeout(() => setLocationFound(false), 2000)
       } else {
