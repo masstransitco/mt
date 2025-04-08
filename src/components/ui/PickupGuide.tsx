@@ -2,9 +2,10 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useVideoPreload } from "@/hooks/useVideoPreload"
 
 interface PickupGuideProps {
   bookingStep?: number
@@ -130,6 +131,17 @@ export default function PickupGuide({
     cards = defaultDepartureCards
   }
 
+  // Extract video URLs for preloading
+  const videoUrls = useMemo(() => {
+    return cards.map(card => card.video).filter(Boolean) as string[]
+  }, [cards])
+  
+  // Preload videos
+  const { loadedVideos } = useVideoPreload(videoUrls, {
+    cacheVideos: true,
+    optimizeWebM: true
+  })
+
   const [activeCard, setActiveCard] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
@@ -140,6 +152,20 @@ export default function PickupGuide({
   useEffect(() => {
     if (onCardChange) {
       onCardChange(activeCard)
+    }
+
+    // Performance optimization: Only play the active video
+    if (scrollRef.current) {
+      const videos = scrollRef.current.querySelectorAll('video');
+      videos.forEach((video, index) => {
+        if (index === activeCard) {
+          // Ensure the active video is playing
+          if (video.paused) video.play();
+        } else {
+          // Pause videos that aren't currently visible
+          if (!video.paused) video.pause();
+        }
+      });
     }
   }, [activeCard, onCardChange])
 
@@ -213,6 +239,40 @@ export default function PickupGuide({
     }
   }
 
+  // Video optimization when component loads
+  useEffect(() => {
+    // Apply optimization strategies to improve WebM playback
+    const optimizeVideoPlayback = () => {
+      if (!scrollRef.current) return;
+      
+      // Get all video elements
+      const videoElements = scrollRef.current.querySelectorAll('video');
+      
+      videoElements.forEach((video, i) => {
+        // Only autostart the active video
+        if (i === activeCard) {
+          video.play().catch(e => console.error("Failed to play video:", e));
+        } else {
+          video.pause();
+          // Preload but don't play
+          video.load();
+        }
+        
+        // Additional optimization techniques for WebM
+        video.addEventListener('loadedmetadata', () => {
+          if (i === activeCard) {
+            video.play().catch(e => console.error("Failed to play after metadata load:", e));
+          }
+        });
+      });
+    };
+    
+    // Apply optimizations after a short delay to ensure DOM is ready
+    const timer = setTimeout(optimizeVideoPlayback, 100);
+    
+    return () => clearTimeout(timer);
+  }, [cards, activeCard]);
+
   // Determine title based on props
   const getTitle = () => {
     if (bookingStep === 1) return "Pricing"
@@ -272,8 +332,32 @@ export default function PickupGuide({
                 {card.video ? (
                   <div className="absolute inset-0">
                     <div className="absolute inset-0 bg-gradient-to-br from-gray-900/30 to-gray-800/30 mix-blend-overlay"></div>
-                    <video autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover">
-                      <source src={card.video} type="video/webm" />
+                    <video 
+                      autoPlay 
+                      loop 
+                      muted 
+                      playsInline 
+                      preload="auto"
+                      decoding="async"
+                      disablePictureInPicture
+                      disableRemotePlayback
+                      className="absolute inset-0 w-full h-full object-cover"
+                      style={{ 
+                        willChange: 'transform',
+                        transform: 'translateZ(0)', // Force GPU acceleration
+                        imageRendering: 'high-quality',
+                        backfaceVisibility: 'hidden'
+                      }}
+                      // Only render visible or adjacent cards for performance
+                      key={card.video}
+                      loading="eager"
+                      onCanPlay={(e) => {
+                        // Set playback rate slightly lower for better stability
+                        const video = e.target as HTMLVideoElement;
+                        video.playbackRate = 0.98;
+                      }}
+                    >
+                      <source src={card.video} type="video/webm; codecs=vp9" />
                     </video>
                   </div>
                 ) : (
