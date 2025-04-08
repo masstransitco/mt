@@ -328,3 +328,21 @@
 div[role="region"][aria-label*="alpha channel"] {
   display: none !important;
 }
+
+/* SF Pro Display font utilities */
+@layer utilities {
+  .font-sf-pro-display-light {
+    font-family: 'SF Pro Display';
+    font-weight: 300;
+  }
+  
+  .font-sf-pro-display {
+    font-family: 'SF Pro Display';
+    font-weight: 400;
+  }
+  
+  .font-sf-pro-display-medium {
+    font-family: 'SF Pro Display';
+    font-weight: 500;
+  }
+}
