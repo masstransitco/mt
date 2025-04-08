@@ -483,6 +483,29 @@ function StationSelector({
   // Expand states for each station's map
   const [departureMapExpanded, setDepartureMapExpanded] = useState(false)
   const [arrivalMapExpanded, setArrivalMapExpanded] = useState(false)
+  // Track animation state to disable clear button during animations
+  const [isAnimating, setIsAnimating] = useState(false)
+  const [animatingStationId, setAnimatingStationId] = useState<number | null>(null)
+
+  // Subscribe to animation state manager
+  useEffect(() => {
+    import("@/lib/animationStateManager").then(module => {
+      const animationStateManager = module.default;
+      
+      // Initialize state based on current animation status
+      const initialState = animationStateManager.getState();
+      setIsAnimating(initialState.isAnimating);
+      setAnimatingStationId(initialState.targetId);
+      
+      // Subscribe to animation state changes
+      const unsubscribe = animationStateManager.subscribe((state) => {
+        setIsAnimating(state.isAnimating);
+        setAnimatingStationId(state.targetId);
+      });
+      
+      return unsubscribe;
+    });
+  }, []);
 
   // Possibly create a virtual station if departure is from a QR car
   const actualScannedCar = scannedCar || reduxScannedCar
@@ -518,12 +541,18 @@ function StationSelector({
 
   // Handlers to clear departure/arrival
   const handleClearDeparture = useCallback(() => {
-    dispatch(clearDispatchRoute())
-    setDepartureMapExpanded(false)
-    onClearDeparture?.()
-  }, [dispatch, onClearDeparture])
+    // Only allow clearing if not currently animating
+    if (!isAnimating || animatingStationId !== departureId) {
+      dispatch(clearDispatchRoute())
+      setDepartureMapExpanded(false)
+      onClearDeparture?.()
+    } else {
+      toast.success("Please wait for animation to complete")
+    }
+  }, [dispatch, onClearDeparture, isAnimating, animatingStationId, departureId])
 
   const handleClearArrival = useCallback(() => {
+    // No animation restriction needed for arrival
     setArrivalMapExpanded(false)
     onClearArrival?.()
   }, [onClearArrival])
@@ -571,7 +600,10 @@ function StationSelector({
               <DepartureIcon highlight={highlightDeparture} step={step} />
               <AddressSearch
                 onAddressSelect={(location) => {
+                  console.log(`[StationSelector] Address selected for departure (step ${step}), updating location:`, location);
+                  // Dispatch to Redux first (important order)
                   dispatch(setSearchLocation(location))
+                  // Then inform parent component to update UI
                   onAddressSearch(location)
                 }}
                 disabled={step >= 3}
@@ -593,11 +625,15 @@ function StationSelector({
                   </motion.button>
 
                   <motion.button
-                    whileTap={{ scale: 0.9 }}
+                    whileTap={isAnimating && animatingStationId === departureId ? {} : { scale: 0.9 }}
                     onClick={handleClearDeparture}
-                    className="p-1 hover:bg-[#2a2a2a] transition-colors flex-shrink-0 rounded-full text-gray-400 hover:text-white"
+                    className={`p-1 ${isAnimating && animatingStationId === departureId 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:bg-[#2a2a2a] hover:text-white cursor-pointer'
+                    } transition-colors flex-shrink-0 rounded-full text-gray-400`}
                     type="button"
                     aria-label="Clear departure"
+                    disabled={isAnimating && animatingStationId === departureId}
                   >
                     <X className="w-3 h-3" />
                   </motion.button>
@@ -621,7 +657,10 @@ function StationSelector({
                   <ArrivalIcon highlight={highlightArrival} step={step} />
                   <AddressSearch
                     onAddressSelect={(location) => {
+                      console.log(`[StationSelector] Address selected for arrival (step ${step}), updating location:`, location);
+                      // Dispatch to Redux first (important order)
                       dispatch(setSearchLocation(location))
+                      // Then inform parent component to update UI
                       onAddressSearch(location)
                     }}
                     disabled={step < 3}
@@ -685,16 +724,17 @@ function StationSelector({
               )}
             </div>
 
-            {/* Use LocateMeButton with clean separation of concerns */}
-            {step === 1 && (
+            {/* Show LocateMeButton in step 1 or 3 (whenever selecting a location is relevant) */}
+            {(step === 1 || step === 3) && (
               <LocateMeButton 
                 // Update Redux state and ensure search location is synchronized
                 updateReduxState={true}
                 animateToLocation={true}
                 updateSearchLocation={true}
                 onLocationFound={(loc) => {
-                  // This updates UI and triggers station sorting
-                  onAddressSearch(loc)
+                  console.log("[StationSelector] LocateMeButton found location:", loc);
+                  // This directly calls the parent component's handler
+                  onAddressSearch(loc);
                 }}
                 // Pass the direct animation function
                 onAnimateToLocation={animateToLocation}

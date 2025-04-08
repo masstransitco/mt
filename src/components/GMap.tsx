@@ -736,19 +736,8 @@ useEffect(() => {
   disableMinimize={disableMinimize}
   headerContent={
     <div className="flex items-center w-full justify-between">
-      {/* A simple dynamic title for clarity */}
-      <h2 className="text-sm font-medium">
-        {sheetMode === "guide" && (bookingStep === 1 || bookingStep === 3)
-          ? <span className="text-gray-400">Start</span>
-          : sheetMode === "list"
-          ? <>
-              <span className="text-gray-400">Nearby </span>
-              <span className="text-gray-300">{reduxSearchLocation ? "search location" : "current location"}</span>
-            </>
-          : sheetMode === "detail"
-          ? <span className="text-gray-400">Pickup</span>
-          : <span className="text-gray-400">Sheet</span>}
-      </h2>
+      {/* Empty space where title used to be */}
+      <div className="text-sm font-medium"></div>
 
       {/* Minimizer icons */}
       {sheetMinimized ? (
@@ -779,9 +768,10 @@ useEffect(() => {
   {sheetMode === "guide" && (
     <>
       {/* Example: if step 1 => departing, if step 3 => returning */}
-      {bookingStep === 1 && <PickupGuide isDepartureFlow />}
+      {bookingStep === 1 && <PickupGuide bookingStep={1} isDepartureFlow />}
       {bookingStep === 3 && (
         <PickupGuide
+          bookingStep={3}
           isDepartureFlow={false}
           primaryText="Choose dropoff station"
           secondaryText="Return to any station"

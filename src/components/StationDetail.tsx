@@ -217,14 +217,14 @@ function StationDetail({
       ) : (
         // For step 2 or other steps needing a vehicle list
         showCarGrid && (
-          <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
+          <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md h-auto">
             {isVirtualCarLocation && scannedCar ? (
               // Use CarCard for scanned car display
               <div className="w-full flex flex-col items-center space-y-4">
                 <div className="text-sm text-[#10A37F] font-medium">QR Scanned Vehicle</div>
                 
                 {/* Import and use the CarCard component */}
-                <div className="w-full">
+                <div className="w-full h-full">
                   <LazyCarCard
                     car={scannedCar}
                     selected={true}
@@ -233,12 +233,10 @@ function StationDetail({
                     isQrScanStation={true}
                   />
                 </div>
-                
-                {/* We no longer need this button as it's already in the marker */}
               </div>
             ) : (
               // Regular car grid for normal stations
-              <CarGrid className="w-full" isVisible scannedCar={scannedCar} isQrScanStation={isVirtualCarLocation} />
+              <CarGrid className="w-full h-full" isVisible scannedCar={scannedCar} isQrScanStation={isVirtualCarLocation} />
             )}
           </div>
         )
