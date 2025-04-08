@@ -9,8 +9,9 @@ export const USER_LOCATION_UPDATED_EVENT = "user-location-updated";
 // Event payload for location updates
 export interface LocationUpdateEvent {
   location: google.maps.LatLngLiteral;
-  source: "locate-me-button" | "system" | "fallback";
+  source: "locate-me-button" | "system" | "fallback" | "button-click";
   forceAnimation?: boolean;
+  timestamp?: number;
 }
 
 interface UserLocationOptions {
@@ -128,10 +129,35 @@ function dispatchLocationEvent(
   source: LocationUpdateEvent["source"],
   forceAnimation?: boolean
 ) {
+  // Check current booking step to determine if animation should be allowed
+  // This aligns with the fix in useCameraAnimation
+  const state = store.getState();
+  const bookingStep = state.booking?.step || 1;
+  const arrivalId = state.booking?.arrivalStationId || null;
+  
+  // Animation is only allowed in step 1 or step 3 without arrival station selected
+  // unless we explicitly force animation (from locate-me button)
+  const shouldAnimate = forceAnimation || bookingStep === 1 || (bookingStep === 3 && !arrivalId);
+  
+  console.log(`[UserLocation] Location event with step=${bookingStep}, arrivalId=${arrivalId}, shouldAnimate=${shouldAnimate}`);
+  
+  // Include timestamp to help components detect unique location updates
   const event = new CustomEvent<LocationUpdateEvent>(USER_LOCATION_UPDATED_EVENT, {
-    detail: { location, source, forceAnimation }
+    detail: { 
+      location, 
+      source, 
+      // Only allow forceAnimation if we determined it should animate based on step
+      forceAnimation: shouldAnimate ? forceAnimation : false,
+      timestamp: Date.now() // Add timestamp for uniqueness tracking
+    }
   });
-  window.dispatchEvent(event);
+  
+  console.log(`[UserLocation] Dispatching location event: source=${source}, forceAnimation=${shouldAnimate && forceAnimation}`);
+  
+  // Use setTimeout to ensure event happens after state updates
+  setTimeout(() => {
+    window.dispatchEvent(event);
+  }, 0);
 }
 
 /**

@@ -23,7 +23,7 @@ import {
 
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { setScannedCar } from "@/store/carSlice";
-import { setListSelectedStation } from "@/store/userSlice";
+import { setListSelectedStation, clearWalkingRoute } from "@/store/userSlice";
 import { toast } from "react-hot-toast";
 import { createVirtualStationFromCar } from "./stationUtils";
 import type { Car } from "@/types/cars";
@@ -86,7 +86,12 @@ class StationSelectionManager {
     const isSelectedStationVirtual = selectedStation?.properties?.isVirtualCarLocation === true;
     
     console.log(`[stationSelectionManager] Selecting station ${stationId}, isVirtual: ${isSelectedStationVirtual}, step: ${step}`);
-    console.log(`[stationSelectionManager] Current state: isQrScanStation=${isQrScanStation}, virtualStationId=${virtualStationId}`);
+
+    // Always clear any active walking route when selecting a station
+    // This ensures consistent behavior regardless of how the station is selected
+    // (via list, marker click, or building click)
+    store.dispatch(clearWalkingRoute());
+    console.log('[stationSelectionManager] Cleared walking route upon station selection');
 
     // If the selected station is a virtual car station, always mark it as the QR station
     // This restores QR station state if it was somehow lost
@@ -279,19 +284,38 @@ class StationSelectionManager {
     const state = store.getState();
     const isQrScanStation = state.booking.isQrScanStation;
     const virtualStationId = state.booking.qrVirtualStationId;
+    const departureStationId = state.booking.departureStationId;
     
-    store.dispatch(clearDepartureStation());
-    store.dispatch(advanceBookingStep(1));
-    store.dispatch(clearDispatchRoute());
+    // Check animation state before clearing
+    const checkAnimationState = async (): Promise<boolean> => {
+      const animationStateManager = (await import("./animationStateManager")).default;
+      const animState = animationStateManager.getState();
+      return animState.isAnimating && animState.targetId === departureStationId;
+    };
     
-    if (isQrScanStation && virtualStationId !== null) {
-      store.dispatch(removeStation(virtualStationId));
-      store.dispatch(clearQrStationData());
-      store.dispatch(setScannedCar(null));
-      this.processedCarIdRef = null;
-    }
+    // Check if animation is in progress for this station
+    checkAnimationState().then(isAnimating => {
+      if (isAnimating) {
+        // Don't allow clearing during animation
+        toast.success("Please wait for animation to complete");
+        return;
+      }
+      
+      // Proceed with clearing if not animating
+      store.dispatch(clearDepartureStation());
+      store.dispatch(advanceBookingStep(1));
+      store.dispatch(clearDispatchRoute());
+      
+      if (isQrScanStation && virtualStationId !== null) {
+        store.dispatch(removeStation(virtualStationId));
+        store.dispatch(clearQrStationData());
+        store.dispatch(setScannedCar(null));
+        this.processedCarIdRef = null;
+      }
+      
+      toast.success("Departure station cleared. Back to picking departure.");
+    });
     
-    toast.success("Departure station cleared. Back to picking departure.");
     return "guide";
   }
 
