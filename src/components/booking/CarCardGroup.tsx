@@ -233,7 +233,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="relative overflow-hidden rounded-xl bg-[#1a1a1a] text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-28 backdrop-blur-sm"
+      className="relative overflow-hidden rounded-xl bg-[#1a1a1a]/90 text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-auto min-h-28 backdrop-blur-sm"
       style={{
         contain: "content",
       }}
@@ -242,7 +242,7 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
       <div className="flex flex-col h-full">
         <div className="flex flex-row flex-1">
           {/* Car Viewer Section */}
-          <div className="relative w-[45%] h-full overflow-hidden flex items-center justify-center">
+          <div className="relative w-[45%] h-full min-h-28 overflow-hidden flex items-center justify-center">
             {!isQrScanStation && group.cars.length > 1 && (
               <div className="absolute top-1.5 left-1.5 z-10" onClick={(e) => e.stopPropagation()}>
                 <select
