@@ -338,19 +338,15 @@ export default function PickupGuide({
                       muted 
                       playsInline 
                       preload="auto"
-                      decoding="async"
-                      disablePictureInPicture
-                      disableRemotePlayback
                       className="absolute inset-0 w-full h-full object-cover"
                       style={{ 
                         willChange: 'transform',
                         transform: 'translateZ(0)', // Force GPU acceleration
-                        imageRendering: 'high-quality',
+                        imageRendering: 'auto',
                         backfaceVisibility: 'hidden'
                       }}
                       // Only render visible or adjacent cards for performance
                       key={card.video}
-                      loading="eager"
                       onCanPlay={(e) => {
                         // Set playback rate slightly lower for better stability
                         const video = e.target as HTMLVideoElement;
