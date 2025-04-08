@@ -291,27 +291,53 @@ export function useSimpleCameraAnimations({
   );
 
   // -------------------------
-  // Animate to route (fitBounds)
+  // Animate to route (fitBounds with enhanced view)
   // -------------------------
   const animateToRoute = useCallback(
     (points: Array<{ lat: number; lng: number }>) => {
       if (!map || points.length < 1) return;
 
-      // For multiple points, use an official method: fitBounds.
+      console.log(`[useCameraAnimation] Animating to route with ${points.length} points`);
+      
+      // For multiple points, first calculate the bounds to get center and appropriate zoom
       const bounds = new google.maps.LatLngBounds();
       points.forEach((pt) => bounds.extend(pt));
-
-      // We'll do an immediate fit, because Google Maps doesn't provide
-      // a direct “animate fitBounds” method. For a more manual approach,
-      // you could do repeated interpolation steps, but that’s more
-      // code complexity.
-      map.setHeading(0);
-      map.setTilt(0);
+      
+      // First, let the map calculate the appropriate zoom level by fitting the bounds
+      // This is done "invisibly" without animation to get a reference point
       map.fitBounds(bounds);
-
+      
+      // Small delay to ensure the map has processed the fitBounds operation
+      setTimeout(() => {
+        // After fitBounds, get the computed zoom level
+        const computedZoom = map.getZoom() || 13;
+        
+        // Calculate center point from bounds
+        const center = bounds.getCenter();
+        
+        if (!center) return;
+        
+        // We want a lower zoom level (further away) than what fitBounds gives us
+        // Decrease zoom by 1 level for a bit more context around the route
+        const adjustedZoom = Math.max(computedZoom - 1, 10);
+        
+        console.log(`[useCameraAnimation] Route animation: original zoom ${computedZoom}, adjusted to ${adjustedZoom}`);
+        
+        // Now use our smooth animation with the calculated center but adjusted zoom and tilt
+        animateCameraTo(
+          {
+            center: { lat: center.lat(), lng: center.lng() },
+            zoom: adjustedZoom,
+            tilt: 45, // 45-degree tilt for a perspective view
+            heading: 0, // keep heading at 0 for consistent north orientation
+          },
+          1200  // Slightly longer animation duration for smoother experience
+        );
+      }, 10);
+      
       manualLocationRef.current = false;
     },
-    [map]
+    [map, animateCameraTo]  // Added animateCameraTo dependency
   );
 
   // -------------------------
@@ -321,15 +347,22 @@ export function useSimpleCameraAnimations({
   const animateToLocation = useCallback(
     (loc: google.maps.LatLngLiteral, zoom = 15) => {
       if (!map) return;
-      // We’ll smoothly move from current to target (heading=0).
+      
+      // Set manual location flag immediately to prevent other animations from overriding
+      manualLocationRef.current = true;
+      
+      // Log that we're animating to a location
+      console.log(`[useCameraAnimation] Animating to location: ${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}, zoom=${zoom}`);
+      
+      // We'll smoothly move from current to target (heading=0).
       const target = {
         center: loc,
         zoom,
         heading: 0,
         tilt: 20, // slight tilt for a nicer effect
       };
+      
       animateCameraTo(target, 1000);
-      manualLocationRef.current = true;
     },
     [map, animateCameraTo]
   );
@@ -374,37 +407,77 @@ export function useSimpleCameraAnimations({
     if (bookingStep === 3) {
       // If both departure + arrival exist => fit them
       if (depId && arrId) {
-        const depSt = findStation(depId);
-        const arrSt = findStation(arrId);
-        if (depSt && arrSt) {
-          const [lng1, lat1] = depSt.geometry.coordinates;
-          const [lng2, lat2] = arrSt.geometry.coordinates;
-          animateToRoute([
-            { lat: lat1, lng: lng1 },
-            { lat: lat2, lng: lng2 },
-          ]);
+        // Check if we have routeCoords first (this would be rare in step 3, but possible)
+        if (routeCoords && routeCoords.length > 0) {
+          console.log(`[useCameraAnimation] Step 3: Using decoded route polyline with ${routeCoords.length} points`);
+          
+          // Sample route for performance if needed
+          const sampledRoute = routeCoords.length > 50 
+            ? [
+                routeCoords[0], // Always include start
+                ...routeCoords.filter((_, i) => i % Math.floor(routeCoords.length / 10) === 0), // Sample middle points
+                routeCoords[routeCoords.length - 1] // Always include end
+              ]
+            : routeCoords;
+          
+          animateToRoute(sampledRoute);
+        } else {
+          // Fallback to just fitting departure and arrival stations
+          const depSt = findStation(depId);
+          const arrSt = findStation(arrId);
+          if (depSt && arrSt) {
+            const [lng1, lat1] = depSt.geometry.coordinates;
+            const [lng2, lat2] = arrSt.geometry.coordinates;
+            
+            console.log(`[useCameraAnimation] Step 3: Using station-based route visualization`);
+            
+            animateToRoute([
+              { lat: lat1, lng: lng1 },
+              { lat: lat2, lng: lng2 },
+            ]);
+          }
         }
       } else {
-        // If arrival not chosen yet, just reset the view
-        resetView();
+        // If arrival not chosen yet, we DON'T reset the view here
+        // This allows search location updates in step 3 to take precedence
+        // Note: searchLocation/userLocation effects now handle this case
+        console.log('[useCameraAnimation] Step 3 without arrival: allowing search location update');
       }
       return;
     }
 
     // 4) Step 4 => show route if available
     if (bookingStep === 4 && depId && arrId) {
-      // If routeCoords exist, we can also do a direct bounding
-      // around the route or just do departure + arrival.
-      // For simplicity, let's keep it departure+arrival bounding:
-      const depSt = findStation(depId);
-      const arrSt = findStation(arrId);
-      if (depSt && arrSt) {
-        const [lng1, lat1] = depSt.geometry.coordinates;
-        const [lng2, lat2] = arrSt.geometry.coordinates;
-        animateToRoute([
-          { lat: lat1, lng: lng1 },
-          { lat: lat2, lng: lng2 },
-        ]);
+      // If routeCoords exist, use them for a more precise route visualization
+      if (routeCoords && routeCoords.length > 0) {
+        console.log(`[useCameraAnimation] Using decoded route polyline with ${routeCoords.length} points`);
+        
+        // Use the actual route coordinates for a more precise fit
+        // For performance, we'll sample the route if it's very detailed
+        const sampledRoute = routeCoords.length > 50 
+          ? [
+              routeCoords[0], // Always include start
+              ...routeCoords.filter((_, i) => i % Math.floor(routeCoords.length / 10) === 0), // Sample middle points
+              routeCoords[routeCoords.length - 1] // Always include end
+            ]
+          : routeCoords;
+        
+        animateToRoute(sampledRoute);
+      } else {
+        // Fallback to just fitting departure and arrival stations
+        const depSt = findStation(depId);
+        const arrSt = findStation(arrId);
+        if (depSt && arrSt) {
+          const [lng1, lat1] = depSt.geometry.coordinates;
+          const [lng2, lat2] = arrSt.geometry.coordinates;
+          
+          console.log(`[useCameraAnimation] Falling back to station-based route visualization`);
+          
+          animateToRoute([
+            { lat: lat1, lng: lng1 },
+            { lat: lat2, lng: lng2 },
+          ]);
+        }
       }
     }
   }, [
@@ -424,16 +497,34 @@ export function useSimpleCameraAnimations({
   // -------------------------
   useEffect(() => {
     if (!searchLocation || isAnimatingRef.current) return;
-    animateToLocation(searchLocation, 15);
-  }, [searchLocation, animateToLocation]);
+    
+    // Only animate to search location if:
+    // 1. We're in step 1 (selecting departure station)
+    // 2. We're in step 3 (selecting arrival station) and NO arrival station is selected yet
+    if (bookingStep === 1 || (bookingStep === 3 && !arrId)) {
+      console.log(`[useCameraAnimation] Animating to search location in step ${bookingStep}`);
+      animateToLocation(searchLocation, 15);
+    } else {
+      console.log(`[useCameraAnimation] Ignoring search location in step ${bookingStep} with arrId=${arrId}`);
+    }
+  }, [searchLocation, animateToLocation, bookingStep, arrId]);
 
   // -------------------------
   // Watch for new user location => animate from current
   // -------------------------
   useEffect(() => {
     if (!userLocation || isAnimatingRef.current) return;
-    animateToLocation(userLocation, 15);
-  }, [userLocation, animateToLocation]);
+    
+    // Only animate to user location if:
+    // 1. We're in step 1 (selecting departure station)
+    // 2. We're in step 3 (selecting arrival station) and NO arrival station is selected yet
+    if (bookingStep === 1 || (bookingStep === 3 && !arrId)) {
+      console.log(`[useCameraAnimation] Animating to user location in step ${bookingStep}`);
+      animateToLocation(userLocation, 15);
+    } else {
+      console.log(`[useCameraAnimation] Ignoring user location in step ${bookingStep} with arrId=${arrId}`);
+    }
+  }, [userLocation, animateToLocation, bookingStep, arrId]);
 
   // -------------------------
   // Return any helpful references or methods
