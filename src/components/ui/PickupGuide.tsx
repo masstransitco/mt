@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect, useMemo } from "react"
+import { useDeviceDetection } from "@/hooks/useDeviceDetection"
 import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import dynamic from 'next/dynamic'
@@ -32,6 +33,8 @@ const CardComponent = ({ card, isActive }: CardProps) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const { os, browser } = useDeviceDetection()
+  const isIOS = os === 'iOS'
 
   // Handle video loading
   const handleVideoLoaded = () => {
@@ -49,9 +52,16 @@ const CardComponent = ({ card, isActive }: CardProps) => {
     if (!video || !isLoaded) return
 
     if (isActive && !isPlaying) {
-      video.play()
-        .then(() => setIsPlaying(true))
-        .catch(() => {/* Silently handle autoplay restrictions */})
+      // iOS requires video to have both muted and playsinline attributes
+      // Use a timeout to help iOS initialize the video properly
+      setTimeout(() => {
+        video.play()
+          .then(() => setIsPlaying(true))
+          .catch((error) => {
+            console.log("Video play error:", error.message)
+            /* iOS often blocks autoplay even with muted videos */
+          })
+      }, 100)
     } else if (!isActive && isPlaying) {
       video.pause()
       setIsPlaying(false)
@@ -62,9 +72,20 @@ const CardComponent = ({ card, isActive }: CardProps) => {
   const handleCardClick = () => {
     const video = videoRef.current
     if (video && isLoaded && !isPlaying) {
+      // Make sure video is muted for iOS (required for playback)
+      video.muted = true;
+      
+      // Add explicit user interaction handler
       video.play()
         .then(() => setIsPlaying(true))
-        .catch(() => {/* Silently handle play restrictions */})
+        .catch((error) => {
+          console.log("Video play error on click:", error.message)
+          
+          // Special handling for iOS - try once more after a delay
+          setTimeout(() => {
+            video.play().catch(() => {})
+          }, 100)
+        })
     }
   }
 
@@ -78,16 +99,32 @@ const CardComponent = ({ card, isActive }: CardProps) => {
       
       {/* Video background (lazy loaded) - only load if active */}
       {card.video && (
-        <video
-          ref={videoRef}
-          muted
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full h-full object-cover"
-          src={card.video}
-          onLoadedData={handleVideoLoaded}
-          onError={handleVideoError}
-        />
+        <>
+          <video
+            ref={videoRef}
+            muted
+            playsInline
+            preload={isIOS ? "auto" : "metadata"}
+            className="absolute inset-0 w-full h-full object-cover"
+            src={card.video}
+            onLoadedData={handleVideoLoaded}
+            onError={handleVideoError}
+            // iOS specific attributes are handled via data attributes instead
+            data-webkit-playsinline="true"
+            data-x-webkit-airplay="allow"
+            disablePictureInPicture
+            controlsList="nodownload"
+          />
+          {!isPlaying && isLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer">
+              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-6 h-6">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Content overlay */}
