@@ -53,8 +53,18 @@ const CardComponent = ({ card, isActive }: CardProps) => {
     setVideoError(false)
     
     // Try to play immediately if active
-    if (isActive && videoRef.current) {
-      attemptPlay()
+    if (isActive && videoRef.current && !isPlaying) {
+      const video = videoRef.current;
+      video.muted = true;
+      
+      video.play()
+        .then(() => {
+          setIsPlaying(true)
+        })
+        .catch(error => {
+          console.error("Auto-play error:", error)
+          setIsPlaying(false)
+        })
     }
   }
 
@@ -64,44 +74,19 @@ const CardComponent = ({ card, isActive }: CardProps) => {
     setVideoError(true)
   }
   
-  // Attempt to play with error handling
-  const attemptPlay = () => {
-    const video = videoRef.current
-    if (!video) return
-    
-    // Ensure muted state is set
-    video.muted = true
-    video.volume = 0
-    
-    // On iOS, we need to set these properties programmatically
-    if (isIOS) {
-      video.setAttribute('playsinline', 'true')
-      video.setAttribute('webkit-playsinline', 'true')
-    }
-    
-    video.play()
-      .then(() => {
-        console.log("Video playing successfully")
-        setIsPlaying(true)
-      })
-      .catch((error) => {
-        console.error("Video play error:", error)
-        // iOS often requires user interaction, so we'll show the play button
-        setIsPlaying(false)
-      })
-  }
-
   // Play/pause based on active state
   useEffect(() => {
     const video = videoRef.current
     if (!video || !isLoaded) return
 
-    if (isActive && !isPlaying) {
-      // For iOS, we delay slightly to allow the browser to initialize
-      setTimeout(() => {
-        attemptPlay()
-      }, isIOS ? 300 : 0)
-    } else if (!isActive && isPlaying) {
+    // On iOS, we need to set these properties programmatically
+    if (isIOS) {
+      video.setAttribute('playsinline', 'true')
+      video.setAttribute('webkit-playsinline', 'true')
+    }
+
+    // Pause if this card becomes inactive
+    if (!isActive && isPlaying) {
       video.pause()
       setIsPlaying(false)
     }
@@ -114,25 +99,27 @@ const CardComponent = ({ card, isActive }: CardProps) => {
     }
   }, [isActive, isLoaded, isPlaying, isIOS])
 
-  // Try to play video when card is clicked - this is essential for iOS
+  // Simple play/pause toggle when card is clicked
   const handleCardClick = () => {
     const video = videoRef.current
     if (!video) return
     
     if (isPlaying) {
-      // If already playing, pause (toggle behavior)
+      // If already playing, pause
       video.pause()
       setIsPlaying(false)
     } else {
-      // If not playing, make sure it's loaded and try to play
-      if (videoError) {
-        // If there was an error, try reloading the video
-        if (video.src) {
-          video.load()
-        }
-      }
+      // If not playing, try to play
+      video.muted = true // Ensure muted for iOS
       
-      attemptPlay()
+      video.play()
+        .then(() => {
+          setIsPlaying(true)
+        })
+        .catch(error => {
+          console.error("Play error:", error)
+          setIsPlaying(false)
+        })
     }
   }
 
@@ -182,8 +169,8 @@ const CardComponent = ({ card, isActive }: CardProps) => {
             />
           )}
           
-          {/* Play button overlay - crucial for iOS */}
-          {(!isPlaying || isIOS) && (
+          {/* Play button overlay - only show when not playing */}
+          {!isPlaying && (
             <div 
               className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
               onClick={(e) => {
