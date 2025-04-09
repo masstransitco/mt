@@ -17,6 +17,7 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { throttle } from "lodash";
 import ChevronDown from "@/components/ui/icons/ChevronDown";
 import ChevronUp from "@/components/ui/icons/ChevronUp";
+import { CameraStateObserver } from "@/components/CameraStateObserver";
 
 import type { Car } from "@/types/cars";
 import type { SheetMode } from "@/types/map";
@@ -443,9 +444,12 @@ export default function GMap() {
 // Advanced Marker Overlay Hook
 // -------------------------
 
-// Call the hook at the top level of your component
-// The hook now handles all marker state and styling internally with the ViewModel pattern
-useMarkerOverlay(actualMap);
+// Call the hook at the top level of your component and capture the returned methods
+const { updateMarkerTilt, updateMarkerZoom } = useMarkerOverlay(actualMap, {
+  onPickupClick: (stationId) => {
+    pickStationAsDeparture(stationId, false);
+  }
+});
 
 // -------------------------
 // Location Circles Overlay Hook
@@ -665,6 +669,8 @@ useEffect(() => {
             >
               {/* 3D overlay from useThreeOverlay */}
             </GoogleMap>
+            {/* Add Camera State Observer */}
+            {actualMap && <CameraStateObserver map={actualMap} throttleMs={100} />}
           </div>
 
           {/* Station selector (top bar) */}
