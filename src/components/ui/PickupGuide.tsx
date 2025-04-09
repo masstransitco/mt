@@ -1,11 +1,114 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect, useMemo } from "react"
 import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { useVideoPreload } from "@/hooks/useVideoPreload"
+import dynamic from 'next/dynamic'
+
+interface CardData {
+  title: string
+  description: string
+  video: string
+}
+
+interface CardProps {
+  card: CardData
+  isActive: boolean
+}
+
+// Card skeleton loading placeholder
+const CardSkeleton = () => (
+  <div className="mx-1 h-48 rounded-xl overflow-hidden relative bg-gradient-to-br from-gray-900 to-gray-800 shadow-lg border border-white/5 animate-pulse">
+    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-6 flex flex-col justify-end">
+      <div className="h-6 bg-gray-700/50 rounded w-3/4 mb-2"></div>
+      <div className="h-4 bg-gray-700/50 rounded w-2/3"></div>
+    </div>
+  </div>
+);
+
+// Card component that manages its own video loading state
+const CardComponent = ({ card, isActive }: CardProps) => {
+  const [isLoaded, setIsLoaded] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Handle video loading
+  const handleVideoLoaded = () => {
+    setIsLoaded(true)
+  }
+
+  // Handle errors without console spam
+  const handleVideoError = () => {
+    // Don't need to do anything - we'll just show the fallback background
+  }
+
+  // Play/pause based on active state
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !isLoaded) return
+
+    if (isActive && !isPlaying) {
+      video.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {/* Silently handle autoplay restrictions */})
+    } else if (!isActive && isPlaying) {
+      video.pause()
+      setIsPlaying(false)
+    }
+  }, [isActive, isLoaded, isPlaying])
+
+  // Try to play video when card is clicked
+  const handleCardClick = () => {
+    const video = videoRef.current
+    if (video && isLoaded && !isPlaying) {
+      video.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {/* Silently handle play restrictions */})
+    }
+  }
+
+  return (
+    <div 
+      className="mx-1 h-48 rounded-xl overflow-hidden relative bg-gradient-to-br from-gray-900 to-gray-800 shadow-lg border border-white/5"
+      onClick={handleCardClick}
+    >
+      {/* Background gradient (always visible) */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/30 to-gray-800/30 mix-blend-overlay"></div>
+      
+      {/* Video background (lazy loaded) - only load if active */}
+      {card.video && (
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 w-full h-full object-cover"
+          src={card.video}
+          onLoadedData={handleVideoLoaded}
+          onError={handleVideoError}
+          loading="lazy"
+        />
+      )}
+
+      {/* Content overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-6 flex flex-col justify-end">
+        <h3 className="font-sf-pro-display-medium text-transparent bg-clip-text bg-gradient-to-r from-white to-white/90 text-xl mb-2 drop-shadow-md tracking-tight">
+          {card.title}
+        </h3>
+        <p className="font-sf-pro-display-light text-white/90 text-sm leading-relaxed max-w-[90%] drop-shadow-sm">
+          {card.description}
+        </p>
+      </div>
+    </div>
+  )
+};
+
+// Lazily load the Card component with client-side only rendering
+const Card = dynamic(() => Promise.resolve(CardComponent), {
+  ssr: false,
+  loading: () => <CardSkeleton />
+});
 
 interface PickupGuideProps {
   bookingStep?: number
@@ -32,7 +135,7 @@ export default function PickupGuide({
   scannedCar = null,
   onCardChange,
 }: PickupGuideProps) {
-  // Set default text based on isDepartureFlow (maintaining original component's logic)
+  // Set default text based on isDepartureFlow
   const defaultPrimaryText = isDepartureFlow ? "Pickup from station" : "Choose dropoff station"
   const defaultSecondaryText = isDepartureFlow ? "Scan a car directly" : "Return to any station"
   const defaultPrimaryDesc = isDepartureFlow ? "Choose station on the map" : "Select destination on map"
@@ -49,17 +152,17 @@ export default function PickupGuide({
     {
       title: "Just HKD$50 to Start",
       description: "Affordable access to your city adventure",
-      video: "/videos/output.webm",
+      video: "/videos/card1.mp4",
     },
     {
       title: "HKD$1 Per Minute",
       description: "Pay only for what you use - freedom at your fingertips",
-      video: "/videos/output2.webm",
+      video: "/videos/card2.mp4",
     },
     {
       title: "HKD$800 Daily Cap",
       description: "Explore all day with peace of mind - no surprise costs",
-      video: "/videos/output3.webm",
+      video: "/videos/card3.mp4",
     },
   ]
 
@@ -67,17 +170,17 @@ export default function PickupGuide({
     {
       title: "Go Anywhere",
       description: "Change your mind? Switch destinations anytime during your journey",
-      video: "/videos/output4.webm",
+      video: "/videos/card4.mp4",
     },
     {
       title: "Come Full Circle",
       description: "Return to where you started - perfect for quick errands",
-      video: "/videos/output5.webm",
+      video: "/videos/card5.mp4",
     },
     {
       title: "Never Alone",
       description: "Our team is with you 24/7 - just a tap away whenever you need us",
-      video: "/videos/output6.webm",
+      video: "/videos/card6.mp4",
     },
   ]
 
@@ -85,38 +188,38 @@ export default function PickupGuide({
     {
       title: "Drop Off Anywhere",
       description: "End your journey at any station - complete freedom to explore",
-      video: "/videos/output4.webm",
+      video: "/videos/card4.mp4",
     },
     {
       title: "Return Home",
       description: "Back where you started? Perfect for round trips and daily commutes",
-      video: "/videos/output5.webm",
+      video: "/videos/card5.mp4",
     },
     {
       title: "Simple Finish",
       description: "Just park, lock and go - we handle the rest for you",
-      video: "/videos/output6.webm",
+      video: "/videos/card6.mp4",
     },
   ]
 
-  // Default cards for backward compatibility - now with 3 cards
+  // Default cards for backward compatibility
   const defaultDepartureCards = [
     {
       title: finalPrimaryText,
       description: finalPrimaryDesc,
-      video: "/videos/output.webm",
+      video: "/videos/card1.mp4",
     },
     {
       title: finalSecondaryText,
       description: finalSecondaryDesc,
-      video: "/videos/output2.webm",
+      video: "/videos/card2.mp4",
     },
     {
       title: isDepartureFlow ? "We've Got You Covered" : "Effortless Returns",
       description: isDepartureFlow
         ? "24/7 support keeps you moving with confidence"
         : "Complete your journey with a simple tap and walk away",
-      video: "/videos/output3.webm",
+      video: "/videos/card3.mp4",
     },
   ]
 
@@ -127,20 +230,8 @@ export default function PickupGuide({
   } else if (bookingStep === 3) {
     cards = isDepartureFlow ? step3DepartureCards : step3ReturnCards
   } else {
-    // Default behavior when no bookingStep is provided (backward compatibility)
     cards = defaultDepartureCards
   }
-
-  // Extract video URLs for preloading
-  const videoUrls = useMemo(() => {
-    return cards.map(card => card.video).filter(Boolean) as string[]
-  }, [cards])
-  
-  // Preload videos
-  const { loadedVideos } = useVideoPreload(videoUrls, {
-    cacheVideos: true,
-    optimizeWebM: true
-  })
 
   const [activeCard, setActiveCard] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
@@ -152,20 +243,6 @@ export default function PickupGuide({
   useEffect(() => {
     if (onCardChange) {
       onCardChange(activeCard)
-    }
-
-    // Performance optimization: Only play the active video
-    if (scrollRef.current) {
-      const videos = scrollRef.current.querySelectorAll('video');
-      videos.forEach((video, index) => {
-        if (index === activeCard) {
-          // Ensure the active video is playing
-          if (video.paused) video.play();
-        } else {
-          // Pause videos that aren't currently visible
-          if (!video.paused) video.pause();
-        }
-      });
     }
   }, [activeCard, onCardChange])
 
@@ -188,7 +265,7 @@ export default function PickupGuide({
     }
   }
 
-  // Touch/mouse handlers for swiping
+  // Swipe/touch logic
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true)
     setStartX(e.pageX - (scrollRef.current?.offsetLeft || 0))
@@ -239,45 +316,11 @@ export default function PickupGuide({
     }
   }
 
-  // Video optimization when component loads
-  useEffect(() => {
-    // Apply optimization strategies to improve WebM playback
-    const optimizeVideoPlayback = () => {
-      if (!scrollRef.current) return;
-      
-      // Get all video elements
-      const videoElements = scrollRef.current.querySelectorAll('video');
-      
-      videoElements.forEach((video, i) => {
-        // Only autostart the active video
-        if (i === activeCard) {
-          video.play().catch(e => console.error("Failed to play video:", e));
-        } else {
-          video.pause();
-          // Preload but don't play
-          video.load();
-        }
-        
-        // Additional optimization techniques for WebM
-        video.addEventListener('loadedmetadata', () => {
-          if (i === activeCard) {
-            video.play().catch(e => console.error("Failed to play after metadata load:", e));
-          }
-        });
-      });
-    };
-    
-    // Apply optimizations after a short delay to ensure DOM is ready
-    const timer = setTimeout(optimizeVideoPlayback, 100);
-    
-    return () => clearTimeout(timer);
-  }, [cards, activeCard]);
-
-  // Determine title based on props
+  // Landing page card title
   const getTitle = () => {
     if (bookingStep === 1) return "Pricing"
     if (bookingStep === 3) return isDepartureFlow ? "Departure Options" : "Return Options"
-    return isDepartureFlow ? "Ways To Start" : "Ways to Return" // Default title from original component
+    return isDepartureFlow ? "Ways To Start" : "Ways to Return"
   }
 
   return (
@@ -300,7 +343,6 @@ export default function PickupGuide({
             <ChevronLeft size={16} />
           </button>
         )}
-
         {activeCard < cards.length - 1 && (
           <button
             onClick={() => handleCardChange(activeCard + 1)}
@@ -326,57 +368,14 @@ export default function PickupGuide({
           onTouchEnd={handleDragEnd}
         >
           {cards.map((card, index) => (
-            <div key={index} className="min-w-full w-full flex-shrink-0 snap-center">
-              <div className="mx-1 h-48 rounded-xl overflow-hidden relative bg-gradient-to-br from-gray-900 to-gray-800 shadow-lg border border-white/5">
-                {/* Video background for each card */}
-                {card.video ? (
-                  <div className="absolute inset-0">
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-900/30 to-gray-800/30 mix-blend-overlay"></div>
-                    <video 
-                      autoPlay 
-                      loop 
-                      muted 
-                      playsInline 
-                      preload="auto"
-                      className="absolute inset-0 w-full h-full object-cover"
-                      style={{ 
-                        willChange: 'transform',
-                        transform: 'translateZ(0)', // Force GPU acceleration
-                        imageRendering: 'auto',
-                        backfaceVisibility: 'hidden'
-                      }}
-                      // Only render visible or adjacent cards for performance
-                      key={card.video}
-                      onCanPlay={(e) => {
-                        // Set playback rate slightly lower for better stability
-                        const video = e.target as HTMLVideoElement;
-                        video.playbackRate = 0.98;
-                      }}
-                    >
-                      <source src={card.video} type="video/webm; codecs=vp9" />
-                    </video>
-                  </div>
-                ) : (
-                  <div
-                    className="absolute inset-0 w-full h-full"
-                    style={{
-                      backgroundImage: `url(/placeholder.svg?height=192&width=400)`,
-                      backgroundSize: "cover",
-                      backgroundPosition: "center",
-                    }}
-                  />
-                )}
-
-                {/* Content overlay - simple version with styled text */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-6 flex flex-col justify-end">
-                  <h3 className="font-sf-pro-display-medium text-transparent bg-clip-text bg-gradient-to-r from-white to-white/90 text-xl mb-2 drop-shadow-md tracking-tight">
-                    {card.title}
-                  </h3>
-                  <p className="font-sf-pro-display-light text-white/90 text-sm leading-relaxed max-w-[90%] drop-shadow-sm">
-                    {card.description}
-                  </p>
-                </div>
-              </div>
+            <div
+              key={index}
+              className="min-w-full w-full flex-shrink-0 snap-center"
+            >
+              <Card 
+                card={card} 
+                isActive={index === activeCard} 
+              />
             </div>
           ))}
         </div>
