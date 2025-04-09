@@ -32,18 +32,63 @@ const CardSkeleton = () => (
 const CardComponent = ({ card, isActive }: CardProps) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [videoError, setVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { os, browser } = useDeviceDetection()
   const isIOS = os === 'iOS'
+  
+  // Set video source for iOS compatibility
+  const videoSource = useMemo(() => {
+    // For iOS, ensure we add cache busting query param to force reload
+    if (isIOS) {
+      return `${card.video}?t=${Date.now()}`
+    }
+    return card.video
+  }, [card.video, isIOS])
 
   // Handle video loading
   const handleVideoLoaded = () => {
+    console.log("Video loaded successfully")
     setIsLoaded(true)
+    setVideoError(false)
+    
+    // Try to play immediately if active
+    if (isActive && videoRef.current) {
+      attemptPlay()
+    }
   }
 
-  // Handle errors without console spam
-  const handleVideoError = () => {
-    // Don't need to do anything - we'll just show the fallback background
+  // Handle errors
+  const handleVideoError = (e: any) => {
+    console.error("Video error:", e)
+    setVideoError(true)
+  }
+  
+  // Attempt to play with error handling
+  const attemptPlay = () => {
+    const video = videoRef.current
+    if (!video) return
+    
+    // Ensure muted state is set
+    video.muted = true
+    video.volume = 0
+    
+    // On iOS, we need to set these properties programmatically
+    if (isIOS) {
+      video.setAttribute('playsinline', 'true')
+      video.setAttribute('webkit-playsinline', 'true')
+    }
+    
+    video.play()
+      .then(() => {
+        console.log("Video playing successfully")
+        setIsPlaying(true)
+      })
+      .catch((error) => {
+        console.error("Video play error:", error)
+        // iOS often requires user interaction, so we'll show the play button
+        setIsPlaying(false)
+      })
   }
 
   // Play/pause based on active state
@@ -52,40 +97,42 @@ const CardComponent = ({ card, isActive }: CardProps) => {
     if (!video || !isLoaded) return
 
     if (isActive && !isPlaying) {
-      // iOS requires video to have both muted and playsinline attributes
-      // Use a timeout to help iOS initialize the video properly
+      // For iOS, we delay slightly to allow the browser to initialize
       setTimeout(() => {
-        video.play()
-          .then(() => setIsPlaying(true))
-          .catch((error) => {
-            console.log("Video play error:", error.message)
-            /* iOS often blocks autoplay even with muted videos */
-          })
-      }, 100)
+        attemptPlay()
+      }, isIOS ? 300 : 0)
     } else if (!isActive && isPlaying) {
       video.pause()
       setIsPlaying(false)
     }
-  }, [isActive, isLoaded, isPlaying])
+    
+    // This will run when component unmounts or card becomes inactive
+    return () => {
+      if (video) {
+        video.pause()
+      }
+    }
+  }, [isActive, isLoaded, isPlaying, isIOS])
 
-  // Try to play video when card is clicked
+  // Try to play video when card is clicked - this is essential for iOS
   const handleCardClick = () => {
     const video = videoRef.current
-    if (video && isLoaded && !isPlaying) {
-      // Make sure video is muted for iOS (required for playback)
-      video.muted = true;
+    if (!video) return
+    
+    if (isPlaying) {
+      // If already playing, pause (toggle behavior)
+      video.pause()
+      setIsPlaying(false)
+    } else {
+      // If not playing, make sure it's loaded and try to play
+      if (videoError) {
+        // If there was an error, try reloading the video
+        if (video.src) {
+          video.load()
+        }
+      }
       
-      // Add explicit user interaction handler
-      video.play()
-        .then(() => setIsPlaying(true))
-        .catch((error) => {
-          console.log("Video play error on click:", error.message)
-          
-          // Special handling for iOS - try once more after a delay
-          setTimeout(() => {
-            video.play().catch(() => {})
-          }, 100)
-        })
+      attemptPlay()
     }
   }
 
@@ -100,28 +147,62 @@ const CardComponent = ({ card, isActive }: CardProps) => {
       {/* Video background (lazy loaded) - only load if active */}
       {card.video && (
         <>
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            preload={isIOS ? "auto" : "metadata"}
-            className="absolute inset-0 w-full h-full object-cover"
-            src={card.video}
-            onLoadedData={handleVideoLoaded}
-            onError={handleVideoError}
-            // iOS specific attributes are handled via data attributes instead
-            data-webkit-playsinline="true"
-            data-x-webkit-airplay="allow"
-            disablePictureInPicture
-            controlsList="nodownload"
-          />
-          {!isPlaying && isLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer">
+          {/* Only load a poster image initially for iOS to improve performance */}
+          {isIOS ? (
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center justify-center">
+              {isActive && (
+                <video
+                  ref={videoRef}
+                  muted
+                  playsInline
+                  preload="auto"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  src={videoSource}
+                  onLoadedData={handleVideoLoaded}
+                  onError={handleVideoError}
+                  loop
+                  disablePictureInPicture
+                  controlsList="nodownload"
+                />
+              )}
+            </div>
+          ) : (
+            /* Standard video implementation for non-iOS devices */
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              preload="metadata"
+              className="absolute inset-0 w-full h-full object-cover"
+              src={card.video}
+              onLoadedData={handleVideoLoaded}
+              onError={handleVideoError}
+              disablePictureInPicture
+              controlsList="nodownload"
+            />
+          )}
+          
+          {/* Play button overlay - crucial for iOS */}
+          {(!isPlaying || isIOS) && (
+            <div 
+              className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent double click handling
+                handleCardClick();
+              }}
+            >
               <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-6 h-6">
                   <path d="M8 5v14l11-7z" />
                 </svg>
               </div>
+            </div>
+          )}
+          
+          {/* Fallback for video errors */}
+          {videoError && (
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-900 to-gray-800 flex items-center justify-center">
+              <span className="text-white text-opacity-80 text-sm">Video unavailable</span>
             </div>
           )}
         </>
