@@ -1,11 +1,10 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect, useMemo } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useDeviceDetection } from "@/hooks/useDeviceDetection"
 import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import dynamic from 'next/dynamic'
 
 interface CardData {
   title: string
@@ -18,7 +17,7 @@ interface CardProps {
   isActive: boolean
 }
 
-// Card skeleton loading placeholder
+// Simple card skeleton for loading state
 const CardSkeleton = () => (
   <div className="mx-1 h-48 rounded-xl overflow-hidden relative bg-gradient-to-br from-gray-900 to-gray-800 shadow-lg border border-white/5 animate-pulse">
     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-6 flex flex-col justify-end">
@@ -28,171 +27,82 @@ const CardSkeleton = () => (
   </div>
 );
 
-// Card component that manages its own video loading state
-const CardComponent = ({ card, isActive }: CardProps) => {
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [videoError, setVideoError] = useState(false)
+// Simplified card component
+const Card = ({ card, isActive }: CardProps) => {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const { os, browser } = useDeviceDetection()
+  const [hasError, setHasError] = useState(false)
+  const [videoLoaded, setVideoLoaded] = useState(false)
+  const { os } = useDeviceDetection()
   const isIOS = os === 'iOS'
-  
-  // Set video source for iOS compatibility
-  const videoSource = useMemo(() => {
-    // For iOS, ensure we add cache busting query param to force reload
-    if (isIOS) {
-      return `${card.video}?t=${Date.now()}`
-    }
-    return card.video
-  }, [card.video, isIOS])
 
-  // Handle video loading
-  const handleVideoLoaded = () => {
-    console.log("Video loaded successfully")
-    setIsLoaded(true)
-    setVideoError(false)
-    
-    // Try to play immediately if active
-    if (isActive && videoRef.current && !isPlaying) {
-      const video = videoRef.current;
-      video.muted = true;
-      
-      video.play()
-        .then(() => {
-          setIsPlaying(true)
-        })
-        .catch(error => {
-          console.error("Auto-play error:", error)
-          setIsPlaying(false)
-        })
-    }
-  }
-
-  // Handle errors
-  const handleVideoError = (e: any) => {
-    console.error("Video error:", e)
-    setVideoError(true)
-  }
-  
-  // Play/pause based on active state
+  // Wait until we have both the video element and it's active before manipulating
   useEffect(() => {
-    const video = videoRef.current
-    if (!video || !isLoaded) return
-
-    // On iOS, we need to set these properties programmatically
-    if (isIOS) {
-      video.setAttribute('playsinline', 'true')
-      video.setAttribute('webkit-playsinline', 'true')
-    }
-
-    // Pause if this card becomes inactive
-    if (!isActive && isPlaying) {
-      video.pause()
-      setIsPlaying(false)
-    }
-    
-    // This will run when component unmounts or card becomes inactive
-    return () => {
-      if (video) {
-        video.pause()
-      }
-    }
-  }, [isActive, isLoaded, isPlaying, isIOS])
-
-  // Simple play/pause toggle when card is clicked
-  const handleCardClick = () => {
     const video = videoRef.current
     if (!video) return
     
-    if (isPlaying) {
-      // If already playing, pause
-      video.pause()
-      setIsPlaying(false)
-    } else {
-      // If not playing, try to play
-      video.muted = true // Ensure muted for iOS
-      
-      video.play()
-        .then(() => {
-          setIsPlaying(true)
-        })
-        .catch(error => {
-          console.error("Play error:", error)
-          setIsPlaying(false)
-        })
+    // Set required attributes
+    video.muted = true
+    video.playsInline = true
+    
+    if (isActive && !videoLoaded) {
+      // For new video loads, ensure it plays
+      video.play().catch(err => {
+        // Silently catch error, don't log to avoid console spam
+      })
+      setVideoLoaded(true)
+    }
+  }, [isActive, videoLoaded])
+
+  // Handle video errors
+  const handleError = () => {
+    console.error("Video failed to load:", card.video)
+    setHasError(true)
+  }
+  
+  // Handle video loaded
+  const handleLoaded = () => {
+    setVideoLoaded(true)
+    
+    // Play the video if this card is active
+    if (isActive && videoRef.current) {
+      videoRef.current.play().catch(() => {
+        // Silent catch
+      })
     }
   }
 
   return (
     <div 
       className="mx-1 h-48 rounded-xl overflow-hidden relative bg-gradient-to-br from-gray-900 to-gray-800 shadow-lg border border-white/5"
-      onClick={handleCardClick}
     >
-      {/* Background gradient (always visible) */}
+      {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-900/30 to-gray-800/30 mix-blend-overlay"></div>
       
-      {/* Video background (lazy loaded) - only load if active */}
-      {card.video && (
-        <>
-          {/* Only load a poster image initially for iOS to improve performance */}
-          {isIOS ? (
-            <div className="absolute inset-0 bg-gradient-to-r from-gray-900 to-gray-800 flex items-center justify-center">
-              {isActive && (
-                <video
-                  ref={videoRef}
-                  muted
-                  playsInline
-                  preload="auto"
-                  className="absolute inset-0 w-full h-full object-cover"
-                  src={videoSource}
-                  onLoadedData={handleVideoLoaded}
-                  onError={handleVideoError}
-                  loop
-                  disablePictureInPicture
-                  controlsList="nodownload"
-                />
-              )}
-            </div>
-          ) : (
-            /* Standard video implementation for non-iOS devices */
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              preload="metadata"
-              className="absolute inset-0 w-full h-full object-cover"
-              src={card.video}
-              onLoadedData={handleVideoLoaded}
-              onError={handleVideoError}
-              disablePictureInPicture
-              controlsList="nodownload"
-            />
-          )}
-          
-          {/* Play button overlay - only show when not playing */}
-          {!isPlaying && (
-            <div 
-              className="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent double click handling
-                handleCardClick();
-              }}
-            >
-              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-6 h-6">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </div>
-            </div>
-          )}
-          
-          {/* Fallback for video errors */}
-          {videoError && (
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-900 to-gray-800 flex items-center justify-center">
-              <span className="text-white text-opacity-80 text-sm">Video unavailable</span>
-            </div>
-          )}
-        </>
+      {/* Video background - simplified approach */}
+      {!hasError && (
+        <video
+          ref={videoRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          src={card.video}
+          muted
+          playsInline
+          loop
+          autoPlay
+          poster="" // Empty poster to avoid flash
+          preload="auto"
+          onError={handleError}
+          onLoadedData={handleLoaded}
+          disablePictureInPicture
+        />
+      )}
+      
+      {/* No play button - removed to allow continuous playback */}
+      
+      {/* Fallback for video errors */}
+      {hasError && (
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-900 to-gray-800 flex items-center justify-center">
+          <span className="text-white text-opacity-80 text-sm">Video unavailable</span>
+        </div>
       )}
 
       {/* Content overlay */}
@@ -207,12 +117,6 @@ const CardComponent = ({ card, isActive }: CardProps) => {
     </div>
   )
 };
-
-// Lazily load the Card component with client-side only rendering
-const Card = dynamic(() => Promise.resolve(CardComponent), {
-  ssr: false,
-  loading: () => <CardSkeleton />
-});
 
 interface PickupGuideProps {
   bookingStep?: number
@@ -338,22 +242,19 @@ export default function PickupGuide({
   }
 
   const [activeCard, setActiveCard] = useState(0)
-  const [isDragging, setIsDragging] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Handle card change
+  // Handle card change notification
   useEffect(() => {
     if (onCardChange) {
       onCardChange(activeCard)
     }
   }, [activeCard, onCardChange])
 
-  // Handle card navigation
-  const handleCardChange = (index: number) => {
+  // Simplified navigation
+  const goToCard = (index: number) => {
     if (index >= 0 && index < cards.length) {
-      setActiveCard(index)
+      // Let scrollToCard handle setting activeCard
       scrollToCard(index)
     }
   }
@@ -361,66 +262,37 @@ export default function PickupGuide({
   // Scroll to specific card
   const scrollToCard = (index: number) => {
     if (scrollRef.current) {
-      const cardWidth = scrollRef.current.offsetWidth
-      scrollRef.current.scrollTo({
-        left: index * cardWidth,
-        behavior: "smooth",
-      })
+      // Set activeCard first to trigger card content update before scrolling
+      setActiveCard(index)
+      
+      // Use setTimeout to ensure we scroll after state update and rerender
+      setTimeout(() => {
+        if (scrollRef.current) {
+          const cardWidth = scrollRef.current.offsetWidth
+          scrollRef.current.scrollTo({
+            left: index * cardWidth,
+            behavior: "smooth",
+          })
+        }
+      }, 10)
     }
   }
 
-  // Swipe/touch logic
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true)
-    setStartX(e.pageX - (scrollRef.current?.offsetLeft || 0))
-    setScrollLeft(scrollRef.current?.scrollLeft || 0)
-  }
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true)
-    setStartX(e.touches[0].pageX - (scrollRef.current?.offsetLeft || 0))
-    setScrollLeft(scrollRef.current?.scrollLeft || 0)
-  }
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return
-    e.preventDefault()
-    const x = e.pageX - (scrollRef.current?.offsetLeft || 0)
-    const walk = (x - startX) * 1.5
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollLeft - walk
-    }
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return
-    const x = e.touches[0].pageX - (scrollRef.current?.offsetLeft || 0)
-    const walk = (x - startX) * 1.5
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollLeft - walk
-    }
-  }
-
-  const handleDragEnd = () => {
-    setIsDragging(false)
-    if (scrollRef.current) {
-      const cardWidth = scrollRef.current.offsetWidth
-      const newIndex = Math.round(scrollRef.current.scrollLeft / cardWidth)
-      setActiveCard(newIndex)
-    }
-  }
-
-  // Handle scroll events to update active card
+  // Handle scroll detection for active card
   const handleScroll = () => {
-    if (isDragging || !scrollRef.current) return
+    if (!scrollRef.current) return
     const cardWidth = scrollRef.current.offsetWidth
     const newIndex = Math.round(scrollRef.current.scrollLeft / cardWidth)
-    if (newIndex !== activeCard) {
-      setActiveCard(newIndex)
+    
+    if (newIndex !== activeCard && newIndex >= 0 && newIndex < cards.length) {
+      // Add a slight delay to avoid rapid state updates during scroll
+      setTimeout(() => {
+        setActiveCard(newIndex)
+      }, 50)
     }
   }
 
-  // Landing page card title
+  // Get section title based on context
   const getTitle = () => {
     if (bookingStep === 1) return "Pricing"
     if (bookingStep === 3) return isDepartureFlow ? "Departure Options" : "Return Options"
@@ -435,21 +307,22 @@ export default function PickupGuide({
         <div className="ml-2 h-px bg-gradient-to-r from-gray-400/30 to-transparent flex-grow"></div>
       </div>
 
-      {/* Card container */}
+      {/* Card carousel */}
       <div className="relative">
         {/* Navigation buttons */}
         {activeCard > 0 && (
           <button
-            onClick={() => handleCardChange(activeCard - 1)}
+            onClick={() => goToCard(activeCard - 1)}
             className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg border border-white/10 transition-all hover:bg-black/70"
             aria-label="Previous card"
           >
             <ChevronLeft size={16} />
           </button>
         )}
+        
         {activeCard < cards.length - 1 && (
           <button
-            onClick={() => handleCardChange(activeCard + 1)}
+            onClick={() => goToCard(activeCard + 1)}
             className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white shadow-lg border border-white/10 transition-all hover:bg-black/70"
             aria-label="Next card"
           >
@@ -457,29 +330,27 @@ export default function PickupGuide({
           </button>
         )}
 
-        {/* Cards scroller */}
+        {/* Simplified scroll container - uses CSS snap points for smooth scrolling */}
         <div
           ref={scrollRef}
           className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           onScroll={handleScroll}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleDragEnd}
-          onMouseLeave={handleDragEnd}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleDragEnd}
         >
           {cards.map((card, index) => (
             <div
               key={index}
               className="min-w-full w-full flex-shrink-0 snap-center"
             >
-              <Card 
-                card={card} 
-                isActive={index === activeCard} 
-              />
+              {/* Always render all cards */}
+              {Math.abs(index - activeCard) < 2 ? (
+                <Card 
+                  card={card}
+                  isActive={index === activeCard} 
+                />
+              ) : (
+                <CardSkeleton />
+              )}
             </div>
           ))}
         </div>
@@ -489,7 +360,7 @@ export default function PickupGuide({
           {cards.map((_, index) => (
             <button
               key={index}
-              onClick={() => handleCardChange(index)}
+              onClick={() => goToCard(index)}
               className="group focus:outline-none"
               aria-label={`Go to card ${index + 1}`}
             >
