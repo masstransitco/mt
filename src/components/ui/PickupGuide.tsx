@@ -87,7 +87,6 @@ const CardComponent = ({ card, isActive }: CardProps) => {
           src={card.video}
           onLoadedData={handleVideoLoaded}
           onError={handleVideoError}
-          loading="lazy"
         />
       )}
 
