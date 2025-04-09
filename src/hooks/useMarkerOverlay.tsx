@@ -891,11 +891,13 @@ const buildMarkerContainer = useCallback(
       // Add click handler for pickup button
       pickupBtn.addEventListener("click", (ev) => {
         ev.stopPropagation()
+        ev.preventDefault() // Prevent any other click events from firing
         import("@/lib/stationSelectionManager").then(module => {
           const stationSelectionManager = module.default;
           if (stationSelectionManager.getCurrentStep() === 2) {
             stationSelectionManager.confirmStationSelection();
-            options?.onPickupClick?.(station.id) // keep for backwards compatibility
+            // Removed: options?.onPickupClick?.(station.id) - this was causing the issue
+            // where the station was being selected as an arrival station after advancing to step 3
           }
         });
       });
