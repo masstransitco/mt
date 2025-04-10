@@ -15,7 +15,7 @@ const ViewerSkeleton = memo(() => (
 ))
 ViewerSkeleton.displayName = "ViewerSkeleton"
 
-// Lazy load the 3D viewer component
+// Lazy load the 3D viewer component with explicit no-SSR directive
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => <ViewerSkeleton />,
@@ -139,69 +139,80 @@ function CarCardComponent({
       onClick={onClick}
       id={`car-${car.id}`}
       className={`
-        relative overflow-hidden rounded-xl bg-[#1a1a1a]/90 text-white 
+        relative overflow-hidden rounded-xl bg-gradient-to-b from-[#1a1a1a]/95 to-[#1a1a1a]/80 text-white 
         border border-white/10 shadow-lg transition-all cursor-pointer 
-        w-full h-28 backdrop-blur-sm
+        w-full backdrop-blur-sm
         ${selected ? "ring-1 ring-white/50" : ""}
         ${className}
       `}
-      style={{ contain: "content" }}
+      style={{ 
+        contain: "content",
+        minHeight: "200px",
+        touchAction: "none" // Prevent touch events from passing through
+      }}
     >
       <div className="flex flex-col h-full">
-        <div className="flex flex-row flex-1">
-          {/* Car Viewer Section */}
-          <div className="relative w-[45%] h-full overflow-hidden flex items-center justify-center">
-            {/* Show registration badge for scanned cars */}
-            {isScannedCar && (
-              <div className="absolute top-1.5 left-1.5 z-10 bg-[#E82127] text-white text-xs font-medium px-2 py-0.5 rounded-full">
-                {car.registration}
-              </div>
-            )}
-            
+        <div className="flex-1">
+          {/* Full-width Car Viewer with overlaid info */}
+          <div 
+            className="relative w-full h-48 overflow-hidden" 
+            style={{ touchAction: "none" }} 
+            onClick={(e) => e.stopPropagation()} // Prevent click events from propagating to sheet
+          >
+            {/* Car model viewer - now full width */}
             {isInViewport && isVisible ? (
-              <Car3DViewer
-                modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
-                imageUrl={car.image}
-                interactive={selected}
-                height="100%"
-                width="100%"
-                isVisible={true}
-              />
+              <div 
+                className="absolute inset-0 w-full h-full three-d-scene" 
+                style={{ 
+                  background: "transparent",
+                  touchAction: "none"
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                <Car3DViewer
+                  modelUrl={car.modelUrl || "/cars/defaultModel.glb"}
+                  interactive={selected}
+                  height="100%"
+                  width="100%"
+                  isVisible={true}
+                  backgroundColor="transparent"
+                />
+              </div>
             ) : (
               <ViewerSkeleton />
             )}
-          </div>
-
-          {/* Car Info Section */}
-          <div className="w-[55%] h-full p-3 pl-2 flex flex-col justify-between">
-            <div>
-              <div className="flex items-start justify-between">
-                <p className="font-medium text-sm leading-tight text-white">{car.model || "Unknown Model"}</p>
-                {car.name && !isScannedCar && (
-                  <span className="text-xs text-white/70 font-medium rounded-full bg-white/10 px-2 py-0.5">
-                    {car.name}
-                  </span>
-                )}
-                {/* Show registration as a badge for scanned cars */}
-                {isScannedCar && car.name && (
-                  <span className="text-xs text-white/70 font-medium rounded-full bg-white/10 px-2 py-0.5">
-                    {car.name}
-                  </span>
-                )}
+            
+            {/* Registration now shown in the header bar */}
+            
+            {/* Header bar with model name and registration - spans full width */}
+            <div className="absolute top-0 left-0 right-0 z-10 backdrop-blur-md bg-black/50 px-3 py-2 border-b border-white/10 shadow-lg flex items-center justify-between">
+              <p className="font-medium text-sm leading-tight text-white">{car.model || "Unknown Model"}</p>
+              {car.name && (
+                <span className="text-xs text-white/70 font-medium rounded-full bg-white/10 px-2 py-0.5">
+                  {car.name}
+                </span>
+              )}
+              {car.registration && (
+                <span className="text-xs bg-[#E82127] text-white font-medium rounded-full px-2 py-0.5 ml-1">
+                  {car.registration}
+                </span>
+              )}
+            </div>
+            
+            {/* Bottom pill indicators - positioned at bottom but above footer */}
+            <div className="absolute bottom-1 left-0 right-0 z-10 px-3 flex items-center justify-center gap-3">
+              <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-full px-2 py-1 border border-white/20 shadow-lg">
+                <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
+                <span className="text-xs font-medium">{batteryPercentage}%</span>
               </div>
-              <div className="flex items-center mt-2 gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
-                  <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
-                  <span className="text-xs font-medium">{batteryPercentage}%</span>
-                </div>
-                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
-                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
-                </div>
-                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
-                  <CarSeat className="w-3.5 h-3.5 text-gray-300" />
-                  <span className="text-xs">1+4</span>
-                </div>
+              <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-full px-2 py-1 border border-white/20 shadow-lg">
+                <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
+              </div>
+              <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-full px-2 py-1 border border-white/20 shadow-lg">
+                <CarSeat className="w-3.5 h-3.5 text-gray-300" />
+                <span className="text-xs">1+4</span>
               </div>
             </div>
           </div>

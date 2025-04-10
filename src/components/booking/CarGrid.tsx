@@ -16,6 +16,9 @@ import ModelManager from "@/lib/modelManager"
 import { ChevronLeft } from "@/components/ui/icons/ChevronLeft"
 import { ChevronRight } from "@/components/ui/icons/ChevronRight"
 
+
+
+
 interface CarGridProps {
   className?: string
   isVisible?: boolean
@@ -23,15 +26,12 @@ interface CarGridProps {
   scannedCar?: Car | null
 }
 
-// Proper model preloading
+// More efficient model preloading with prioritization
 function preloadCommonCarModels() {
-  ModelManager.getInstance().preloadModels([
-    "/cars/kona.glb", 
-    "/cars/defaultModel.glb",
-    "/cars/car2.glb",
-    "/cars/car3.glb",
-    "/cars/car4.glb"
-  ]);
+  const modelManager = ModelManager.getInstance();
+  if (modelManager) {
+    modelManager.preloadModels(['/cars/defaultModel.glb', '/cars/car2.glb', '/cars/car3.glb', '/cars/car4.glb']);
+  }
 }
 
 // Loading skeleton
@@ -233,6 +233,7 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
     )
   }
   
+  
   return (
     <div 
       className={`w-full relative ${className}`} 
@@ -317,10 +318,4 @@ function CarGrid({ className = "", isVisible = true, isQrScanStation = false, sc
   )
 }
 
-export default memo(CarGrid, (prev, next) => {
-  return (
-    prev.isVisible === next.isVisible &&
-    prev.isQrScanStation === next.isQrScanStation &&
-    prev.scannedCar === next.scannedCar
-  )
-})
+export default CarGrid;

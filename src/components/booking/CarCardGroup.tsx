@@ -108,6 +108,20 @@ const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
 })
 InfoPopup.displayName = "InfoPopup"
 
+// Function to prevent sheet drag when interacting with 3D elements
+function preventSheetDrag(e: React.TouchEvent | React.PointerEvent) {
+  // Stop propagation at every level
+  e.stopPropagation();
+  
+  // We can't use preventDefault in passive listeners
+  // Only use stopImmediatePropagation if event is cancelable
+  if (e.nativeEvent.cancelable) {
+    e.nativeEvent.stopImmediatePropagation();
+  }
+  
+  return false;
+}
+
 // Helper function to format "Last driven" time
 function formatLastDriven(timestamp: string | null | undefined): string {
   if (!timestamp) return "Never driven"
@@ -141,7 +155,7 @@ function formatLastDriven(timestamp: string | null | undefined): string {
   }
 }
 
-// Dynamically load Car3DViewer with a consistent loading state.
+// Dynamically load Car3DViewer with a consistent loading state and explicit no-SSR directive
 const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
   ssr: false,
   loading: () => <ViewerSkeleton />,
@@ -183,7 +197,21 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
     return { batteryPercentage: percentage, batteryIconColor: color, BatteryIcon: Icon }
   })()
 
-  const modelUrl = displayedCar?.modelUrl || "/cars/defaultModel.glb"
+  // Validate and prepare model URL with fallback
+  const modelUrl = (() => {
+    // Check if the displayedCar has a valid modelUrl
+    if (displayedCar?.modelUrl && typeof displayedCar.modelUrl === 'string' && displayedCar.modelUrl.trim() !== '') {
+      // Ensure url starts with /cars/ for public path
+      const url = displayedCar.modelUrl.startsWith('/cars/') 
+        ? displayedCar.modelUrl 
+        : `/cars/${displayedCar.modelUrl}`
+      
+      // Ensure it has .glb extension
+      return url.endsWith('.glb') ? url : `${url}.glb`
+    }
+    // Default fallback
+    return "/cars/defaultModel.glb"
+  })()
 
   // Format last driven time
   const lastDrivenText = formatLastDriven(displayedCar.location_updated)
@@ -233,18 +261,49 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
         scale: isGroupSelected ? 1.0 : 0.98,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      className="relative overflow-hidden rounded-xl bg-[#1a1a1a]/90 text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-auto min-h-28 backdrop-blur-sm"
+      className="relative overflow-hidden rounded-xl bg-gradient-to-b from-[#1a1a1a]/95 to-[#1a1a1a]/80 text-white border border-white/10 shadow-lg transition-all cursor-pointer w-full h-auto backdrop-blur-sm"
       style={{
         contain: "content",
+        minHeight: "200px",
+        touchAction: "none" // Prevent touch events from passing through
       }}
       {...touchScrollHandlers}
     >
       <div className="flex flex-col h-full">
         <div className="flex flex-row flex-1">
-          {/* Car Viewer Section */}
-          <div className="relative w-[45%] h-full min-h-28 overflow-hidden flex items-center justify-center">
+          {/* Full-width Car Viewer with overlaid info */}
+          <div 
+            className="relative w-full h-48 overflow-hidden" 
+            style={{ touchAction: "none" }} 
+            onClick={(e) => e.stopPropagation()} // Prevent click events from propagating to sheet
+          >
+            {/* Car model viewer - now full width */}
+            {isInView && isVisible ? (
+              <div 
+                className="absolute inset-0 w-full h-full three-d-scene" 
+                style={{ 
+                  background: "transparent",
+                  touchAction: "none"
+                }}
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                <Car3DViewer
+                  modelUrl={modelUrl}
+                  interactive={isGroupSelected}
+                  height="100%"
+                  width="100%"
+                  isVisible={true}
+                  backgroundColor="transparent"
+                />
+              </div>
+            ) : (
+              <ViewerSkeleton />
+            )}
+            
+            {/* Car selector - positioned in top left */}
             {!isQrScanStation && group.cars.length > 1 && (
-              <div className="absolute top-1.5 left-1.5 z-10" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute top-2 left-2 z-20" onClick={(e) => e.stopPropagation()}>
                 <select
                   className="cursor-pointer bg-black/70 border border-white/20 rounded-full px-2 py-0.5 text-white text-xs backdrop-blur-sm"
                   onChange={(e) => handleSelectCar(Number.parseInt(e.target.value, 10))}
@@ -264,44 +323,35 @@ function CarCardGroup({ group, isVisible = true, rootRef, isQrScanStation = fals
                 </div>
               </div>
             )}
-            {isInView && isVisible ? (
-              <Car3DViewer
-                modelUrl={modelUrl}
-                imageUrl={displayedCar?.image}
-                interactive={isGroupSelected}
-                height="100%"
-                width="100%"
-                isVisible={true}
-              />
-            ) : (
-              <ViewerSkeleton />
-            )}
-          </div>
-
-          {/* Car Info Section */}
-          <div className="w-[55%] h-full p-3 pl-2 flex flex-col justify-between">
-            <div>
-              <div className="flex items-start justify-between">
-                <p className="font-medium text-sm leading-tight text-white">{displayedCar.model || "Unknown Model"}</p>
-                {displayedCar.name && (
-                  <span className="text-xs text-white/70 font-medium rounded-full bg-white/10 px-2 py-0.5">
-                    {displayedCar.name}
-                  </span>
-                )}
+            
+            {/* Header bar with model name and registration - spans full width */}
+            <div className="absolute top-0 left-0 right-0 z-10 backdrop-blur-md bg-black/50 px-3 py-2 border-b border-white/10 shadow-lg flex items-center justify-between">
+              <p className="font-medium text-sm leading-tight text-white">{displayedCar.model || "Unknown Model"}</p>
+              {displayedCar.name && (
+                <span className="text-xs text-white/70 font-medium rounded-full bg-white/10 px-2 py-0.5">
+                  {displayedCar.name}
+                </span>
+              )}
+              {displayedCar.registration && (
+                <span className="text-xs bg-[#E82127] text-white font-medium rounded-full px-2 py-0.5 ml-1">
+                  {displayedCar.registration}
+                </span>
+              )}
+            </div>
+            
+            {/* Bottom pill indicators - positioned at bottom but above footer */}
+            <div className="absolute bottom-1 left-0 right-0 z-10 px-3 flex items-center justify-center gap-3">
+              <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-full px-2 py-1 border border-white/20 shadow-lg">
+                <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
+                <span className="text-xs font-medium">{batteryPercentage}%</span>
               </div>
-              <div className="flex items-center mt-2 gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
-                  <BatteryIcon className={`w-3.5 h-3.5 ${batteryIconColor}`} />
-                  <span className="text-xs font-medium">{batteryPercentage}%</span>
-                </div>
-                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
-                  <Gauge className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
-                </div>
-                <div className="flex items-center gap-1 bg-black/40 rounded-full px-2 py-0.5 border border-white/10">
-                  <CarSeat className="w-3.5 h-3.5 text-gray-300" />
-                  <span className="text-xs">1+4</span>
-                </div>
+              <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-full px-2 py-1 border border-white/20 shadow-lg">
+                <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-xs">{(batteryPercentage * 3.2).toFixed(0)} km</span>
+              </div>
+              <div className="flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-full px-2 py-1 border border-white/20 shadow-lg">
+                <CarSeat className="w-3.5 h-3.5 text-gray-300" />
+                <span className="text-xs">1+4</span>
               </div>
             </div>
           </div>
