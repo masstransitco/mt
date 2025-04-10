@@ -52,19 +52,13 @@ class MarkerPool {
   private handleStationClick = (ev: Event) => {}; // Will be set by useMarkerOverlay
   private handleMarkerHover = (ev: Event) => {
     const target = ev.currentTarget as HTMLElement;
-    if (target.classList.contains('collapsed-view')) {
-      target.style.transform = "scale(1.05)";
-      target.style.borderColor = "rgba(255, 255, 255, 1)";
-      target.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+    if (!target.classList.contains('hover')) {
+      target.classList.add('hover');
     }
   };
   private handleMarkerUnhover = (ev: Event) => {
     const target = ev.currentTarget as HTMLElement;
-    if (target.classList.contains('collapsed-view')) {
-      target.style.transform = "";
-      target.style.borderColor = "rgba(255, 255, 255, 0.9)";
-      target.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)";
-    }
+    target.classList.remove('hover');
   };
 
   // Set the station click handler
@@ -77,25 +71,23 @@ class MarkerPool {
       // 1) Remove any event listeners we attached earlier
       this.removeAllMarkerEventListeners(element);
 
-      // 2) Reset relevant fields
-      element.className = 'collapsed-view';
+      // 2) Reset relevant styles and classes
+      // Remove all classes except basic marker class
+      const classesToKeep = ['marker-collapsed'];
+      const classList = Array.from(element.classList);
+      classList.forEach(className => {
+        if (!classesToKeep.includes(className)) {
+          element.classList.remove(className);
+        }
+      });
+      
+      // Make sure we have the right class
+      if (!element.classList.contains('marker-collapsed')) {
+        element.classList.add('marker-collapsed');
+      }
+      
+      // Reset content
       element.innerHTML = ''; // Empty for solid circle
-      element.style.cssText = `
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: rgba(23, 23, 23, 0.95);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05);
-        pointer-events: auto;
-        transform-origin: center;
-        will-change: transform, background-color, box-shadow;
-        transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
-        border: 2px solid rgba(255, 255, 255, 0.9);
-      `;
 
       // 3) Store the original node in the pool
       this.collapsedMarkers.push(element);
@@ -107,71 +99,33 @@ class MarkerPool {
       // 1) Remove any event listeners we attached earlier
       this.removeAllMarkerEventListeners(element);
 
-      // 2) Reset relevant fields
-      element.className = 'expanded-view';
-      element.style.cssText = `
-        width: 170px;
-        background: rgba(23, 23, 23, 0.98);
-        backdrop-filter: blur(12px);
-        color: #FFFFFF;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 8px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-        padding: 7px;
-        cursor: pointer;
-        pointer-events: auto;
-        transform-origin: center;
-        will-change: transform, border-color, box-shadow;
-        transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
-      `;
+      // 2) Reset relevant styles and classes
+      // Remove all classes except basic marker class
+      const classesToKeep = ['marker-expanded'];
+      const classList = Array.from(element.classList);
+      classList.forEach(className => {
+        if (!classesToKeep.includes(className)) {
+          element.classList.remove(className);
+        }
+      });
+      
+      // Make sure we have the right class
+      if (!element.classList.contains('marker-expanded')) {
+        element.classList.add('marker-expanded');
+      }
 
-      // Reset inner HTML to original state
+      // Reset inner HTML with our CSS classes
       element.innerHTML = `
-        <div class="expanded-info-section" style="margin-bottom: 5px;"></div>
+        <div class="expanded-info-section"></div>
         
-        <!-- Add animation progress indicator - Tesla style -->
-        <div class="animation-progress" style="
-          height: 22px;
-          display: none;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 5px;
-        ">
-          <div style="
-            width: 14px;
-            height: 14px;
-            border: 1.5px solid #3E6AE1;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: camera-spin 1s linear infinite;
-          "></div>
-          <span style="margin-left: 5px; font-size: 11px; color: #FFFFFF; font-weight: 400; letter-spacing: 0.5px; opacity: 0.9; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">SCANNING LOCATION</span>
+        <div class="marker-animation-progress">
+          <div class="marker-animation-spinner"></div>
+          <span class="marker-animation-text">SCANNING LOCATION</span>
         </div>
         
-        <button class="pickup-btn" style="
-          display: inline-block;
-          width: 100%;
-          padding: 7px 0;
-          background: #4A4A4A;
-          color: #FFFFFF;
-          font-size: 11px;
-          font-weight: 500;
-          font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.25s ease;
-          letter-spacing: 0.5px;
-          text-transform: uppercase;
-        ">
+        <button class="marker-pickup-btn">
           SELECT LOCATION
         </button>
-        
-        <style>
-          @keyframes camera-spin {
-            to { transform: rotate(360deg); }
-          }
-        </style>
       `;
 
       // 3) Store the original node in the pool
@@ -179,96 +133,31 @@ class MarkerPool {
     }
   }
 
-  // Create a fresh collapsed marker with consistent styling
+  // Create a fresh collapsed marker with CSS classes
   private createCollapsedMarker = (): HTMLElement => {
     const collapsedDiv = document.createElement("div");
-    collapsedDiv.classList.add("collapsed-view");
-    collapsedDiv.style.cssText = `
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: rgba(23, 23, 23, 0.95);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05);
-    pointer-events: auto;
-    transform-origin: center;
-    will-change: transform, background-color, box-shadow;
-    transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
-    border: 2px solid rgba(255, 255, 255, 0.9);
-  `;
-    // Empty inner HTML - just a solid circle with border
+    collapsedDiv.classList.add("marker-collapsed");
     return collapsedDiv;
   }
 
-  // Create a fresh expanded marker with proper structure but no event handlers
+  // Create a fresh expanded marker with CSS classes
   private createExpandedMarker = (): HTMLElement => {
     const expandedDiv = document.createElement("div");
-    expandedDiv.classList.add("expanded-view");
-    expandedDiv.style.cssText = `
-    width: 170px;
-    background: rgba(23, 23, 23, 0.98);
-    backdrop-filter: blur(12px);
-    color: #FFFFFF;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-    padding: 7px;
-    cursor: pointer;
-    pointer-events: auto;
-    transform-origin: center;
-    will-change: transform, border-color, box-shadow;
-    transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
-  `;
+    expandedDiv.classList.add("marker-expanded");
+    
     expandedDiv.innerHTML = `
-    <div class="expanded-info-section" style="margin-bottom: 5px;"></div>
+      <div class="expanded-info-section"></div>
+      
+      <div class="marker-animation-progress">
+        <div class="marker-animation-spinner"></div>
+        <span class="marker-animation-text">SCANNING LOCATION</span>
+      </div>
+      
+      <button class="marker-pickup-btn">
+        SELECT LOCATION
+      </button>
+    `;
     
-    <!-- Add animation progress indicator - Tesla style -->
-    <div class="animation-progress" style="
-      height: 22px;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 5px;
-    ">
-      <div style="
-        width: 14px;
-        height: 14px;
-        border: 1.5px solid #3E6AE1;
-        border-top-color: transparent;
-        border-radius: 50%;
-        animation: camera-spin 1s linear infinite;
-      "></div>
-      <span style="margin-left: 5px; font-size: 11px; color: #FFFFFF; font-weight: 400; letter-spacing: 0.5px; opacity: 0.9; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">SCANNING LOCATION</span>
-    </div>
-    
-    <button class="pickup-btn" style="
-      display: inline-block;
-      width: 100%;
-      padding: 7px 0;
-      background: #4A4A4A;
-      color: #FFFFFF;
-      font-size: 11px;
-      font-weight: 500;
-      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.25s ease;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    ">
-      SELECT LOCATION
-    </button>
-    
-    <style>
-      @keyframes camera-spin {
-        to { transform: rotate(360deg); }
-      }
-    </style>
-  `;
     return expandedDiv;
   }
 }
@@ -621,63 +510,49 @@ function buildCollapsedMarkerDOM(
   markerPool: MarkerPool,
   onStationClick: (stationId: number) => void
 ) {
-  const container = document.createElement("div")
-  container.classList.add("marker-container")
-  container.style.cssText = `
-    position: relative;
-    pointer-events: auto;
-    transform-origin: center bottom;
-    will-change: transform, opacity;
-    transition: transform 0.25s, opacity 0.2s;
-    transform: scale(0);
-    opacity: 1;
-  `
-
-  const collapsedWrapper = document.createElement("div")
-  collapsedWrapper.classList.add("collapsed-wrapper")
-  collapsedWrapper.style.cssText = `
-    display: flex; 
-    flex-direction: column; 
-    align-items: center;
-    pointer-events: none;
-    will-change: opacity, transform;
-    transition: opacity 0.2s ease-out, transform 0.2s;
-  `
-
-  // Grab a collapsed marker from the pool
-  const collapsedDiv = markerPool.getCollapsedMarker()
+  // Create container with CSS class instead of inline styles
+  const container = document.createElement("div");
+  container.classList.add("marker-container");
+  
+  // Create collapsed wrapper with CSS class
+  const collapsedWrapper = document.createElement("div");
+  collapsedWrapper.classList.add("marker-collapsed-wrapper");
+  
+  // Grab a collapsed marker from the pool and add class
+  const collapsedDiv = markerPool.getCollapsedMarker();
+  collapsedDiv.classList.add("marker-collapsed");
+  
+  // Add click handler
   collapsedDiv.addEventListener("click", (ev) => {
-    ev.stopPropagation()
-    onStationClick(station.id)
-  })
+    ev.stopPropagation();
+    onStationClick(station.id);
+  });
 
-  // Hover effect - Tesla-inspired clean and subtle
+  // Simplified hover effects using CSS classes
   const handleMouseEnter = () => {
-    collapsedDiv.style.transform = "scale(1.05)"
-    collapsedDiv.style.borderColor = "rgba(255, 255, 255, 1)"
-    collapsedDiv.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)"
+    if (!collapsedDiv.classList.contains("hover")) {
+      collapsedDiv.classList.add("hover");
+    }
   };
+  
   const handleMouseLeave = () => {
-    collapsedDiv.style.transform = ""
-    collapsedDiv.style.borderColor = "rgba(255, 255, 255, 0.9)"
-    collapsedDiv.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)"
+    collapsedDiv.classList.remove("hover");
   };
   
   collapsedDiv.addEventListener("mouseenter", handleMouseEnter);
   collapsedDiv.addEventListener("mouseleave", handleMouseLeave);
 
-  const collapsedPost = document.createElement("div")
-  collapsedPost.style.cssText = `
-    width: 1px; 
-    height: 28px;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.1));
-    margin-top: 1px;
-    pointer-events: none;
-  `
+  // Create post with CSS class
+  const collapsedPost = document.createElement("div");
+  collapsedPost.classList.add("marker-post");
+  
+  // Set initial height (will be updated later as needed)
+  collapsedPost.style.height = "28px";
 
-  collapsedWrapper.appendChild(collapsedDiv)
-  collapsedWrapper.appendChild(collapsedPost)
-  container.appendChild(collapsedWrapper)
+  // Assemble the DOM structure
+  collapsedWrapper.appendChild(collapsedDiv);
+  collapsedWrapper.appendChild(collapsedPost);
+  container.appendChild(collapsedWrapper);
 
   return {
     container,
@@ -688,7 +563,7 @@ function buildCollapsedMarkerDOM(
       collapsedMouseEnter: handleMouseEnter,
       collapsedMouseLeave: handleMouseLeave,
     }
-  }
+  };
 }
 
 // Function to build the expanded marker portion on demand
@@ -702,213 +577,148 @@ function buildExpandedMarkerDOM(
 
   if (isVirtual) {
     // Create custom expanded marker for scanned car
-    expandedDiv = document.createElement("div")
-    expandedDiv.classList.add("expanded-view")
-    expandedDiv.style.cssText = `
-      width: 200px;
-      background: rgba(16, 16, 16, 0.98);
-      backdrop-filter: blur(12px);
-      color: #FFFFFF;
-      border: 2px solid #E82127;
-      border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15), 0 0 15px rgba(232, 33, 39, 0.3);
-      padding: 8px;
-      cursor: pointer;
-      pointer-events: auto;
-      transform-origin: center;
-      will-change: transform, border-color, box-shadow;
-      transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
-    `
+    expandedDiv = document.createElement("div");
+    expandedDiv.classList.add("marker-expanded");
     
     // Get the car registration if available
     const registration = station.properties.registration || station.properties.plateNumber || '';
     
-    expandedDiv.innerHTML = `
-      <div class="expanded-info-section" style="margin-bottom: 5px;">
-        <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #E82127; text-transform: uppercase;">
-          SCANNED CAR
-        </div>
-        <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px;">
-          ${(station.properties.Place || 'Electric Vehicle').replace(/\[.*\]/, '')}
-        </div>
-        <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF;">
-          ${station.properties.Address || 'Current location'}
-        </div>
-      </div>
-      
-      <!-- Car Plate - similar to CarPlate.tsx - ALWAYS show for virtual car stations -->
-      <div class="car-plate-container" style="
-        margin: 8px 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      ">
-        <div style="
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 3px 8px rgba(0,0,0,0.4);
-        ">
-          <!-- Plate border -->
-          <div style="
-            position: absolute;
-            inset: 0;
-            border-radius: 0.75rem;
-            border: 2px solid black;
-            z-index: 2;
-          "></div>
-          
-          <!-- Plate background -->
-          <div style="
-            width: 100%;
-            height: 100%;
-            border-radius: 0.75rem;
-            background-color: #f3f4f6;
-            padding: 0.75rem 1.25rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1;
-          ">
-            <div style="
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 0.25rem;
-            ">
-              ${(registration || station.properties.Place || "").split('').map(char => `
-                <span style="
-                  color: black;
-                  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-                  font-size: 1.5rem;
-                  font-weight: bold;
-                  ${char === ' ' ? 'width: 0.5rem;' : ''}
-                ">${char !== ' ' ? char : ''}</span>
-              `).join('')}
-            </div>
+    // Create elements with proper structure
+    const infoSection = document.createElement("div");
+    infoSection.classList.add("expanded-info-section");
+    infoSection.style.marginBottom = "5px";
+    
+    // Title element
+    const titleElement = document.createElement("div");
+    titleElement.textContent = "SCANNED CAR";
+    titleElement.style.fontSize = "11px";
+    titleElement.style.fontWeight = "500";
+    titleElement.style.letterSpacing = "0.5px";
+    titleElement.style.marginBottom = "2px";
+    titleElement.style.color = "#E82127";
+    titleElement.style.textTransform = "uppercase";
+    
+    // Place name element
+    const placeElement = document.createElement("div");
+    placeElement.textContent = (station.properties.Place || 'Electric Vehicle').replace(/\[.*\]/, '');
+    placeElement.style.fontSize = "15px";
+    placeElement.style.fontWeight = "400";
+    placeElement.style.letterSpacing = "0.2px";
+    placeElement.style.color = "#FFFFFF";
+    placeElement.style.marginBottom = "3px";
+    
+    // Address element
+    const addressElement = document.createElement("div");
+    addressElement.textContent = station.properties.Address || 'Current location';
+    addressElement.style.fontSize = "11px";
+    addressElement.style.opacity = "0.8";
+    addressElement.style.lineHeight = "1.3";
+    addressElement.style.color = "#FFFFFF";
+    
+    // Add elements to info section
+    infoSection.appendChild(titleElement);
+    infoSection.appendChild(placeElement);
+    infoSection.appendChild(addressElement);
+    
+    // Car plate container
+    const plateContainer = document.createElement("div");
+    plateContainer.style.margin = "8px 0";
+    plateContainer.style.display = "flex";
+    plateContainer.style.justifyContent = "center";
+    plateContainer.style.alignItems = "center";
+    
+    // Create license plate div
+    const licensePlate = document.createElement("div");
+    licensePlate.innerHTML = `
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.4);">
+        <!-- Plate border -->
+        <div style="position: absolute; inset: 0; border-radius: 0.75rem; border: 2px solid black; z-index: 2;"></div>
+        
+        <!-- Plate background -->
+        <div style="width: 100%; height: 100%; border-radius: 0.75rem; background-color: #f3f4f6; padding: 0.75rem 1.25rem; display: flex; align-items: center; justify-content: center; z-index: 1;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+            ${(registration || station.properties.Place || "").split('').map(char => `
+              <span style="color: black; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 1.5rem; font-weight: bold; ${char === ' ' ? 'width: 0.5rem;' : ''}">${char !== ' ' ? char : ''}</span>
+            `).join('')}
           </div>
-          
-          <!-- Plate shadow -->
-          <div style="
-            position: absolute;
-            bottom: -0.25rem;
-            left: 0.25rem;
-            right: 0.25rem;
-            height: 0.5rem;
-            background: black;
-            opacity: 0.2;
-            filter: blur(3px);
-            border-radius: 9999px;
-            z-index: 0;
-          "></div>
         </div>
+        
+        <!-- Plate shadow -->
+        <div style="position: absolute; bottom: -0.25rem; left: 0.25rem; right: 0.25rem; height: 0.5rem; background: black; opacity: 0.2; filter: blur(3px); border-radius: 9999px; z-index: 0;"></div>
       </div>
-      
-      <!-- Animation progress indicator - Tesla style -->
-      <div class="animation-progress" style="
-        height: 22px;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: 5px;
-      ">
-        <div style="
-          width: 14px;
-          height: 14px;
-          border: 1.5px solid #10A37F;
-          border-top-color: transparent;
-          border-radius: 50%;
-          animation: camera-spin 1s linear infinite;
-        "></div>
-        <span style="margin-left: 5px; font-size: 11px; color: #FFFFFF; font-weight: 400; letter-spacing: 0.5px; opacity: 0.9; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">SCANNING LOCATION</span>
-      </div>
-      
-      <button class="pickup-btn" style="
-        display: inline-block;
-        width: 100%;
-        padding: 8px 0;
-        background: #4A4A4A;
-        color: #FFFFFF;
-        font-size: 12px;
-        font-weight: 500;
-        font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.25s ease;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-      ">
-        START DRIVING HERE
-      </button>
-      
-      <style>
-        @keyframes camera-spin {
-          to { transform: rotate(360deg); }
-        }
-      </style>
-    `
+    `;
+    plateContainer.appendChild(licensePlate);
+    
+    // Animation progress indicator
+    const animProgress = document.createElement("div");
+    animProgress.classList.add("marker-animation-progress");
+    
+    const spinner = document.createElement("div");
+    spinner.classList.add("marker-animation-spinner");
+    
+    const scanText = document.createElement("span");
+    scanText.classList.add("marker-animation-text");
+    scanText.textContent = "SCANNING LOCATION";
+    
+    animProgress.appendChild(spinner);
+    animProgress.appendChild(scanText);
+    
+    // Pickup button
+    const pickupBtn = document.createElement("button");
+    pickupBtn.classList.add("marker-pickup-btn");
+    pickupBtn.textContent = "START DRIVING HERE";
+    
+    // Add all components to expanded div
+    expandedDiv.appendChild(infoSection);
+    expandedDiv.appendChild(plateContainer);
+    expandedDiv.appendChild(animProgress);
+    expandedDiv.appendChild(pickupBtn);
   } else {
     // Use pool for regular stations
-    expandedDiv = markerPool.getExpandedMarker()
+    expandedDiv = markerPool.getExpandedMarker();
+    expandedDiv.classList.add("marker-expanded");
   }
 
-  const expandedWrapper = document.createElement("div")
-  expandedWrapper.classList.add("expanded-wrapper")
-  expandedWrapper.style.cssText = `
-    display: none; 
-    flex-direction: column; 
-    align-items: center;
-    transition: opacity 0.2s ease-out, transform 0.2s;
-  `
+  // Create expanded wrapper with CSS class
+  const expandedWrapper = document.createElement("div");
+  expandedWrapper.classList.add("marker-expanded-wrapper");
 
   // Define handlers for expanded view hover effects
   const handleExpandedMouseEnter = () => {
-    expandedDiv.style.transform = "scale(1.01) translateY(-1px)"
-    expandedDiv.style.borderColor = isVirtual ? "rgba(232, 33, 39, 1)" : "rgba(255, 255, 255, 0.18)"
-    expandedDiv.style.boxShadow = isVirtual 
-      ? "0 5px 12px rgba(0,0,0,0.18), 0 0 20px rgba(232, 33, 39, 0.4)" 
-      : "0 5px 12px rgba(0,0,0,0.18)"
+    if (!expandedDiv.classList.contains("hover")) {
+      expandedDiv.classList.add("hover");
+    }
   };
   
   const handleExpandedMouseLeave = () => {
-    expandedDiv.style.transform = ""
-    expandedDiv.style.borderColor = isVirtual ? "#E82127" : "rgba(255, 255, 255, 0.12)"
-    expandedDiv.style.boxShadow = isVirtual 
-      ? "0 4px 10px rgba(0,0,0,0.15), 0 0 15px rgba(232, 33, 39, 0.3)" 
-      : "0 4px 10px rgba(0,0,0,0.15)"
+    expandedDiv.classList.remove("hover");
   };
   
   // Add hover effects to expanded view
   expandedDiv.addEventListener("mouseenter", handleExpandedMouseEnter);
   expandedDiv.addEventListener("mouseleave", handleExpandedMouseLeave);
 
-  const expandedPost = document.createElement("div")
-  expandedPost.style.cssText = `
-    width: 1px;
-    height: 28px;
-    background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.1));
-    margin-top: 1px;
-    pointer-events: none;
-    will-change: height, opacity;
-    transition: height 0.25s ease, opacity 0.25s ease;
-  `
-  expandedWrapper.appendChild(expandedDiv)
-  expandedWrapper.appendChild(expandedPost)
+  // Create post with CSS class
+  const expandedPost = document.createElement("div");
+  expandedPost.classList.add("marker-post");
+  expandedPost.style.height = "28px";  // Initial height, will be updated later
+
+  // Assemble the DOM structure
+  expandedWrapper.appendChild(expandedDiv);
+  expandedWrapper.appendChild(expandedPost);
 
   return {
     expandedWrapper,
     expandedDiv,
     expandedPost,
-    pickupBtn: expandedDiv.querySelector<HTMLButtonElement>(".pickup-btn"),
-    animationProgress: expandedDiv.querySelector<HTMLDivElement>(".animation-progress"),
+    pickupBtn: expandedDiv.querySelector<HTMLButtonElement>(".marker-pickup-btn"),
+    animationProgress: expandedDiv.querySelector<HTMLDivElement>(".marker-animation-progress"),
     expandedInfoSection: expandedDiv.querySelector<HTMLDivElement>(".expanded-info-section"),
     eventHandlers: {
       expandedMouseEnter: handleExpandedMouseEnter,
       expandedMouseLeave: handleExpandedMouseLeave,
     }
-  }
+  };
 }
 
 // Build marker container function - now builds only the collapsed portion initially
@@ -1361,21 +1171,121 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     });
   }, []);
 
-  // Batch update markers with the unified camera info using the ViewModel
+  // Style configuration constants moved to module scope
+  const MARKER_STYLE_CONFIGS = {
+    qr: {
+      borderColor: "#10A37F", // Green
+      textColor: "#10A37F",
+      markerBackground: "rgba(23, 23, 23, 0.95)",
+      markerBorderColor: "#10A37F", 
+      expandedGlowColor: "rgba(16, 163, 127, 0.6)",
+      collapsedGlowColor: "rgba(16, 163, 127, 0.4)",
+      titleText: "QR SCANNED VEHICLE",
+      stateClass: "marker-qr"
+    },
+    virtual: {
+      borderColor: "rgba(16, 163, 127, 0.7)", // Lighter green
+      textColor: "#10A37F",
+      markerBackground: "rgba(23, 23, 23, 0.95)",
+      markerBorderColor: "rgba(16, 163, 127, 0.7)",
+      expandedGlowColor: "rgba(16, 163, 127, 0.5)",
+      collapsedGlowColor: "rgba(16, 163, 127, 0.3)",
+      titleText: "SCANNED VEHICLE",
+      stateClass: "marker-virtual"
+    },
+    departure: {
+      borderColor: "#3E6AE1", // Blue
+      textColor: "#3E6AE1",
+      markerBackground: "rgba(23, 23, 23, 0.95)",
+      markerBorderColor: "#3E6AE1",
+      expandedGlowColor: "rgba(62, 106, 225, 0.6)",
+      collapsedGlowColor: "rgba(62, 106, 225, 0.4)",
+      titleText: "PICKUP LOCATION", // Will be overridden for pickupMins
+      stateClass: "marker-departure"
+    },
+    arrival: {
+      borderColor: "#E82127", // Red
+      textColor: "#E82127",
+      markerBackground: "rgba(23, 23, 23, 0.95)",
+      markerBorderColor: "#E82127",
+      expandedGlowColor: "rgba(232, 33, 39, 0.6)",
+      collapsedGlowColor: "rgba(232, 33, 39, 0.4)",
+      titleText: "DESTINATION",
+      stateClass: "marker-arrival"
+    },
+    listSelected: {
+      borderColor: "rgba(220, 220, 220, 0.9)",
+      textColor: "#FFFFFF",
+      markerBackground: "rgba(23, 23, 23, 0.95)",
+      markerBorderColor: "rgba(220, 220, 220, 0.9)",
+      expandedGlowColor: "rgba(255, 255, 255, 0.4)",
+      collapsedGlowColor: "rgba(220, 220, 220, 0.4)",
+      titleText: "SELECTED LOCATION",
+      stateClass: "marker-selected"
+    },
+    normal: {
+      borderColor: "rgba(255, 255, 255, 0.15)",
+      textColor: "#FFFFFF",
+      markerBackground: "rgba(23, 23, 23, 0.95)",
+      markerBorderColor: "rgba(255, 255, 255, 0.7)",
+      expandedGlowColor: "rgba(255, 255, 255, 0.3)",
+      collapsedGlowColor: "rgba(255, 255, 255, 0.1)",
+      titleText: "PICKUP LOCATION",
+      stateClass: "marker-normal"
+    }
+  };
+
+  // Create a view model cache using station ID and camera state as key
+  const viewModelCacheRef = useRef<Map<string, MarkerViewModel>>(new Map());
+  
+  // Cache key helper
+  const createViewModelCacheKey = (stationId: number, camera: {tilt: number; zoom: number}) => {
+    // Round values to reduce cache misses on minor camera changes
+    const roundedTilt = Math.round(camera.tilt * 2) / 2; // Round to nearest 0.5
+    const roundedZoom = Math.round(camera.zoom * 10) / 10; // Round to nearest 0.1
+    return `${stationId}_${roundedTilt}_${roundedZoom}`;
+  };
+
+  // Updated batchUpdateMarker to use CSS classes and implement better caching
   const batchUpdateMarker = useCallback((
     entry: (typeof candidateStationsRef.current)[number], 
     camera: {tilt: number, zoom: number},
-    forceUpdate = false
+    forceUpdate = false,
+    cachedViewModel?: MarkerViewModel // Allow passing a pre-computed view model
   ) => {
     if (!entry.marker || !entry.refs || !entry.stationData) return;
     
     const station = entry.stationData;
     const { marker, refs } = entry;
     
-    // Compute new view model with the current camera settings
-    const viewModel = computeMarkerViewModel(station.id, camera);
+    // Get view model - either from passed parameter or compute new one 
+    let viewModel: MarkerViewModel;
     
-    // If it was collapsed and is now expanded, build the expanded DOM
+    if (cachedViewModel) {
+      // Use pre-computed view model if provided (from batched updates)
+      viewModel = cachedViewModel;
+    } else {
+      // Check cache first
+      const cacheKey = createViewModelCacheKey(station.id, camera);
+      
+      if (!forceUpdate && viewModelCacheRef.current.has(cacheKey)) {
+        viewModel = viewModelCacheRef.current.get(cacheKey)!;
+      } else {
+        // Compute and cache the new view model
+        viewModel = computeMarkerViewModel(station.id, camera);
+        viewModelCacheRef.current.set(cacheKey, viewModel);
+        
+        // Prevent cache from growing too large
+        if (viewModelCacheRef.current.size > 500) {
+          const keys = Array.from(viewModelCacheRef.current.keys());
+          // Remove oldest 100 entries
+          const oldestKeys = keys.slice(0, 100);
+          oldestKeys.forEach(key => viewModelCacheRef.current.delete(key));
+        }
+      }
+    }
+    
+    // If it was collapsed and is now expanded, ensure expanded DOM exists
     if (viewModel.isExpanded && !entry.refs?.expandedWrapper) {
       ensureExpandedDOM(entry);
       
@@ -1386,9 +1296,9 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     }
     
     // Show post only if it has sufficient height
-    const showPosts = viewModel.postHeight > 4 ? "1" : "0";
+    const showPosts = viewModel.postHeight > 4;
     
-    // Compare with previous state
+    // Compare with previous state to avoid unnecessary DOM updates
     const prevState = entry.markerState;
     if (!forceUpdate && prevState && 
         prevState.isExpanded === viewModel.isExpanded &&
@@ -1398,13 +1308,22 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         prevState.isListSelected === viewModel.isListSelected &&
         Math.abs(prevState.postHeight - viewModel.postHeight) < 0.5 &&
         prevState.showPickupBtn === viewModel.showPickupBtn &&
-        prevState.pickupMins === viewModel.pickupMins) {
+        prevState.pickupMins === viewModel.pickupMins &&
+        prevState.style === viewModel.style) {
       // No significant changes - skip update
       return;
     }
     
     // Update state reference
     entry.markerState = viewModel;
+    
+    // Get marker style configuration
+    const styleConfig = viewModel.isDeparture ? MARKER_STYLE_CONFIGS.departure :
+                        viewModel.isArrival ? MARKER_STYLE_CONFIGS.arrival :
+                        viewModel.isListSelected ? MARKER_STYLE_CONFIGS.listSelected :
+                        viewModel.style === "qr" ? MARKER_STYLE_CONFIGS.qr :
+                        viewModel.style === "virtual" ? MARKER_STYLE_CONFIGS.virtual :
+                        MARKER_STYLE_CONFIGS.normal;
     
     // Decide collisionBehavior:
     const isHighPriority = viewModel.isDeparture || viewModel.isArrival || 
@@ -1418,6 +1337,16 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     if (marker.element) {
       marker.element.style.zIndex = isHighPriority ? "9999" : "1";
     }
+    
+    // Remove all state classes first
+    const container = refs.container;
+    const stateClasses = ['marker-normal', 'marker-selected', 'marker-departure', 'marker-arrival', 'marker-qr', 'marker-virtual'];
+    stateClasses.forEach(cls => {
+      container.classList.remove(cls);
+    });
+    
+    // Add appropriate state class
+    container.classList.add(styleConfig.stateClass);
     
     // Handle expanded/collapsed view toggling
     if (refs.expandedWrapper) {
@@ -1444,16 +1373,16 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         }, 250);
       }
       
-      // Update post heights for both views
+      // Update post heights for both views - one of the few remaining inline styles needed
       refs.collapsedPost.style.height = `${viewModel.postHeight}px`;
-      refs.collapsedPost.style.opacity = showPosts;
+      refs.collapsedPost.style.opacity = showPosts ? "1" : "0";
       
       if (refs.expandedPost) {
         refs.expandedPost.style.height = `${viewModel.postHeight}px`;
-        refs.expandedPost.style.opacity = showPosts;
+        refs.expandedPost.style.opacity = showPosts ? "1" : "0";
       }
       
-      // Check animation state from a single source
+      // Check animation state from consolidated sources
       let isAnimatingThisStation = false;
       // Only check animation state if relevant (for performance)
       if ((viewModel.isDeparture || viewModel.style === "qr") && typeof window !== 'undefined') {
@@ -1476,19 +1405,22 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         }
       }
 
-      // Animation progress indicator
+      // Animation progress indicator - use classList for toggling visibility
       if (refs.animationProgress) {
-        refs.animationProgress.style.display = isAnimatingThisStation ? "flex" : "none";
+        if (isAnimatingThisStation) {
+          refs.animationProgress.style.display = "flex";
+        } else {
+          refs.animationProgress.style.display = "none";
+        }
       }
       
       // Update pickup button visibility based on view model and animation state
       if (refs.pickupBtn) {
-        if (viewModel.showPickupBtn) {
-          // Show button only if not animating
-          refs.pickupBtn.style.display = isAnimatingThisStation ? "none" : "inline-block";
+        if (viewModel.showPickupBtn && !isAnimatingThisStation) {
+          refs.pickupBtn.style.display = "inline-block";
           
           // If we just completed animation, add a nice fade-in effect
-          if (!isAnimatingThisStation && circlingTargetStation === station.id) {
+          if (circlingTargetStation === station.id) {
             refs.pickupBtn.style.opacity = "0";
             refs.pickupBtn.style.transform = "translateY(5px)";
             
@@ -1501,7 +1433,6 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
               if (pickupBtn) {
                 pickupBtn.style.opacity = "1";
                 pickupBtn.style.transform = "translateY(0)";
-                pickupBtn.style.transition = "opacity 0.3s ease-out, transform 0.3s ease-out";
               }
             }, 100);
           }
@@ -1510,67 +1441,51 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
         }
       }
       
-      // Get marker style configuration based on view model
-      const styleConfig = getMarkerStyleConfig(viewModel);
-      
-      // Apply styles to expanded marker
-      if (refs.expandedDiv) {
-        refs.expandedDiv.style.borderColor = styleConfig.borderColor;
-        if (viewModel.isDeparture || viewModel.isArrival || viewModel.isListSelected) {
-          refs.expandedDiv.style.boxShadow = `0 8px 20px rgba(0,0,0,0.3), 0 0 20px ${styleConfig.expandedGlowColor}`;
-          refs.expandedDiv.style.borderWidth = "2px";
-        } else {
-          refs.expandedDiv.style.boxShadow = "0 8px 16px rgba(0,0,0,0.25)";
-          refs.expandedDiv.style.borderWidth = "1px";
-        }
-      }
-      
       // Update info section content
       if (refs.expandedInfoSection) {
+        // Create DOM elements rather than setting innerHTML directly
+        refs.expandedInfoSection.innerHTML = '';
+        
+        const titleElement = document.createElement('div');
+        titleElement.style.fontSize = '11px';
+        titleElement.style.fontWeight = '500';
+        titleElement.style.letterSpacing = '0.5px';
+        titleElement.style.marginBottom = '2px';
+        titleElement.style.color = '#FFFFFF';
+        titleElement.style.opacity = '0.7';
+        titleElement.style.textTransform = 'uppercase';
+        titleElement.style.fontFamily = "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif";
+        titleElement.textContent = viewModel.isDeparture && viewModel.pickupMins !== null
+          ? 'ESTIMATED PICKUP'
+          : styleConfig.titleText;
+        
+        const valueElement = document.createElement('div');
+        valueElement.style.fontSize = '15px';
+        valueElement.style.fontWeight = '400';
+        valueElement.style.letterSpacing = '0.2px';
+        valueElement.style.color = '#FFFFFF';
+        valueElement.style.marginBottom = '3px';
+        valueElement.style.fontFamily = "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif";
+        
         if (viewModel.isDeparture && viewModel.pickupMins !== null) {
-          refs.expandedInfoSection.innerHTML = `
-            <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">
-              ${styleConfig.titleText}
-            </div>
-            <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">
-              ${viewModel.pickupMins} min
-            </div>
-            <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">
-              ${viewModel.address}
-            </div>
-          `;
+          valueElement.textContent = `${viewModel.pickupMins} min`;
         } else {
-          refs.expandedInfoSection.innerHTML = `
-            <div style="font-size: 11px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 2px; color: #FFFFFF; opacity: 0.7; text-transform: uppercase; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">
-              ${styleConfig.titleText}
-            </div>
-            <div style="font-size: 15px; font-weight: 400; letter-spacing: 0.2px; color: #FFFFFF; margin-bottom: 3px; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">
-              ${viewModel.place}
-            </div>
-            <div style="font-size: 11px; opacity: 0.8; line-height: 1.3; color: #FFFFFF; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">
-              ${viewModel.address}
-            </div>
-          `;
+          valueElement.textContent = viewModel.place;
         }
+        
+        const addressElement = document.createElement('div');
+        addressElement.style.fontSize = '11px';
+        addressElement.style.opacity = '0.8';
+        addressElement.style.lineHeight = '1.3';
+        addressElement.style.color = '#FFFFFF';
+        addressElement.style.fontFamily = "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif";
+        addressElement.textContent = viewModel.address;
+        
+        refs.expandedInfoSection.appendChild(titleElement);
+        refs.expandedInfoSection.appendChild(valueElement);
+        refs.expandedInfoSection.appendChild(addressElement);
       }
     }
-    
-    // Apply styles to collapsed marker
-    const styleConfig = getMarkerStyleConfig(viewModel);
-    refs.collapsedDiv.style.background = styleConfig.markerBackground;
-    refs.collapsedDiv.style.borderColor = styleConfig.markerBorderColor;
-    
-    // Special styling for important stations
-    if (viewModel.isDeparture || viewModel.isArrival || viewModel.isListSelected) {
-      refs.collapsedDiv.style.transform = "scale(1.05)";
-      refs.collapsedDiv.style.boxShadow = `0 1px 3px rgba(0,0,0,0.15), 0 0 6px ${styleConfig.collapsedGlowColor}`;
-      refs.collapsedDiv.style.borderWidth = "2px";
-    } else {
-      refs.collapsedDiv.style.transform = "";
-      refs.collapsedDiv.style.boxShadow = "0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05)";
-      refs.collapsedDiv.style.borderWidth = "1.5px";
-    }
-    
   }, [
     computeMarkerViewModel,
     circlingAnimationActive,
@@ -1637,7 +1552,7 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     entry.refs = undefined;
   }, [handleStationClick]);
 
-  // Unified map update handler that combines tilt, zoom, and bounds changes
+  // Unified map update handler that implements true batching
   const handleMapUpdate = useCallback(() => {
     if (!googleMap) return;
     
@@ -1659,38 +1574,72 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     // Current camera info for view model
     const cameraInfo = { tilt, zoom };
     
-    // Single unified pass: process all stations in one loop with view model-driven decisions
+    // Create pending updates array for batching DOM updates
+    const pendingUpdates: {
+      entry: typeof candidateStationsRef.current[number];
+      viewModel: MarkerViewModel;
+      forceUpdate: boolean;
+    }[] = [];
+    
+    // PHASE 1: Compute all view models and collect changes (pure JS, no DOM)
     candidateStationsRef.current.forEach(entry => {
       const { stationId, marker } = entry;
       
-      // Always compute the view model first - single source of truth
-      const viewModel = computeMarkerViewModel(stationId, cameraInfo);
+      // Use cached view model if available, or compute a new one
+      const cacheKey = createViewModelCacheKey(stationId, cameraInfo);
+      let viewModel: MarkerViewModel;
+      
+      if (viewModelCacheRef.current.has(cacheKey)) {
+        viewModel = viewModelCacheRef.current.get(cacheKey)!;
+      } else {
+        viewModel = computeMarkerViewModel(stationId, cameraInfo);
+        viewModelCacheRef.current.set(cacheKey, viewModel);
+      }
       
       // Combined visibility check - either the view model marks it as important,
       // or it's in the visible bounds (optimized via spatial index)
       const shouldBeVisible = viewModel.isVisible || visibleStationIds.includes(stationId);
       
-      if (viewModel.style === "qr" || viewModel.style === "virtual") {
-        if (process.env.NODE_ENV === "development") {
-          console.log('[useMarkerOverlay] Processing virtual car station:', stationId);
-        }
+      // Debug logging
+      if ((viewModel.style === "qr" || viewModel.style === "virtual") && process.env.NODE_ENV === "development") {
+        console.log('[useMarkerOverlay] Processing virtual car station:', stationId);
       }
       
       // First handle marker existence/visibility
       if (shouldBeVisible) {
         if (!marker) {
-          // Create new marker if needed
+          // Create new marker if needed - can't batch this part
           createStationMarker(entry);
         } else if (!marker.map) {
-          // Add to map if not already visible
+          // Add to map if not already visible - just update map reference
           marker.map = googleMap;
         }
         
-        // Now that we have a valid marker, update its styling
+        // Add this marker to pending updates if it exists
         if (entry.marker) {
           // Force update for QR/virtual car stations for reliable visibility
           const forceUpdate = viewModel.style === "qr" || viewModel.style === "virtual";
-          batchUpdateMarker(entry, cameraInfo, forceUpdate);
+          
+          // Quick check if we actually need to update this marker
+          const prevState = entry.markerState;
+          const needsUpdate = forceUpdate || !prevState || 
+                          prevState.isExpanded !== viewModel.isExpanded ||
+                          prevState.isVisible !== viewModel.isVisible ||
+                          prevState.isDeparture !== viewModel.isDeparture ||
+                          prevState.isArrival !== viewModel.isArrival ||
+                          prevState.isListSelected !== viewModel.isListSelected ||
+                          Math.abs(prevState.postHeight - viewModel.postHeight) >= 0.5 ||
+                          prevState.showPickupBtn !== viewModel.showPickupBtn ||
+                          prevState.pickupMins !== viewModel.pickupMins ||
+                          prevState.style !== viewModel.style;
+          
+          if (needsUpdate) {
+            pendingUpdates.push({
+              entry,
+              viewModel,
+              forceUpdate
+            });
+          }
         }
       } else if (marker && marker.map) {
         // If the marker is currently visible but shouldn't be, properly clean it up
@@ -1708,7 +1657,34 @@ const createOrUpdateRouteMarker = useCallback((camera?: {tilt: number, zoom: num
     // Update route marker with the same camera info
     createOrUpdateRouteMarker(cameraInfo);
     
-  }, [googleMap, createStationMarker, batchUpdateMarker, createOrUpdateRouteMarker, computeMarkerViewModel, cleanupMarker]);
+    // PHASE 2: Apply all DOM updates in a single animation frame
+    if (pendingUpdates.length > 0) {
+      // Cancel any previous pending animation frame
+      if (pendingAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(pendingAnimationFrameRef.current);
+      }
+      
+      // Queue a new animation frame for the DOM updates
+      pendingAnimationFrameRef.current = requestAnimationFrame(() => {
+        // Process all pending updates with the cached view models
+        pendingUpdates.forEach(update => {
+          const { entry, viewModel, forceUpdate } = update;
+          batchUpdateMarker(entry, cameraInfo, forceUpdate, viewModel);
+        });
+        
+        // Clear the pending animation frame reference
+        pendingAnimationFrameRef.current = null;
+      });
+    }
+  }, [
+    googleMap, 
+    createStationMarker, 
+    batchUpdateMarker, 
+    createOrUpdateRouteMarker, 
+    computeMarkerViewModel, 
+    cleanupMarker, 
+    createViewModelCacheKey
+  ]);
   
   // Debounced map update handler
   const debouncedMapUpdate = useMemo(() => {
