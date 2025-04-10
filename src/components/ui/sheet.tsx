@@ -1,73 +1,11 @@
 "use client"
 
 import type React from "react"
-import { memo, useMemo, useCallback, useRef, useState, useEffect, type ReactNode } from "react"
+import { useCallback, useRef, useState, useEffect, type ReactNode } from "react"
 import { AnimatePresence, motion, useDragControls, type PanInfo, type Variants } from "framer-motion"
+import { ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useBodyScrollLock } from "@/lib/useBodyScrollLock"
-
-interface SheetHeaderProps {
-  title?: string
-  subtitle?: ReactNode
-  headerContent?: ReactNode
-  count?: number
-  countLabel?: string
-  disableMinimize?: boolean
-  headerRef: React.RefObject<HTMLDivElement>
-  onPointerDown: (e: React.PointerEvent) => void
-}
-
-/**
- * A sub-component for rendering the Sheet's header area.
- */
-const SheetHeader = memo(function SheetHeader({
-  title,
-  subtitle,
-  headerContent,
-  count,
-  countLabel,
-  headerRef,
-  onPointerDown,
-}: SheetHeaderProps) {
-  const titleSection = useMemo(() => {
-    if (!(title || subtitle || typeof count === "number")) return null
-    return (
-      <div className="w-full flex flex-col">
-        {title && <h2 className="text-white font-medium text-base leading-tight">{title}</h2>}
-        {subtitle && <div className="text-sm text-gray-400 leading-tight">{subtitle}</div>}
-        {typeof count === "number" && (
-          <div className="text-sm text-gray-400 leading-tight">
-            {count} {countLabel ?? "items"}
-          </div>
-        )}
-      </div>
-    )
-  }, [title, subtitle, count, countLabel])
-
-  const headerContentSection = useMemo(() => {
-    if (!headerContent) return null
-    return <div className="mt-1">{headerContent}</div>
-  }, [headerContent])
-
-  // Keep pointer events active on the header so user can click/drag even if the rest is disabled
-  return (
-    <div
-      ref={headerRef}
-      className="cursor-grab active:cursor-grabbing w-full pointer-events-auto"
-      style={{ pointerEvents: "auto" }}
-      onPointerDown={onPointerDown}
-      onClick={(e) => e.preventDefault()}
-    >
-      <div className="px-4 pt-3 pb-2 flex flex-col gap-1">
-        {titleSection}
-        {headerContentSection}
-      </div>
-      <div className="w-12 h-1 bg-[#2a2a2a] mx-auto mt-1 mb-2 rounded-full" />
-    </div>
-  )
-})
-
-SheetHeader.displayName = "SheetHeader"
 
 /** The props for the Sheet component. */
 export interface SheetProps {
@@ -83,16 +21,6 @@ export interface SheetProps {
   onDismiss?: () => void
   /** Optional higher z-index if needed. */
   highPriority?: boolean
-  /** Title text shown in the header. */
-  title?: string
-  /** Subtitle or small text below the title in the header. */
-  subtitle?: ReactNode
-  /** Additional header content (e.g. status indicators). */
-  headerContent?: ReactNode
-  /** Optional item count display. */
-  count?: number
-  /** Label to show alongside `count`. */
-  countLabel?: string
   /** Whether to disable minimizing the sheet. */
   disableMinimize?: boolean
   /** Additional CSS classes for the sheet container. */
@@ -101,23 +29,63 @@ export interface SheetProps {
   children: ReactNode
 }
 
-// Variants for the sheet's main motion.div
-// "hidden": sheet is off-screen at the bottom
-// "minimized": sheet is partially visible (85% down the screen)
-// "expanded": sheet is fully visible
+// Enhanced spring physics for the sheet's motion variants
 const sheetVariants: Variants = {
   hidden: {
     y: "100%",
-    transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 30,
+      mass: 0.8,
+    },
   },
   minimized: {
     y: "85%",
-    transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 30,
+      mass: 0.8,
+    },
   },
   expanded: {
     y: "0%",
-    transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 30,
+      mass: 0.8,
+    },
   },
+}
+
+// Content animation variants
+const contentVariants: Variants = {
+  hidden: {
+    opacity: 0,
+    transition: { duration: 0.15 },
+  },
+  visible: {
+    opacity: 1,
+    transition: {
+      duration: 0.25,
+      delay: 0.05,
+    },
+  },
+}
+
+/**
+ * Trigger haptic feedback on iOS devices
+ */
+const triggerHapticFeedback = () => {
+  // Check if device supports vibration
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate(10) // Short vibration
+  } else if (typeof window !== "undefined" && window.navigator && "vibrate" in window.navigator) {
+    // @ts-ignore - Some browsers have vibrate on window.navigator
+    window.navigator.vibrate(10)
+  }
 }
 
 /**
@@ -130,11 +98,6 @@ export default function Sheet({
   onExpand,
   onDismiss,
   highPriority = false,
-  title,
-  subtitle,
-  headerContent,
-  count,
-  countLabel,
   disableMinimize = false,
   className,
   children,
@@ -154,14 +117,23 @@ export default function Sheet({
   const startYRef = useRef(0)
   const [preventDrag, setPreventDrag] = useState(false)
 
-  // We'll measure the header's height, though we might not do much with it.
-  const [headerHeight, setHeaderHeight] = useState(64)
+  // Track previous minimized state for animations
+  const [prevMinimized, setPrevMinimized] = useState(isMinimized)
+  const [contentVisible, setContentVisible] = useState(!isMinimized)
 
+  // Update content visibility based on minimized state changes
   useEffect(() => {
-    if (!headerRef.current) return
-    const measuredHeight = headerRef.current.getBoundingClientRect().height
-    setHeaderHeight(Math.max(64, Math.ceil(measuredHeight)))
-  }, [title, subtitle, headerContent, count, countLabel])
+    if (prevMinimized !== isMinimized) {
+      if (isMinimized) {
+        // When minimizing, start fading out content
+        setContentVisible(false)
+      } else {
+        // When expanding, make content visible
+        setContentVisible(true)
+      }
+      setPrevMinimized(isMinimized)
+    }
+  }, [isMinimized, prevMinimized])
 
   /**
    * Start drag when pointer is down on the header,
@@ -182,9 +154,15 @@ export default function Sheet({
 
   /**
    * Check if we're in a scrollable area that's not at the top
+   * or in a 3D interactive element
    */
   const isInScrollableContent = useCallback((target: HTMLElement | null): boolean => {
     if (!target) return false
+
+    // Check if the target is inside a 3D viewer
+    if (target.closest(".three-d-scene")) {
+      return true // Always prevent sheet drag for 3D interactions
+    }
 
     // Find closest scrollable parent
     const scrollableParent = target.closest(".overflow-y-auto, .overflow-auto")
@@ -222,12 +200,16 @@ export default function Sheet({
 
       // If expanded (not minimized) and user drags down > 50px => minimize
       if (!isMinimized && info.offset.y > 50) {
+        // Trigger haptic feedback when crossing threshold
+        triggerHapticFeedback()
         onMinimize?.()
         return
       }
 
       // If minimized and user drags up > 50px => expand
       if (isMinimized && info.offset.y < -50) {
+        // Trigger haptic feedback when crossing threshold
+        triggerHapticFeedback()
         onExpand?.()
         return
       }
@@ -242,9 +224,8 @@ export default function Sheet({
     (e: React.TouchEvent) => {
       const target = e.target as HTMLElement
 
-      // If we're in a scrollable area that's not at the top,
-      // prevent dragging the sheet initially
-      if (isInScrollableContent(target)) {
+      // Prevent dragging if in a 3D scene or scrollable content
+      if (isInScrollableContent(target) || target.closest(".three-d-scene")) {
         setPreventDrag(true)
       } else {
         setPreventDrag(false)
@@ -260,7 +241,7 @@ export default function Sheet({
           style={{
             touchAction: isMinimized ? "none" : "auto",
           }}
-          className={cn("fixed bottom-0 left-0 right-0", zIndexClass)}
+          className={cn("fixed bottom-0 left-0 right-0 motion-div-sheet sheet-container", zIndexClass)}
           key="sheet-container"
           variants={sheetVariants}
           initial={"hidden"}
@@ -279,30 +260,52 @@ export default function Sheet({
         >
           <div
             className={cn(
-              "relative bg-[#1a1a1a] text-white rounded-t-xl shadow-xl flex flex-col select-none",
+              "relative bg-[#1a1a1a] text-white rounded-t-xl shadow-xl border border-[#2a2a2a] flex flex-col select-none",
               className,
             )}
             style={{
-              // We'll rely on the motion variants for y positioning.
               pointerEvents: "auto",
+              boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.25), 0 -2px 6px rgba(0, 0, 0, 0.15)",
             }}
           >
-            <SheetHeader
-              title={title}
-              subtitle={subtitle}
-              headerContent={headerContent}
-              count={count}
-              countLabel={countLabel}
-              headerRef={headerRef}
-              onPointerDown={handleHeaderPointerDown}
-            />
-
-            {/* Body area: always enable pointer events but handle scrolling properly */}
+            {/* Top area with centered drag handle and minimize button */}
             <div
+              ref={headerRef}
+              className="relative flex items-center justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing w-full"
+              onPointerDown={handleHeaderPointerDown}
+            >
+              <div
+                className="w-12 h-1.5 rounded-full bg-gradient-to-r from-[#333333] via-[#444444] to-[#333333]"
+                style={{
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.1)",
+                }}
+              ></div>
+
+              {/* Absolute positioned minimize button in the top right */}
+              <button
+                type="button"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-200"
+                onClick={() => {
+                  if (!disableMinimize) {
+                    if (isMinimized) {
+                      triggerHapticFeedback()
+                      onExpand?.()
+                    } else {
+                      triggerHapticFeedback()
+                      onMinimize?.()
+                    }
+                  }
+                }}
+              >
+                {isMinimized ? <ChevronUp width={20} height={20} /> : <ChevronDown width={20} height={20} />}
+              </button>
+            </div>
+
+            {/* Body area with fade animation */}
+            <motion.div
               ref={bodyRef}
               className={cn(
-                "flex-grow overflow-y-auto overscroll-contain px-4 pt-2 pb-6 transition-all duration-200 sheet-body",
-                isMinimized ? "opacity-50" : "opacity-100",
+                "flex-grow overflow-y-auto overscroll-contain px-4 pb-6 transition-all duration-200 sheet-body sheet-content-area",
               )}
               style={{
                 WebkitOverflowScrolling: "touch",
@@ -310,13 +313,15 @@ export default function Sheet({
                 touchAction: "pan-y",
               }}
               onTouchStart={handleBodyTouchStart}
+              variants={contentVariants}
+              initial="hidden"
+              animate={contentVisible ? "visible" : "hidden"}
             >
               {children}
-            </div>
+            </motion.div>
           </div>
         </motion.div>
       )}
     </AnimatePresence>
   )
 }
-
