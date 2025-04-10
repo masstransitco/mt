@@ -740,36 +740,8 @@ useEffect(() => {
   onExpand={() => setSheetMinimized(false)}
   onDismiss={() => setSheetMinimized(true)}
   disableMinimize={disableMinimize}
-  headerContent={
-    <div className="flex items-center w-full justify-between">
-      {/* Empty space where title used to be */}
-      <div className="text-sm font-medium"></div>
-
-      {/* Minimizer icons */}
-      {sheetMinimized ? (
-        <button
-          type="button"
-          className="p-1 text-gray-400 hover:text-gray-200"
-          onClick={() => {
-            if (!disableMinimize) setSheetMinimized(false)
-          }}
-        >
-          <ChevronUp width={20} height={20} />
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="p-1 text-gray-400 hover:text-gray-200"
-          onClick={() => {
-            if (!disableMinimize) setSheetMinimized(true)
-          }}
-        >
-          <ChevronDown width={20} height={20} />
-        </button>
-      )}
-    </div>
-  }
 >
+
   {/* Sheet body content depends on sheetMode */}
   {sheetMode === "guide" && (
     <>
@@ -798,7 +770,7 @@ useEffect(() => {
   )}
 
   {sheetMode === "list" && (
-    <div className="space-y-2 px-4 py-2">
+    <div className="space-y-2">
       <StationList
         stations={sortedStations}
         userLocation={userLocation}
@@ -817,8 +789,6 @@ useEffect(() => {
       isVirtualCarLocation={isQrScanStation}
       scannedCar={scannedCar}
       confirmLabel="Confirm"
-
-
       isSignedIn={isSignedIn}
       onOpenSignInModal={() => setSignInModalOpen(true)}
     />
@@ -826,7 +796,7 @@ useEffect(() => {
 
   {/* If stationToShow is null but mode is detail, you could show a fallback */}
   {sheetMode === "detail" && !stationToShow && (
-    <div className="p-4 text-sm text-gray-400">
+    <div className="text-sm text-gray-400">
       No station selected yet.
     </div>
   )}
