@@ -426,10 +426,8 @@ function Car3DComponents({
         const modelManager = ModelManager.getInstance();
         if (modelManager) {
           // Preload models in a safe way
-          modelManager.preloadModels(["/cars/defaultModel.glb"]).catch(err => {
-            console.warn("Model preloading warning:", err);
-            // Non-critical error, can continue
-          });
+          modelManager.preloadModels(["/cars/defaultModel.glb"]);
+          // Remove the .catch() as preloadModels internally handles errors
         }
       } catch (err) {
         console.error("ModelManager initialization error:", err);
