@@ -313,7 +313,7 @@ class StationSelectionManager {
     const checkAnimationState = async (): Promise<boolean> => {
       const animationStateManager = (await import("./animationStateManager")).default;
       const animState = animationStateManager.getState();
-      return animState.isAnimating && animState.targetId === departureStationId;
+      return animState.isAnimating && animState.highestPriorityAnimation?.targetId === departureStationId;
     };
     
     // Check if animation is in progress for this station
