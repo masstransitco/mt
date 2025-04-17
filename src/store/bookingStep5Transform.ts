@@ -4,7 +4,9 @@ import { BookingState } from "./bookingSlice";
 const defaultBooking: BookingState = {
   step: 1,
   stepName: "selecting_departure_station",
-  departureDate: null,
+  departureDateString: null,
+  departureTimeString: null,
+  isDateTimeConfirmed: false,
   route: null,
   routeStatus: "idle",
   routeError: null,

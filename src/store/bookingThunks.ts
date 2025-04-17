@@ -213,8 +213,8 @@ export const loadBookingDetails = createAsyncThunk<
         console.log("[loadBookingDetails] Restoring step 5 booking...");
         
         // Only rehydrate if we found booking data for step 5
-        if (booking.departureDate) {
-          dispatch(setDepartureDate(new Date(booking.departureDate)));
+        if (booking.departureDateString) {
+          dispatch(setDepartureDate(new Date(booking.departureDateString)));
         }
 
         if (booking.ticketPlan) {
