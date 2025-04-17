@@ -3,21 +3,9 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
-import { useAppDispatch } from "@/store/store";
-import { fetchCarByRegistration, setScannedCar } from "@/store/carSlice";
 import type { Car } from "@/types/cars";
 import { toast } from "react-hot-toast";
-import {
-  clearDepartureStation,
-  clearArrivalStation,
-  clearRoute,
-  advanceBookingStep,
-  selectDepartureStation,
-  setQrStationData,
-} from "@/store/bookingSlice";
-import { clearDispatchRoute } from "@/store/dispatchSlice";
-import { addVirtualStation } from "@/store/stationsSlice";
-import { createVirtualStationFromCar } from "@/lib/stationUtils";
+import { useAppDispatch } from "@/store/store";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
@@ -57,61 +45,24 @@ export default function QrScannerOverlay({
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
-        // Extract the car registration from the code
-        const match = scannedValue.match(/\/([a-zA-Z0-9]+)(?:\/|$)/);
-        if (!match) {
-          toast.error("Invalid QR code format");
-          onClose(); // closes overlay on error
+        // Use the centralized stationSelectionManager to process the QR code
+        const stationSelectionManager = (await import("@/lib/stationSelectionManager")).default;
+        const result = await stationSelectionManager.processQrCode(scannedValue);
+        
+        if (!result.success) {
+          toast.error(result.message);
+          onClose();
           return;
         }
-
-        const registration = match[1].toUpperCase();
-        console.log("Car registration:", registration);
-
-        // Fetch the car from the backend
-        const carResult = await dispatch(fetchCarByRegistration(registration)).unwrap();
-        if (!carResult) {
-          toast.error(`Car ${registration} not found`);
-          onClose(); // closes overlay if no car found
-          return;
-        }
-
-        // Update Redux with the scanned car
-        await dispatch(setScannedCar(carResult));
-
-        // 1) Clear any existing departure/arrival stations & routes
-        dispatch(clearDepartureStation());
-        dispatch(clearArrivalStation());
-        dispatch(clearRoute());
-        dispatch(clearDispatchRoute());
-
-        // 2) Create a station from this car
-        const virtualStationId = 1000000 + carResult.id;
-        const virtualStation = createVirtualStationFromCar(carResult, virtualStationId);
-
-        // 3) Add that station to Redux so we actually see it in stations[]
-        dispatch(addVirtualStation(virtualStation));
-
-        // 4) Mark in Redux that we have a QR-based station
-        dispatch(
-          setQrStationData({
-            isQrScanStation: true,
-            qrVirtualStationId: virtualStationId,
-          })
-        );
-
-        // 5) Force this station to be departure & user at step=2
-        dispatch(selectDepartureStation(virtualStationId));
-        dispatch(advanceBookingStep(2));
-
-        // Notify parent to do further station logic
-        if (onScanSuccess) {
+        
+        // Notify parent component of successful scan
+        if (onScanSuccess && result.car) {
           setTimeout(() => {
-            onScanSuccess(carResult);
+            onScanSuccess(result.car!);
           }, 500);
         }
 
-        toast.success(`Car ${registration} found!`);
+        toast.success(result.message);
         // Close the scanner on successful scan
         onClose();
       } catch (error) {
@@ -122,7 +73,7 @@ export default function QrScannerOverlay({
         setLoading(false);
       }
     },
-    [dispatch, onClose, onScanSuccess, loading]
+    [onClose, onScanSuccess, loading]
   );
 
   const handleError = useCallback(

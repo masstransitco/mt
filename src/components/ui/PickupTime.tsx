@@ -3,16 +3,53 @@
 
 import { useEffect, useState, memo, useCallback, useMemo, useRef } from "react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
+import { useAppSelector } from "@/store/store"
+import { selectDepartureDate, selectDepartureTime } from "@/store/bookingSlice"
+import { addMinutes } from "date-fns"
 
 interface PickupTimeProps {
-  startTime: Date
-  endTime: Date
+  startTime?: Date
+  endTime?: Date
+  // If no times are provided, component will try to use Redux state
+  useReduxTime?: boolean
 }
 
-const PickupTime = memo(function PickupTime({ startTime, endTime }: PickupTimeProps) {
+const PickupTime = memo(function PickupTime({ 
+  startTime: propStartTime, 
+  endTime: propEndTime, 
+  useReduxTime = true 
+}: PickupTimeProps) {
   const [isPressed, setIsPressed] = useState(false)
   const [use24HourFormat, setUse24HourFormat] = useState(false)
   const [isAnimating, setIsAnimating] = useState(false)
+  
+  // Get time from Redux if enabled
+  const reduxDate = useAppSelector(selectDepartureDate)
+  const reduxTime = useAppSelector(selectDepartureTime)
+  
+  // Combine date and time from Redux or use provided props
+  const effectiveStartTime = useMemo(() => {
+    if (!useReduxTime || !reduxDate || !reduxTime) {
+      return propStartTime || new Date(Date.now() + 5 * 60000) // Fallback to 5 minutes from now
+    }
+    
+    // Combine reduxDate and reduxTime into a single Date object
+    const combinedDate = new Date(
+      reduxDate.getFullYear(),
+      reduxDate.getMonth(),
+      reduxDate.getDate(),
+      reduxTime.getHours(),
+      reduxTime.getMinutes()
+    )
+    
+    return combinedDate
+  }, [useReduxTime, reduxDate, reduxTime, propStartTime])
+  
+  // Calculate end time (15 minutes after start time)
+  const effectiveEndTime = useMemo(() => {
+    if (propEndTime) return propEndTime
+    return effectiveStartTime ? addMinutes(effectiveStartTime, 15) : new Date(Date.now() + 20 * 60000)
+  }, [effectiveStartTime, propEndTime])
 
   // Use refs to store timers for proper cleanup
   const animationTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -48,10 +85,10 @@ const PickupTime = memo(function PickupTime({ startTime, endTime }: PickupTimePr
   // Memoize the formatted times to prevent recalculation on every render
   const { start, end } = useMemo(() => {
     return {
-      start: formatTime(startTime, use24HourFormat),
-      end: formatTime(endTime, use24HourFormat),
+      start: formatTime(effectiveStartTime, use24HourFormat),
+      end: formatTime(effectiveEndTime, use24HourFormat),
     }
-  }, [startTime, endTime, use24HourFormat, formatTime])
+  }, [effectiveStartTime, effectiveEndTime, use24HourFormat, formatTime])
 
   // Memoize the press handler to prevent recreation on each render
   const handlePress = useCallback(() => {

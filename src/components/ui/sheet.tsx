@@ -268,44 +268,41 @@ export default function Sheet({
               boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.25), 0 -2px 6px rgba(0, 0, 0, 0.15)",
             }}
           >
-            {/* Top area with centered drag handle and minimize button */}
+            {/* Top area with centered drag handle that serves as the minimize button */}
             <div
               ref={headerRef}
-              className="relative flex items-center justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing w-full"
+              className="relative flex items-center justify-center pt-3 pb-2 cursor-pointer w-full"
+              onClick={() => {
+                if (!disableMinimize) {
+                  if (isMinimized) {
+                    triggerHapticFeedback()
+                    onExpand?.()
+                  } else {
+                    triggerHapticFeedback()
+                    onMinimize?.()
+                  }
+                }
+              }}
               onPointerDown={handleHeaderPointerDown}
             >
               <div
-                className="w-12 h-1.5 rounded-full bg-gradient-to-r from-[#333333] via-[#444444] to-[#333333]"
+                className={cn(
+                  "w-12 h-1.5 rounded-full transition-all duration-200",
+                  isMinimized 
+                    ? "bg-gradient-to-r from-[#3a3a3a] via-[#4c4c4c] to-[#3a3a3a]" 
+                    : "bg-gradient-to-r from-[#333333] via-[#444444] to-[#333333]"
+                )}
                 style={{
                   boxShadow: "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.1)",
                 }}
               ></div>
-
-              {/* Absolute positioned minimize button in the top right */}
-              <button
-                type="button"
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-200"
-                onClick={() => {
-                  if (!disableMinimize) {
-                    if (isMinimized) {
-                      triggerHapticFeedback()
-                      onExpand?.()
-                    } else {
-                      triggerHapticFeedback()
-                      onMinimize?.()
-                    }
-                  }
-                }}
-              >
-                {isMinimized ? <ChevronUp width={20} height={20} /> : <ChevronDown width={20} height={20} />}
-              </button>
             </div>
 
             {/* Body area with fade animation */}
             <motion.div
               ref={bodyRef}
               className={cn(
-                "flex-grow overflow-y-auto overscroll-contain px-4 pb-6 transition-all duration-200 sheet-body sheet-content-area",
+                "flex-grow overflow-y-auto overscroll-contain px-4 py-6 transition-all duration-200 sheet-body sheet-content-area",
               )}
               style={{
                 WebkitOverflowScrolling: "touch",
