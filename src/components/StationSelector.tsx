@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useAnimationState } from "@/hooks/useAnimationState"
 import dynamic from "next/dynamic"
 import { X, AlertCircle, Search, Maximize2 } from "lucide-react"
 import { toast } from "react-hot-toast"
@@ -483,29 +484,14 @@ function StationSelector({
   // Expand states for each station's map
   const [departureMapExpanded, setDepartureMapExpanded] = useState(false)
   const [arrivalMapExpanded, setArrivalMapExpanded] = useState(false)
-  // Track animation state to disable clear button during animations
-  const [isAnimating, setIsAnimating] = useState(false)
-  const [animatingStationId, setAnimatingStationId] = useState<number | null>(null)
-
-  // Subscribe to animation state manager
-  useEffect(() => {
-    import("@/lib/animationStateManager").then(module => {
-      const animationStateManager = module.default;
-      
-      // Initialize state based on current animation status
-      const initialState = animationStateManager.getState();
-      setIsAnimating(initialState.isAnimating);
-      setAnimatingStationId(initialState.targetId);
-      
-      // Subscribe to animation state changes
-      const unsubscribe = animationStateManager.subscribe((state) => {
-        setIsAnimating(state.isAnimating);
-        setAnimatingStationId(state.targetId);
-      });
-      
-      return unsubscribe;
-    });
-  }, []);
+  // Use the animation state hook to track animations
+  const { isAnimating: checkAnimating, highestPriorityAnimation } = useAnimationState();
+  
+  // Check if we're currently animating
+  const isAnimating = checkAnimating();
+  
+  // Get the current target station ID (if any) from the highest priority animation
+  const animatingStationId = highestPriorityAnimation?.targetId || null;
 
   // Possibly create a virtual station if departure is from a QR car
   const actualScannedCar = scannedCar || reduxScannedCar
