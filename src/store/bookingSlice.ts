@@ -19,7 +19,9 @@ interface RouteInfo {
 export interface BookingState {
   step: number;
   stepName: string;
-  departureDate: Date | null;
+  departureDateString: string | null; // ISO string for Date
+  departureTimeString: string | null; // ISO string for Time
+  isDateTimeConfirmed: boolean;
   route: RouteInfo | null;
   routeStatus: string; // "idle" | "loading" | "succeeded" | "failed"
   routeError: string | null;
@@ -78,7 +80,9 @@ export const fetchRoute = createAsyncThunk<
 const initialState: BookingState = {
   step: 1,
   stepName: "selecting_departure_station",
-  departureDate: null,
+  departureDateString: null,
+  departureTimeString: null,
+  isDateTimeConfirmed: false,
   route: null,
   routeStatus: "idle",
   routeError: null,
@@ -94,7 +98,13 @@ export const bookingSlice = createSlice({
   initialState,
   reducers: {
     setDepartureDate: (state, action: PayloadAction<Date>) => {
-      state.departureDate = action.payload;
+      state.departureDateString = action.payload.toISOString();
+    },
+    setDepartureTime: (state, action: PayloadAction<Date>) => {
+      state.departureTimeString = action.payload.toISOString();
+    },
+    confirmDateTime: (state, action: PayloadAction<boolean>) => {
+      state.isDateTimeConfirmed = action.payload;
     },
     advanceBookingStep: (state, action: PayloadAction<number>) => {
       const newStep = action.payload;
@@ -134,6 +144,11 @@ export const bookingSlice = createSlice({
       }
     },
     selectDepartureStation: (state, action: PayloadAction<number>) => {
+      // Clear any existing date/time selection when changing departure station
+      state.departureDateString = null;
+      state.departureTimeString = null;
+      state.isDateTimeConfirmed = false;
+      
       state.departureStationId = action.payload;
       state.step = 2;
       state.stepName = "selected_departure_station";
@@ -145,6 +160,11 @@ export const bookingSlice = createSlice({
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
+      
+      // Also clear date/time when clearing departure station
+      state.departureDateString = null;
+      state.departureTimeString = null;
+      state.isDateTimeConfirmed = false;
     },
     selectArrivalStation: (state, action: PayloadAction<number>) => {
       if (state.step >= 3 && state.step <= 4) {
@@ -164,11 +184,18 @@ export const bookingSlice = createSlice({
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
+      
+      // Also clear date/time when clearing arrival station
+      state.departureDateString = null;
+      state.departureTimeString = null;
+      state.isDateTimeConfirmed = false;
     },
     resetBookingFlow: (state) => {
       state.step = 1;
       state.stepName = "selecting_departure_station";
-      state.departureDate = null;
+      state.departureDateString = null;
+      state.departureTimeString = null;
+      state.isDateTimeConfirmed = false;
       state.route = null;
       state.routeStatus = "idle";
       state.routeError = null;
@@ -232,6 +259,8 @@ export const bookingSlice = createSlice({
 
 export const {
   setDepartureDate,
+  setDepartureTime,
+  confirmDateTime,
   advanceBookingStep,
   selectDepartureStation,
   clearDepartureStation,
@@ -269,12 +298,28 @@ export const selectBookingStepName = (state: RootState): string => {
 
 export const selectDepartureDate = (state: RootState): Date | null => {
   try {
-    if (!state?.booking) return null;
-    return state.booking.departureDate instanceof Date 
-      ? state.booking.departureDate 
-      : null;
+    if (!state?.booking || !state.booking.departureDateString) return null;
+    return new Date(state.booking.departureDateString);
   } catch (e) {
     return null; // Fallback
+  }
+};
+
+export const selectDepartureTime = (state: RootState): Date | null => {
+  try {
+    if (!state?.booking || !state.booking.departureTimeString) return null;
+    return new Date(state.booking.departureTimeString);
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectIsDateTimeConfirmed = (state: RootState): boolean => {
+  try {
+    if (!state?.booking) return false;
+    return !!state.booking.isDateTimeConfirmed;
+  } catch (e) {
+    return false; // Fallback
   }
 };
 

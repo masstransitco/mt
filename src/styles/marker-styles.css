@@ -1,0 +1,471 @@
+/* Base marker styles - using a more simplified CSS approach */
+.marker-container {
+  position: relative;
+  pointer-events: auto;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+  transform: scale(0);
+  opacity: 1;
+  transition: transform 0.25s, opacity 0.2s;
+}
+.marker-container.visible {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* Marker state classes */
+.marker-container.marker-normal,
+.marker-container.marker-selected,
+.marker-container.marker-departure,
+.marker-container.marker-arrival,
+.marker-container.marker-qr,
+.marker-container.marker-virtual {
+  transition: transform 0.3s, opacity 0.3s;
+}
+
+/* Wrappers for collapsed and expanded states */
+.marker-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+  transform: scale(0.8);
+}
+.marker-wrapper.collapsed.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+.marker-wrapper.expanded.visible {
+  display: flex;
+  opacity: 1;
+  transform: scale(1);
+}
+.marker-wrapper.expanded:not(.visible) {
+  display: none;
+}
+
+/* Highlight state (like in Google example) */
+.highlight {
+  z-index: 1;
+  background-color: rgba(28, 28, 30, 0.95);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+/* Button states */
+.marker-pickup-btn {
+  display: inline-block;
+  width: 100%;
+  padding: 7px 0;
+  background: #4A4A4A;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transform: translateY(0);
+  box-shadow: none;
+}
+.marker-pickup-btn--hover {
+  background: #3A3A3A;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+  letter-spacing: 0.6px;
+}
+.marker-pickup-btn--hidden {
+  display: none;
+}
+.marker-pickup-btn--animation-out {
+  opacity: 0;
+  transform: translateY(5px);
+}
+.marker-pickup-btn--animation-in {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Animation states */
+.marker-animation-progress--active {
+  display: flex;
+}
+.marker-animation-progress--inactive {
+  display: none;
+}
+
+/* Marker post */
+.marker-post {
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.1));
+  margin-top: 1px;
+  pointer-events: none;
+  will-change: height, opacity;
+  transition: height 0.25s ease, opacity 0.25s ease;
+}
+
+/* Post visibility */
+.marker-post--visible {
+  opacity: 1;
+}
+.marker-post--hidden {
+  opacity: 0;
+}
+
+/* Route marker styles */
+.route-marker-container {
+  position: relative;
+  will-change: transform, opacity;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+.route-marker-container--visible {
+  transform: scale(1);
+  opacity: 1;
+}
+.route-marker-container--hidden {
+  transform: scale(0);
+  opacity: 0;
+}
+.route-marker-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.route-box {
+  width: 120px;
+  background: rgba(28, 28, 30, 0.85);
+  backdrop-filter: blur(8px);
+  color: #FFFFFF;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  padding: 8px 12px;
+  text-align: center;
+  pointer-events: auto;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  cursor: default;
+  transition: transform 0.2s ease;
+  letter-spacing: 0.2px;
+}
+.route-post {
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+  margin-top: 2px;
+  pointer-events: none;
+  will-change: height, opacity;
+  transition: height 0.3s ease, opacity 0.3s ease;
+}
+
+/* Info section elements */
+.info-section {
+  margin-bottom: 5px;
+}
+.info-title {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  color: #FFFFFF;
+  opacity: 0.7;
+  text-transform: uppercase;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.info-title--qr { color: #10A37F; }
+.info-title--virtual { color: #10A37F; }
+.info-title--departure { color: #3E6AE1; }
+.info-title--arrival { color: #E82127; }
+
+.info-value {
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  color: #FFFFFF;
+  margin-bottom: 3px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+.info-address {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.3;
+  color: #FFFFFF;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Simplified indicator for virtual car markers */
+.compact-virtual-indicator {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: #10A37F;
+  text-align: center;
+  padding: 4px 8px;
+  background: rgba(16, 163, 127, 0.15);
+  border-radius: 6px;
+  margin: 4px 0;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Remove duplicate declaration - already properly defined at the top */
+.marker-wrapper.collapsed, .marker-wrapper.expanded {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: transform 0.3s, opacity 0.3s;
+}
+.marker-collapsed, .marker-expanded {
+  border-radius: 14px;
+  background-color: rgba(28, 28, 30, 0.95);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+/* Reduced border width and boldness for selected markers */
+.marker-container.marker-departure .marker-expanded,
+.marker-container.marker-arrival .marker-expanded,
+.marker-container.marker-selected .marker-expanded {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+}
+
+/* State Classes */
+.marker-departure .marker-collapsed {
+  border-color: #3E6AE1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 6px rgba(62, 106, 225, 0.4);
+  transform: scale(1.05);
+  border-width: 2px;
+}
+
+.marker-departure .marker-expanded {
+  border-color: #3E6AE1;
+  border-width: 2px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(62, 106, 225, 0.6);
+}
+
+.marker-arrival .marker-collapsed {
+  border-color: #E82127;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 6px rgba(232, 33, 39, 0.4);
+  transform: scale(1.05);
+  border-width: 2px;
+}
+
+.marker-arrival .marker-expanded {
+  border-color: #E82127;
+  border-width: 2px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(232, 33, 39, 0.6);
+}
+
+.marker-selected .marker-collapsed {
+  border-color: rgba(220, 220, 220, 0.9);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 6px rgba(220, 220, 220, 0.4);
+  transform: scale(1.05);
+  border-width: 2px;
+}
+
+.marker-selected .marker-expanded {
+  border-color: rgba(220, 220, 220, 0.9);
+  border-width: 2px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(255, 255, 255, 0.4);
+}
+
+.marker-qr .marker-collapsed {
+  border-color: #10A37F;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 6px rgba(16, 163, 127, 0.4);
+  transform: scale(1.05);
+  border-width: 2px;
+}
+
+.marker-qr .marker-expanded {
+  border-color: #10A37F;
+  border-width: 2px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(16, 163, 127, 0.6);
+}
+
+.marker-virtual .marker-collapsed {
+  border-color: rgba(16, 163, 127, 0.7);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15), 0 0 6px rgba(16, 163, 127, 0.3);
+  transform: scale(1.05);
+  border-width: 2px;
+}
+
+.marker-virtual .marker-expanded {
+  border-color: rgba(16, 163, 127, 0.7);
+  border-width: 2px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(16, 163, 127, 0.5);
+}
+.marker-collapsed {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(23, 23, 23, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 0 1px rgba(255,255,255,0.05);
+  pointer-events: auto;
+  transform-origin: center;
+  will-change: transform, background-color, box-shadow;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+}
+.marker-expanded {
+  width: 170px;
+  background: rgba(23, 23, 23, 0.98);
+  backdrop-filter: blur(12px);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  padding: 7px;
+  cursor: pointer;
+  pointer-events: auto;
+  transform-origin: center;
+  will-change: transform, border-color, box-shadow;
+  transition: all 0.25s cubic-bezier(0.2, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Car plate container & license plate styles */
+.car-plate-container {
+  margin: 8px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+/* Car plate styles for the simplified CarPlate in markers */
+.car-plate {
+  background-color: #FFFFFF;
+  color: #000000;
+  border-radius: 8px;
+  border: 2px solid #000000;
+  padding: 4px 8px;
+  text-align: center;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  width: 100%;
+  max-width: 160px;
+  transition: all 0.2s ease;
+}
+
+.car-plate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+}
+
+.car-plate .plate-title {
+  font-size: 10px;
+  color: #666666;
+  margin-bottom: 2px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.car-plate .plate-number {
+  font-size: 16px;
+  font-family: monospace;
+  letter-spacing: 1px;
+  font-weight: bold;
+}
+/* Simplified indicator for the marker */
+.virtual-car-indicator {
+  background: rgba(16, 163, 127, 0.2);
+  color: #10A37F;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+/* License plate styles kept for backwards compatibility */
+.license-plate {
+  pointer-events: none;
+  display: none; /* Hide by default - now shown in StationDetail */
+}
+.plate-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+}
+.plate-border {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.75rem;
+  border: 2px solid black;
+  z-index: 2;
+}
+.plate-background {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.75rem;
+  background-color: #f3f4f6;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+.plate-text-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+.plate-char {
+  color: black;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+.plate-space {
+  width: 0.5rem;
+}
+.plate-shadow {
+  position: absolute;
+  bottom: -0.25rem;
+  left: 0.25rem;
+  right: 0.25rem;
+  height: 0.5rem;
+  background: black;
+  opacity: 0.2;
+  filter: blur(3px);
+  border-radius: 9999px;
+  z-index: 0;
+}
+
+/* Animation components */
+.marker-animation-progress {
+  height: 22px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 5px;
+}
+.marker-animation-spinner {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #3E6AE1;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: camera-spin 1s linear infinite;
+}
+.marker-animation-text {
+  font-size: 11px;
+  color: #FFFFFF;
+  letter-spacing: 0.5px;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+@keyframes camera-spin {
+  to { transform: rotate(360deg); }
+}

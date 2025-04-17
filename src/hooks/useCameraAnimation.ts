@@ -12,7 +12,8 @@ import {
 } from "@/store/userSlice";
 import type { StationFeature } from "@/store/stationsSlice";
 import { DEFAULT_CENTER } from "@/constants/map";
-import cameraStateManager from "@/lib/cameraStateManager";
+import animationStateManager, { AnimationType, AnimationPriority } from "@/lib/animationStateManager";
+import { useAnimationState } from "@/hooks/useAnimationState";
 
 /** Minimal interface */
 interface UseSimpleCameraAnimationsOptions {
@@ -39,8 +40,8 @@ export function useSimpleCameraAnimations({
   // Track if user manually set a location
   const manualLocationRef = useRef(false);
 
-  // Track if we're mid-animation (so we can block user inputs)
-  const isAnimatingRef = useRef(false);
+  // Animation ID references for tracking animations
+  const currentAnimationIdRef = useRef<string | null>(null);
 
   // -------------------------
   // On user/search location change, mark manual override
@@ -70,31 +71,19 @@ export function useSimpleCameraAnimations({
   // Helper: get current camera state
   // -------------------------
   const getCurrentCameraState = useCallback(() => {
-    // Try to get camera state from shared manager first
-    const sharedState = cameraStateManager.getCameraState();
-    if (sharedState.lastUpdated > 0) {
-      return {
-        center: sharedState.center || DEFAULT_CENTER,
-        zoom: sharedState.zoom,
-        heading: sharedState.heading,
-        tilt: sharedState.tilt,
-      };
-    }
-    
-    // Fallback to direct API calls if needed
+    // If no map is available, return default state
     if (!map) {
-      const defaultState = {
+      return {
         center: DEFAULT_CENTER,
         zoom: 13,
         heading: 0,
         tilt: 0,
       };
-      return defaultState;
     }
     
-    // Get camera state directly from map - only done once if shared state isn't initialized
+    // Get camera state directly from map
     const center = map.getCenter();
-    const cameraState = {
+    return {
       center: center ? {
         lat: center.lat(),
         lng: center.lng(),
@@ -103,45 +92,11 @@ export function useSimpleCameraAnimations({
       heading: map.getHeading() ?? 0,
       tilt: map.getTilt() ?? 0,
     };
-    
-    // Update shared state - only done once on initialization
-    cameraStateManager.updateCameraState({
-      tilt: cameraState.tilt,
-      zoom: cameraState.zoom,
-      heading: cameraState.heading,
-      center: cameraState.center
-    });
-    
-    return cameraState;
   }, [map]);
 
   // -------------------------
-  // Helper: linear interpolation
+  // We'll use the shared animation utility methods from animationStateManager
   // -------------------------
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-  // For lat/lng, just do a simple linear interpolation
-  const lerpLatLng = (
-    from: google.maps.LatLngLiteral,
-    to: google.maps.LatLngLiteral,
-    t: number
-  ) => ({
-    lat: lerp(from.lat, to.lat, t),
-    lng: lerp(from.lng, to.lng, t),
-  });
-
-  // Constants for determining if camera positions are roughly equal
-  const EPSILON = {
-    latLng: 0.00005, // ~5 meters
-    zoom: 0.01,
-    heading: 0.5,
-    tilt: 0.5,
-  };
-
-  // Helper functions to determine if values are roughly equal
-  const isRoughlyEqual = (a: number, b: number, epsilon: number) => Math.abs(a - b) < epsilon;
-  const isLatLngEqual = (a: google.maps.LatLngLiteral, b: google.maps.LatLngLiteral) =>
-    isRoughlyEqual(a.lat, b.lat, EPSILON.latLng) && isRoughlyEqual(a.lng, b.lng, EPSILON.latLng);
 
   // -------------------------
   // animateCameraTo: smoothly transition from current camera to a target
@@ -155,7 +110,11 @@ export function useSimpleCameraAnimations({
         heading: number;
       },
       durationMs = 1000, // 1s default
-      onComplete?: () => void
+      onComplete?: () => void,
+      animationType: AnimationType = 'CAMERA_CIRCLING',
+      targetId: number | string | null = null,
+      priority: AnimationPriority = AnimationPriority.MEDIUM,
+      isBlocking: boolean = false
     ) => {
       if (!map) return;
 
@@ -164,84 +123,59 @@ export function useSimpleCameraAnimations({
       const end = target;
       
       // Check if the camera position is already very close to the target
-      const noChange =
-        isLatLngEqual(start.center, end.center) &&
-        isRoughlyEqual(start.zoom, end.zoom, EPSILON.zoom) &&
-        isRoughlyEqual(start.heading, end.heading, EPSILON.heading) &&
-        isRoughlyEqual(start.tilt, end.tilt, EPSILON.tilt);
+      const noChange = animationStateManager.isCameraEqual(start, end);
       
       // If we're already at the target position (or very close), just update state and return
       if (noChange) {
         // Just set camera directly without animation
         map.moveCamera(end);
-        // Update state manager without animation
-        cameraStateManager.updateCameraState(end);
+        // Direct camera update is sufficient
         // Call callbacks
         onCameraChanged?.();
         onComplete?.();
         return;
       }
 
-      // If we get here, we need to animate - cancel any in-progress animation
-      isAnimatingRef.current = true;
+      // If we have a current animation, cancel it
+      if (currentAnimationIdRef.current) {
+        animationStateManager.cancelAnimation(currentAnimationIdRef.current);
+        currentAnimationIdRef.current = null;
+      }
+      
+      // Register the animation with the global animation state manager
+      const animationId = animationStateManager.startAnimation({
+        type: animationType,
+        targetId,
+        duration: durationMs,
+        priority,
+        isBlocking,
+        canInterrupt: true,
+        onProgress: (progress) => {
+          if (!map) return;
+          
+          // Use animation manager's lerpCamera function
+          const interpolated = animationStateManager.lerpCamera(start, end, progress);
+
+          // Update camera position with interpolated values
+          map.moveCamera(interpolated);
+          
+          // Call onCameraChanged only at key points to reduce unnecessary calls
+          if (progress === 0 || progress >= 0.5 || progress === 1) {
+            onCameraChanged?.();
+          }
+        },
+        onComplete: () => {
+          setUserGestureEnabled(true);
+          currentAnimationIdRef.current = null;
+          onComplete?.();
+        }
+      });
+      
+      // Store current animation ID for future reference
+      currentAnimationIdRef.current = animationId;
+      
+      // Disable user gestures while animation is active
       setUserGestureEnabled(false);
-
-      const startTime = performance.now();
-      let rafId = 0;
-
-      const frame = (now: number) => {
-        const elapsed = now - startTime;
-        const t = Math.min(elapsed / durationMs, 1); // clamp to 1
-
-        // LERP each camera property
-        const center = lerpLatLng(start.center, end.center, t);
-        const zoom = lerp(start.zoom, end.zoom, t);
-        const heading = lerp(start.heading, end.heading, t);
-        const tilt = lerp(start.tilt, end.tilt, t);
-
-        // Only update camera if values significantly changed
-        map.moveCamera({
-          center,
-          zoom,
-          heading,
-          tilt,
-        });
-        
-        // Throttle updates to camera state manager (only every 3rd frame)
-        if (Math.floor(t * 10) % 3 === 0) {
-          cameraStateManager.updateCameraState({
-            center,
-            zoom,
-            heading,
-            tilt
-          });
-        }
-        
-        // Call onCameraChanged only at key points (start, middle, end)
-        if (t === 0 || t >= 0.5 || t === 1) {
-          onCameraChanged?.();
-        }
-
-        if (t < 1) {
-          rafId = requestAnimationFrame(frame);
-        } else {
-          finish();
-        }
-      };
-
-      const finish = () => {
-        isAnimatingRef.current = false;
-        setUserGestureEnabled(true);
-        onComplete?.();
-      };
-
-      rafId = requestAnimationFrame(frame);
-
-      // In case the component unmounts mid-animation
-      return () => {
-        cancelAnimationFrame(rafId);
-        finish();
-      };
     },
     [map, getCurrentCameraState, setUserGestureEnabled, onCameraChanged]
   );
@@ -256,9 +190,9 @@ export function useSimpleCameraAnimations({
 
   /**
    * circleAroundStation
-   * - First animates camera from current position → revolve start position
-   * - Then does revolve (tilt up to ~67.5, heading 0→360)
-   * - Re-enables user input
+   * - Uses the updated animation system for smooth camera circling
+   * - Centralizes animation state in the animationStateManager
+   * - Proper priority and UI blocking for consistent UX
    */
   const circleAroundStation = useCallback(
     (stationId: number, onComplete?: () => void) => {
@@ -270,126 +204,71 @@ export function useSimpleCameraAnimations({
       }
       const [lng, lat] = station.geometry.coordinates;
 
-      // Mark animation as started and update animation state manager
-      isAnimatingRef.current = true;
-      setUserGestureEnabled(false);
-      
-      // Update animation state in the manager
-      import("@/lib/animationStateManager").then(module => {
-        const animationStateManager = module.default;
-        // 4500ms total duration (reduced from 8000ms)
-        animationStateManager.startAnimation('CAMERA_CIRCLING', stationId, 4500);
-      });
-
-      // Step 1: smoothly move from current camera to revolve start
+      // Phase 1: Move to station with animation manager
       const revolveStart = {
         center: { lat, lng },
-        zoom: 17, // slightly further than before
+        zoom: 17,
         heading: 0,
         tilt: 0,
       };
 
-      animateCameraTo(revolveStart, 800, () => {
-        // Step 2: revolve
-        let tilt = 0;
-        let heading = 0;
-        let phase = 1; // 1 => tilt up, 2 => revolve
-        isAnimatingRef.current = true;
-        setUserGestureEnabled(false);
-
-        let rafId = 0;
-
-        // Track frames to optimize updates
-        let frameCounter = 0;
-        
-        const animateRevolve = () => {
-          if (!map) {
-            stop();
-            return;
-          }
-
-          frameCounter++;
-          
-          if (phase === 1) {
-            // Increase tilt up to ~67.5 in increments
-            tilt += 1.2; // Further increased speed for faster tilt
-            if (tilt >= 67.5) {
-              tilt = 67.5;
-              phase = 2;
+      // Register the camera movement in the animation system
+      animateCameraTo(
+        revolveStart, 
+        800,
+        () => {
+          // Once we've moved to the station, start the circling animation
+          const circleAnimationId = animationStateManager.startAnimation({
+            type: 'CAMERA_CIRCLING',
+            targetId: stationId,
+            duration: 3700, // Slightly shorter for better UX
+            priority: AnimationPriority.HIGH,
+            isBlocking: true,
+            onProgress: (progress) => {
+              if (!map) return;
+              
+              // Calculate tilt and heading based on progress
+              let tilt, heading;
+              
+              // First 30% of the animation: tilt up
+              if (progress < 0.3) {
+                const tiltProgress = progress / 0.3; // Normalize to 0-1 range
+                tilt = tiltProgress * 67.5;
+                heading = 0;
+              } 
+              // Remaining 70%: rotate around
+              else {
+                tilt = 67.5;
+                const rotateProgress = (progress - 0.3) / 0.7; // Normalize to 0-1 range
+                heading = rotateProgress * 180;
+              }
+              
+              // Update camera
+              map.moveCamera({
+                center: revolveStart.center,
+                zoom: revolveStart.zoom,
+                tilt,
+                heading,
+              });
+              
+              // Call camera changed callback periodically
+              if (progress === 0 || progress >= 0.3 || progress >= 0.6 || progress === 1) {
+                onCameraChanged?.();
+              }
+            },
+            onComplete: () => {
+              setUserGestureEnabled(true);
+              
+              // The animation manager will handle button display timing
+              onComplete?.();
             }
-          } else {
-            // Phase 2: revolve heading from 0 → 180
-            heading += 2.0; // Further increased for faster rotation
-            if (heading >= 180) {
-              heading = 180;
-            }
-          }
-
-          map.moveCamera({
-            center: revolveStart.center,
-            zoom: revolveStart.zoom,
-            tilt,
-            heading,
           });
-          
-          // Update shared camera state less frequently
-          if (frameCounter % 3 === 0) {
-            cameraStateManager.updateCameraState({
-              center: revolveStart.center,
-              zoom: revolveStart.zoom,
-              tilt,
-              heading
-            });
-          }
-          
-          // Only call callback periodically to reduce overhead
-          if (frameCounter % 4 === 0) {
-            onCameraChanged?.();
-          }
-
-          if (phase === 2 && heading >= 180) {
-            stop();
-            return;
-          }
-          rafId = requestAnimationFrame(animateRevolve);
-        };
-
-        const stop = () => {
-          cancelAnimationFrame(rafId);
-          isAnimatingRef.current = false;
-          setUserGestureEnabled(true);
-          
-          // Notify animation state manager of completion
-          import("@/lib/animationStateManager").then(module => {
-            const animationStateManager = module.default;
-            
-            // Log completion
-            console.log(`[useCameraAnimation] Animation complete for station ${stationId}, notifying manager`);
-            
-            // First ensure camera state is updated one last time with final values
-            cameraStateManager.updateCameraState({
-              center: revolveStart.center,
-              zoom: revolveStart.zoom,
-              tilt,
-              heading
-            });
-            
-            // Then notify animation manager that we've completed
-            animationStateManager.completeAnimation();
-            
-            // Force a slight delay to ensure state updates propagate and log the result
-            setTimeout(() => {
-              console.log(`[useCameraAnimation] Animation state after completion:`, animationStateManager.getState());
-            }, 300);
-          });
-          
-          if (onComplete) {
-            onComplete();
-          }
-        };
-
-        rafId = requestAnimationFrame(animateRevolve);
-      });
+        },
+        'CAMERA_CIRCLING',
+        stationId,
+        AnimationPriority.HIGH,
+        true
+      );
     },
     [map, findStation, animateCameraTo, setUserGestureEnabled, onCameraChanged]
   );
@@ -419,8 +298,7 @@ export function useSimpleCameraAnimations({
       const bounds = new google.maps.LatLngBounds();
       optimizedPoints.forEach((pt) => bounds.extend(pt));
       
-      // Calculate approximate center and zoom directly instead of relying on fitBounds + setTimeout
-      // This avoids an extra render cycle and potential flicker
+      // Calculate approximate center and zoom directly
       const ne = bounds.getNorthEast();
       const sw = bounds.getSouthWest();
       
@@ -431,13 +309,11 @@ export function useSimpleCameraAnimations({
       };
       
       // Approximate zoom calculation based on distance
-      // Using the Haversine formula approximation
       const latDistance = Math.abs(ne.lat() - sw.lat());
       const lngDistance = Math.abs(ne.lng() - sw.lng());
       const maxDistance = Math.max(latDistance, lngDistance * Math.cos(center.lat * Math.PI / 180));
       
       // Approximate zoom based on distance
-      // zoom = log2(360/distance) assuming 360 degrees covers zoom level 0
       let estimatedZoom = Math.log2(360 / maxDistance);
       
       // Adjust zoom for better viewing - typically 1 level out
@@ -447,7 +323,7 @@ export function useSimpleCameraAnimations({
         console.log(`[useCameraAnimation] Route animation: estimated zoom ${estimatedZoom.toFixed(2)}, adjusted to ${adjustedZoom}`);
       }
       
-      // Use our smooth animation with the calculated center and zoom
+      // Use animation manager with the calculated center and zoom
       animateCameraTo(
         {
           center,
@@ -455,17 +331,22 @@ export function useSimpleCameraAnimations({
           tilt: 45, // 45-degree tilt for a perspective view
           heading: 0, // keep heading at 0 for consistent north orientation
         },
-        1000  // Slightly faster animation for better responsiveness
+        1000,  // Slightly faster animation for better responsiveness
+        () => {
+          manualLocationRef.current = false;
+        },
+        'ROUTE_PREVIEW',
+        null,
+        AnimationPriority.MEDIUM,
+        false
       );
-      
-      manualLocationRef.current = false;
     },
     [map, animateCameraTo]
   );
 
   // -------------------------
   // Animate to user/search location
-  // Now using animateCameraTo
+  // Now using the animation manager
   // -------------------------
   const animateToLocation = useCallback(
     (loc: google.maps.LatLngLiteral, zoom = 15) => {
@@ -485,7 +366,16 @@ export function useSimpleCameraAnimations({
         tilt: 20, // slight tilt for a nicer effect
       };
       
-      animateCameraTo(target, 1000);
+      // Use animation manager
+      animateCameraTo(
+        target,
+        1000,
+        undefined,
+        'CAMERA_CIRCLING', // Reusing this type for simple camera movement
+        null,
+        AnimationPriority.MEDIUM,
+        false
+      );
     },
     [map, animateCameraTo]
   );
@@ -501,14 +391,52 @@ export function useSimpleCameraAnimations({
       heading: 0,
       tilt: 0,
     };
-    animateCameraTo(target, 1000);
+    
+    // Use animation manager with low priority
+    animateCameraTo(
+      target,
+      1000,
+      undefined,
+      'CAMERA_CIRCLING',
+      null,
+      AnimationPriority.LOW,
+      false
+    );
   }, [map, animateCameraTo]);
+
+  // -------------------------
+  // Setup effect for subscribing to animation state changes
+  // -------------------------
+  useEffect(() => {
+    // Subscribe to animation state changes to sync with camera controls
+    const unsubscribe = animationStateManager.subscribe((state) => {
+      // When there are no active animations, ensure user gestures are enabled
+      if (!state.isAnimating && map) {
+        setUserGestureEnabled(true);
+      }
+      
+      // If there's a blocking animation, make sure user gestures are disabled
+      if (state.activeAnimations.some(anim => anim.isBlocking) && map) {
+        setUserGestureEnabled(false);
+      }
+    });
+    
+    return () => {
+      unsubscribe();
+      
+      // Cancel any animations when component unmounts
+      if (currentAnimationIdRef.current) {
+        animationStateManager.cancelAnimation(currentAnimationIdRef.current);
+      }
+    };
+  }, [map, setUserGestureEnabled]);
 
   // -------------------------
   // Main effect reacting to bookingStep
   // -------------------------
   useEffect(() => {
-    if (!map || isAnimatingRef.current) return;
+    // Don't trigger animations if animation manager is already animating
+    if (!map || animationStateManager.getState().isAnimating) return;
 
     // 1) If no station at all & user not manually overriding => reset
     if (!depId && !arrId) {
@@ -619,7 +547,8 @@ export function useSimpleCameraAnimations({
   // Watch for new search location => animate from current
   // -------------------------
   useEffect(() => {
-    if (!searchLocation || isAnimatingRef.current) return;
+    // Don't trigger if no location or animation manager is already busy with higher priority
+    if (!searchLocation || animationStateManager.isUIBlocked()) return;
     
     // Only animate to search location if:
     // 1. We're in step 1 (selecting departure station)
@@ -636,7 +565,8 @@ export function useSimpleCameraAnimations({
   // Watch for new user location => animate from current
   // -------------------------
   useEffect(() => {
-    if (!userLocation || isAnimatingRef.current) return;
+    // Don't trigger if no location or animation manager is already busy with higher priority
+    if (!userLocation || animationStateManager.isUIBlocked()) return;
     
     // Only animate to user location if:
     // 1. We're in step 1 (selecting departure station)
@@ -658,12 +588,24 @@ export function useSimpleCameraAnimations({
       const station = findStation(stationId);
       if (!map || !station) return;
       const [lng, lat] = station.geometry.coordinates;
-      animateCameraTo({ center: { lat, lng }, zoom: 15, heading: 0, tilt }, 1000);
-      manualLocationRef.current = false;
+      
+      // Use animation manager with medium priority
+      animateCameraTo(
+        { center: { lat, lng }, zoom: 15, heading: 0, tilt },
+        1000,
+        () => {
+          manualLocationRef.current = false;
+        },
+        'CAMERA_CIRCLING',
+        stationId,
+        AnimationPriority.MEDIUM,
+        false
+      );
     },
     circleAroundStation,
     animateToRoute,
     animateToLocation,
-    isAnimatingRef,
+    // Return whether animation is currently running
+    isAnimating: () => animationStateManager.getState().isAnimating
   };
 }

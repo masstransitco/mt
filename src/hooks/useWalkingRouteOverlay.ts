@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useMemo } from "react";
 import { useAppSelector } from "@/store/store";
 import { selectWalkingRoute } from "@/store/userSlice";
+import animationStateManager, { AnimationType, AnimationPriority } from "@/lib/animationStateManager";
+import { useAnimationState } from "@/hooks/useAnimationState";
 
 /**
  * Custom hook to manage walking route polyline on the map
@@ -33,6 +35,9 @@ export function useWalkingRouteOverlay(
   
   // Polyline reference
   const walkingRouteRef = useRef<google.maps.Polyline | null>(null);
+  
+  // Animation ID reference for tracking animations
+  const routeAnimationIdRef = useRef<string | null>(null);
   
   // Define type for polyline options
   interface PolylineOptions {
@@ -102,15 +107,50 @@ export function useWalkingRouteOverlay(
         if (path.length === 0) return;
         
         if (!walkingRouteRef.current) {
-          // Create new polyline - combine path and options into one constructor call
+          // Cancel any existing animations
+          if (routeAnimationIdRef.current) {
+            animationStateManager.cancelAnimation(routeAnimationIdRef.current);
+            routeAnimationIdRef.current = null;
+          }
+          
+          // Create new polyline with initial invisible state
           walkingRouteRef.current = new google.maps.Polyline({
             path,
             map: googleMap,
-            ...polylineOptions
+            ...polylineOptions,
+            strokeOpacity: 0 // Start invisible
           });
           
           // Store initial options for future comparison
           prevOptionsRef.current = {...polylineOptions};
+          
+          // Animate the polyline appearance
+          routeAnimationIdRef.current = animationStateManager.startAnimation({
+            type: 'WALKING_ROUTE_ANIMATION',
+            targetId: 'walking_route',
+            duration: 600, // 600ms for a quick but noticeable fade-in
+            priority: AnimationPriority.MEDIUM,
+            isBlocking: false,
+            onProgress: (progress) => {
+              if (!walkingRouteRef.current) return;
+              
+              // Fade in by increasing opacity
+              const opacity = progress * polylineOptions.strokeOpacity;
+              walkingRouteRef.current.setOptions({
+                strokeOpacity: opacity
+              });
+            },
+            onComplete: () => {
+              if (!walkingRouteRef.current) return;
+              
+              // Ensure final values are set
+              walkingRouteRef.current.setOptions({
+                strokeOpacity: polylineOptions.strokeOpacity
+              });
+              
+              routeAnimationIdRef.current = null;
+            }
+          });
         } else {
           // Update existing polyline
           walkingRouteRef.current.setPath(path);
@@ -139,7 +179,35 @@ export function useWalkingRouteOverlay(
     } else {
       // Hide polyline if no route
       if (walkingRouteRef.current && walkingRouteRef.current.getMap()) {
-        walkingRouteRef.current.setMap(null);
+        // Cancel any existing animations
+        if (routeAnimationIdRef.current) {
+          animationStateManager.cancelAnimation(routeAnimationIdRef.current);
+          routeAnimationIdRef.current = null;
+        }
+        
+        // Animate the polyline disappearance
+        routeAnimationIdRef.current = animationStateManager.startAnimation({
+          type: 'WALKING_ROUTE_ANIMATION',
+          targetId: 'walking_route_fadeout',
+          duration: 400, // 400ms for a quick fade-out
+          priority: AnimationPriority.LOW,
+          isBlocking: false,
+          onProgress: (progress) => {
+            if (!walkingRouteRef.current) return;
+            
+            // Fade out by decreasing opacity
+            const opacity = (1 - progress) * polylineOptions.strokeOpacity;
+            walkingRouteRef.current.setOptions({
+              strokeOpacity: opacity
+            });
+          },
+          onComplete: () => {
+            if (walkingRouteRef.current) {
+              walkingRouteRef.current.setMap(null);
+            }
+            routeAnimationIdRef.current = null;
+          }
+        });
       }
     }
   }, [googleMap, walkingRoute, polylineOptions]);
@@ -152,6 +220,12 @@ export function useWalkingRouteOverlay(
     
     // Cleanup function
     return () => {
+      // Cancel any active animations
+      if (routeAnimationIdRef.current) {
+        animationStateManager.cancelAnimation(routeAnimationIdRef.current);
+        routeAnimationIdRef.current = null;
+      }
+      
       if (walkingRouteRef.current) {
         walkingRouteRef.current.setMap(null);
         walkingRouteRef.current = null;
@@ -170,5 +244,6 @@ export function useWalkingRouteOverlay(
   return {
     walkingRouteRef,
     updateWalkingRoutePolyline,
+    isAnimating: () => !!routeAnimationIdRef.current
   };
 }

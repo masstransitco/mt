@@ -745,7 +745,7 @@ export function useThreeOverlay(
               const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
   
               // Update position
-              navigationCursorRef.current.position.set(offsetX, offsetY, 0);
+              navigationCursorRef.current.position.set(offsetX, offsetY, 50); // 50 for better visibility
               markNeedsRedraw();
   
               // Update material properties - only when visible to save performance

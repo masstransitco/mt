@@ -15,9 +15,8 @@ export const DEFAULT_CENTER = {
 
 export const DEFAULT_ZOOM = 12;
 
-// Zoom thresholds for marker rendering
+// Zoom threshold for expanded marker state
 export const MARKER_POST_MIN_ZOOM = 15;
-export const MARKER_POST_MAX_ZOOM = 20;
 
 export const LIBRARIES: Libraries = [
   "geometry",

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useAppSelector } from "@/store/store";
 import { selectUserLocation, selectSearchLocation } from "@/store/userSlice";
+import animationStateManager, { AnimationType, AnimationPriority } from "@/lib/animationStateManager";
+import { useAnimationState } from "@/hooks/useAnimationState";
 
 type GoogleCircle = google.maps.Circle;
 
@@ -13,11 +15,13 @@ interface UseCircleOverlayOptions {
   searchCircleRadius?: number;
   onUserCircleClick?: () => void;
   onSearchCircleClick?: () => void;
+  animateAppearance?: boolean;
 }
 
 /**
  * Custom hook to manage location circles for user location and search location
  * following the same lifecycle as Google Maps WebGL overlays
+ * Now integrated with the animation state manager
  */
 export function useCircleOverlay(
   googleMap: google.maps.Map | null,
@@ -33,6 +37,7 @@ export function useCircleOverlay(
     searchCircleRadius = 150, // 150 meters
     onUserCircleClick,
     onSearchCircleClick,
+    animateAppearance = true,
   } = options;
 
   // Redux location states
@@ -42,6 +47,10 @@ export function useCircleOverlay(
   // Circle references
   const userCircleRef = useRef<GoogleCircle | null>(null);
   const searchCircleRef = useRef<GoogleCircle | null>(null);
+
+  // Animation IDs for tracking
+  const userCircleAnimationIdRef = useRef<string | null>(null);
+  const searchCircleAnimationIdRef = useRef<string | null>(null);
 
   // Reference to track previous values for optimizing updates
   const prevLocationsRef = useRef<{
@@ -53,66 +62,227 @@ export function useCircleOverlay(
   });
 
   /**
-   * Create or update user location circle
-   * Following the same pattern as our Three.js models - update properties first,
-   * only update visibility at the end
+   * Create, update or animate a location circle
+   * Shared implementation for both user and search circles
+   */
+  const updateLocationCircle = useCallback(
+    (options: {
+      circleRef: React.MutableRefObject<GoogleCircle | null>;
+      location: google.maps.LatLngLiteral | null;
+      prevLocation: google.maps.LatLngLiteral | null;
+      animationIdRef: React.MutableRefObject<string | null>;
+      circleColor: string;
+      circleOpacity: number;
+      circleRadius: number;
+      onCircleClick?: () => void;
+      targetId: string;
+      zIndex: number;
+    }) => {
+      const {
+        circleRef,
+        location,
+        prevLocation,
+        animationIdRef,
+        circleColor,
+        circleOpacity,
+        circleRadius,
+        onCircleClick,
+        targetId,
+        zIndex
+      } = options;
+      
+      if (!googleMap) return;
+
+      // Check if location is valid
+      const hasValidLocation =
+        location &&
+        typeof location.lat === "number" &&
+        typeof location.lng === "number";
+
+      // Cancel any existing animation
+      if (animationIdRef.current) {
+        animationStateManager.cancelAnimation(animationIdRef.current);
+        animationIdRef.current = null;
+      }
+
+      // Update or create circle
+      if (hasValidLocation) {
+        const isNewCircle = !circleRef.current;
+        const locationChanged = prevLocation && 
+          (prevLocation.lat !== location.lat ||
+           prevLocation.lng !== location.lng);
+
+        if (isNewCircle) {
+          // Create new circle if it doesn't exist
+          circleRef.current = new google.maps.Circle({
+            strokeColor: circleColor,
+            strokeOpacity: 0,  // Start invisible for animation
+            strokeWeight: 2,
+            fillColor: circleColor,
+            fillOpacity: 0,    // Start invisible for animation
+            map: googleMap,
+            center: location,
+            radius: circleRadius * 0.3,  // Start smaller for animation
+            clickable: !!onCircleClick,
+            zIndex, 
+          });
+
+          // Add click handler if provided
+          if (onCircleClick) {
+            circleRef.current.addListener("click", onCircleClick);
+          }
+
+          // Animate the circle appearance if enabled
+          if (animateAppearance) {
+            animationIdRef.current = animationStateManager.startAnimation({
+              type: 'MARKER_ANIMATION',
+              targetId: `${targetId}_appear`,
+              duration: 800,
+              priority: AnimationPriority.MEDIUM,
+              isBlocking: false,
+              onProgress: (progress) => {
+                if (!circleRef.current) return;
+                
+                // Grow radius and fade in opacity
+                const radius = circleRadius * (0.3 + (0.7 * progress));
+                const opacity = circleOpacity * progress;
+                const strokeOpacity = 0.6 * progress;
+                
+                circleRef.current.setRadius(radius);
+                circleRef.current.setOptions({
+                  fillOpacity: opacity,
+                  strokeOpacity: strokeOpacity
+                });
+              },
+              onComplete: () => {
+                if (!circleRef.current) return;
+                
+                // Ensure final values are set
+                circleRef.current.setRadius(circleRadius);
+                circleRef.current.setOptions({
+                  fillOpacity: circleOpacity,
+                  strokeOpacity: 0.6
+                });
+                
+                animationIdRef.current = null;
+              }
+            });
+          } else {
+            // Set final values immediately if animation is disabled
+            circleRef.current.setRadius(circleRadius);
+            circleRef.current.setOptions({
+              fillOpacity: circleOpacity,
+              strokeOpacity: 0.6
+            });
+          }
+        } else if (locationChanged) {
+          // If location changed, animate the transition
+          const previousLocation = prevLocation!;
+          
+          animationIdRef.current = animationStateManager.startAnimation({
+            type: 'MARKER_ANIMATION',
+            targetId: `${targetId}_move`,
+            duration: 500,
+            priority: AnimationPriority.LOW,
+            isBlocking: false,
+            onProgress: (progress) => {
+              if (!circleRef.current) return;
+              
+              // Use animationStateManager's lerpLatLng utility
+              const interpolated = animationStateManager.lerpLatLng(
+                previousLocation,
+                location,
+                progress
+              );
+              
+              circleRef.current.setCenter(interpolated);
+            },
+            onComplete: () => {
+              if (!circleRef.current) return;
+              circleRef.current.setCenter(location);
+              animationIdRef.current = null;
+            }
+          });
+        } else {
+          // Make sure circle is visible on map
+          if (circleRef.current && !circleRef.current.getMap()) {
+            circleRef.current.setMap(googleMap);
+            circleRef.current.setOptions({
+              fillOpacity: circleOpacity,
+              strokeOpacity: 0.6
+            });
+            circleRef.current.setRadius(circleRadius);
+          }
+        }
+
+        return { ...location };
+      } else {
+        // Hide circle if no valid location
+        if (circleRef.current && circleRef.current.getMap()) {
+          if (animateAppearance) {
+            // Animate the fade out
+            animationIdRef.current = animationStateManager.startAnimation({
+              type: 'MARKER_ANIMATION',
+              targetId: `${targetId}_fadeout`,
+              duration: 400,
+              priority: AnimationPriority.LOW,
+              isBlocking: false,
+              onProgress: (progress) => {
+                if (!circleRef.current) return;
+                
+                // Shrink radius and fade out opacity
+                const reverseProgress = 1 - progress;
+                const radius = circleRadius * (0.3 + (0.7 * reverseProgress));
+                const opacity = circleOpacity * reverseProgress;
+                const strokeOpacity = 0.6 * reverseProgress;
+                
+                circleRef.current.setRadius(radius);
+                circleRef.current.setOptions({
+                  fillOpacity: opacity,
+                  strokeOpacity: strokeOpacity
+                });
+              },
+              onComplete: () => {
+                if (circleRef.current) {
+                  circleRef.current.setMap(null);
+                }
+                animationIdRef.current = null;
+              }
+            });
+          } else {
+            // Remove from map immediately if animation is disabled
+            circleRef.current.setMap(null);
+          }
+        }
+        
+        return null;
+      }
+    },
+    [googleMap, animateAppearance]
+  );
+
+  /**
+   * Update user location circle - uses shared implementation
    */
   const updateUserLocationCircle = useCallback(() => {
-    if (!googleMap) return;
-
-    const hasValidLocation =
-      userLocation &&
-      typeof userLocation.lat === "number" &&
-      typeof userLocation.lng === "number";
-
-    // Update or create circle
-    if (hasValidLocation) {
-      if (!userCircleRef.current) {
-        // Create new circle if it doesn't exist
-        userCircleRef.current = new google.maps.Circle({
-          strokeColor: userCircleColor,
-          strokeOpacity: 0.6,
-          strokeWeight: 2,
-          fillColor: userCircleColor,
-          fillOpacity: userCircleOpacity,
-          map: googleMap,
-          center: userLocation,
-          radius: userCircleRadius,
-          clickable: !!onUserCircleClick,
-          zIndex: 1, // Below search circle
-        });
-
-        // Add click handler if provided
-        if (onUserCircleClick) {
-          userCircleRef.current.addListener("click", onUserCircleClick);
-        }
-      } else {
-        // Update existing circle properties
-        // Only update center if location has changed
-        if (
-          !prevLocationsRef.current.userLocation ||
-          prevLocationsRef.current.userLocation.lat !== userLocation.lat ||
-          prevLocationsRef.current.userLocation.lng !== userLocation.lng
-        ) {
-          userCircleRef.current.setCenter(userLocation);
-        }
-
-        // Ensure the circle is on the map - similar to setting visible=true
-        if (!userCircleRef.current.getMap()) {
-          userCircleRef.current.setMap(googleMap);
-        }
-      }
-
-      // Save current location for future comparison
-      prevLocationsRef.current.userLocation = { ...userLocation };
-    } else {
-      // Hide circle if no valid location - similar to setting visible=false
-      if (userCircleRef.current && userCircleRef.current.getMap()) {
-        userCircleRef.current.setMap(null);
-      }
+    const newLocation = updateLocationCircle({
+      circleRef: userCircleRef,
+      location: userLocation,
+      prevLocation: prevLocationsRef.current.userLocation,
+      animationIdRef: userCircleAnimationIdRef,
+      circleColor: userCircleColor,
+      circleOpacity: userCircleOpacity,
+      circleRadius: userCircleRadius,
+      onCircleClick: onUserCircleClick,
+      targetId: 'user_circle',
+      zIndex: 1
+    });
+    
+    if (newLocation) {
+      prevLocationsRef.current.userLocation = newLocation;
     }
   }, [
-    googleMap,
+    updateLocationCircle,
     userLocation,
     userCircleColor,
     userCircleOpacity,
@@ -121,66 +291,27 @@ export function useCircleOverlay(
   ]);
 
   /**
-   * Create or update search location circle
-   * Following the same pattern as our Three.js models - update properties first,
-   * only update visibility at the end
+   * Update search location circle - uses shared implementation
    */
   const updateSearchLocationCircle = useCallback(() => {
-    if (!googleMap) return;
-
-    const hasValidLocation =
-      searchLocation &&
-      typeof searchLocation.lat === "number" &&
-      typeof searchLocation.lng === "number";
-
-    // Update or create circle
-    if (hasValidLocation) {
-      if (!searchCircleRef.current) {
-        // Create new circle if it doesn't exist
-        searchCircleRef.current = new google.maps.Circle({
-          strokeColor: searchCircleColor,
-          strokeOpacity: 0.6,
-          strokeWeight: 2,
-          fillColor: searchCircleColor,
-          fillOpacity: searchCircleOpacity,
-          map: googleMap,
-          center: searchLocation,
-          radius: searchCircleRadius,
-          clickable: !!onSearchCircleClick,
-          zIndex: 2, // Above user circle
-        });
-
-        // Add click handler if provided
-        if (onSearchCircleClick) {
-          searchCircleRef.current.addListener("click", onSearchCircleClick);
-        }
-      } else {
-        // Update existing circle properties
-        // Only update center if location has changed
-        if (
-          !prevLocationsRef.current.searchLocation ||
-          prevLocationsRef.current.searchLocation.lat !== searchLocation.lat ||
-          prevLocationsRef.current.searchLocation.lng !== searchLocation.lng
-        ) {
-          searchCircleRef.current.setCenter(searchLocation);
-        }
-
-        // Ensure the circle is on the map - similar to setting visible=true
-        if (!searchCircleRef.current.getMap()) {
-          searchCircleRef.current.setMap(googleMap);
-        }
-      }
-
-      // Save current location for future comparison
-      prevLocationsRef.current.searchLocation = { ...searchLocation };
-    } else {
-      // Hide circle if no valid location - similar to setting visible=false
-      if (searchCircleRef.current && searchCircleRef.current.getMap()) {
-        searchCircleRef.current.setMap(null);
-      }
+    const newLocation = updateLocationCircle({
+      circleRef: searchCircleRef,
+      location: searchLocation,
+      prevLocation: prevLocationsRef.current.searchLocation,
+      animationIdRef: searchCircleAnimationIdRef,
+      circleColor: searchCircleColor,
+      circleOpacity: searchCircleOpacity,
+      circleRadius: searchCircleRadius,
+      onCircleClick: onSearchCircleClick,
+      targetId: 'search_circle',
+      zIndex: 2
+    });
+    
+    if (newLocation) {
+      prevLocationsRef.current.searchLocation = newLocation;
     }
   }, [
-    googleMap,
+    updateLocationCircle,
     searchLocation,
     searchCircleColor,
     searchCircleOpacity,
@@ -196,13 +327,19 @@ export function useCircleOverlay(
     updateUserLocationCircle();
     updateSearchLocationCircle();
 
-    // Cleanup function - similar to our other overlay hooks
+    // Cleanup function
     return () => {
+      // Cancel any active animations
+      if (userCircleAnimationIdRef.current) {
+        animationStateManager.cancelAnimation(userCircleAnimationIdRef.current);
+      }
+      
+      if (searchCircleAnimationIdRef.current) {
+        animationStateManager.cancelAnimation(searchCircleAnimationIdRef.current);
+      }
+      
       if (userCircleRef.current) {
-        // If we need a fade-out animation, we would implement it here
-        // For now, just remove from map
         userCircleRef.current.setMap(null);
-        // Clean up event listeners
         if (onUserCircleClick) {
           google.maps.event.clearListeners(userCircleRef.current, "click");
         }
@@ -225,20 +362,25 @@ export function useCircleOverlay(
     onSearchCircleClick,
   ]);
 
-  // React to location changes
+  // React to location changes - only if no blocking animations are running
   useEffect(() => {
-    updateUserLocationCircle();
+    if (!animationStateManager.isUIBlocked()) {
+      updateUserLocationCircle();
+    }
   }, [userLocation, updateUserLocationCircle]);
 
   useEffect(() => {
-    updateSearchLocationCircle();
+    if (!animationStateManager.isUIBlocked()) {
+      updateSearchLocationCircle();
+    }
   }, [searchLocation, updateSearchLocationCircle]);
 
-  // Return methods to manually update circles from outside
+  // Return methods and references
   return {
     userCircleRef,
     searchCircleRef,
     updateUserLocationCircle,
     updateSearchLocationCircle,
+    isAnimating: () => !!(userCircleAnimationIdRef.current || searchCircleAnimationIdRef.current)
   };
 }

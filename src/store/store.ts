@@ -21,6 +21,7 @@ import bookingReducer, { BookingState } from "./bookingSlice";
 import stations3DReducer from "./stations3DSlice";
 import dispatchReducer from "./dispatchSlice";
 import verificationReducer from "./verificationSlice";
+import uiReducer from "./uiSlice";
 
 // Default booking state for resets
 const defaultBooking: BookingState = {
@@ -165,6 +166,7 @@ const rootReducer = combineReducers({
   booking: persistReducer(bookingPersistConfig, bookingReducer),
   dispatch: dispatchReducer,
   verification: verificationReducer,
+  ui: uiReducer,
 });
 
 /**
