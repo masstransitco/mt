@@ -38,7 +38,7 @@ export const CarModel = memo(({
   return (
     <group position={position}>
       {model && <primitive object={model} />}
-      {isSelected && <ParkingSpot carDimensions={carDimensions} />}
+      {isSelected && <ParkingSpot carDimensions={carDimensions || undefined} />}
     </group>
   );
 });

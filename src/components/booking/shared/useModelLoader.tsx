@@ -88,7 +88,7 @@ export function useModelLoader(modelUrl: string, isInteractive = false) {
         // Store original materials and ensure model is visible
         clonedModel.visible = true;
         clonedModel.traverse(child => {
-          if (child.isMesh) {
+          if ((child as THREE.Mesh).isMesh) {
             // Store original material
             child.visible = true;
             
@@ -98,13 +98,22 @@ export function useModelLoader(modelUrl: string, isInteractive = false) {
             
             child.userData.isGlass = isGlass;
             
-            if (child.material) {
-              child.userData.originalMaterial = child.material.clone();
-              
-              if (isGlass) {
-                const glassMaterial = child.userData.originalMaterial;
-                glassMaterial.transparent = true;
-                glassMaterial.opacity = 0.7;
+            const meshChild = child as THREE.Mesh;
+            if (meshChild.material) {
+              // Handle both single materials and material arrays
+              if (Array.isArray(meshChild.material)) {
+                // For material arrays, store an array of cloned materials
+                child.userData.originalMaterial = meshChild.material.map(mat => mat.clone());
+              } else {
+                // For single material, clone it directly
+                child.userData.originalMaterial = meshChild.material.clone();
+                
+                // Apply glass properties if needed
+                if (isGlass) {
+                  const glassMaterial = child.userData.originalMaterial;
+                  glassMaterial.transparent = true;
+                  glassMaterial.opacity = 0.7;
+                }
               }
             }
           }
@@ -133,25 +142,35 @@ export function useModelLoader(modelUrl: string, isInteractive = false) {
     if (!model) return;
     
     model.traverse(child => {
-      if (child.isMesh) {
+      if ((child as THREE.Mesh).isMesh) {
+        const meshChild = child as THREE.Mesh;
         // Always set shadow properties based on selection
-        child.castShadow = isInteractive;
-        child.receiveShadow = isInteractive;
+        meshChild.castShadow = isInteractive;
+        meshChild.receiveShadow = isInteractive;
         
         // Apply materials based on selection state
         if (isInteractive) {
           // Selected cars use their original materials
           if (child.userData.originalMaterial) {
-            child.material = child.userData.originalMaterial;
+            // Handle both single materials and material arrays
+            meshChild.material = child.userData.originalMaterial;
           }
         } else {
           // Unselected cars use the shared unselected material
-          child.material = unselectedMaterial;
+          meshChild.material = unselectedMaterial;
         }
         
         // Make sure materials update
-        if (child.material) {
-          child.material.needsUpdate = true;
+        if (meshChild.material) {
+          if (Array.isArray(meshChild.material)) {
+            // Update each material in the array
+            meshChild.material.forEach(mat => {
+              mat.needsUpdate = true;
+            });
+          } else {
+            // Update single material
+            meshChild.material.needsUpdate = true;
+          }
         }
       }
     });

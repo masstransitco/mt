@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { VEHICLE_DIMENSIONS } from "@/lib/threeUtils";
 import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import ModelManager from "@/lib/modelManager";
 
 // Floor component with optimized Apple-inspired dark theme
@@ -68,7 +69,7 @@ export const Floor = memo(() => {
 Floor.displayName = "Floor";
 
 // Parking spot component with clean blue rectangle only
-export const ParkingSpot = memo(({ carDimensions = VEHICLE_DIMENSIONS.DEFAULT }) => {
+export const ParkingSpot = memo(({ carDimensions = VEHICLE_DIMENSIONS.DEFAULT }: { carDimensions?: { width: number; length: number; height: number } }) => {
   // Apple iOS blue color for the lines
   const LINE_COLOR = '#0A84FF';
   
@@ -135,12 +136,12 @@ export const CameraController = memo(({
 }: CameraControllerProps) => {
   const { camera, controls } = useThree((state) => ({
     camera: state.camera,
-    controls: state.controls
+    controls: state.controls as unknown as OrbitControlsImpl
   }));
   
   // Store default position and look-at point
-  const defaultPosition = useRef(targetPosition);
-  const defaultLookAt = useRef([
+  const defaultPosition = useRef<[number, number, number]>(targetPosition);
+  const defaultLookAt = useRef<[number, number, number]>([
     targetPosition[0] + lookAtOffset[0], 
     lookAtOffset[1], 
     targetPosition[2] + lookAtOffset[2]
@@ -162,7 +163,7 @@ export const CameraController = memo(({
     );
     
     // Set the controls target (where the camera is looking)
-    const lookAtPoint = [
+    const lookAtPoint: [number, number, number] = [
       targetPosition[0] + lookAtOffset[0],
       lookAtOffset[1],
       targetPosition[2] + lookAtOffset[2]
@@ -205,11 +206,10 @@ export const CameraController = memo(({
     };
     
     // Add event listeners to orbit controls
-    const controlsInstance = controls as any;
-    controlsInstance.addEventListener('start', handleStart);
+    controls.addEventListener('start', handleStart);
     
     return () => {
-      controlsInstance.removeEventListener('start', handleStart);
+      controls.removeEventListener('start', handleStart);
     };
   }, [controls]);
   
@@ -233,16 +233,11 @@ export const CameraController = memo(({
       const currentTarget = new THREE.Vector3().copy(controls.target);
       
       // Get target positions
-      const targetPos = new THREE.Vector3(
-        defaultPosition.current[0],
-        defaultPosition.current[1],
-        defaultPosition.current[2]
-      );
-      const targetLook = new THREE.Vector3(
-        defaultLookAt.current[0],
-        defaultLookAt.current[1],
-        defaultLookAt.current[2]
-      );
+      const [x, y, z] = defaultPosition.current;
+      const targetPos = new THREE.Vector3(x, y, z);
+      
+      const [lookX, lookY, lookZ] = defaultLookAt.current;
+      const targetLook = new THREE.Vector3(lookX, lookY, lookZ);
       
       // Calculate distance to target
       const posDistance = currentPos.distanceTo(targetPos);
@@ -321,48 +316,48 @@ export const FallbackCar = memo(() => {
   }), []);
   
   return (
-    <group rotation={[0, Math.PI, 0]} scale={[1, 1, 1]}>
+    <group rotation={[0, Math.PI, 0] as [number, number, number]} scale={[1, 1, 1] as [number, number, number]}>
       {/* Car body - simplified */}
-      <mesh position={[0, 0.25, 0]}>
+      <mesh position={[0, 0.25, 0] as [number, number, number]}>
         <boxGeometry args={[4, 0.5, 1.8]} />
         <primitive object={bodyMaterial} />
       </mesh>
       
       {/* Car cabin - simplified */}
-      <mesh position={[0.1, 0.6, 0]}>
+      <mesh position={[0.1, 0.6, 0] as [number, number, number]}>
         <boxGeometry args={[2.6, 0.4, 1.5]} />
         <primitive object={bodyMaterial} />
       </mesh>
       
       {/* Car accent strip */}
-      <mesh position={[0, 0.35, 0]}>
+      <mesh position={[0, 0.35, 0] as [number, number, number]}>
         <boxGeometry args={[4.1, 0.05, 1.81]} />
         <primitive object={accentMaterial} />
       </mesh>
       
       {/* Wheels - simplified with fewer segments */}
       {[
-        [1.4, 0, 0.9], 
-        [-1.4, 0, 0.9], 
-        [1.4, 0, -0.9], 
-        [-1.4, 0, -0.9]
+        [1.4, 0, 0.9] as [number, number, number], 
+        [-1.4, 0, 0.9] as [number, number, number], 
+        [1.4, 0, -0.9] as [number, number, number], 
+        [-1.4, 0, -0.9] as [number, number, number]
       ].map((pos, index) => (
-        <mesh key={`wheel-${index}`} position={pos} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh key={`wheel-${index}`} position={pos} rotation={[Math.PI / 2, 0, 0] as [number, number, number]}>
           <cylinderGeometry args={[0.35, 0.35, 0.2, 8]} /> {/* Reduced segments from 16 to 8 */}
           <primitive object={wheelMaterial} />
         </mesh>
       ))}
       
       {/* Front windshield */}
-      <mesh position={[0.8, 0.65, 0]} rotation={[0, 0, -0.2]}>
+      <mesh position={[0.8, 0.65, 0] as [number, number, number]} rotation={[0, 0, -0.2] as [number, number, number]}>
         <boxGeometry args={[0.7, 0.35, 1.45]} />
         <primitive object={glassMaterial} />
       </mesh>
       
       {/* Headlights - just the accent color elements that are important */}
       {[
-        [1.95, 0.35, 0.6],
-        [1.95, 0.35, -0.6]
+        [1.95, 0.35, 0.6] as [number, number, number],
+        [1.95, 0.35, -0.6] as [number, number, number]
       ].map((pos, index) => (
         <mesh key={`headlight-${index}`} position={pos}>
           <boxGeometry args={[0.1, 0.15, 0.3]} />
