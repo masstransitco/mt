@@ -15,11 +15,11 @@ const ViewerSkeleton = memo(() => (
 ))
 ViewerSkeleton.displayName = "ViewerSkeleton"
 
-// Lazy load the 3D viewer component with explicit no-SSR directive
-const Car3DViewer = dynamic(() => import("./Car3DViewer"), {
-  ssr: false,
-  loading: () => <ViewerSkeleton />,
-});
+// Import the safe dynamic component instead
+import { DynamicCar3DViewer } from "./CarComponents";
+
+// Alias for backward compatibility
+const Car3DViewer = DynamicCar3DViewer;
 
 interface CarCardProps {
   car: Car;
@@ -152,13 +152,10 @@ function CarCardComponent({
       }}
     >
       <div className="flex flex-col h-full">
-        <div className="flex-1">
-          {/* Full-width Car Viewer with overlaid info */}
-          <div 
-            className="relative w-full h-48 overflow-hidden" 
-            style={{ touchAction: "none" }} 
-            onClick={(e) => e.stopPropagation()} // Prevent click events from propagating to sheet
-          >
+        <div className="relative w-full h-48 overflow-hidden flex-1" 
+          style={{ touchAction: "none" }} 
+          onClick={(e) => e.stopPropagation()} // Prevent click events from propagating to sheet
+        >
             {/* Car model viewer - now full width */}
             {isInViewport && isVisible ? (
               <div 
@@ -216,10 +213,9 @@ function CarCardComponent({
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer Component */}
-        <div className="w-full h-6 bg-black/50 px-3 flex items-center justify-between text-xs border-t border-white/10">
+        {/* Footer Component - Overlaid at bottom of 3D scene */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 backdrop-blur-md bg-black/50 px-3 py-1.5 border-t border-white/10 shadow-lg flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5 relative">
             <div className="relative">
               <Clock

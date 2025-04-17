@@ -6,10 +6,11 @@ import { motion } from "framer-motion"
 import { Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAppSelector } from "@/store/store"
-import { selectBookingStep } from "@/store/bookingSlice"
+import { selectBookingStep, selectIsDateTimeConfirmed } from "@/store/bookingSlice"
 import type { StationFeature } from "@/store/stationsSlice"
 import type { Car } from "@/types/cars"
 import { PaymentSummary } from "@/components/ui/PaymentComponents"
+import FareDisplay from "@/components/ui/FareDisplay"
 import React from "react"
 
 // Lazy-load components
@@ -22,25 +23,57 @@ const CarPlate = dynamic(() => import("@/components/ui/CarPlate"), {
   ssr: false,
 })
 
-// Lazy-load CarCard for scanned cars
-const LazyCarCard = dynamic(() => import("./booking/CarCard"), {
-  loading: () => (
-    <div className="h-28 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
-      <div className="text-xs text-gray-400">Loading vehicle...</div>
-    </div>
-  ),
-  ssr: false,
-})
+// Import our safe dynamic components
+import { DynamicCarCardScene } from "@/components/booking/CarComponents"
 
-// Lazy-load the CarGrid
-const CarGrid = dynamic(() => import("./booking/CarGrid"), {
-  loading: () => (
-    <div className="h-32 w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center">
-      <div className="text-xs text-gray-400">Loading vehicles...</div>
+// Loading placeholder component
+const LoadingPlaceholder = ({ height = '280px', text = 'Loading...' }) => (
+  <div 
+    className="w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center"
+    style={{ height }}
+  >
+    <div className="flex flex-col items-center justify-center gap-2">
+      <div className="w-6 h-6 border-2 border-white/10 border-t-green-500 rounded-full animate-spin" />
+      <div className="text-xs text-gray-400">{text}</div>
     </div>
-  ),
-  ssr: false,
-})
+  </div>
+);
+
+// Safely lazy-load CarCard for scanned cars with safe import handling
+const LazyCarCard = dynamic(
+  async () => {
+    // Only import on client side
+    if (typeof window === 'undefined') {
+      return { default: () => <LoadingPlaceholder /> };
+    }
+    try {
+      return await import("./booking/CarCard");
+    } catch (error) {
+      console.error("Failed to load CarCard:", error);
+      return { default: () => <LoadingPlaceholder text="Error loading vehicle" /> };
+    }
+  },
+  {
+    loading: () => <LoadingPlaceholder text="Loading vehicle..." />,
+    ssr: false,
+  }
+);
+
+// Simplified, safer loading for the CarGridWithScene component
+const CarGridWithScene = dynamic(
+  () => import("./booking/CarGridWithScene"),
+  {
+    loading: () => (
+      <div className="w-full bg-[#1a1a1a] rounded-xl flex items-center justify-center h-60">
+        <div className="flex flex-col items-center justify-center gap-2">
+          <div className="w-6 h-6 border-2 border-white/10 border-t-green-500 rounded-full animate-spin" />
+          <div className="text-xs text-gray-400">Loading vehicles...</div>
+        </div>
+      </div>
+    ),
+    ssr: false,
+  }
+)
 
 /** Tooltip icon that opens to the left */
 const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
@@ -78,39 +111,6 @@ const InfoPopup = memo(function InfoPopup({ text }: { text: string }) {
 })
 InfoPopup.displayName = "InfoPopup"
 
-/** Station details (contactless, gate label) */
-const StationStats = memo(function StationStats({
-  activeStation,
-  bookingStep,
-  isVirtualCarLocation,
-}: {
-  activeStation: StationFeature
-  bookingStep: number
-  isVirtualCarLocation?: boolean
-}) {
-  // Step 4 => "Arrival Gate", otherwise => "Departure Gate"
-  const gateLabel = bookingStep === 4 ? "Arrival Gate" : "Departure Gate"
-
-  return (
-    <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
-      {isVirtualCarLocation ? (
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-gray-400">Status</span>
-          <span className="font-medium text-[#10a37f]">Ready to Drive</span>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">{gateLabel}</span>
-          <div className="flex items-center gap-1.5">
-            <span className="font-medium text-white">Contactless</span>
-            <InfoPopup text="Parking entry and exits are contactless." />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-})
-StationStats.displayName = "StationStats"
 
 /** Generic confirm button */
 function ConfirmButton({
@@ -171,6 +171,7 @@ function StationDetail({
   onOpenSignInModal,
 }: StationDetailProps) {
   const bookingStep = useAppSelector(selectBookingStep)
+  const isDateTimeConfirmed = useAppSelector(selectIsDateTimeConfirmed)
 
   if (!activeStation) return null
 
@@ -183,13 +184,19 @@ function StationDetail({
     onConfirm?.()
   }, [bookingStep, isSignedIn, onOpenSignInModal, onConfirm])
 
-  // We only show a confirm button in step 4 now (no button at step 2)
+  // We show confirm button in step 2 (to select station) and in step 4 (to confirm trip)
   let showConfirmButton = false
   let dynamicLabel = confirmLabel
   let dynamicClasses = ""
 
-  if (bookingStep === 4) {
+  if (bookingStep === 2) {
     showConfirmButton = true
+    dynamicLabel = "PICKUP CAR HERE"
+    dynamicClasses =
+      "text-gray-900 bg-[#c4c4c4] btn-select-location disabled:opacity-50 disabled:cursor-not-allowed"
+  } else if (bookingStep === 4) {
+    // Only show confirm button if date/time have been confirmed
+    showConfirmButton = isDateTimeConfirmed
     dynamicLabel = "Confirm Trip"
     dynamicClasses =
       "text-white bg-[#276EF1] hover:bg-[#1d5bc9] disabled:bg-[#276EF1]/40 disabled:cursor-not-allowed"
@@ -202,17 +209,15 @@ function StationDetail({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
     >
-      {/* Station stats */}
-      <StationStats
-        activeStation={activeStation}
-        bookingStep={bookingStep}
-        isVirtualCarLocation={isVirtualCarLocation}
-      />
 
-      {/* If step 4 and signed in => PaymentSummary; else if step 2 => CarGrid, etc. */}
+      {/* If step 4 and signed in => PaymentSummary; else if date/time confirmed => FareDisplay; else if step 2 => CarGrid, etc. */}
       {bookingStep === 4 && isSignedIn ? (
         <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
           <PaymentSummary onOpenWalletModal={() => {}} />
+        </div>
+      ) : bookingStep === 4 && isDateTimeConfirmed ? (
+        <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md mb-4">
+          <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} maxDailyFare={800} />
         </div>
       ) : (
         // For step 2 or other steps needing a vehicle list
@@ -236,13 +241,13 @@ function StationDetail({
               </div>
             ) : (
               // Regular car grid for normal stations
-              <CarGrid className="w-full h-full" isVisible scannedCar={scannedCar} isQrScanStation={isVirtualCarLocation} />
+              <CarGridWithScene className="w-full h-full" isVisible scannedCar={scannedCar} isQrScanStation={isVirtualCarLocation} />
             )}
           </div>
         )
       )}
 
-      {/* Confirm button only appears in step 4 */}
+      {/* Confirm button appears in step 2 or step 4 */}
       {showConfirmButton && (
         <ConfirmButton
           label={dynamicLabel}
