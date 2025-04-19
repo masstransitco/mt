@@ -60,3 +60,30 @@ export function useIsClient() {
 export function easeInOutQuad(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
+
+// Global memory cleanup for THREE.js resources
+export function cleanupThreeResources(): void {
+  // Clear all cached textures and resources
+  THREE.Cache.clear();
+  
+  // Force dispose all cached models
+  try {
+    const ModelManager = require("./modelManager").default;
+    const manager = ModelManager.getInstance();
+    if (manager && typeof manager.disposeAll === 'function') {
+      manager.disposeAll();
+    }
+  } catch (error) {
+    console.warn("Failed to clean up model manager:", error);
+  }
+  
+  // Force a full garbage collection by suggesting to browser
+  if (typeof window !== 'undefined' && 'gc' in window) {
+    try {
+      // @ts-ignore - not in standard API but can help on supported browsers
+      window.gc();
+    } catch (e) {
+      // Ignore if not available
+    }
+  }
+}

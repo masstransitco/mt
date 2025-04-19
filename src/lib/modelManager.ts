@@ -118,12 +118,31 @@ class ModelManager {
         // Dispose of geometries and materials
         cache.model.traverse((child: any) => {
           if (child instanceof THREE.Mesh) {
-            child.geometry?.dispose();
+            if (child.geometry) {
+              child.geometry.dispose();
+            }
+            
             if (child.material) {
               if (Array.isArray(child.material)) {
-                child.material.forEach((mat: THREE.Material) => mat.dispose());
+                child.material.forEach((mat: THREE.Material) => {
+                  // Also dispose of textures
+                  this.disposeTextures(mat);
+                  mat.dispose();
+                });
               } else {
+                // Also dispose of textures
+                this.disposeTextures(child.material);
                 child.material.dispose();
+              }
+            }
+            
+            // Clean any userData object references
+            if (child.userData && Object.keys(child.userData).length > 0) {
+              for (const key in child.userData) {
+                if (child.userData[key]?.dispose) {
+                  child.userData[key].dispose();
+                }
+                child.userData[key] = null;
               }
             }
           }
@@ -133,6 +152,58 @@ class ModelManager {
         console.log(`[ModelManager] Released unused model: ${url}`);
       }
     }
+  }
+  
+  // Helper method to dispose textures
+  private disposeTextures(material: THREE.Material): void {
+    // Check for standard textures on most material types
+    const textureProps = [
+      'map', 'normalMap', 'bumpMap', 'emissiveMap', 'displacementMap',
+      'specularMap', 'metalnessMap', 'roughnessMap', 'alphaMap', 'aoMap'
+    ];
+    
+    textureProps.forEach(prop => {
+      const texture = (material as any)[prop];
+      if (texture && texture.isTexture) {
+        texture.dispose();
+      }
+    });
+  }
+  
+  // Force clean everything - use when component unmounts
+  public disposeAll(): void {
+    // Dispose all models regardless of reference count
+    for (const [url, cache] of this.models.entries()) {
+      // Dispose of geometries and materials
+      cache.model.traverse((child: any) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+          
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((mat: THREE.Material) => {
+                this.disposeTextures(mat);
+                mat.dispose();
+              });
+            } else {
+              this.disposeTextures(child.material);
+              child.material.dispose();
+            }
+          }
+        }
+      });
+    }
+    
+    // Clear maps
+    this.models.clear();
+    this.loading.clear();
+    
+    // Clear THREE.js cache
+    THREE.Cache.clear();
+    
+    console.log('[ModelManager] Disposed all models and cleared cache');
   }
 }
 
