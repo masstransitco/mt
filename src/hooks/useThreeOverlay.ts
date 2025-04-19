@@ -21,8 +21,153 @@ import { CatmullRomCurve3 } from "three";
 const dracoLoaderSingleton = new DRACOLoader();
 dracoLoaderSingleton.setDecoderPath("/draco/"); // Adjust path if needed
 
-// Model cache for efficient loading
-const modelCache = new Map<string, THREE.Group>();
+// Model cache with LRU eviction - safer implementation
+class ModelLRUCache {
+  private cache = new Map<string, THREE.Group>();
+  private keys: string[] = [];
+  private maxSize: number = 20; // Maximum number of models to keep
+  private activelyUsed = new Set<string>(); // Track which models are actively being used
+
+  set(key: string, model: THREE.Group): void {
+    try {
+      // Store only the original, not a clone
+      if (this.cache.has(key)) {
+        // Move key to the end (most recently used)
+        this.keys = this.keys.filter(k => k !== key);
+        this.keys.push(key);
+      } else {
+        // Add new key
+        this.keys.push(key);
+        // Evict oldest if needed, but only if not in active use
+        this.enforceLimit();
+      }
+      this.cache.set(key, model);
+      this.activelyUsed.add(key); // Mark as actively used
+    } catch (err) {
+      console.error("[ModelLRUCache] Error setting model in cache:", err);
+    }
+  }
+
+  get(key: string): THREE.Group | undefined {
+    try {
+      const model = this.cache.get(key);
+      if (model) {
+        // Move to end of keys (mark as recently used)
+        this.keys = this.keys.filter(k => k !== key);
+        this.keys.push(key);
+        this.activelyUsed.add(key); // Mark as actively used
+      }
+      return model;
+    } catch (err) {
+      console.error("[ModelLRUCache] Error getting model from cache:", err);
+      return undefined;
+    }
+  }
+
+  // Mark a model as no longer actively used
+  release(key: string): void {
+    this.activelyUsed.delete(key);
+  }
+
+  // Remove oldest items if we exceed the limit
+  private enforceLimit(): void {
+    // Only evict models that aren't actively in use
+    const evictableCandidates = this.keys.filter(k => !this.activelyUsed.has(k));
+    
+    // If we're over the limit, try to remove evictable candidates
+    while (this.keys.length > this.maxSize && evictableCandidates.length > 0) {
+      const oldestEvictableIndex = this.keys.findIndex(k => !this.activelyUsed.has(k));
+      if (oldestEvictableIndex >= 0) {
+        const oldestKey = this.keys.splice(oldestEvictableIndex, 1)[0];
+        const model = this.cache.get(oldestKey);
+        if (model) {
+          try {
+            // Properly dispose of geometries and materials
+            model.traverse((obj) => {
+              if (obj instanceof THREE.Mesh) {
+                if (obj.geometry) obj.geometry.dispose();
+                if (Array.isArray(obj.material)) {
+                  obj.material.forEach(material => {
+                    this.disposeTextures(material);
+                    material.dispose();
+                  });
+                } else if (obj.material) {
+                  this.disposeTextures(obj.material);
+                  obj.material.dispose();
+                }
+              }
+            });
+          } catch (err) {
+            console.warn("[ModelLRUCache] Error disposing model:", err);
+          }
+        }
+        this.cache.delete(oldestKey);
+        console.log(`[ModelLRUCache] Evicted model: ${oldestKey}`);
+      } else {
+        // No more evictable models - break to avoid infinite loop
+        break;
+      }
+    }
+  }
+
+  // Helper to safely dispose textures
+  private disposeTextures(material: THREE.Material): void {
+    try {
+      const textureProps = [
+        'map', 'normalMap', 'bumpMap', 'emissiveMap', 'displacementMap',
+        'specularMap', 'metalnessMap', 'roughnessMap', 'alphaMap', 'aoMap'
+      ];
+      
+      textureProps.forEach(prop => {
+        const texture = (material as any)[prop];
+        if (texture && texture.isTexture) {
+          texture.dispose();
+        }
+      });
+    } catch (err) {
+      console.warn("[ModelLRUCache] Error disposing textures:", err);
+    }
+  }
+
+  // Safer clear function
+  clear(): void {
+    try {
+      // Copy keys to avoid modification during iteration
+      const keysToDispose = [...this.keys];
+      
+      // Only dispose models that aren't actively in use
+      keysToDispose
+        .filter(key => !this.activelyUsed.has(key))
+        .forEach(key => {
+          const model = this.cache.get(key);
+          if (model) {
+            model.traverse((obj) => {
+              if (obj instanceof THREE.Mesh) {
+                if (obj.geometry) obj.geometry.dispose();
+                if (Array.isArray(obj.material)) {
+                  obj.material.forEach(material => {
+                    this.disposeTextures(material);
+                    material.dispose();
+                  });
+                } else if (obj.material) {
+                  this.disposeTextures(obj.material);
+                  obj.material.dispose();
+                }
+              }
+            });
+            this.cache.delete(key);
+            this.keys = this.keys.filter(k => k !== key);
+          }
+        });
+      
+      console.log(`[ModelLRUCache] Cleared ${keysToDispose.length} models from cache`);
+    } catch (err) {
+      console.error("[ModelLRUCache] Error clearing cache:", err);
+    }
+  }
+}
+
+const modelCache = new ModelLRUCache();
 
 interface ThreeOverlayOptions {
   onStationSelected?: (stationId: number) => void;
@@ -192,36 +337,51 @@ export function useThreeOverlay(
   }, []);
   
   // ------------------------------------------------
-  // Model loading utility
+  // Model loading utility with proper caching and reference tracking
   // ------------------------------------------------
   const loadModel = useCallback((url: string, onLoad: (model: THREE.Group) => void) => {
-    // Check if already in cache
-    if (modelCache.has(url)) {
+    try {
+      // Check if already in cache
       const cachedModel = modelCache.get(url);
       if (cachedModel) {
-        // Create a clone of the cached model
+        // Create a clone of the cached model - only clone on get
         const clone = cachedModel.clone();
         onLoad(clone);
         return;
       }
+      
+      // If not in cache, load it
+      const loader = new GLTFLoader();
+      loader.setDRACOLoader(dracoLoaderSingleton);
+      
+      loader.load(
+        url,
+        (gltf) => {
+          try {
+            const model = gltf.scene;
+            // Store original in cache, not a clone
+            modelCache.set(url, model);
+            // Create a clone for the caller
+            onLoad(model.clone());
+            markNeedsRedraw();
+          } catch (err) {
+            console.error(`[useThreeOverlay] Error processing loaded model ${url}:`, err);
+            // Try to provide a fallback empty group if processing fails
+            onLoad(new THREE.Group());
+          }
+        },
+        undefined,
+        (err) => {
+          console.error(`[useThreeOverlay] ${url} load error:`, err);
+          // Provide an empty model on error to avoid breaking the UI
+          onLoad(new THREE.Group());
+        }
+      );
+    } catch (err) {
+      console.error(`[useThreeOverlay] Critical error in loadModel for ${url}:`, err);
+      // Provide an empty model on critical error
+      setTimeout(() => onLoad(new THREE.Group()), 0);
     }
-    
-    // If not in cache, load it
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(dracoLoaderSingleton);
-    
-    loader.load(
-      url,
-      (gltf) => {
-        const model = gltf.scene;
-        // Store in cache
-        modelCache.set(url, model.clone());
-        onLoad(model);
-        markNeedsRedraw();
-      },
-      undefined,
-      (err) => console.error(`[useThreeOverlay] ${url} load error:`, err)
-    );
   }, [markNeedsRedraw]);
 
   // ------------------------------------------------
@@ -559,6 +719,9 @@ export function useThreeOverlay(
           navCursorGroup.visible = false;
           scene.add(navCursorGroup);
           navigationCursorRef.current = navCursorGroup;
+          
+          // Store the model URL in userData for easier reference during cleanup
+          navCursorGroup.userData.modelUrl = '/map/cursor_navigation.glb';
 
           markNeedsRedraw();
         });
@@ -577,13 +740,30 @@ export function useThreeOverlay(
       canvas.style.height = "100%";
       canvas.style.pointerEvents = "auto";
 
-      const handlePointerDown = (ev: PointerEvent) => {
-        pickWithRay(ev);
-      };
-      canvas.addEventListener("pointerdown", handlePointerDown);
-      removePointerListenerRef.current = () => {
-        canvas.removeEventListener("pointerdown", handlePointerDown);
-      };
+      // Only create one listener per canvas instance - track with a WeakMap
+      // This listener ref is tied directly to this specific instance of the overlay
+      const listenerRef = new WeakMap<HTMLCanvasElement, (ev: PointerEvent) => void>();
+      
+      // Check if we already attached a listener to this canvas
+      if (!listenerRef.has(canvas)) {
+        // Create a clean new listener
+        const handlePointerDown = (ev: PointerEvent) => {
+          pickWithRay(ev);
+        };
+        
+        // Add new listener 
+        canvas.addEventListener("pointerdown", handlePointerDown);
+        listenerRef.set(canvas, handlePointerDown);
+        
+        // Update removal function to clean up this specific listener
+        removePointerListenerRef.current = () => {
+          const listener = listenerRef.get(canvas);
+          if (listener) {
+            canvas.removeEventListener("pointerdown", listener);
+            listenerRef.delete(canvas);
+          }
+        };
+      }
 
       refreshRouteTube();
     };
@@ -811,16 +991,35 @@ export function useThreeOverlay(
 
     overlay.onRemove = () => {
       const scene = sceneRef.current;
+      const renderer = rendererRef.current;
 
       // Stop any running animations first
       stopRouteAnimation();
       
+      // Remove event listeners
       removePointerListenerRef.current();
+
+      // Release all cached models from activelyUsed set to allow proper LRU eviction
+      // This addresses a memory leak where models were never released from the activelyUsed set
+      if (navigationCursorRef.current) {
+        // Release the cursor model URL from activelyUsed set
+        const modelUrl = navigationCursorRef.current.userData.modelUrl || '/map/cursor_navigation.glb';
+        modelCache.release(modelUrl);
+      }
+
+      // Traverse scene to find and release all cloned models
+      sceneRef.current?.traverse(obj => {
+        if ((obj as any).userData?.srcUrl) {
+          modelCache.release((obj as any).userData.srcUrl);
+        }
+      });
 
       // Cleanup route tube
       if (routeTubeRef.current) {
         scene?.remove(routeTubeRef.current);
-        routeTubeRef.current.geometry.dispose();
+        if (routeTubeRef.current.geometry) {
+          routeTubeRef.current.geometry.dispose();
+        }
         if (tubeMaterialRef.current) {
           tubeMaterialRef.current.dispose();
           tubeMaterialRef.current = null;
@@ -831,10 +1030,14 @@ export function useThreeOverlay(
       // Cleanup buildings
       buildingGroupsRef.current.forEach((group) => {
         scene?.remove(group);
-        group.children.forEach((child) => {
+        group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            disposeMaterial(child.material);
+            if (child.geometry) child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(material => material.dispose());
+            } else if (child.material) {
+              disposeMaterial(child.material);
+            }
           }
         });
       });
@@ -845,18 +1048,27 @@ export function useThreeOverlay(
         scene?.remove(cursorRef.current);
         cursorRef.current.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            disposeMaterial(child.material);
+            if (child.geometry) child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(material => material.dispose());
+            } else if (child.material) {
+              disposeMaterial(child.material);
+            }
           }
         });
         cursorRef.current = null;
       }
+      
       if (navigationCursorRef.current) {
         scene?.remove(navigationCursorRef.current);
         navigationCursorRef.current.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            child.geometry.dispose();
-            disposeMaterial(child.material);
+            if (child.geometry) child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach(material => material.dispose());
+            } else if (child.material) {
+              disposeMaterial(child.material);
+            }
           }
         });
         navigationCursorRef.current = null;
@@ -867,16 +1079,66 @@ export function useThreeOverlay(
       dirtyRef.current = false;
       routeStartTimeRef.current = null;
       
+      // Properly clean up renderer resources but be careful not to break the WebGL context
+      if (renderer) {
+        // First dispose render lists and programs
+        renderer.renderLists.dispose();
+        
+        // Just dispose the renderer without force-losing context
+        // This is safer for Google Maps integration
+        renderer.dispose();
+        
+        // Don't null out the domElement as it's managed by Google Maps
+        
+        rendererRef.current = null;
+      }
+      
       // Cleanup scene
       if (sceneRef.current) {
-        sceneRef.current.clear();
+        // Remove and dispose all remaining children
+        const scene = sceneRef.current;
+        while (scene.children.length > 0) {
+          const object = scene.children[0];
+          scene.remove(object);
+          
+          if (object instanceof THREE.Mesh) {
+            if (object.geometry) object.geometry.dispose();
+            if (Array.isArray(object.material)) {
+              object.material.forEach(material => material.dispose());
+            } else if (object.material) {
+              disposeMaterial(object.material);
+            }
+          }
+        }
+        
+        // Thoroughly dispose all scene geometries and materials
+        scene.traverse(o => { 
+          if ((o as any).geometry?.dispose) { 
+            (o as any).geometry.dispose(); 
+          } 
+          if ((o as any).material) { 
+            const material = (o as any).material;
+            if (Array.isArray(material)) {
+              material.forEach(m => m.dispose && m.dispose());
+            } else if (material.dispose) {
+              material.dispose();
+            }
+          } 
+        });
+        
+        scene.clear();
         sceneRef.current = null;
       }
+      
+      // Clean up all references
       cameraRef.current = null;
       raycasterRef.current = null;
       invProjMatrixRef.current = null;
       overlayRef.current = null;
       isInitializedRef.current = false;
+      
+      // We'll let the LRU cache manage itself rather than clearing it completely
+      // This avoids sudden blank maps when station selection changes
     };
 
     overlay.setMap(googleMap);

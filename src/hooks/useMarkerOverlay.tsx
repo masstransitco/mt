@@ -301,10 +301,20 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     // Setup click handler only when needed - optimization for performance
     const collapsedMarker = container.querySelector('.marker-collapsed') as HTMLElement;
     if (collapsedMarker && (!isOptimizedStep || isImportantStation)) {
-      collapsedMarker.addEventListener('click', (ev) => {
+      // Use a named function reference to avoid accumulating anonymous closures
+      const clickHandler = function(ev: Event) {
         ev.stopPropagation();
         handleStationClick(station.id);
-      });
+      };
+      
+      // First ensure any existing handlers are removed by cloning
+      const newCollapsedMarker = collapsedMarker.cloneNode(true) as HTMLElement;
+      if (collapsedMarker.parentNode) {
+        collapsedMarker.parentNode.replaceChild(newCollapsedMarker, collapsedMarker);
+      }
+      
+      // Add listener to the clean clone
+      newCollapsedMarker.addEventListener('click', clickHandler);
     }
     
     // Setup info for expanded view
@@ -518,6 +528,12 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         if (process.env.NODE_ENV === "development") {
           console.log(`[useMarkerOverlay] Updating content for station ${station.id} (important: ${isImportant}, force: ${forceContentUpdate})`);
         }
+        
+        // Remove event listener from old content before replacing it
+        const oldContent = marker.content as HTMLElement;
+        oldContent?.querySelector('.marker-collapsed')
+           ?.removeEventListener('click', handleStationClick as any);
+           
         // Update content if needed - create new element
         const markerElement = createMarkerElement(station);
         marker.content = markerElement;
@@ -782,7 +798,22 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
           visibleMarkerCount++;
         }
       } else if (data.marker) {
-        // Hide marker
+        // Hide marker and properly clean up event listeners before removing from map
+        if (data.marker.content) {
+          const content = data.marker.content as HTMLElement;
+          if (content.querySelectorAll) {
+            // Clear all event listeners by cloning without events for click targets
+            const clickTargets = content.querySelectorAll('.marker-collapsed');
+            clickTargets.forEach(el => {
+              if (el.parentNode) {
+                const clone = el.cloneNode(true);
+                el.parentNode.replaceChild(clone, el);
+              }
+            });
+          }
+        }
+        
+        // Remove from map
         data.marker.map = null;
       }
     });
@@ -880,14 +911,101 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
     updateVisibleMarkers,
   ]);
 
+  // Periodically clean up stations that are no longer visible to prevent memory growth
+  useEffect(() => {
+    // Add a pruning function to clean up stale stations
+    const pruneStaleStations = () => {
+      // Track which stations should be kept
+      const stationsToKeep = new Set<number>();
+      
+      // Always keep important stations
+      if (departureStationId) stationsToKeep.add(departureStationId);
+      if (arrivalStationId) stationsToKeep.add(arrivalStationId);
+      if (listSelectedStationId) stationsToKeep.add(listSelectedStationId);
+      
+      // Get visible stations from map bounds
+      if (googleMap) {
+        const bounds = googleMap.getBounds();
+        if (bounds) {
+          const visibleIds = spatialIndexRef.current.getVisibleStations(bounds);
+          visibleIds.forEach(id => stationsToKeep.add(id));
+        }
+      }
+      
+      // Find all virtual stations to keep them too
+      Object.entries(stationsRef.current).forEach(([id, data]) => {
+        if (data.isVirtualCarLocation) {
+          stationsToKeep.add(Number(id));
+        }
+      });
+      
+      // Count stations before pruning
+      const totalBefore = Object.keys(stationsRef.current).length;
+      
+      // Keep only stations that:
+      // 1. Are currently visible
+      // 2. Are important (departure, arrival, selected)
+      // 3. Are virtual car locations
+      // 4. Have active markers
+      const entriesToRemove: number[] = [];
+      
+      Object.entries(stationsRef.current).forEach(([id, data]) => {
+        const stationId = Number(id);
+        // If not in the keep set and has no marker, remove it
+        if (!stationsToKeep.has(stationId) && !data.marker) {
+          entriesToRemove.push(stationId);
+        }
+      });
+      
+      // Remove the stale entries
+      entriesToRemove.forEach(id => {
+        delete stationsRef.current[id];
+      });
+      
+      if (entriesToRemove.length > 0 && process.env.NODE_ENV === 'development') {
+        console.log(`[useMarkerOverlay] Pruned ${entriesToRemove.length} stale stations, before: ${totalBefore}, after: ${Object.keys(stationsRef.current).length}`);
+      }
+    };
+    
+    // Set up an interval to periodically clean up stations
+    // This is a safer approach than monkey-patching the updateVisibleMarkers function
+    const pruneInterval = setInterval(pruneStaleStations, 30000); // Every 30 seconds
+    
+    return () => {
+      clearInterval(pruneInterval);
+    };
+  }, [departureStationId, arrivalStationId, listSelectedStationId, googleMap]);
+  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Remove all markers from map
+      // Remove all markers from map and clear event listeners
       Object.values(stationsRef.current).forEach(data => {
         if (data.marker) {
+          // Clean up event listeners before removing
+          if (data.marker.content) {
+            const content = data.marker.content as HTMLElement;
+            if (content.querySelectorAll) {
+              const clickTargets = content.querySelectorAll('.marker-collapsed');
+              clickTargets.forEach(el => {
+                if (el.parentNode) {
+                  // Clone without event listeners
+                  const clone = el.cloneNode(true);
+                  el.parentNode.replaceChild(clone, el);
+                }
+              });
+            }
+          }
+          
+          // Remove from map
           data.marker.map = null;
+          data.marker = null;
         }
+      });
+      
+      // Clear stations ref to allow garbage collection
+      Object.keys(stationsRef.current).forEach(key => {
+        delete stationsRef.current[Number(key)];
       });
       
       // Clear route marker
@@ -895,6 +1013,9 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null, options?: Us
         routeMarkerRef.current.map = null;
         routeMarkerRef.current = null;
       }
+      
+      // Clear spatial index
+      spatialIndexRef.current.clear();
     };
   }, []);
 
