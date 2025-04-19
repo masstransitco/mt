@@ -4,7 +4,7 @@ import React, { useRef, useEffect, memo, useState, useCallback, useMemo } from "
 import * as THREE from "three"
 import { Canvas } from "@react-three/fiber"
 import { OrbitControls } from '@react-three/drei'
-import { VEHICLE_DIMENSIONS, getOptimalDPR, normalizeModelUrl, useIsClient } from "@/lib/threeUtils"
+import { VEHICLE_DIMENSIONS, getOptimalDPR, normalizeModelUrl, useIsClient, cleanupThreeResources } from "@/lib/threeUtils"
 import ModelManager from "@/lib/modelManager"
 import { SceneSetup, CameraController } from "./shared/ThreeSceneComponents"
 import { CarModel } from "./shared/CarModelComponent"
@@ -46,7 +46,7 @@ function Car3DViewerClient({
     return normalizeModelUrl(modelUrl || '/cars/defaultModel.glb');
   }, [modelUrl]);
   
-  // Preload models
+  // Preload models and handle cleanup on unmount
   useEffect(() => {
     if (!isVisible) return;
     
@@ -64,6 +64,26 @@ function Car3DViewerClient({
     } catch (error) {
       console.warn('Error preloading models:', error);
     }
+    
+    // Cleanup on unmount
+    return () => {
+      try {
+        const modelManager = ModelManager.getInstance();
+        if (modelManager) {
+          // Release resources by calling the release model function
+          modelManager.releaseModel("/cars/defaultModel.glb");
+          
+          if (normalizedModelUrl && normalizedModelUrl !== "/cars/defaultModel.glb") {
+            modelManager.releaseModel(normalizedModelUrl);
+          }
+          
+          // Clean any models that haven't been used in the last 30 seconds
+          modelManager.cleanUnusedModels(30000);
+        }
+      } catch (error) {
+        console.warn('Error cleaning up models:', error);
+      }
+    };
   }, [isVisible, normalizedModelUrl]);
   
   // Prevent event propagation to avoid sheet drag conflicts
@@ -203,6 +223,15 @@ function Car3DViewer(props: Car3DViewerProps) {
       </div>
     );
   }
+  
+  // Clean up THREE.js resources when component unmounts
+  useEffect(() => {
+    return () => {
+      // The cleanup runs when component is unmounted from the page
+      // This prevents memory leaks between page navigations
+      cleanupThreeResources();
+    };
+  }, []);
   
   // On client, render the full component
   return <Car3DViewerClient {...props} />;

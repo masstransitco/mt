@@ -56,6 +56,15 @@ export const Floor = memo(() => {
     return texture;
   }, []);
   
+  // Dispose texture when component unmounts
+  useEffect(() => {
+    return () => {
+      if (floorTexture) {
+        floorTexture.dispose();
+      }
+    };
+  }, [floorTexture]);
+  
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
       <planeGeometry args={[100, 100]} />
@@ -96,6 +105,15 @@ export const ParkingSpot = memo(({ carDimensions = VEHICLE_DIMENSIONS.DEFAULT }:
       transparent: true,
     });
   }, []);
+  
+  // Dispose material when component unmounts
+  useEffect(() => {
+    return () => {
+      if (lineMaterial) {
+        lineMaterial.dispose();
+      }
+    };
+  }, [lineMaterial]);
   
   // Create a simple blue rectangular parking spot
   return (
@@ -150,6 +168,7 @@ export const CameraController = memo(({
   // Track user interaction
   const lastInteraction = useRef(Date.now());
   const isReturning = useRef(false);
+  const animationFrameId = useRef<number | null>(null);
   
   // Update camera position and look-at point when targetPosition changes
   useEffect(() => {
@@ -255,6 +274,20 @@ export const CameraController = memo(({
     }
   });
   
+  // Clean up animations on unmount
+  useEffect(() => {
+    return () => {
+      // Cancel any animation frame
+      if (animationFrameId.current !== null) {
+        cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
+      }
+      
+      // Reset animation state
+      isReturning.current = false;
+    };
+  }, []);
+  
   return null;
 });
 CameraController.displayName = "CameraController";
@@ -314,6 +347,18 @@ export const FallbackCar = memo(() => {
   const wheelMaterial = useMemo(() => new THREE.MeshBasicMaterial({ 
     color: "#2c2c2e"
   }), []);
+  
+  // Dispose all materials when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up all materials
+      [bodyMaterial, accentMaterial, glassMaterial, wheelMaterial].forEach(material => {
+        if (material) {
+          material.dispose();
+        }
+      });
+    };
+  }, [bodyMaterial, accentMaterial, glassMaterial, wheelMaterial]);
   
   return (
     <group rotation={[0, Math.PI, 0] as [number, number, number]} scale={[1, 1, 1] as [number, number, number]}>

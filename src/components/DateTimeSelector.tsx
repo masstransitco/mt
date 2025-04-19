@@ -3,33 +3,33 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { format, addDays, addMinutes, startOfDay, isSameDay, isAfter } from "date-fns"
-import { ChevronLeft, ChevronRight, Clock, Calendar, Check } from "lucide-react"
+import { ChevronLeft, ChevronRight, Clock, Calendar } from "lucide-react"
 import { toast } from "react-hot-toast"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useAppDispatch, useAppSelector } from "@/store/store"
-import { 
-  setDepartureDate, 
-  setDepartureTime, 
-  confirmDateTime, 
-  selectDepartureDate, 
+import {
+  setDepartureDate,
+  setDepartureTime,
+  confirmDateTime,
+  selectDepartureDate,
   selectDepartureTime,
   selectIsDateTimeConfirmed,
-  advanceBookingStep
+  advanceBookingStep,
 } from "@/store/bookingSlice"
 
 interface DateTimeSelectorProps {
-  onDateTimeConfirmed?: () => void;
+  onDateTimeConfirmed?: () => void
 }
 
 export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelectorProps) {
   const dispatch = useAppDispatch()
-  
+
   // Get from Redux store
   const reduxSelectedDate = useAppSelector(selectDepartureDate)
   const reduxSelectedTime = useAppSelector(selectDepartureTime)
   const isConfirmed = useAppSelector(selectIsDateTimeConfirmed)
-  
+
   // Local state
   const [selectedDate, setSelectedDate] = useState<Date | null>(reduxSelectedDate)
   const [selectedTime, setSelectedTime] = useState<Date | null>(reduxSelectedTime)
@@ -43,16 +43,17 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
     const now = new Date()
     const dates = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(now), i))
     setAvailableDates(dates)
-    
+
     // Set selected date if not already set from Redux
     if (!selectedDate) {
       setSelectedDate(dates[0])
     } else {
       // Find the index of the previously selected date to maintain correct dateIndex
-      const existingDateIndex = dates.findIndex(date => 
-        date.getFullYear() === selectedDate.getFullYear() && 
-        date.getMonth() === selectedDate.getMonth() && 
-        date.getDate() === selectedDate.getDate()
+      const existingDateIndex = dates.findIndex(
+        (date) =>
+          date.getFullYear() === selectedDate.getFullYear() &&
+          date.getMonth() === selectedDate.getMonth() &&
+          date.getDate() === selectedDate.getDate(),
       )
       if (existingDateIndex >= 0) {
         setDateIndex(existingDateIndex)
@@ -113,16 +114,16 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
         selectedTime.getMinutes(),
       )
       console.log("Selected date and time:", dateTime)
-      
+
       // Store in Redux that date/time is confirmed
       dispatch(confirmDateTime(true))
-      
+
       // Advance to booking step 3 after date/time is confirmed
       dispatch(advanceBookingStep(3))
-      
+
       // Show success toast
       toast.success("Date and time confirmed! Now choose your arrival station.")
-      
+
       // Notify parent component if callback provided
       if (onDateTimeConfirmed) {
         onDateTimeConfirmed()
@@ -132,7 +133,7 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
 
   return (
     <div className="w-full text-white">
-      <motion.div 
+      <motion.div
         className="w-full rounded-xl bg-[#1a1a1a] overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -141,8 +142,7 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
         {/* Header */}
         <div className="bg-[#111111] px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-zinc-400" />
-            <h2 className="text-lg font-medium">Select Date & Time</h2>
+            <h2 className="text-lg font-medium">Pickup date and time</h2>
           </div>
           {selectedDate && selectedTime && (
             <motion.div
@@ -158,7 +158,10 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
         {/* Date Selector */}
         <div className="p-6 border-b border-[#1a1a1a]">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-zinc-400">DATE</h3>
+            <h3 className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              DATE
+            </h3>
             <div className="flex gap-2">
               <Button
                 variant="ghost"
@@ -188,7 +191,7 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
                 className={cn(
                   "flex flex-col items-center justify-center p-2 rounded-xl transition-colors",
                   selectedDate && isSameDay(date, selectedDate)
-                    ? "bg-zinc-700 text-white"
+                    ? "bg-[#276EF1] text-white"
                     : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white",
                 )}
                 onClick={() => handleDateSelect(date)}
@@ -221,9 +224,9 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
                   <motion.button
                     key={i}
                     className={cn(
-                      "py-2 px-3 rounded-lg text-sm font-medium transition-colors",
+                      "py-2 px-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap w-full h-10 flex items-center justify-center",
                       selectedTime && time.getTime() === selectedTime.getTime()
-                        ? "bg-zinc-700 text-white"
+                        ? "bg-[#276EF1] text-white"
                         : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white",
                     )}
                     onClick={() => handleTimeSelect(time)}
@@ -258,17 +261,11 @@ export default function DateTimeSelector({ onDateTimeConfirmed }: DateTimeSelect
               whileTap={{ scale: 0.95 }}
             >
               {isConfirmed ? (
-                <>
-                  <Check className="h-5 w-5" />
-                  <span>Selection Confirmed</span>
-                </>
+                <span>Selection Confirmed</span>
               ) : selectedDate && selectedTime ? (
-                <>
-                  <Check className="h-5 w-5" />
-                  <span>Confirm Date & Time</span>
-                </>
+                <span>Confirm Pickup</span>
               ) : (
-                <span>Select Date and Time</span>
+                <span>Select Pickup Time</span>
               )}
             </motion.div>
           </Button>

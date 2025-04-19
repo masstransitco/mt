@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber"
 import { OrbitControls } from '@react-three/drei'
 import { useAppDispatch, useAppSelector } from "@/store/store"
 import { selectCar } from "@/store/userSlice"
-import { VEHICLE_DIMENSIONS, getOptimalDPR, normalizeModelUrl, useIsClient } from "@/lib/threeUtils"
+import { VEHICLE_DIMENSIONS, getOptimalDPR, normalizeModelUrl, useIsClient, cleanupThreeResources } from "@/lib/threeUtils"
 import { ChevronLeft } from "@/components/ui/icons/ChevronLeft"
 import { ChevronRight } from "@/components/ui/icons/ChevronRight"
 import { CarSeat } from "@/components/ui/icons/CarSeat"
@@ -289,18 +289,36 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
     }
   }, [cars, dispatch, selectedCarId])
 
-  // Preload common car models
+  // Preload common car models with proper cleanup
   useEffect(() => {
     if (typeof window === 'undefined' || !isVisible) return;
+    
+    const modelUrls = ['/cars/defaultModel.glb', '/cars/car2.glb', '/cars/car3.glb', '/cars/car4.glb'];
     
     try {
       const modelManager = ModelManager.getInstance();
       if (modelManager) {
-        modelManager.preloadModels(['/cars/defaultModel.glb', '/cars/car2.glb', '/cars/car3.glb', '/cars/car4.glb']);
+        modelManager.preloadModels(modelUrls);
       }
     } catch (error) {
       console.warn('Error preloading models:', error);
     }
+    
+    // Cleanup on unmount
+    return () => {
+      try {
+        const modelManager = ModelManager.getInstance();
+        if (modelManager) {
+          // Release each model
+          modelUrls.forEach(url => modelManager.releaseModel(url));
+          
+          // Clean unused models
+          modelManager.cleanUnusedModels(30000);
+        }
+      } catch (error) {
+        console.warn('Error cleaning up models:', error);
+      }
+    };
   }, [isVisible]);
 
   // Basic placeholder for initial load
@@ -503,6 +521,14 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
 // Export a component that renders either the client component or a placeholder
 export default function CarCardScene(props: CarCardSceneProps) {
   const isClient = useIsClient();
+  
+  // Add global resource cleanup when unmounting
+  useEffect(() => {
+    return () => {
+      // Run cleanup on component unmount
+      cleanupThreeResources();
+    };
+  }, []);
   
   if (!isClient) {
     return <Placeholder className={props.className} />
