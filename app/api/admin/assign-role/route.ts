@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { adminAuth, setUserRole } from '@/lib/firebase-admin';
+import { adminAuth, setAdminRole } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
     
     // Set the role
-    const result = await setUserRole(uid, role);
+    const result = await setAdminRole(uid);
     
     if (result.success) {
       return NextResponse.json({ success: true });
