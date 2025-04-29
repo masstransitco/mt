@@ -1,5 +1,74 @@
 // File: src/lib/firebase-admin.ts
 import admin from "firebase-admin";
+import { getApps, initializeApp, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+
+// Consolidated initialization function
+export function initAdmin() {
+  const apps = getApps();
+  
+  if (apps.length === 0) {
+    // Check if we have a complete service account JSON
+    if (process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY) {
+      try {
+        // Check if it's a JSON string or an email address
+        if (process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY.includes('{')) {
+          const serviceAccount = JSON.parse(process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY);
+          initializeApp({
+            credential: cert(serviceAccount)
+          });
+        } else {
+          // If it's not a JSON string, use individual env vars
+          const privateKey = process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY;
+          
+          if (!privateKey) {
+            throw new Error("Firebase private key is missing");
+          }
+          
+          // Replace escaped newlines with actual newlines
+          const formattedKey = privateKey.replace(/\\n/g, "\n");
+          
+          initializeApp({
+            credential: cert({
+              projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+              clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
+              privateKey: formattedKey,
+            }),
+          });
+        }
+      } catch (error) {
+        console.error("Error initializing Firebase Admin:", error);
+        // In development, continue with mock implementation
+        if (process.env.NODE_ENV === 'development') {
+          console.warn("Using mock implementation due to initialization error");
+          return getAuth();
+        }
+        throw error;
+      }
+    } else {
+      // Otherwise use individual environment variables
+      // Ensure the private key is properly formatted
+      const privateKey = process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY;
+      
+      if (!privateKey) {
+        throw new Error("Firebase private key is missing");
+      }
+      
+      // Replace escaped newlines with actual newlines
+      const formattedKey = privateKey.replace(/\\n/g, "\n");
+      
+      initializeApp({
+        credential: cert({
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+          clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
+          privateKey: formattedKey,
+        }),
+      });
+    }
+  }
+  
+  return getAuth();
+}
 
 // Mock implementation for development
 class MockFirestore {
@@ -76,22 +145,22 @@ if (process.env.NODE_ENV === 'development') {
   // Production initialization
   if (!admin.apps.length) {
     // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
-    if (process.env.SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
+    if (process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY) {
+      const serviceAccount = JSON.parse(process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY as string);
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        storageBucket: "masstransitcompany.firebasestorage.app", // <-- specify bucket
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, // <-- specify bucket
       });
     } else {
       // Option B: Use separate env variables for projectId, privateKey, clientEmail
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+          clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
         }),
-        storageBucket: "masstransitcompany.firebasestorage.app", // <-- specify bucket
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, // <-- specify bucket
       });
     }
 
@@ -170,4 +239,41 @@ export async function topUpUserBalance(userId: string, amount: number): Promise<
   });
 
   return newBalance;
+}
+
+// Initialize Firebase Admin SDK if it hasn't been initialized
+let adminAuth;
+try {
+  const app = !getApps().length ? initAdmin() : getAuth(getApps()[0]);
+  adminAuth = app;
+} catch (error) {
+  console.error("Failed to initialize Firebase Admin:", error);
+  // Provide a mock implementation for development
+  adminAuth = {
+    setCustomUserClaims: async () => ({ success: false, error: "Firebase Admin not initialized" }),
+    verifySessionCookie: async () => ({ valid: false, error: "Firebase Admin not initialized" })
+  };
+}
+
+export { adminAuth };
+
+// Helper function to set admin role
+export async function setAdminRole(uid: string) {
+  try {
+    await adminAuth.setCustomUserClaims(uid, { admin: true, role: "admin" });
+    return { success: true };
+  } catch (error) {
+    console.error("Error setting admin role:", error);
+    return { success: false, error };
+  }
+}
+
+// Helper function to verify session cookie
+export async function verifySessionCookie(sessionCookie: string) {
+  try {
+    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
+    return { valid: true, claims: decodedClaims };
+  } catch (error) {
+    return { valid: false, error };
+  }
 }

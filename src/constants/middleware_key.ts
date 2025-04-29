@@ -1,0 +1,5 @@
+export default Object.freeze({
+  AIRCITY_SESSION_KEY: "__AIRCITY_SESSION",
+  SECRET_KEY: "aircity",
+  AIRCITY_SESSION_DECODE: "AIRCITY_SESSION_DECODE",
+})
