@@ -813,8 +813,8 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null | undefined, 
     
     // Determine collision behavior based on importance
     const collisionBehavior = stateConfig.isImportant
-      ? "REQUIRED" as any
-      : "OPTIONAL_AND_HIDES_LOWER_PRIORITY" as any;
+      ? google.maps.CollisionBehavior.REQUIRED
+      : google.maps.CollisionBehavior.OPTIONAL_AND_HIDES_LOWER_PRIORITY;
     
     // Create new marker if needed
     if (!stationEntry || !stationEntry.marker) {
@@ -1045,7 +1045,7 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null | undefined, 
       routeMarkerRef.current = new AdvancedMarkerElement({
         position: midpoint,
         gmpClickable: false,
-        collisionBehavior: "OPTIONAL_AND_HIDES_LOWER_PRIORITY",
+        collisionBehavior: google.maps.CollisionBehavior.OPTIONAL_AND_HIDES_LOWER_PRIORITY,
         content: elt,
         map: googleMap,
       });
