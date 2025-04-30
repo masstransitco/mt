@@ -28,10 +28,8 @@ import {
   setSignInModalOpen
 } from "@/store/uiSlice";
 
-import type { Car } from "@/types/cars";
-import type { SheetMode } from "@/types/map";
+import type { Car } from "../types/cars";
 import { useAppDispatch, useAppSelector } from "@/store/store";
-import { store } from "@/store/store";
 import {
   fetchStations,
   selectStationsWithDistance,
