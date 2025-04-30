@@ -27,7 +27,7 @@ const AddressSearch = React.memo(function AddressSearch({
   placeholder,
   selectedStation,
 }: AddressSearchProps) {
-  const { inSheet, currentStep, animateToLocation } = useStationSelector();
+  const { inSheet, currentStep } = useStationSelector();
   const [searchText, setSearchText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   
