@@ -61,9 +61,9 @@ export function useWalkingRouteOverlay(
                 .map((latLng: google.maps.LatLng) => latLng.toJSON());
             }
           } 
-          // Fallback check for Google API format
-          else if (walkingRoute.routes?.[0]?.overview_polyline?.points) {
-            const encoded = walkingRoute.routes[0].overview_polyline.points;
+          // Fallback check for Google API format (handle as any for compatibility)
+          else if ((walkingRoute as any).routes?.[0]?.overview_polyline?.points) {
+            const encoded = (walkingRoute as any).routes[0].overview_polyline.points;
             
             if (window.google?.maps?.geometry?.encoding) {
               path = window.google.maps.geometry.encoding
