@@ -1,0 +1,292 @@
+/**
+ * A union type of 100 different Unicode 'icon' names (no emojis).
+ */
+export type IconName =
+  | "STAR_FILLED"
+  | "STAR_OUTLINE"
+  | "CHECKMARK"
+  | "HEAVY_CHECKMARK"
+  | "CROSS"
+  | "HEAVY_CROSS"
+  | "BLACK_CIRCLE"
+  | "WHITE_CIRCLE"
+  | "BLACK_SQUARE"
+  | "WHITE_SQUARE"
+  | "BLACK_DIAMOND"
+  | "WHITE_DIAMOND"
+  | "BLACK_HEART"
+  | "SPADE"
+  | "CLUB"
+  | "DIAMOND_SUIT"
+  | "BULLET"
+  | "ELLIPSIS"
+  | "VERTICAL_ELLIPSIS"
+  | "LEFT_ARROW"
+  | "UP_ARROW"
+  | "RIGHT_ARROW"
+  | "DOWN_ARROW"
+  | "LEFT_RIGHT_ARROW"
+  | "UP_DOWN_ARROW"
+  | "ARROW_NE"
+  | "ARROW_SE"
+  | "ARROW_NW"
+  | "ARROW_SW"
+  | "DOUBLE_ANGLE_LEFT"
+  | "DOUBLE_ANGLE_RIGHT"
+  | "PARAGRAPH_SIGN"
+  | "SECTION_SIGN"
+  | "PLUS_MINUS"
+  | "MULTIPLY_SIGN"
+  | "DIVIDE_SIGN"
+  | "PARTIAL_DIFFERENTIAL"
+  | "SUMMATION_SIGN"
+  | "PRODUCT_SIGN"
+  | "INTEGRAL_SIGN"
+  | "INFINITY"
+  | "ANGLE"
+  | "APPROX_EQUAL"
+  | "NOT_EQUAL"
+  | "LESS_EQUAL"
+  | "GREATER_EQUAL"
+  | "OHM"
+  | "ALPHA"
+  | "BETA"
+  | "GAMMA"
+  | "DELTA"
+  | "EPSILON"
+  | "ZETA"
+  | "ETA"
+  | "THETA"
+  | "IOTA"
+  | "KAPPA"
+  | "LAMBDA"
+  | "MU"
+  | "NU"
+  | "XI"
+  | "PI"
+  | "RHO"
+  | "SIGMA"
+  | "TAU"
+  | "UPSILON"
+  | "PHI"
+  | "CHI"
+  | "PSI"
+  | "OMEGA"
+  | "TRIPLE_BAR"
+  | "CONTOUR_INTEGRAL"
+  | "EURO_SIGN"
+  | "POUND_SIGN"
+  | "YEN_SIGN"
+  | "CURRENCY_SIGN"
+  | "DAGGER"
+  | "DOUBLE_DAGGER"
+  | "PERMILLE"
+  | "CARET"
+  | "UNDERSCORE"
+  | "TILDE"
+  | "CURLY_BRACKET_LEFT"
+  | "CURLY_BRACKET_RIGHT"
+  | "PIPE"
+  | "ANGLE_BRACKET_LEFT"
+  | "ANGLE_BRACKET_RIGHT"
+  | "CENT_SIGN"
+  | "PRIME"
+  | "DOUBLE_PRIME"
+  | "TRIPLE_PRIME"
+  | "BULLET_OPERATOR"
+  | "MIDDLE_DOT"
+  | "LOGICAL_AND"
+  | "LOGICAL_OR"
+  | "SUBSET"
+  | "SUPERSET"
+  | "THEREFORE"
+  | "BECAUSE"
+  | "LOZENGE"
+  | "BLACK_UP_POINTING_TRIANGLE"
+  | "WHITE_UP_POINTING_TRIANGLE"
+  | "BLACK_DOWN_POINTING_TRIANGLE"
+  | "WHITE_DOWN_POINTING_TRIANGLE"
+  | "BLACK_RIGHT_POINTING_TRIANGLE"
+  | "WHITE_RIGHT_POINTING_TRIANGLE"
+  | "BLACK_LEFT_POINTING_TRIANGLE"
+  | "WHITE_LEFT_POINTING_TRIANGLE"
+  | "BLACK_UPPER_LEFT_TRIANGLE"
+  | "BLACK_UPPER_RIGHT_TRIANGLE"
+  | "BLACK_LOWER_LEFT_TRIANGLE"
+  | "BLACK_LOWER_RIGHT_TRIANGLE"
+  | "CIRCLE_WITH_DOT"
+  | "BULLSEYE"
+  | "LOCATION_CROSSHAIR"
+  | "DROP_PIN"
+  | "CIRCLE_PLUS"
+  | "CIRCLE_MINUS"
+  | "CIRCLE_TIMES"
+  | "CIRCLE_DIVIDE"
+  | "WHITE_FLAG"
+  | "BLACK_FLAG"
+  | "UPPER_LEFT_QUADRANT"
+  | "UPPER_RIGHT_QUADRANT"
+  | "LOWER_LEFT_QUADRANT"
+  | "LOWER_RIGHT_QUADRANT"
+  | "LEFT_HALF_BLACK_CIRCLE"
+  | "RIGHT_HALF_BLACK_CIRCLE"
+  | "UPPER_HALF_BLACK_CIRCLE"
+  | "RIGHT_TRIANGLE_HALF_SQUARE"
+  | "LEFT_TRIANGLE_HALF_SQUARE"
+  | "LOWER_RIGHT_TRIANGLE"
+  | "UPPER_LEFT_TRIANGLE"
+  | "RIGHT_ANGLE_ARC"
+  | "RIGHT_TRIANGLE_GEOM"
+  | "OPPOSITION"
+  | "CONJUNCTION"
+  | "CORNER_BRACKET_TOP_LEFT"
+  | "CORNER_BRACKET_BOTTOM_RIGHT"
+  | "CORNER_BRACKET_TOP_RIGHT";
+
+
+/**
+ * IconName to Unicode glyph.
+ */
+export const ICONS: Record<IconName, string> = {
+  STAR_FILLED: "★",
+  STAR_OUTLINE: "☆",
+  CHECKMARK: "✓",
+  HEAVY_CHECKMARK: "✔",
+  CROSS: "✗",
+  HEAVY_CROSS: "✖",
+  BLACK_CIRCLE: "●",
+  WHITE_CIRCLE: "○",
+  BLACK_SQUARE: "■",
+  WHITE_SQUARE: "□",
+  BLACK_DIAMOND: "◆",
+  WHITE_DIAMOND: "◇",
+  BLACK_HEART: "♥",
+  SPADE: "♠",
+  CLUB: "♣",
+  DIAMOND_SUIT: "♦",
+  BULLET: "•",
+  ELLIPSIS: "…",
+  VERTICAL_ELLIPSIS: "⋮",
+  LEFT_ARROW: "←",
+  UP_ARROW: "↑",
+  RIGHT_ARROW: "→",
+  DOWN_ARROW: "↓",
+  LEFT_RIGHT_ARROW: "↔",
+  UP_DOWN_ARROW: "↕",
+  ARROW_NE: "↗",
+  ARROW_SE: "↘",
+  ARROW_NW: "↖",
+  ARROW_SW: "↙",
+  DOUBLE_ANGLE_LEFT: "«",
+  DOUBLE_ANGLE_RIGHT: "»",
+  PARAGRAPH_SIGN: "¶",
+  SECTION_SIGN: "§",
+  PLUS_MINUS: "±",
+  MULTIPLY_SIGN: "×",
+  DIVIDE_SIGN: "÷",
+  PARTIAL_DIFFERENTIAL: "∂",
+  SUMMATION_SIGN: "∑",
+  PRODUCT_SIGN: "∏",
+  INTEGRAL_SIGN: "∫",
+  INFINITY: "∞",
+  ANGLE: "∠",
+  APPROX_EQUAL: "≈",
+  NOT_EQUAL: "≠",
+  LESS_EQUAL: "≤",
+  GREATER_EQUAL: "≥",
+  OHM: "Ω",
+  ALPHA: "α",
+  BETA: "β",
+  GAMMA: "γ",
+  DELTA: "δ",
+  EPSILON: "ε",
+  ZETA: "ζ",
+  ETA: "η",
+  THETA: "θ",
+  IOTA: "ι",
+  KAPPA: "κ",
+  LAMBDA: "λ",
+  MU: "μ",
+  NU: "ν",
+  XI: "ξ",
+  PI: "π",
+  RHO: "ρ",
+  SIGMA: "σ",
+  TAU: "τ",
+  UPSILON: "υ",
+  PHI: "φ",
+  CHI: "χ",
+  PSI: "ψ",
+  OMEGA: "ω",
+  TRIPLE_BAR: "≡",
+  CONTOUR_INTEGRAL: "∮",
+  EURO_SIGN: "€",
+  POUND_SIGN: "£",
+  YEN_SIGN: "¥",
+  CURRENCY_SIGN: "¤",
+  DAGGER: "†",
+  DOUBLE_DAGGER: "‡",
+  PERMILLE: "‰",
+  CARET: "ˆ",
+  UNDERSCORE: "_",
+  TILDE: "~",
+  CURLY_BRACKET_LEFT: "{",
+  CURLY_BRACKET_RIGHT: "}",
+  PIPE: "|",
+  ANGLE_BRACKET_LEFT: "〈",
+  ANGLE_BRACKET_RIGHT: "〉",
+  CENT_SIGN: "¢",
+  PRIME: "′",
+  DOUBLE_PRIME: "″",
+  TRIPLE_PRIME: "‴",
+  BULLET_OPERATOR: "∙",
+  MIDDLE_DOT: "·",
+  LOGICAL_AND: "∧",
+  LOGICAL_OR: "∨",
+  SUBSET: "⊂",
+  SUPERSET: "⊃",
+  THEREFORE: "∴",
+  BECAUSE: "∵",
+  LOZENGE: "◊",
+  BLACK_UP_POINTING_TRIANGLE: "▲",       // U+25B2
+  WHITE_UP_POINTING_TRIANGLE: "△",       // U+25B3
+  BLACK_DOWN_POINTING_TRIANGLE: "▼",     // U+25BC
+  WHITE_DOWN_POINTING_TRIANGLE: "▽",     // U+25BD
+  BLACK_RIGHT_POINTING_TRIANGLE: "▶",    // U+25B6
+  WHITE_RIGHT_POINTING_TRIANGLE: "▷",    // U+25B7
+  BLACK_LEFT_POINTING_TRIANGLE: "◀",     // U+25C0
+  WHITE_LEFT_POINTING_TRIANGLE: "◁",     // U+25C1
+  BLACK_UPPER_LEFT_TRIANGLE: "◤",       // U+25E4
+  BLACK_UPPER_RIGHT_TRIANGLE: "◥",      // U+25E5
+  BLACK_LOWER_LEFT_TRIANGLE: "◣",       // U+25E3
+  BLACK_LOWER_RIGHT_TRIANGLE: "◢",      // U+25E2
+  CIRCLE_WITH_DOT: "⊙",                 // U+2299  "circled dot operator"
+  BULLSEYE: "◎",                        // U+25CE  "bullseye"
+  LOCATION_CROSSHAIR: "✥",             // U+2725
+  DROP_PIN: "⌖",                        // U+2316  "position indicator"
+  CIRCLE_PLUS: "⊕",                    // U+2295  "circled plus"
+  CIRCLE_MINUS: "⊖",                   // U+2296  "circled minus"
+  CIRCLE_TIMES: "⊗",                   // U+2297  "circled times"
+  CIRCLE_DIVIDE: "⊘",                  // U+2298  "circled divide"
+  WHITE_FLAG: "⚐",                // U+2690
+  BLACK_FLAG: "⚑",                // U+2691
+  UPPER_LEFT_QUADRANT: "◰",       // U+25F0
+  UPPER_RIGHT_QUADRANT: "◱",      // U+25F1
+  LOWER_LEFT_QUADRANT: "◲",       // U+25F2
+  LOWER_RIGHT_QUADRANT: "◳",      // U+25F3
+  LEFT_HALF_BLACK_CIRCLE: "◵",    // U+25F5
+  RIGHT_HALF_BLACK_CIRCLE: "◶",   // U+25F6
+  UPPER_HALF_BLACK_CIRCLE: "◷",   // U+25F7
+  RIGHT_TRIANGLE_HALF_SQUARE: "◹",// U+25F9
+  LEFT_TRIANGLE_HALF_SQUARE: "◺", // U+25FA
+  LOWER_RIGHT_TRIANGLE: "◿",      // U+25FF
+  UPPER_LEFT_TRIANGLE: "◸",       // U+25F8
+  RIGHT_ANGLE_ARC: "⊾",           // U+22FE
+  RIGHT_TRIANGLE_GEOM: "⊿",       // U+22FF
+  OPPOSITION: "☍",                // U+260D
+  CONJUNCTION: "☌",               // U+260C
+  CORNER_BRACKET_TOP_LEFT: "⌜",   // U+231C
+  CORNER_BRACKET_BOTTOM_RIGHT: "⌟", // U+231F
+  CORNER_BRACKET_TOP_RIGHT: "⌝",  // U+231D
+};
+

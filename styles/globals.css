@@ -1,0 +1,471 @@
+@import url("https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.10/css/weather-icons.min.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SF Pro Display Font Declarations */
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro-Display-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  main {
+    pointer-events: none !important;
+  }
+
+  /* 
+   * --- THEME & DESIGN SYSTEM --- 
+   * Apple-inspired Dark Theme Color System + Map Marker variables
+   */
+  :root {
+    /* Base Colors */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 98%;
+    
+    /* Card and Surface Elements */
+    --card: 0 0% 7%;  /* Darker card background */
+    --card-foreground: 0 0% 98%;
+    --card-border: 0 0% 16%;
+    
+    /* Panels and Sheets */
+    --sheet-background: 0 0% 7%; 
+    --sheet-border: 0 0% 16%;
+    
+    /* Popover and Dropdown */
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Accent Colors */
+    --accent: 214 100% 60%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 214 100% 55%;
+    
+    /* Primary Button & Actions */
+    --primary: 214 100% 60%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary Elements */
+    --secondary: 210 100% 65%;
+    --secondary-foreground: 0 0% 100%;
+    
+    /* Muted Elements */
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 85%;
+    
+    /* Destructive Elements */
+    --destructive: 0 100% 45%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Status Colors */
+    --success: 142 70% 45%;
+    --warning: 38 92% 50%;
+    --info: 204 94% 50%;
+    
+    /* Borders, Inputs, Rings */
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 214 100% 60%;
+    
+    /* Border Radius */
+    --radius: 1rem;
+    
+    /* Station Selector Specific */
+    --station-background: 0 0% 7%;
+    --station-highlight-departure: 214 100% 60%;
+    --station-highlight-arrival: 0 100% 45%;
+    --station-highlight-qr: 160 85% 35%;
+    
+    /* Z-index system to ensure consistent layering */
+    --z-index-map: 1;
+    --z-index-marker: 5;
+    --z-index-route-marker: 6;
+    --z-index-selected-marker: 7;
+    --z-index-station-selector: 50;
+    --z-index-infobar: 60;
+    --z-index-header: 70;
+    --z-index-modal: 100;
+  }
+
+  html {
+    font-family: "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    overscroll-behavior: none;
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior: none;
+    height: 100%;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+
+
+@layer components {
+  /* Apple-inspired container styling */
+  .apple-container {
+    @apply bg-card border border-border/40 rounded-xl shadow-md;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  
+  .apple-input {
+    @apply bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none;
+  }
+  
+  .apple-button {
+    @apply rounded-full p-1.5 transition-all duration-200;
+    @apply bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground;
+  }
+  
+  .apple-accent-button {
+    @apply rounded-full px-3 py-1.5 transition-all duration-200;
+    @apply bg-primary/90 hover:bg-primary text-white font-medium text-sm shadow-sm;
+  }
+
+  /* StationSelector needs to be interactive */
+   .station-selector,
+   .station-selector * {
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+      z-index: var(--z-index-station-selector) !important;
+    }
+    
+  /* InfoBar needs to be interactive and above StationSelector */
+   .infobar-container,
+   .infobar-container * {
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+      z-index: var(--z-index-infobar) !important;
+    }
+    
+  /* StationSelector inside sheet styling */
+.sheet-content-area .station-selector {
+    margin: 0.25rem 0 1rem;   /* 4 px top, 16 px bottom */
+    z-index: 1 !important; /* Lower z-index inside sheet */
+    pointer-events: auto !important;
+    max-height: 60px !important;
+    overflow: visible !important;
+}
+  
+  .sheet-content-area .station-selector input::placeholder {
+      font-size: 0.75rem !important; /* Match text-xs */
+  }
+
+    header.main-header,
+    div:has(> header.main-header) {
+      pointer-events: none !important;
+      touch-action: manipulation !important;
+      position: relative !important;
+      z-index: var(--z-index-header) !important;
+    }
+    
+    /* Ensure all children of the header are interactive */
+    header.main-header *,
+    div:has(> header.main-header) * {
+      pointer-events: auto !important;
+      touch-action: auto !important;
+    }
+    
+    /* Specifically target buttons to ensure they're clickable */
+    header.main-header button,
+    header.main-header a {
+      cursor: pointer !important;
+      pointer-events: auto !important;
+      touch-action: auto !important;
+    }
+    
+    /* This ensures the header sits outside the stacking context affected by pointer-events: none */
+    body > div > div > header.main-header,
+    body > div > div > div > header.main-header {
+      position: relative !important;
+      z-index: var(--z-index-header) !important;
+    }
+
+
+/* Car related components */
+  .car-card {
+    @apply relative overflow-hidden rounded-xl transition-all duration-300 bg-card border border-border hover:border-primary/50 text-foreground mx-auto w-full;
+  }
+  
+  .car-card-selected {
+    @apply border-primary shadow-lg shadow-primary/10;
+  }
+  
+  .model-viewer-container {
+    @apply relative aspect-[16/9] overflow-hidden bg-gradient-to-b from-black/5 to-transparent;
+  }
+  
+  .model-viewer-loading {
+    @apply absolute inset-0 flex items-center justify-center bg-card text-muted-foreground text-sm;
+  }
+
+  .car-details {
+    @apply p-4 space-y-4;
+  }
+
+  .car-header {
+    @apply flex justify-between items-start;
+  }
+
+  .car-title {
+    @apply text-lg font-semibold text-foreground leading-tight;
+  }
+
+  .car-type {
+    @apply flex items-center gap-1.5 text-sm text-muted-foreground;
+  }
+
+  .car-price {
+    @apply text-right;
+  }
+
+  .car-price-amount {
+    @apply text-2xl font-bold text-foreground leading-none;
+  }
+
+  .car-price-period {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  .car-features {
+    @apply flex items-center gap-4 text-sm text-muted-foreground border-t border-border/50 pt-4;
+  }
+
+  .car-feature {
+    @apply flex items-center gap-1.5;
+  }
+  
+  /* Bottom sheet components */
+  .bottom-sheet {
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border rounded-t-[var(--radius)] shadow-2xl transform transition-all duration-300 ease-in-out pb-4;
+  }
+
+  .bottom-sheet-header {
+    @apply p-4 cursor-pointer hover:bg-muted/20 transition-colors duration-200 select-none;
+    /* Removed 'border-b border-gray-700' so no line under the header */
+  }
+
+  .bottom-sheet-filter-btn {
+    @apply px-4 py-2 rounded-full text-sm bg-muted hover:bg-muted/80 text-muted-foreground transition-colors active:scale-[0.98] border border-border/50;
+  }
+
+  .bottom-sheet-list {
+    @apply overflow-y-auto overscroll-contain;
+  }
+
+  .bottom-sheet-item {
+    @apply p-4 border-b border-border hover:bg-muted/20 cursor-pointer transition-colors duration-200;
+  }
+
+  .bottom-sheet-item-detail {
+    @apply flex items-center gap-1.5 text-sm text-muted-foreground;
+  }
+
+  .bottom-sheet-distance {
+    @apply bg-muted px-3 py-1.5 rounded-full text-sm text-muted-foreground flex items-center gap-1.5;
+  }
+  
+  /* Button components */
+  .btn-primary {
+    @apply h-12 px-6 rounded-full bg-accent text-accent-foreground font-medium active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-accent/25;
+  }
+  
+  .btn-select-location {
+    @apply transition-colors duration-200 ease-in-out;
+    background-color: #4A4A4A;
+  }
+  
+  .btn-select-location:active {
+    background-color: #276EF1;
+    animation: pulse-blue 0.3s ease-in-out;
+  }
+  
+  @keyframes pulse-blue {
+    0% { transform: scale(0.98); }
+    50% { transform: scale(1.01); }
+    100% { transform: scale(1); }
+  }
+  
+  /* Scroll components */
+  .scroll-container {
+    @apply overflow-auto overscroll-contain;
+  }
+
+  /* Dialog components */
+  .dialog-content {
+    @apply bg-background sm:rounded-lg overflow-hidden;
+    @apply w-full sm:w-[448px];
+    @apply p-0 gap-0 border border-border/40;
+  }
+}
+
+
+/* Menu components */
+.app-menu {
+  @apply fixed inset-0 bg-background z-50 flex flex-col min-h-screen w-full;
+}
+
+.app-menu-header {
+  @apply sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60;
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+.app-menu-header-content {
+  @apply flex items-center px-4 h-14 border-b border-border/40;
+}
+
+.app-menu-back-button {
+  @apply p-2 -ml-2 hover:bg-accent/10 rounded-full transition-colors;
+}
+
+.app-menu-title {
+  @apply text-xl font-medium ml-2;
+}
+
+.app-menu-section {
+  @apply p-4 border-b border-border/40;
+}
+
+.app-menu-discover-icon {
+  @apply w-14 h-14 rounded-lg bg-card flex items-center justify-center overflow-hidden;
+}
+
+.app-menu-discover-image {
+  @apply w-10 h-10 object-cover;
+}
+
+.app-menu-footer {
+  @apply sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t border-border/40;
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+/* Mobile styles */
+@media (max-width: 640px) {
+  .dialog-content {
+    max-height: 100dvh;
+    height: 100dvh;
+    width: 100vw;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+  }
+
+  .welcome-hero {
+    height: 45vh;
+    min-height: 300px;
+    max-height: 45vh;
+  }
+
+  .welcome-content {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Desktop styles */
+@media (min-width: 641px) {
+  .dialog-content {
+    height: 85vh;
+    max-height: 800px;
+    margin-top: 3vh;
+  }
+
+  .welcome-hero {
+    height: 320px;
+  }
+}
+
+/* Shared styles */
+.modal-gradient-overlay {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.3) 30%,
+    rgba(0, 0, 0, 0.7) 70%,
+    hsl(var(--background)) 100%
+  );
+}
+
+/* Utility classes */
+.three-d-scene {
+  @apply touch-none select-none;
+  pointer-events: auto !important;
+  touch-action: none !important;
+  /* Create containing block to isolate from parents */
+  position: relative;
+  z-index: 10;
+  /* Prevent iOS and Safari overscroll/bounce */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+
+.three-d-scene * {
+  touch-action: none !important;
+  pointer-events: auto !important;
+}
+
+.three-d-scene-selected {
+  @apply cursor-grab active:cursor-grabbing;
+}
+
+::selection {
+  @apply bg-accent/30 text-foreground;
+}
+
+/* Hide Alpha Channel Banner */
+div[role="region"][aria-label*="alpha channel"] {
+  display: none !important;
+}
+
+/* SF Pro Display font utilities */
+@layer utilities {
+  .font-sf-pro-display-light {
+    font-family: 'SF Pro Display';
+    font-weight: 300;
+  }
+  
+  .font-sf-pro-display {
+    font-family: 'SF Pro Display';
+    font-weight: 400;
+  }
+  
+  .font-sf-pro-display-medium {
+    font-family: 'SF Pro Display';
+    font-weight: 500;
+  }
+}
+
+/* 
+ * Map Marker Styles moved to marker-styles.css 
+ * For better organization and performance
+ */
