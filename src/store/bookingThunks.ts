@@ -214,7 +214,8 @@ export const loadBookingDetails = createAsyncThunk<
         
         // Only rehydrate if we found booking data for step 5
         if (booking.departureDateString) {
-          dispatch(setDepartureDate(new Date(booking.departureDateString)));
+          // Use the string directly, no need to convert to Date and back
+          dispatch(setDepartureDate(booking.departureDateString));
         }
 
         if (booking.ticketPlan) {
