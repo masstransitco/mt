@@ -1,48 +1,68 @@
-import { useAnimationState } from '@/hooks/useAnimationState';
-import { AnimationPriority } from '@/lib/animationStateManager';
+import { useEffect, useState } from 'react';
+import { useCameraAnimation } from '@/hooks/useCameraAnimation';
+import { logger, LOG_LEVELS } from '@/lib/logger';
 
 /**
- * Animation debugger component that shows all active animations
+ * Simplified animation debugger component that shows if camera animation is active
  * Only displayed in development environment
  */
 export function AnimationDebugger() {
-  const { activeAnimations, isUIBlocked } = useAnimationState();
+  const { isAnimating } = useCameraAnimation();
+  const [inDevMode, setInDevMode] = useState(false);
+  const [logLevel, setLogLevel] = useState<number>(LOG_LEVELS.INFO);
   
-  // Only show in development
-  if (process.env.NODE_ENV !== 'development') {
+  useEffect(() => {
+    // Only show in development
+    setInDevMode(process.env.NODE_ENV === 'development');
+  }, []);
+  
+  // Update log level state when it changes
+  useEffect(() => {
+    const checkLogLevel = () => {
+      const currentLevel = logger.getLevel();
+      setLogLevel(currentLevel);
+    };
+    
+    // Initial check
+    checkLogLevel();
+    
+    // Setup an interval to check for changes
+    const intervalId = setInterval(checkLogLevel, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
+  
+  // Function to toggle log level
+  const toggleLogLevel = () => {
+    const newLevel = logLevel === LOG_LEVELS.DEBUG ? LOG_LEVELS.INFO : LOG_LEVELS.DEBUG;
+    logger.setLevel(newLevel);
+    setLogLevel(newLevel);
+  };
+  
+  // Get log level name
+  const getLogLevelName = (level: number): string => {
+    return Object.keys(LOG_LEVELS).find(key => 
+      LOG_LEVELS[key as keyof typeof LOG_LEVELS] === level
+    ) || 'UNKNOWN';
+  };
+  
+  if (!inDevMode) {
     return null;
   }
   
-  // Get priority level as string for display
-  const getPriorityName = (priority: AnimationPriority): string => {
-    switch (priority) {
-      case AnimationPriority.LOW:
-        return 'Low';
-      case AnimationPriority.MEDIUM:
-        return 'Medium';
-      case AnimationPriority.HIGH:
-        return 'High';
-      case AnimationPriority.CRITICAL:
-        return 'Critical';
-      default:
-        return `Unknown (${priority})`;
-    }
-  };
-  
   return (
     <div className="fixed bottom-0 right-0 bg-black/80 text-white p-2 text-xs max-w-xs overflow-auto max-h-40 z-50">
-      <div>UI Blocked: {isUIBlocked() ? 'Yes' : 'No'}</div>
-      <div>Active animations: {activeAnimations.length}</div>
-      {activeAnimations.map(anim => (
-        <div key={anim.id} className="mt-1 border-t border-gray-700 pt-1">
-          <div>Type: {anim.type}</div>
-          <div>Target: {anim.targetId || 'none'}</div>
-          <div>Progress: {Math.round(anim.progress * 100)}%</div>
-          <div>Priority: {getPriorityName(anim.priority)}</div>
-          <div>Blocking: {anim.isBlocking ? 'Yes' : 'No'}</div>
-          <div>Interruptible: {anim.canInterrupt ? 'Yes' : 'No'}</div>
-        </div>
-      ))}
+      <div>Camera animation active: {isAnimating ? 'Yes' : 'No'}</div>
+      <div>
+        Log level: {getLogLevelName(logLevel)} 
+        <button 
+          className="ml-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-0 px-2 rounded text-xs"
+          onClick={toggleLogLevel}
+        >
+          Toggle
+        </button>
+        <div className="text-gray-400 text-[10px]">Shortcut: Ctrl+Shift+D</div>
+      </div>
     </div>
   );
 }

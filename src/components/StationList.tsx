@@ -215,6 +215,14 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
     }
   }, [stations.length, visibleStations, selectedStationId, dispatch, isLoading]);
   
+  // Simplified effect to respond to listSelectedStationId changes from Redux
+  useEffect(() => {
+    if (listSelectedStationId === null && selectedStationId !== null) {
+      // Reset local state when list selection is cleared in Redux
+      setSelectedStationId(null);
+    }
+  }, [listSelectedStationId, selectedStationId]);
+  
   // Sync local state with Redux state
   useEffect(() => {
     if (listSelectedStationId !== selectedStationId && listSelectedStationId !== null) {
@@ -295,7 +303,7 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
 
   return (
     <>
-      <div className="flex flex-col w-full select-none">
+      <div className="flex flex-col w-full select-none px-4">
         <motion.div
           className={`${className} w-full`}
           initial={{ opacity: 0 }}
@@ -309,20 +317,22 @@ function StationList({ stations, onStationClick, userLocation, searchLocation, c
               <span className="text-sm text-gray-400">Updating stations...</span>
             </div>
           )}
-          <NearestStationDisplay 
-            minutesAway={walkingMinutes}
-            locationName={
-              // When a route is shown, use the selected station name
-              isWalkingRouteShown && selectedStationId
-                ? stations.find(s => s.id === selectedStationId)?.properties.Place
-                // Otherwise, show the nearest station name
-                : visibleStations[0]?.properties.Place
-            }
-            sourceLocationName={searchLocation ? "search location" : "current location"}
-            isAccurateTime={isWalkingRouteShown && walkingRouteStatus === 'succeeded'}
-            onShowWalkingRoute={handleShowWalkingRoute}
-            isWalkingRouteShown={isWalkingRouteShown}
-          />
+          <div className="mb-2">
+            <NearestStationDisplay 
+              minutesAway={walkingMinutes}
+              locationName={
+                // When a route is shown, use the selected station name
+                isWalkingRouteShown && selectedStationId
+                  ? stations.find(s => s.id === selectedStationId)?.properties.Place
+                  // Otherwise, show the nearest station name
+                  : visibleStations[0]?.properties.Place
+              }
+              sourceLocationName={searchLocation ? "search location" : "current location"}
+              isAccurateTime={isWalkingRouteShown && walkingRouteStatus === 'succeeded'}
+              onShowWalkingRoute={handleShowWalkingRoute}
+              isWalkingRouteShown={isWalkingRouteShown}
+            />
+          </div>
           <div className="space-y-1.5 mt-1.5">
             <AnimatePresence>
               {visibleStations.map((station, index) => (

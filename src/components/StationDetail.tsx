@@ -2,15 +2,16 @@
 
 import { memo, useState, useCallback } from "react"
 import dynamic from "next/dynamic"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Info } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useAppSelector } from "@/store/store"
-import { selectBookingStep, selectIsDateTimeConfirmed } from "@/store/bookingSlice"
+import { useAppSelector, useAppDispatch } from "@/store/store"
+import { selectBookingStep, selectIsDateTimeConfirmed, advanceBookingStep } from "@/store/bookingSlice"
 import type { StationFeature } from "@/store/stationsSlice"
 import type { Car } from "@/types/cars"
 import { PaymentSummary } from "@/components/ui/PaymentComponents"
 import FareDisplay from "@/components/ui/FareDisplay"
+import DateTimeSelector from "@/components/DateTimeSelector"
 import React from "react"
 
 // Lazy-load components
@@ -172,6 +173,8 @@ function StationDetail({
 }: StationDetailProps) {
   const bookingStep = useAppSelector(selectBookingStep)
   const isDateTimeConfirmed = useAppSelector(selectIsDateTimeConfirmed)
+  const dispatch = useAppDispatch()
+  const [showDateTimePicker, setShowDateTimePicker] = useState(false)
 
   if (!activeStation) return null
 
@@ -181,8 +184,31 @@ function StationDetail({
       onOpenSignInModal?.()
       return
     }
+    
+    if (bookingStep === 2) {
+      // In step 2, directly advance to step 3 
+      // instead of opening DateTimeSelector
+      dispatch(advanceBookingStep(3))
+      onConfirm?.()
+      return
+    }
+    
     onConfirm?.()
-  }, [bookingStep, isSignedIn, onOpenSignInModal, onConfirm])
+  }, [bookingStep, isSignedIn, onOpenSignInModal, onConfirm, dispatch])
+
+  // Handle DateTimeSelector when user cancels
+  const handleDateTimeCancel = () => {
+    setShowDateTimePicker(false)
+  }
+
+  // Handle DateTimeSelector confirmation
+  const handleDateTimeConfirmed = () => {
+    setShowDateTimePicker(false)
+    // After date/time selection is confirmed, advance to step 3
+    dispatch(advanceBookingStep(3))
+    // Call the parent's onConfirm callback if provided to ensure proper navigation
+    onConfirm?.()
+  }
 
   // We show confirm button in step 2 (to select station) and in step 4 (to confirm trip)
   let showConfirmButton = false
@@ -190,70 +216,134 @@ function StationDetail({
   let dynamicClasses = ""
 
   if (bookingStep === 2) {
+    // In step 2, always show the button
     showConfirmButton = true
     dynamicLabel = "PICKUP CAR HERE"
     dynamicClasses =
       "text-gray-900 bg-[#c4c4c4] btn-select-location disabled:opacity-50 disabled:cursor-not-allowed"
   } else if (bookingStep === 4) {
-    // Only show confirm button if date/time have been confirmed
-    showConfirmButton = isDateTimeConfirmed
+    // Always show confirm button in step 4
+    showConfirmButton = true
     dynamicLabel = "Confirm Trip"
     dynamicClasses =
       "text-white bg-[#276EF1] hover:bg-[#1d5bc9] disabled:bg-[#276EF1]/40 disabled:cursor-not-allowed"
   }
 
   return (
-    <motion.div
-      className="p-3 space-y-3.5"
+    <motion.div 
+      className={cn(
+        "overflow-visible w-full",
+        bookingStep === 2 && showCarGrid ? "space-y-2" : "space-y-3.5 px-4" // Remove vertical spacing for car grid
+      )}
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", damping: 25, stiffness: 300 }}
     >
-
-      {/* If step 4 and signed in => PaymentSummary; else if date/time confirmed => FareDisplay; else if step 2 => CarGrid, etc. */}
-      {bookingStep === 4 && isSignedIn ? (
-        <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
-          <PaymentSummary onOpenWalletModal={() => {}} />
-        </div>
-      ) : bookingStep === 4 && isDateTimeConfirmed ? (
-        <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md mb-4">
-          <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} maxDailyFare={800} />
-        </div>
-      ) : (
-        // For step 2 or other steps needing a vehicle list
-        showCarGrid && (
-          <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md h-auto">
-            {isVirtualCarLocation && scannedCar ? (
-              // Use CarCard for scanned car display
-              <div className="w-full flex flex-col items-center space-y-4">
-                <div className="text-sm text-[#10A37F] font-medium">QR Scanned Vehicle</div>
-                
-                {/* Import and use the CarCard component */}
-                <div className="w-full h-full">
-                  <LazyCarCard
-                    car={scannedCar}
-                    selected={true}
-                    onClick={() => {}}
-                    isVisible={true}
-                    isQrScanStation={true}
+      <div className={cn(
+        bookingStep === 2 && showCarGrid ? "px-0" : "px-0" // Handle padding differently based on content
+      )}>
+        {/* If step 4 => FareDisplay or PaymentSummary; else if step 2 => CarGrid, etc. */}
+        {bookingStep === 4 ? (
+          <>
+            {/* Always show FareDisplay in step 4 for non-signed in users */}
+            {!isSignedIn && (
+              <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md mb-4">
+                <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} maxDailyFare={800} />
+              </div>
+            )}
+            
+            {/* Always show PaymentSummary for signed in users */}
+            {isSignedIn && (
+              <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
+                <PaymentSummary onOpenWalletModal={() => {}} />
+              </div>
+            )}
+          </>
+        ) : (
+          // For step 2 or other steps needing a vehicle list
+          showCarGrid && (
+            <div className={cn(
+              "w-full",
+              bookingStep === 2 ? "pt-0" : "" // No padding top for step 2
+            )}>
+              {isVirtualCarLocation && scannedCar ? (
+                // Use CarCard for scanned car display
+                <div className="bg-[#1a1a1a] rounded-xl shadow-md overflow-hidden w-full mb-4 mx-4">
+                  <div className="w-full flex flex-col items-center">
+                    <div className="text-sm text-[#10A37F] font-medium my-2">QR Scanned Vehicle</div>
+                    
+                    {/* Import and use the CarCard component */}
+                    <div className="w-full h-full">
+                      <LazyCarCard
+                        car={scannedCar}
+                        selected={true}
+                        onClick={() => {}}
+                        isVisible={true}
+                        isQrScanStation={true}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Regular car grid for normal stations - full width with rounded corners */
+                <div className={cn(
+                  "overflow-visible bg-[#111111] w-full",
+                  bookingStep === 2 ? "mb-0 rounded-none" : "mb-4 mx-auto px-0 rounded-xl" // Remove margins and make it full-bleed in step 2
+                )}>
+                  <CarGridWithScene 
+                    className="w-full h-full" 
+                    isVisible 
+                    scannedCar={scannedCar} 
+                    isQrScanStation={isVirtualCarLocation} 
                   />
                 </div>
-              </div>
-            ) : (
-              // Regular car grid for normal stations
-              <CarGridWithScene className="w-full h-full" isVisible scannedCar={scannedCar} isQrScanStation={isVirtualCarLocation} />
-            )}
-          </div>
-        )
-      )}
+              )}
+              
+              {/* Confirm button always appears in step 2 for reliability */}
+              {bookingStep === 2 && (
+                <div className="mx-4 mt-4">
+                  <ConfirmButton
+                    label={dynamicLabel}
+                    onConfirm={handleConfirmClick}
+                    buttonClassName={dynamicClasses}
+                  />
+                  <p className="text-xs text-gray-400 text-center mt-2">
+                    You can also schedule your pickup time from the time indicator above
+                  </p>
+                </div>
+              )}
+            </div>
+          )
+        )}
 
-      {/* Confirm button appears in step 2 or step 4 */}
-      {showConfirmButton && (
-        <ConfirmButton
-          label={dynamicLabel}
-          onConfirm={handleConfirmClick}
-          buttonClassName={dynamicClasses}
-        />
+        {/* Confirm button always appears in step 4 - keep outside car grid wrapper */}
+        {showConfirmButton && bookingStep === 4 && (
+          <div className="mx-4 mt-4">
+            <ConfirmButton
+              label={dynamicLabel}
+              onConfirm={handleConfirmClick}
+              buttonClassName={dynamicClasses}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* DateTimeSelector rendered centered */}
+      {showDateTimePicker && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+          <div className="w-full max-w-md px-4">
+            <DateTimeSelector 
+              onDateTimeConfirmed={handleDateTimeConfirmed}
+              onCancel={handleDateTimeCancel}
+              autoAdvanceStep={true}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* Hide the rest of the content when DateTimePicker is visible */}
+      {showDateTimePicker && (
+        <div className="fixed inset-0 bg-transparent" style={{ zIndex: 40 }} />
       )}
     </motion.div>
   )
