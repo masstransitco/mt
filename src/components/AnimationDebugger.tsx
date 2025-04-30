@@ -52,7 +52,7 @@ export function AnimationDebugger() {
   
   return (
     <div className="fixed bottom-0 right-0 bg-black/80 text-white p-2 text-xs max-w-xs overflow-auto max-h-40 z-50">
-      <div>Camera animation active: {isAnimating ? 'Yes' : 'No'}</div>
+      <div>Camera animation active: {isAnimating() ? 'Yes' : 'No'}</div>
       <div>
         Log level: {getLogLevelName(logLevel)} 
         <button 
