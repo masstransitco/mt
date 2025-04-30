@@ -199,7 +199,7 @@ function CarGridWithScene({
   
   return (
     <div 
-      className={`w-full relative ${className}`} 
+      className={`w-full relative overflow-visible flex justify-center ${className}`}
       ref={(el) => {
         // Update ref and connect with InView
         containerRef.current = el
@@ -213,12 +213,13 @@ function CarGridWithScene({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="w-full rounded-xl overflow-hidden"
+            className="w-full h-64 overflow-visible flex justify-center" // Increased height for more visual impact
           >
             <DynamicCarCardScene 
               cars={availableCars} 
               isVisible={inView} 
-              className="rounded-xl overflow-hidden"
+              className="overflow-visible w-full"
+              height="h-full"
             />
           </motion.div>
         </AnimatePresence>

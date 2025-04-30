@@ -42,7 +42,7 @@ const CarsScene = React.memo(({
   const carPositions = useMemo((): [number, number, number][] => {
     const spacing = VEHICLE_DIMENSIONS.CAR_SPACING; // Consistent spacing between cars
     return cars.map((_, index) => {
-      // Position relative to selected car
+      // Position relative to selected car, perfectly centered
       return [spacing * (index - selectedIndex), 0, 0] as [number, number, number];
     });
   }, [cars, selectedIndex]);
@@ -136,12 +136,13 @@ interface CarCardSceneProps {
   cars: Car[]
   className?: string
   isVisible?: boolean
+  height?: string
 }
 
 // Server-side placeholder
-function Placeholder({ className }: { className?: string }) {
+function Placeholder({ className, height = 'h-60' }: { className?: string, height?: string }) {
   return (
-    <div className={`relative w-full ${className}`} style={{ height: "180px" }}>
+    <div className={`relative w-full ${height} ${className}`}>
       <div className="w-full h-full flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-lg">
         <div className="px-4 py-2 bg-black/40 rounded-full text-white/80 text-sm">
           Loading 3D scene...
@@ -151,8 +152,8 @@ function Placeholder({ className }: { className?: string }) {
   )
 }
 
-// Client-side component
-function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardSceneProps) {
+// Client-side component with fixed aspect ratio handling
+function CarCardSceneClient({ cars, className = "", isVisible = true, height = 'h-60' }: CarCardSceneProps) {
   const dispatch = useAppDispatch()
   const selectedCarId = useAppSelector(state => state.user.selectedCarId)
   
@@ -323,11 +324,11 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
 
   // Basic placeholder for initial load
   if (!isVisible || cars.length === 0) {
-    return <Placeholder className={className} />
+    return <Placeholder className={className} height={height} />
   }
   
   return (
-    <div className={`relative w-full ${className}`} style={{ height: "180px" }}>
+    <div className={`relative ${height} ${className} overflow-visible w-full`}>
       {/* 3D Canvas */}
       <Canvas
         shadows
@@ -346,7 +347,14 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
           depth: true,
           powerPreference: "default",
         }}
-        style={{ background: "transparent" }}
+        style={{ 
+          background: "transparent",
+          width: "100%", // Force canvas to take full width of parent
+          height: "100%",
+          position: "absolute",
+          top: 0,
+          left: 0
+        }}
         dpr={getOptimalDPR(true)}
       >
         {/* Controls - User can interact, but camera will return to default */}
@@ -384,7 +392,7 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
         <>
           <button
             onClick={goToPrevCar}
-            className="absolute top-1/2 left-2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
+            className="absolute top-1/2 left-6 -translate-y-1/2 z-20 h-10 w-10 rounded-full 
                      bg-black/70 backdrop-blur-sm flex items-center justify-center
                      border border-white/20 text-white opacity-80 hover:opacity-100"
             aria-label="Previous car"
@@ -394,7 +402,7 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
           
           <button
             onClick={goToNextCar}
-            className="absolute top-1/2 right-2 -translate-y-1/2 z-10 h-10 w-10 rounded-full 
+            className="absolute top-1/2 right-6 -translate-y-1/2 z-20 h-10 w-10 rounded-full 
                      bg-black/70 backdrop-blur-sm flex items-center justify-center
                      border border-white/20 text-white opacity-80 hover:opacity-100"
             aria-label="Next car"
@@ -442,7 +450,7 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
       )}
       
       {/* Car stats indicators - overlaid at bottom of scene, moved closer to footer */}
-      <div className="absolute bottom-8 left-0 right-0 z-20 px-4 flex items-center justify-center gap-3">
+      <div className="absolute bottom-8 left-0 right-0 z-20 px-6 flex items-center justify-center gap-3">
         <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-lg">
           <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
           <span className="text-xs font-medium text-white">{batteryPercentage}%</span>
@@ -458,12 +466,12 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
       </div>
       
       {/* Top header with model and registration */}
-      <div className="absolute top-0 left-0 right-0 z-20 backdrop-blur-md bg-black/50 px-3 py-2 
-                    border-b border-white/10 flex items-center justify-between">
-        <div className="flex-1">
+      <div className="absolute top-0 left-0 right-0 z-20 backdrop-blur-md bg-black/50 px-6 py-2 
+                    border-b border-white/10 flex items-center justify-between rounded-t-xl">
+        <div className="flex-1 min-w-0 pl-4">
           {selectedCarId && (
             <div className="text-white">
-              <div className="text-sm font-medium">
+              <div className="text-sm font-medium truncate">
                 {selectedCar?.model || "Car"}
               </div>
             </div>
@@ -471,16 +479,16 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
         </div>
         
         {selectedCar?.registration && (
-          <div className="text-xs font-bold bg-[#E82127] text-white rounded-md px-2.5 py-1 ml-auto">
+          <div className="text-xs font-bold bg-[#E82127] text-white rounded-md px-2.5 py-1 ml-auto mr-4">
             {selectedCar.registration}
           </div>
         )}
       </div>
 
       {/* Car info overlay with last driven info - condensed height */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 backdrop-blur-md bg-black/50 px-3 py-1 
-                     border-t border-white/10 flex items-center justify-between">
-        <div className="flex-1 flex items-center gap-1.5">
+      <div className="absolute bottom-0 left-0 right-0 z-10 backdrop-blur-md bg-black/50 px-6 py-2 
+                     border-t border-white/10 flex items-center justify-between rounded-b-xl">
+        <div className="flex-1 flex items-center gap-1.5 pl-4 min-w-0">
           <div className="relative">
             <span 
               onClick={handleOdometerClick}
@@ -507,10 +515,10 @@ function CarCardSceneClient({ cars, className = "", isVisible = true }: CarCardS
               )}
             </AnimatePresence>
           </div>
-          <span className="text-xs text-gray-400 text-[10px]">Last driven: {lastDrivenText}</span>
+          <span className="text-xs text-gray-400 text-[10px] truncate">Last driven: {lastDrivenText}</span>
         </div>
         
-        <div className="text-[10px] font-medium text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">
+        <div className="text-[10px] font-medium text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full mr-4">
           Ready
         </div>
       </div>
@@ -531,7 +539,7 @@ export default function CarCardScene(props: CarCardSceneProps) {
   }, []);
   
   if (!isClient) {
-    return <Placeholder className={props.className} />
+    return <Placeholder className={props.className} height={props.height} />
   }
   
   return <CarCardSceneClient {...props} />
