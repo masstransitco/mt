@@ -260,7 +260,7 @@ export default function Sheet({
         >
           <div
             className={cn(
-              "relative bg-[#1a1a1a] text-white rounded-t-xl shadow-xl border border-[#2a2a2a] flex flex-col select-none",
+              "relative bg-black/90 backdrop-blur-md text-white rounded-t-xl shadow-xl border border-white/10 flex flex-col select-none",
               className,
             )}
             style={{
@@ -302,7 +302,8 @@ export default function Sheet({
             <motion.div
               ref={bodyRef}
               className={cn(
-                "flex-grow overflow-y-auto overscroll-contain px-4 py-6 transition-all duration-200 sheet-body sheet-content-area",
+                "flex-grow overflow-y-auto overscroll-contain transition-all duration-200 sheet-body sheet-content-area",
+                // Let individual components control their own padding
               )}
               style={{
                 WebkitOverflowScrolling: "touch",

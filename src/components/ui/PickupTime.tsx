@@ -1,17 +1,164 @@
-// src/components/PickupTime.tsx
+// src/components/ui/PickupTime.tsx
 "use client"
 
 import { useEffect, useState, memo, useCallback, useMemo, useRef } from "react"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import { useAppSelector } from "@/store/store"
-import { selectDepartureDate, selectDepartureTime } from "@/store/bookingSlice"
-import { addMinutes } from "date-fns"
+import { selectDepartureDate, selectDepartureTime, selectIsDateTimeConfirmed } from "@/store/bookingSlice"
+import { addMinutes, format } from "date-fns"
+import DateTimeSelector from "@/components/DateTimeSelector"
+import { cn } from "@/lib/utils"
 
 interface PickupTimeProps {
   startTime?: Date
   endTime?: Date
   // If no times are provided, component will try to use Redux state
   useReduxTime?: boolean
+  pickupMins?: number | null;
+  onDateTimePickerVisibilityChange?: (isVisible: boolean) => void;
+  className?: string;
+  variant?: "fancy" | "simple" | "info-pill"; // Different styling variants
+  inInfoBar?: boolean; // Flag to indicate if component is inside InfoBar
+}
+
+/**
+ * A simpler version of PickupTime that just shows the pickup time and allows
+ * selection of a date/time. This matches the needs in InfoBar and other places.
+ */
+export function SimplePickupTime({
+  pickupMins,
+  onDateTimePickerVisibilityChange,
+  className,
+  variant = "info-pill",
+  inInfoBar = false
+}: Omit<PickupTimeProps, 'startTime' | 'endTime' | 'useReduxTime'>) {
+  // Get scheduled date/time from Redux
+  const departureDate = useAppSelector(selectDepartureDate);
+  const departureTime = useAppSelector(selectDepartureTime);
+  const isDateTimeConfirmed = useAppSelector(selectIsDateTimeConfirmed);
+
+  // State for picker visibility
+  const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+
+  // Notify parent when DateTimePicker visibility changes
+  const updatePickerVisibility = (isVisible: boolean) => {
+    setShowDateTimePicker(isVisible);
+    onDateTimePickerVisibilityChange?.(isVisible);
+  };
+
+  // Handler for pickup time click
+  const handlePickupTimeClick = () => {
+    // Only handle clicks directly if not inside InfoBar 
+    // (InfoBar already handles click events)
+    if (!inInfoBar) {
+      updatePickerVisibility(!showDateTimePicker);
+    }
+  };
+
+  // Handler for cancel
+  const handleDateTimeCancel = () => {
+    updatePickerVisibility(false);
+  };
+
+  // Handle time confirmed callback
+  const handleTimeConfirmed = () => {
+    updatePickerVisibility(false);
+  };
+
+  // Determine which display mode to use - Ensure confirmed datetime takes precedence
+  const displayMode = useMemo(() => {
+    // Add more verbose logging to troubleshoot the display logic
+    console.log('SimplePickupTime determining display mode:', {
+      isDateTimeConfirmed,
+      hasDate: !!departureDate,
+      hasTime: !!departureTime,
+      pickupMins
+    });
+
+    // First priority: Always show confirmed date/time if available
+    if (isDateTimeConfirmed && departureDate && departureTime) {
+      console.log('Using confirmed_datetime mode');
+      return 'confirmed_datetime';
+    } 
+    // Second priority: Show selected but unconfirmed date/time
+    else if (departureDate && departureTime) {
+      console.log('Using selected_datetime mode');
+      return 'selected_datetime';
+    }
+    // Third priority: Fall back to dispatch time if available
+    else if (pickupMins !== null && pickupMins !== undefined) {
+      console.log('Using dispatch_time mode');
+      return 'dispatch_time';
+    } 
+    // Last resort: Schedule pickup
+    else {
+      console.log('Using schedule_pickup mode');
+      return 'schedule_pickup';
+    }
+  }, [isDateTimeConfirmed, departureDate, departureTime, pickupMins]);
+
+  // Determine button text based on display mode
+  const buttonText = 
+    displayMode === 'confirmed_datetime'
+      ? `✓ Pickup on ${format(departureDate!, 'MMM d')} at ${format(departureTime!, 'h:mm a')}`
+    : displayMode === 'dispatch_time'
+      ? `Pickup in ${pickupMins} minutes`
+    : displayMode === 'selected_datetime'
+      ? `Pickup on ${format(departureDate!, 'MMM d')} at ${format(departureTime!, 'h:mm a')}`
+    : "Schedule pickup";
+
+  // Apply different styling based on variant, 
+  // making sure to remove background and border when inside InfoBar (since InfoBar provides its own container)
+  const buttonStyle = 
+    variant === "info-pill" 
+      ? inInfoBar
+        ? "apple-accent-button py-1 px-2.5 text-sm text-white" // No background or border when inside InfoBar
+        : "apple-accent-button py-1 px-2.5 text-sm bg-black/80 border border-white/20 text-white rounded-full hover:bg-black hover:border-white/30"
+      : "text-sm text-white py-2 px-3 border border-white/20 rounded-lg hover:bg-black/10";
+
+  // Apply different styling based on display mode
+  // Skip applying extra styles when inside InfoBar since InfoBar handles its own styling
+  const confirmedStyle = inInfoBar
+    ? "" // No extra styles when inside InfoBar
+    : displayMode === 'confirmed_datetime' 
+        ? "border-green-600/30 bg-black/30" 
+        : displayMode === 'selected_datetime' 
+          ? "border-yellow-600/30 bg-black/20" 
+          : "";
+  
+  // Determine if we should handle click events internally
+  // When inside InfoBar, the InfoBar already handles the click event
+  const shouldHandleClicks = !inInfoBar && variant !== "info-pill";
+
+  return (
+    <>
+      <motion.div
+        onClick={shouldHandleClicks ? handlePickupTimeClick : undefined}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className={cn(
+          buttonStyle,
+          confirmedStyle,
+          className,
+          shouldHandleClicks ? "cursor-pointer" : ""
+        )}
+      >
+        {buttonText}
+      </motion.div>
+
+      {/* DateTimeSelector is now handled by the parent InfoBar component when in InfoBar mode */}
+      {!inInfoBar && showDateTimePicker && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+          <div className="w-full max-w-md px-4">
+            <DateTimeSelector 
+              onDateTimeConfirmed={handleTimeConfirmed}
+              onCancel={handleDateTimeCancel}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 const PickupTime = memo(function PickupTime({ 

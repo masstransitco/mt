@@ -4,28 +4,21 @@ import React, { useState } from "react"
 import { motion } from "framer-motion"
 import { Crosshair } from "lucide-react"
 import { toast } from "react-hot-toast"
-import { getUserLocation, USER_LOCATION_UPDATED_EVENT } from "@/lib/UserLocation"
+import { locateUser } from "@/lib/UserLocation"
+import { cn } from "@/lib/utils"
 
-// Add props with clear separation of concerns
+export type LocateMePosition = "sheet" | "bottom" | "inline"
+
 interface LocateMeButtonProps {
-  // Callback when location is found - for UI updates without animation
-  onLocationFound?: (loc: google.maps.LatLngLiteral) => void
-  // Whether to update userLocation in Redux - for animation and state
-  updateReduxState?: boolean
-  // Whether to trigger animation directly - to prevent racing animations
-  animateToLocation?: boolean
-  // Whether to also update search location - to ensure consistent station sorting
-  updateSearchLocation?: boolean
-  // Direct reference to camera animation function - for explicit animation triggering
-  onAnimateToLocation?: (loc: google.maps.LatLngLiteral, zoom?: number) => void
+  // Position variant for styling/placement
+  position?: LocateMePosition
+  // Optional callback for component-specific behavior
+  onSuccess?: (loc: google.maps.LatLngLiteral) => void
 }
 
-export default function LocateMeButton({ 
-  onLocationFound,
-  updateReduxState = true,
-  animateToLocation = true,
-  updateSearchLocation = false,
-  onAnimateToLocation
+export default function LocateMeButton({
+  position = "inline",
+  onSuccess,
 }: LocateMeButtonProps) {
   const [isLocating, setIsLocating] = useState(false)
   const [locationFound, setLocationFound] = useState(false)
@@ -39,48 +32,40 @@ export default function LocateMeButton({
     const toastId = toast.loading("Finding your location...")
 
     try {
-      // IMPORTANT: Log that this is a user-initiated locate-me action
-      console.log("[LocateMeButton] User clicked locate-me, requesting location")
+      console.log("[LocateMeButton] User clicked locate-me")
       
-      // Use centralized location service to get position
-      const location = await getUserLocation({
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 5000, // Shorter cache time for button clicks (5 seconds)
-        updateSearchLocation: true, // Always update search location in Redux for consistent behavior
-        forceAnimation: true, // Always force animation when locate-me button is clicked
-        onLocationFound: (loc) => {
-          console.log("[LocateMeButton] Location found:", loc)
-          
-          // IMPORTANT: Call the callback to ensure GMap gets notified DIRECTLY
-          onLocationFound?.(loc)
-        }
+      // Single call to centralized locate function with source
+      const location = await locateUser({
+        source: "locate-me-button"
       })
-
+      
       if (location) {
         toast.dismiss(toastId)
         toast.success("Location found!")
         
-        // Directly trigger camera animation for a smoother experience
-        if (onAnimateToLocation) {
-          console.log("[LocateMeButton] Triggering camera animation to location")
-          onAnimateToLocation(location, 15) // Zoom level 15 matches the default
-        }
+        // Call optional success callback for component-specific behavior
+        onSuccess?.(location)
         
-        // Show success state for 2s
+        // Show success state briefly
         setLocationFound(true)
         setTimeout(() => setLocationFound(false), 2000)
       } else {
-        // If no location returned, the error was already handled
         toast.dismiss(toastId)
       }
     } catch (error) {
-      console.error("Unexpected error getting location:", error)
+      console.error("Error getting location:", error)
       toast.dismiss(toastId)
-      toast.error("Unexpected error getting location")
+      toast.error("Unable to get your location")
     } finally {
       setIsLocating(false)
     }
+  }
+
+  // Position-based styling
+  const buttonStyles = {
+    sheet: "px-3 py-1.5 h-[30px] w-full", // Full width with reduced height
+    bottom: "px-3 py-1.5 h-[30px] w-auto",
+    inline: "px-3 py-1.5 h-[30px] w-auto"
   }
 
   return (
@@ -88,53 +73,56 @@ export default function LocateMeButton({
       onClick={handleLocateMe}
       whileTap={{ scale: 0.95 }}
       disabled={isLocating}
-      className={`
-        relative flex items-center gap-1.5 
-        text-xs text-white px-2.5 py-1 bg-[#2a2a2a] rounded-lg 
-        hover:bg-[#333333] transition-colors z-10
-      `}
+      className={cn(`
+        relative flex items-center justify-center gap-2
+        text-xs text-white font-medium
+        border border-white/10 rounded-xl
+        bg-black/90 backdrop-blur-md
+        hover:bg-black hover:border-white/20
+        transition-all duration-200 shadow-lg z-10
+      `, buttonStyles[position])}
       type="button"
     >
-      <Crosshair className="w-3 h-3" />
+      <Crosshair className="w-3.5 h-3.5" />
       <span>Locate me</span>
 
       {/* Ripple effect while locating */}
       {isLocating && (
         <>
           <motion.span
-            className="absolute inset-0 rounded-lg border-2 border-[#10a37f]"
+            className="absolute inset-0 rounded-xl border-2 border-[#10a37f]"
             initial={{ opacity: 1, scale: 1 }}
             animate={{
               opacity: 0,
               scale: 1.2,
               transition: {
-                repeat: Infinity,
+                repeat: Number.POSITIVE_INFINITY,
                 duration: 1.5,
-                ease: "easeOut"
-              }
+                ease: "easeOut",
+              },
             }}
           />
           <motion.span
-            className="absolute inset-0 rounded-lg border-2 border-[#10a37f]"
+            className="absolute inset-0 rounded-xl border-2 border-[#10a37f]"
             initial={{ opacity: 1, scale: 1 }}
             animate={{
               opacity: 0,
               scale: 1.2,
               transition: {
-                repeat: Infinity,
+                repeat: Number.POSITIVE_INFINITY,
                 duration: 1.5,
                 delay: 0.5,
-                ease: "easeOut"
-              }
+                ease: "easeOut",
+              },
             }}
           />
         </>
       )}
 
-      {/* Brief success highlight */}
+      {/* Success highlight */}
       {locationFound && (
         <motion.span
-          className="absolute inset-0 rounded-lg bg-[#10a37f]"
+          className="absolute inset-0 rounded-xl bg-[#10a37f]"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 0.2, scale: 1 }}
           transition={{ duration: 0.3 }}

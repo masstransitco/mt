@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, ReactNode } from "react";
+import React, { useRef, useEffect, ReactNode, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,13 @@ export default function TopSheet({
   onDismiss,
 }: TopSheetProps) {
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to top when opened (optional)
+  useEffect(() => {
+    if (isOpen && contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [isOpen]);
 
   // Scroll to top when opened (optional)
   useEffect(() => {

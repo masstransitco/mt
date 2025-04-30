@@ -139,12 +139,12 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
       {/* Card with sleeker Tesla-inspired design */}
       <div className="w-full flex items-center justify-center">
         <motion.div 
-          className={`rounded-sm overflow-hidden w-full ${isWalkingRouteShown ? "" : "pulsating-border"}`}
+          className={`rounded-xl overflow-hidden w-full ${isWalkingRouteShown ? "" : "pulsating-border"}`}
           animate={pulseControls}
           initial={{boxShadow: "0 0 0 0px rgba(255, 255, 255, 0)"}}
         >
           <motion.div
-            className="flex items-center px-3 py-2 bg-[#181818] w-full justify-between shadow-sm"
+            className="flex items-center px-3 py-2.5 bg-[#181818] w-full justify-between shadow-sm"
             initial="normal"
             animate={isWalkingRouteShown ? "pressed" : "normal"}
             variants={containerVariants}
@@ -168,7 +168,7 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
                   ease: [0.16, 1, 0.3, 1],
                 },
               }}
-              className={`rounded-sm px-2 py-0.5 ${
+              className={`rounded-lg px-2.5 py-1 ${
                 isWalkingRouteShown 
                   ? 'bg-[#1e4a3a]' 
                   : isAccurateTime 
@@ -176,7 +176,7 @@ const NearestStationDisplay = memo(function NearestStationDisplay({
                     : 'bg-[#232323]'
               }`}
             >
-              <span className="font-medium text-xs text-neutral-300">
+              <span className="font-medium text-xs text-neutral-300 font-sfpro">
                 {locationName 
                   ? `walk to ${locationName}` 
                   : "walk to nearest station"
