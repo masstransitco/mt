@@ -6,7 +6,7 @@ declare global {
     recaptchaVerifier?: import("firebase/auth").RecaptchaVerifier;
     confirmationResult?: import("firebase/auth").ConfirmationResult;
     
-    // Animation state for THREE.js animations
+    // Animation state for THREE.js rendering
     __threeAnimations?: {
       [key: string]: {
         startTime: number;
@@ -16,6 +16,5 @@ declare global {
       }
     };
     __lastRenderTime?: number;
-    __animationStateManager?: any;
   }
 }

@@ -12,16 +12,7 @@ interface UiState {
     qrScannerOpen: boolean;
     signInModalOpen: boolean;
   };
-  // Selected station IDs for different contexts
-  selectedIds: {
-    listSelected: number | null;
-  };
-  // Animation state
-  animation: {
-    isAnimating: boolean;
-    targetId: number | null;
-    type: string | null;
-  };
+  // Animation state removed - now using animationStateManager
 }
 
 // Define the initial state
@@ -33,14 +24,6 @@ const initialState: UiState = {
   modals: {
     qrScannerOpen: false,
     signInModalOpen: false,
-  },
-  selectedIds: {
-    listSelected: null,
-  },
-  animation: {
-    isAnimating: false,
-    targetId: null,
-    type: null,
   },
 };
 
@@ -64,28 +47,6 @@ export const uiSlice = createSlice({
     setSignInModalOpen: (state, action: PayloadAction<boolean>) => {
       state.modals.signInModalOpen = action.payload;
     },
-    
-    // Selection actions
-    setListSelectedStation: (state, action: PayloadAction<number | null>) => {
-      state.selectedIds.listSelected = action.payload;
-    },
-    
-    // Animation actions
-    setAnimationState: (state, action: PayloadAction<{
-      isAnimating: boolean;
-      targetId?: number | null;
-      type?: string | null;
-    }>) => {
-      state.animation.isAnimating = action.payload.isAnimating;
-      
-      if (action.payload.targetId !== undefined) {
-        state.animation.targetId = action.payload.targetId;
-      }
-      
-      if (action.payload.type !== undefined) {
-        state.animation.type = action.payload.type;
-      }
-    },
   },
 });
 
@@ -95,8 +56,6 @@ export const {
   setSheetMinimized,
   setQrScannerOpen,
   setSignInModalOpen,
-  setListSelectedStation,
-  setAnimationState,
 } = uiSlice.actions;
 
 // Export selectors
@@ -104,10 +63,6 @@ export const selectSheetMode = (state: RootState) => state.ui.sheet.mode;
 export const selectSheetMinimized = (state: RootState) => state.ui.sheet.minimized;
 export const selectQrScannerOpen = (state: RootState) => state.ui.modals.qrScannerOpen;
 export const selectSignInModalOpen = (state: RootState) => state.ui.modals.signInModalOpen;
-export const selectListSelectedStation = (state: RootState) => state.ui.selectedIds.listSelected;
-export const selectIsAnimating = (state: RootState) => state.ui.animation.isAnimating;
-export const selectAnimationTargetId = (state: RootState) => state.ui.animation.targetId;
-export const selectAnimationType = (state: RootState) => state.ui.animation.type;
 
 // Export the reducer
 export default uiSlice.reducer;

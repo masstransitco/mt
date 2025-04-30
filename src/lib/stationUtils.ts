@@ -76,6 +76,13 @@ export function generateCarQrUrl(registration: string): string {
 }
 
 /**
+ * Finds a station by ID from an array of stations
+ */
+export function findStationById(stationId: number, stations: StationFeature[]): StationFeature | undefined {
+  return stations.find((s) => s.id === stationId);
+}
+
+/**
  * Finds the nearest station to a given car location
  */
 export function findNearestStation(car: Car, stations: StationFeature[]): StationFeature | null {

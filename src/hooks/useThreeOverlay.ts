@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
 import type { StationFeature } from "@/store/stationsSlice";
 import { latLngAltToVector3 } from "@/lib/geo-utils";
+import { logger } from "@/lib/logger";
 
 import { useAppSelector } from "@/store/store";
 import { selectStations3D } from "@/store/stations3DSlice";
@@ -16,6 +17,20 @@ import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { selectUserLocation } from "@/store/userSlice";
 import { selectAllStations } from "@/store/stationsSlice";
 import { CatmullRomCurve3 } from "three";
+
+// Throttle function removed - no longer needed since we removed pointermove handler
+
+// Utility hook to store latest value in a ref
+// This prevents re-renders when the value changes
+function useLatest<T>(value: T) {
+  const ref = useRef<T>(value);
+  
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  
+  return ref;
+}
 
 // --- SINGLETON DracoLoader so it isn't re-instantiated on each context restore ---
 const dracoLoaderSingleton = new DRACOLoader();
@@ -44,7 +59,7 @@ class ModelLRUCache {
       this.cache.set(key, model);
       this.activelyUsed.add(key); // Mark as actively used
     } catch (err) {
-      console.error("[ModelLRUCache] Error setting model in cache:", err);
+      logger.error("[ModelLRUCache] Error setting model in cache:", err);
     }
   }
 
@@ -59,7 +74,7 @@ class ModelLRUCache {
       }
       return model;
     } catch (err) {
-      console.error("[ModelLRUCache] Error getting model from cache:", err);
+      logger.error("[ModelLRUCache] Error getting model from cache:", err);
       return undefined;
     }
   }
@@ -98,11 +113,11 @@ class ModelLRUCache {
               }
             });
           } catch (err) {
-            console.warn("[ModelLRUCache] Error disposing model:", err);
+            logger.warn("[ModelLRUCache] Error disposing model:", err);
           }
         }
         this.cache.delete(oldestKey);
-        console.log(`[ModelLRUCache] Evicted model: ${oldestKey}`);
+        logger.debug(`[ModelLRUCache] Evicted model: ${oldestKey}`);
       } else {
         // No more evictable models - break to avoid infinite loop
         break;
@@ -125,7 +140,7 @@ class ModelLRUCache {
         }
       });
     } catch (err) {
-      console.warn("[ModelLRUCache] Error disposing textures:", err);
+      logger.warn("[ModelLRUCache] Error disposing textures:", err);
     }
   }
 
@@ -160,9 +175,9 @@ class ModelLRUCache {
           }
         });
       
-      console.log(`[ModelLRUCache] Cleared ${keysToDispose.length} models from cache`);
+      logger.debug(`[ModelLRUCache] Cleared ${keysToDispose.length} models from cache`);
     } catch (err) {
-      console.error("[ModelLRUCache] Error clearing cache:", err);
+      logger.error("[ModelLRUCache] Error clearing cache:", err);
     }
   }
 }
@@ -174,7 +189,7 @@ interface ThreeOverlayOptions {
 }
 
 export function useThreeOverlay(
-  googleMap: google.maps.Map | null,
+  googleMap: google.maps.Map | null | undefined,
   stations: StationFeature[],
   options?: ThreeOverlayOptions
 ) {
@@ -191,18 +206,31 @@ export function useThreeOverlay(
   // Single array for building groups (mesh only now)
   const buildingGroupsRef = useRef<THREE.Group[]>([]);
 
-  // Redux states
-  const userLocation = useAppSelector(selectUserLocation);
-  const bookingStep = useAppSelector(selectBookingStep);
-  const departureStationId = useAppSelector(selectDepartureStationId);
-  const arrivalStationId = useAppSelector(selectArrivalStationId);
-  const allStations = useAppSelector(selectAllStations);
-  const buildings3D = useAppSelector(selectStations3D);
-  const routeDecoded = useAppSelector(selectRouteDecoded);
+  // Redux states with useLatest to prevent unnecessary re-renders
+  const userLocationValue = useAppSelector(selectUserLocation);
+  const userLocation = useLatest(userLocationValue);
+  
+  const bookingStepValue = useAppSelector(selectBookingStep);
+  const bookingStep = useLatest(bookingStepValue);
+  
+  const departureStationIdValue = useAppSelector(selectDepartureStationId);
+  const departureStationId = useLatest(departureStationIdValue);
+  
+  const arrivalStationIdValue = useAppSelector(selectArrivalStationId);
+  const arrivalStationId = useLatest(arrivalStationIdValue);
+  
+  const allStationsValue = useAppSelector(selectAllStations);
+  const allStations = useLatest(allStationsValue);
+  
+  const buildings3DValue = useAppSelector(selectStations3D);
+  const buildings3D = useLatest(buildings3DValue);
+  
+  const routeDecodedValue = useAppSelector(selectRouteDecoded);
+  const routeDecoded = useLatest(routeDecodedValue);
 
   // Route tube references
   const routeTubeRef = useRef<THREE.Mesh | null>(null);
-  const tubeMaterialRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const tubeMaterialRef = useRef<THREE.MeshStandardMaterial | null>(null);
 
   // Store route data to handle "scene not ready" case
   const routeDataRef = useRef<Array<{ lat: number; lng: number }>>([]);
@@ -222,16 +250,19 @@ export function useThreeOverlay(
   const removePointerListenerRef = useRef<() => void>(() => {});
 
   // Optimization references
-  const dirtyRef = useRef(false);
-  const lastRedrawTimeRef = useRef(0);
+  const needsUpdateRef = useRef(true); // Start with true to ensure initial update
   const animationLoopActiveRef = useRef(false);
   const animateRoute = useRef<() => void>(() => {});
-  const MIN_REDRAW_INTERVAL = 16; // ~60fps max
+  const animationTimerRef = useRef<number | null>(null); // For animation heartbeat
+  
+  // Animation performance optimization
+  const lastFrameTimeRef = useRef<number>(0);
+  const targetFpsRef = useRef<number>(60); // Target 60fps for animations
 
   // Colors
-  const BUILDING_DEFAULT_COLOR = new THREE.Color(0x888888); // Darker gray for better contrast
+  const BUILDING_DEFAULT_COLOR = new THREE.Color(0x657382); // Darker gray for better contrast
   const BUILDING_SELECTED_COLOR = new THREE.Color(0xffffff); // Pure white for selected stations
-  const ROUTE_TUBE_COLOR = new THREE.Color(0xffffff);
+  const ROUTE_TUBE_COLOR = new THREE.Color(0x3E6AE1); // Blue color for route tubes
 
   // Clock ref for simple animation (used for "breathing" effect)
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
@@ -319,21 +350,16 @@ export function useThreeOverlay(
   }
 
   // ------------------------------------------------
-  // Helper functions for redraw optimization
+  // Helper function to flag scene updates
   // ------------------------------------------------
-  const markNeedsRedraw = useCallback(() => {
-    dirtyRef.current = true;
-  }, []);
-  
-  const requestRedrawIfNeeded = useCallback(() => {
-    if (!dirtyRef.current || !overlayRef.current) return;
-    
-    const now = performance.now();
-    if (now - lastRedrawTimeRef.current < MIN_REDRAW_INTERVAL) return;
-    
-    overlayRef.current.requestRedraw();
-    dirtyRef.current = false;
-    lastRedrawTimeRef.current = now;
+  // For most state changes, we just flag the scene as needing update and let
+  // WebGLOverlayView's natural render cycle handle it. However, for animations 
+  // that need to run continuously (even without user interaction), we use 
+  // direct requestRedraw() calls to maintain consistent frame rates.
+  // ------------------------------------------------
+  const markNeedsUpdate = useCallback(() => {
+    // Simply flag that state has changed - let WebGLOverlayView handle redraws
+    needsUpdateRef.current = true;
   }, []);
   
   // ------------------------------------------------
@@ -363,32 +389,40 @@ export function useThreeOverlay(
             modelCache.set(url, model);
             // Create a clone for the caller
             onLoad(model.clone());
-            markNeedsRedraw();
+            markNeedsUpdate();
           } catch (err) {
-            console.error(`[useThreeOverlay] Error processing loaded model ${url}:`, err);
+            logger.error(`[useThreeOverlay] Error processing loaded model ${url}:`, err);
             // Try to provide a fallback empty group if processing fails
             onLoad(new THREE.Group());
           }
         },
         undefined,
         (err) => {
-          console.error(`[useThreeOverlay] ${url} load error:`, err);
+          logger.error(`[useThreeOverlay] ${url} load error:`, err);
           // Provide an empty model on error to avoid breaking the UI
           onLoad(new THREE.Group());
         }
       );
     } catch (err) {
-      console.error(`[useThreeOverlay] Critical error in loadModel for ${url}:`, err);
+      logger.error(`[useThreeOverlay] Critical error in loadModel for ${url}:`, err);
       // Provide an empty model on critical error
       setTimeout(() => onLoad(new THREE.Group()), 0);
     }
-  }, [markNeedsRedraw]);
+  }, [markNeedsUpdate]);
 
   // ------------------------------------------------
   // Animation control functions
   // ------------------------------------------------
   const startRouteAnimation = useCallback(() => {
     if (animationLoopActiveRef.current) return;
+    
+    // Double check we have a valid curve before starting animation
+    if (!routeCurveRef.current) {
+      logger.warn("[useThreeOverlay] Attempted to start route animation without valid curve");
+      return;
+    }
+    
+    logger.debug("[useThreeOverlay] Starting route animation");
     
     animationLoopActiveRef.current = true;
     routeStartTimeRef.current = performance.now();
@@ -397,31 +431,77 @@ export function useThreeOverlay(
     const routeDurationMs = 12000;
     const CAR_FRONT = new THREE.Vector3(0, 1, 0);
     
-    // Create reusable animation function
-    animateRoute.current = () => {
+    // Create reusable animation function with FPS throttling
+    animateRoute.current = (timestamp: number = performance.now()) => {
       if (!animationLoopActiveRef.current) return;
       
-      const navCursor = navigationCursorRef.current;
-      const curve = routeCurveRef.current;
+      // FPS throttling for efficiency
+      const timeSinceLastFrame = timestamp - lastFrameTimeRef.current;
+      const targetFrameTime = 1000 / targetFpsRef.current;
       
-      if (navCursor && curve && navCursor.visible) {
-        const elapsed = performance.now() - (routeStartTimeRef.current || 0);
-        const t = (elapsed % routeDurationMs) / routeDurationMs;
+      // Only process animation at target framerate
+      if (timeSinceLastFrame >= targetFrameTime) {
+        lastFrameTimeRef.current = timestamp;
         
-        // Update position
-        curve.getPointAt(t, navCursor.position);
-        navCursor.position.z += 50; // Altitude offset
+        // Use cached refs
+        const navCursor = navigationCursorRef.current;
+        const curve = routeCurveRef.current;
+        const overlay = overlayRef.current;
         
-        // Update orientation
-        const tangent = new THREE.Vector3();
-        curve.getTangentAt(t, tangent);
-        navCursor.quaternion.setFromUnitVectors(
-          CAR_FRONT,
-          tangent.normalize()
-        );
-        
-        // Mark as needing redraw
-        markNeedsRedraw();
+        if (navCursor && curve && navCursor.visible && overlay) {
+          try {
+            // Inline routeStartTimeRef - no need for a ref
+            const elapsed = timestamp - (routeStartTimeRef.current || 0);
+            const t = (elapsed % routeDurationMs) / routeDurationMs;
+            
+            let didUpdatePosition = false;
+            
+            // Check if curve has getPointAt method before calling it
+            if (typeof curve.getPointAt === 'function') {
+              try {
+                // Create a temporary vector to hold the position
+                const curvePoint = new THREE.Vector3();
+                
+                // Check if the curve has any valid points
+                if (curve.points && curve.points.length > 0) {
+                  curve.getPointAt(t, curvePoint);
+                  
+                  // Safely update position
+                  navCursor.position.copy(curvePoint);
+                  navCursor.position.z += 1; // Altitude offset
+                  didUpdatePosition = true;
+                  
+                  // Update orientation only if getTangentAt is available
+                  if (typeof curve.getTangentAt === 'function') {
+                    const tangent = new THREE.Vector3();
+                    curve.getTangentAt(t, tangent);
+                    if (tangent.length() > 0) { // Make sure tangent is valid
+                      navCursor.quaternion.setFromUnitVectors(
+                        CAR_FRONT,
+                        tangent.normalize()
+                      );
+                    }
+                  }
+                }
+              } catch (err) {
+                // If any error occurs during curve animation, log it and stop the animation
+                logger.error("[useThreeOverlay] Error in curve animation:", err);
+                stopRouteAnimation();
+              }
+            }
+            
+            // For animations, we need to force a redraw to ensure continuous motion
+            if (didUpdatePosition) {
+              // Set the update flag for consistency, though redundant with requestRedraw
+              needsUpdateRef.current = true;
+              // Request redraw directly for animations to maintain consistent frame rate
+              overlay.requestRedraw();
+            }
+          } catch (err) {
+            // Log the error but don't crash the animation
+            console.error("[useThreeOverlay] Error in animation:", err);
+          }
+        }
       }
       
       // Request next frame only if animation is still active
@@ -432,7 +512,7 @@ export function useThreeOverlay(
     
     // Start the animation loop
     requestAnimationFrame(animateRoute.current);
-  }, [markNeedsRedraw]);
+  }, [markNeedsUpdate]);
   
   const stopRouteAnimation = useCallback(() => {
     animationLoopActiveRef.current = false;
@@ -449,8 +529,10 @@ export function useThreeOverlay(
       }
   
       if (!tubeMaterialRef.current) {
-        tubeMaterialRef.current = new THREE.MeshBasicMaterial({
+        tubeMaterialRef.current = new THREE.MeshStandardMaterial({
           color: ROUTE_TUBE_COLOR,
+          emissive: ROUTE_TUBE_COLOR,
+          emissiveIntensity: 1.5,
           transparent: true,
           opacity: 0.9,
           side: THREE.FrontSide,
@@ -460,15 +542,40 @@ export function useThreeOverlay(
       // Convert lat/lng to Vector3
       const anchor = anchorRef.current;
       const points = path.map(({ lat, lng }) => {
-        const { x, y, z } = latLngAltToVector3({ lat, lng, altitude: 5 }, anchor);
+        const { x, y, z } = latLngAltToVector3({ lat, lng, altitude: 0 }, anchor);
         return new THREE.Vector3(x, y, z);
       });
   
       // Only create curve if we have valid points
       if (points.length >= 2) {
-        // Store the route as a CatmullRomCurve3 for our animation
-        routeCurveRef.current = new CatmullRomCurve3(points, false, "catmullrom", 0.2);
-        routeStartTimeRef.current = null; // reset start time so animation restarts
+        try {
+          // Store the route as a CatmullRomCurve3 for our animation
+          routeCurveRef.current = new CatmullRomCurve3(points, false, "catmullrom", 0.2);
+          
+          // Verify the curve has the required methods for animation
+          if (!routeCurveRef.current.getPointAt || !routeCurveRef.current.getTangentAt) {
+            logger.warn("[useThreeOverlay] Created curve is missing required methods");
+            // Create a simple linear curve as fallback
+            routeCurveRef.current = {
+              getPointAt: (t: number, target = new THREE.Vector3()) => {
+                const i = Math.floor(t * (points.length - 1));
+                const j = Math.min(i + 1, points.length - 1);
+                const alpha = t * (points.length - 1) - i;
+                return target.copy(points[i]).lerp(points[j], alpha);
+              },
+              getTangentAt: (t: number, target = new THREE.Vector3()) => {
+                const i = Math.floor(t * (points.length - 1));
+                const j = Math.min(i + 1, points.length - 1);
+                return target.copy(points[j]).sub(points[i]).normalize();
+              }
+            } as CatmullRomCurve3;
+          }
+          
+          routeStartTimeRef.current = null; // reset start time so animation restarts
+        } catch (error) {
+          logger.error("[useThreeOverlay] Error creating CatmullRomCurve3:", error);
+          routeCurveRef.current = null;
+        }
     
         // Build a TubeGeometry for the route
         class CustomCurve extends THREE.Curve<THREE.Vector3> {
@@ -516,32 +623,79 @@ export function useThreeOverlay(
         }
       }
   
-      // Mark for redraw instead of immediate redraw
-      markNeedsRedraw();
+      // Flag that state has changed - let WebGLOverlayView handle redraw timing
+      markNeedsUpdate();
     } catch (error) {
-      console.warn("Error refreshing route tube:", error);
+      logger.warn("Error refreshing route tube:", error);
     }
-  }, [ROUTE_TUBE_COLOR, markNeedsRedraw]);
+  }, [ROUTE_TUBE_COLOR, markNeedsUpdate]);
 
   // Watch for routeDecoded changes => store path, refresh tube
   useEffect(() => {
-    if (departureStationId && arrivalStationId && routeDecoded?.length >= 2) {
-      routeDataRef.current = routeDecoded;
-    } else {
+    logger.debug(`[useThreeOverlay] Route data changed: depId=${departureStationId.current}, arrId=${arrivalStationId.current}, routeLen=${routeDecoded.current?.length || 0}, step=${bookingStep.current}`);
+    
+    // Use .current references for accessing Redux state
+    if (!arrivalStationId.current || !departureStationId.current || !routeDecoded.current || routeDecoded.current.length < 2) {
+      logger.debug(`[useThreeOverlay] Clearing route - missing required data`);
+      
+      // Clear the route data
       routeDataRef.current = [];
+      
+      // Clear route tube if it exists
+      if (routeTubeRef.current && routeTubeRef.current.visible) {
+        routeTubeRef.current.visible = false;
+        
+        // Stop any ongoing animation
+        stopRouteAnimation();
+      }
+      
+      // Reset the route curve
+      routeCurveRef.current = null;
+      
+      // Flag that state has changed
+      markNeedsUpdate();
+      return;
     }
-    refreshRouteTube();
-  }, [routeDecoded, departureStationId, arrivalStationId, refreshRouteTube]);
+    
+    // If we have valid departure and arrival stations with route data, always update
+    // Use .current references for accessing Redux state
+    if (departureStationId.current && arrivalStationId.current && routeDecoded.current.length >= 2) {
+      logger.debug(`[useThreeOverlay] Setting route data with ${routeDecoded.current.length} points`);
+      
+      // Set route data from Redux using .current
+      routeDataRef.current = [...routeDecoded.current];
+      
+      // Refresh the tube with updated route data
+      refreshRouteTube();
+      markNeedsUpdate();
+      
+      // If we're already in step 4, make sure the animation starts
+      if (bookingStep.current === 4) {
+        logger.debug(`[useThreeOverlay] In step 4, ensuring animation is updated`);
+        // Ensure curve visibility in next frame
+        setTimeout(() => {
+          if (routeTubeRef.current) {
+            routeTubeRef.current.visible = true;
+          }
+          markNeedsUpdate();
+        }, 0);
+      }
+    }
+  }, [routeDecodedValue, departureStationIdValue, arrivalStationIdValue, bookingStepValue, refreshRouteTube, markNeedsUpdate, stopRouteAnimation]);
 
   // ------------------------------------------------
-  // 3. Station selection callback - now uses stationSelectionManager
+  // 3. Station selection callback with camera animations - using CameraAnimationManager
   // ------------------------------------------------
   const handleStationSelected = useCallback(
     (stationId: number) => {
-      // First use our centralized selection manager
-      import("@/lib/stationSelectionManager").then(module => {
-        const stationSelectionManager = module.default;
-        stationSelectionManager.selectStation(stationId, false);
+      // Use CameraAnimationManager instead of directly importing useCameraAnimation
+      import("@/lib/cameraAnimationManager").then((managerModule) => {
+        const cameraAnimationManager = managerModule.default;
+        // Let the stationSelectionManager handle the animation through CameraAnimationManager
+        import("@/lib/stationSelectionManager").then((stationManagerModule) => {
+          const stationSelectionManager = stationManagerModule.default;
+          stationSelectionManager.selectStation(stationId, false);
+        });
       });
       
       // Also notify parent through callback for backward compatibility
@@ -549,15 +703,18 @@ export function useThreeOverlay(
         options.onStationSelected(stationId);
       }
       
-      // Mark as dirty since selection state will change
-      markNeedsRedraw();
+      // Flag that selection state has changed
+      markNeedsUpdate();
     },
-    [options, markNeedsRedraw]
+    [options, markNeedsUpdate]
   );
 
   // ------------------------------------------------
   // 4. Main useEffect to init & teardown
   // ------------------------------------------------
+  // Track map event listeners
+  const mapListenersRef = useRef<google.maps.MapsEventListener[]>([]);
+  
   useEffect(() => {
     // If the map changes, reset initialization state
     if (overlayRef.current) {
@@ -567,12 +724,16 @@ export function useThreeOverlay(
       // Clear model references so they're reloaded only when needed
       cursorRef.current = null;
       navigationCursorRef.current = null;
+      
+      // Clean up any existing map listeners
+      mapListenersRef.current.forEach(listener => listener.remove());
+      mapListenersRef.current = [];
     }
     
     // Exit if no map available or already initialized
     if (!googleMap || isInitializedRef.current) return;
     
-    console.log("[useThreeOverlay] Initializing WebGLOverlayView");
+    logger.debug("[useThreeOverlay] Initializing WebGLOverlayView");
     isInitializedRef.current = true;
 
     const overlay = new google.maps.WebGLOverlayView();
@@ -596,7 +757,7 @@ export function useThreeOverlay(
       }
 
       // 1) Create a simple white circle cursor - CREATED ONCE in onAdd
-      console.log("[useThreeOverlay] Creating simple white circle cursor");
+      logger.debug("[useThreeOverlay] Creating simple white circle cursor");
       
       // Create a group to hold the cursor
       const cursorGroup = new THREE.Group();
@@ -632,10 +793,10 @@ export function useThreeOverlay(
       scene.add(cursorGroup);
       cursorRef.current = cursorGroup;
       
-      console.log("[useThreeOverlay] Simple circle cursor added to scene");
+      logger.debug("[useThreeOverlay] Simple circle cursor added to scene");
       
       // Create extruded buildings
-      const validBuildings = buildings3D.filter((b: any) => {
+      const validBuildings = buildings3D.current.filter((b: any) => {
         const coords = b.geometry.coordinates[0];
         if (!coords || coords.length < 3) return false;
         const [lng, lat] = coords[0];
@@ -661,7 +822,7 @@ export function useThreeOverlay(
           scene.add(group);
           buildingGroupsRef.current.push(group);
         } catch (err) {
-          console.error("[useThreeOverlay] building creation error:", err);
+          logger.error("[useThreeOverlay] building creation error:", err);
         }
       });
 
@@ -723,7 +884,7 @@ export function useThreeOverlay(
           // Store the model URL in userData for easier reference during cleanup
           navCursorGroup.userData.modelUrl = '/map/cursor_navigation.glb';
 
-          markNeedsRedraw();
+          markNeedsUpdate();
         });
       }
 
@@ -742,24 +903,32 @@ export function useThreeOverlay(
 
       // Only create one listener per canvas instance - track with a WeakMap
       // This listener ref is tied directly to this specific instance of the overlay
-      const listenerRef = new WeakMap<HTMLCanvasElement, (ev: PointerEvent) => void>();
+      const listenerRef = new WeakMap<
+        HTMLCanvasElement,
+        { pointerDown: (ev: PointerEvent) => void }
+      >();
       
       // Check if we already attached a listener to this canvas
       if (!listenerRef.has(canvas)) {
-        // Create a clean new listener
+        // Create a clean new listener for pointer down - we only need click/tap interaction
+        // We don't need to track hover/pointermove events at all
         const handlePointerDown = (ev: PointerEvent) => {
           pickWithRay(ev);
         };
         
-        // Add new listener 
+        // Add only pointerdown listener for station selection
         canvas.addEventListener("pointerdown", handlePointerDown);
-        listenerRef.set(canvas, handlePointerDown);
         
-        // Update removal function to clean up this specific listener
+        // Store the handler for cleanup
+        listenerRef.set(canvas, {
+          pointerDown: handlePointerDown
+        });
+        
+        // Update removal function to clean up the listener
         removePointerListenerRef.current = () => {
-          const listener = listenerRef.get(canvas);
-          if (listener) {
-            canvas.removeEventListener("pointerdown", listener);
+          const handlers = listenerRef.get(canvas);
+          if (handlers) {
+            canvas.removeEventListener("pointerdown", handlers.pointerDown);
             listenerRef.delete(canvas);
           }
         };
@@ -807,7 +976,7 @@ export function useThreeOverlay(
         if (stationId) {
           handleStationSelected(stationId);
         } else {
-          console.log("[useThreeOverlay] Building has no station mapping");
+          logger.debug("[useThreeOverlay] Building has no station mapping");
         }
       }
     };
@@ -827,81 +996,89 @@ export function useThreeOverlay(
       });
       camera.projectionMatrix.fromArray(camMatArr);
 
-      // 1) Color buildings (departure/arrival)
-      buildingGroupsRef.current.forEach((group) => {
-        const c = group.userData.centerPos as THREE.Vector3;
-        group.position.set(c.x, c.y, 0);
+      // Only perform expensive state updates if something has changed
+      if (needsUpdateRef.current) {
+        // Reset the flag at the beginning of processing
+        needsUpdateRef.current = false;
 
-        const stationId = group.userData.stationId;
-        const mesh = group.children[0] as THREE.Mesh;
-        const mat = mesh.material as THREE.MeshBasicMaterial;
+        // 1) Color buildings (departure/arrival) - using .current references
+        buildingGroupsRef.current.forEach((group) => {
+          const c = group.userData.centerPos as THREE.Vector3;
+          group.position.set(c.x, c.y, 0);
 
-        if (stationId === departureStationId || stationId === arrivalStationId) {
-          mat.color.copy(BUILDING_SELECTED_COLOR);
-        } else {
-          mat.color.copy(BUILDING_DEFAULT_COLOR);
-        }
-      });
+          const stationId = group.userData.stationId;
+          const mesh = group.children[0] as THREE.Mesh;
+          const mat = mesh.material as THREE.MeshBasicMaterial;
 
-      // 2) Update user location cursor - simple positioning without animation
-      if (cursorRef.current) {
-        const hasValidLocation =
-          userLocation &&
-          typeof userLocation.lat === "number" &&
-          typeof userLocation.lng === "number";
-        
-        // Position cursor only when we have a valid location
-        if (hasValidLocation) {
-          // Position update - only if location changed or not initialized
-          if (!cursorRef.current.userData.initialPositionSet || 
-              cursorRef.current.userData.lastLat !== userLocation.lat ||
-              cursorRef.current.userData.lastLng !== userLocation.lng) {
-            
-            // Update position
-            const { lat, lng } = userLocation;
-            const { x, y, z } = latLngAltToVector3(
-              { lat, lng, altitude: 10 },
-              anchor
-            );
-            cursorRef.current.position.set(x, y, z);
-            
-            // Store location for change detection
-            cursorRef.current.userData.lastLat = userLocation.lat;
-            cursorRef.current.userData.lastLng = userLocation.lng;
-            cursorRef.current.userData.initialPositionSet = true;
-            
-            // Mark for redraw
-            markNeedsRedraw();
+          // Use .current for accessing Redux state
+          if (stationId === departureStationId.current || stationId === arrivalStationId.current) {
+            mat.color.copy(BUILDING_SELECTED_COLOR);
+          } else {
+            mat.color.copy(BUILDING_DEFAULT_COLOR);
           }
+        });
+
+        // 2) Update user location cursor - using .current references
+        if (cursorRef.current) {
+          const hasValidLocation =
+            userLocation.current != null &&
+            typeof userLocation.current.lat === "number" &&
+            typeof userLocation.current.lng === "number";
           
-          // Only update visibility when needed
-          if (!cursorRef.current.visible) {
-            cursorRef.current.visible = true;
-            markNeedsRedraw();
+          // Position cursor only when we have a valid location
+          if (hasValidLocation && userLocation.current) { // Extra null check for TypeScript
+            // Position update - only if location changed or not initialized
+            if (!cursorRef.current.userData.initialPositionSet || 
+                cursorRef.current.userData.lastLat !== userLocation.current.lat ||
+                cursorRef.current.userData.lastLng !== userLocation.current.lng) {
+              
+              // Update position
+              const { lat, lng } = userLocation.current;
+              const { x, y, z } = latLngAltToVector3(
+                { lat, lng, altitude: 1 },
+                anchor
+              );
+              cursorRef.current.position.set(x, y, z);
+              
+              // Store location for change detection
+              cursorRef.current.userData.lastLat = userLocation.current.lat;
+              cursorRef.current.userData.lastLng = userLocation.current.lng;
+              cursorRef.current.userData.initialPositionSet = true;
+            }
+            
+            // Only update visibility when needed
+            if (!cursorRef.current.visible) {
+              cursorRef.current.visible = true;
+            }
+          } else if (cursorRef.current.visible) {
+            // Hide cursor if no valid location
+            cursorRef.current.visible = false;
           }
-        } else if (cursorRef.current.visible) {
-          // Hide cursor if no valid location
-          cursorRef.current.visible = false;
-          markNeedsRedraw();
         }
       }
 
-      // 3) Step 3 or 4: controlling navigationCursorRef - with optimized visibility handling
+      // Updates that should run every frame regardless of needsUpdate flag
+      
+      // 3) Step 3 or 4: controlling navigationCursorRef - using .current references
       if (navigationCursorRef.current) {
-        // Determine visibility state first but don't apply yet
+        // Determine visibility state first but don't apply yet - using .current references
+        const hasValidCurve = !!(routeCurveRef.current && 
+                                typeof routeCurveRef.current.getPointAt === 'function' && 
+                                typeof routeCurveRef.current.getTangentAt === 'function');
+                                
         const shouldShowNavigationCursor = !!(
-          (bookingStep === 3 && departureStationId != null) || 
-          (bookingStep === 4 && routeCurveRef.current)
+          (bookingStep.current === 3 && departureStationId.current != null) || 
+          (bookingStep.current === 4 && hasValidCurve)
         );
         
         // If it's booking step 3 with a departure station, update position
-        if (bookingStep === 3 && departureStationId != null) {
+        if (bookingStep.current === 3 && departureStationId.current != null) {
           // Only process position updates when cursor should be visible
           if (shouldShowNavigationCursor) {
-            // Find station and related building
-            const depStation = allStations.find((s) => s.id === departureStationId);
+            // Find station and related building - using allStations.current
+            const depStation = allStations.current.find((s) => s.id === departureStationId.current);
             const buildingGroup = depStation ? 
-              buildingGroupsRef.current.find((g) => g.userData.stationId === departureStationId) : null;
+              buildingGroupsRef.current.find((g) => g.userData.stationId === departureStationId.current) : null;
               
             if (buildingGroup) {
               // Calculate position relative to the building
@@ -909,9 +1086,11 @@ export function useThreeOverlay(
               const boundingRadius = buildingGroup.userData.boundingRadius || 0;
   
               let angle = 0;
-              if (userLocation) {
+              if (userLocation.current != null && 
+                  typeof userLocation.current.lat === "number" && 
+                  typeof userLocation.current.lng === "number") {
                 const userVec = latLngAltToVector3(
-                  { lat: userLocation.lat, lng: userLocation.lng, altitude: 0 },
+                  { lat: userLocation.current.lat, lng: userLocation.current.lng, altitude: 0 },
                   anchor
                 );
                 const dx = userVec.x - boundingCenter.x;
@@ -925,8 +1104,7 @@ export function useThreeOverlay(
               const offsetY = boundingCenter.y + offsetDist * Math.sin(angle);
   
               // Update position
-              navigationCursorRef.current.position.set(offsetX, offsetY, 50); // 50 for better visibility
-              markNeedsRedraw();
+              navigationCursorRef.current.position.set(offsetX, offsetY, 0); 
   
               // Update material properties - only when visible to save performance
               const elapsed = clockRef.current.getElapsedTime();
@@ -947,7 +1125,7 @@ export function useThreeOverlay(
               }
             }
           }
-        } else if (bookingStep === 4 && routeCurveRef.current) {
+        } else if (bookingStep.current === 4 && hasValidCurve) {
           // Use the optimized animation manager instead of creating new animation loops
           if (routeStartTimeRef.current === null && shouldShowNavigationCursor) {
             startRouteAnimation();
@@ -957,10 +1135,9 @@ export function useThreeOverlay(
         // Update visibility only when it changes
         if (navigationCursorRef.current.visible !== shouldShowNavigationCursor) {
           navigationCursorRef.current.visible = shouldShowNavigationCursor;
-          markNeedsRedraw();
           
           // Start/stop animation based on visibility
-          if (shouldShowNavigationCursor && bookingStep === 4) {
+          if (shouldShowNavigationCursor && bookingStep.current === 4 && hasValidCurve) {
             startRouteAnimation();
           } else if (!shouldShowNavigationCursor && animationLoopActiveRef.current) {
             stopRouteAnimation();
@@ -970,15 +1147,13 @@ export function useThreeOverlay(
 
       // 4) Keep route tube slightly above ground
       if (routeTubeRef.current) {
-        routeTubeRef.current.position.z = 10;
+        routeTubeRef.current.position.z = 1;
       }
-
-      // Schedule the next redraw only if needed
-      requestAnimationFrame(requestRedrawIfNeeded);
       
-      // Render
+      // Render - this happens every frame
       renderer.setViewport(0, 0, gl.canvas.width, gl.canvas.height);
       renderer.render(scene, camera);
+      
       renderer.resetState();
     };
 
@@ -1074,9 +1249,8 @@ export function useThreeOverlay(
         navigationCursorRef.current = null;
       }
 
-      // Reset animation and dirty flag state
+      // Reset animation state
       animationLoopActiveRef.current = false;
-      dirtyRef.current = false;
       routeStartTimeRef.current = null;
       
       // Properly clean up renderer resources but be careful not to break the WebGL context
@@ -1130,6 +1304,7 @@ export function useThreeOverlay(
         sceneRef.current = null;
       }
       
+      
       // Clean up all references
       cameraRef.current = null;
       raycasterRef.current = null;
@@ -1155,15 +1330,73 @@ export function useThreeOverlay(
     bookingStep,
   ]);
 
-  // Mark for redraw when key state changes
+  // No need for idle listener - WebGLOverlayView handles map changes automatically
   useEffect(() => {
-    markNeedsRedraw();
-  }, [departureStationId, arrivalStationId, markNeedsRedraw]);
+    if (!googleMap) return;
+    
+    // Clean up any existing listeners
+    return () => {
+      mapListenersRef.current.forEach(l => l.remove());
+      mapListenersRef.current = [];
+    };
+  }, [googleMap]);
+
+  // Flag updates when key state changes
+  useEffect(() => {
+    markNeedsUpdate();
+  }, [departureStationIdValue, arrivalStationIdValue, markNeedsUpdate]);
+
+  // When transitions to step 4, ensure route is visible
+  useEffect(() => {
+    // When transitioning specifically to step 4, ensure route is visible
+    if (bookingStep.current === 4) {
+      logger.debug(`[useThreeOverlay] Transition to step 4 detected`);
+      
+      // If we already have route data, make sure it's visible
+      if (routeDataRef.current.length >= 2) {
+        logger.debug(`[useThreeOverlay] Ensuring route is visible on step 4 entry`);
+        
+        // Force refresh the route tube and ensure visibility
+        if (routeTubeRef.current) {
+          routeTubeRef.current.visible = true;
+        } else {
+          // If tube doesn't exist yet, force create it
+          refreshRouteTube();
+        }
+        
+        // Flag that state has changed
+        markNeedsUpdate();
+      }
+    }
+  }, [bookingStepValue, refreshRouteTube, markNeedsUpdate]);
+
+  // Handle arrival station clearing
+  useEffect(() => {
+    // If arrival station was cleared (changed to null)
+    if (arrivalStationId.current === null) {
+      // Clear the route data
+      routeDataRef.current = [];
+      
+      // Clear route tube if it exists
+      if (routeTubeRef.current) {
+        routeTubeRef.current.visible = false;
+      }
+      
+      // Reset the route curve to stop animations
+      routeCurveRef.current = null;
+      
+      // Stop any ongoing animation
+      stopRouteAnimation();
+      
+      // Flag that state has changed
+      markNeedsUpdate();
+    }
+  }, [arrivalStationIdValue, markNeedsUpdate, stopRouteAnimation]);
 
   // Track whether animation should be running for route
   useEffect(() => {
     // Determine if animation should run
-    const shouldAnimateRoute = bookingStep === 4 && !!routeCurveRef.current;
+    const shouldAnimateRoute = bookingStep.current === 4 && !!routeCurveRef.current;
     
     // Start or stop the animation based on visibility
     if (shouldAnimateRoute) {
@@ -1175,7 +1408,7 @@ export function useThreeOverlay(
     return () => {
       stopRouteAnimation();
     };
-  }, [bookingStep, startRouteAnimation, stopRouteAnimation]);
+  }, [bookingStepValue, startRouteAnimation, stopRouteAnimation]);
 
   // Force cursor updates when location is updated from LocateMe button
   useEffect(() => {
@@ -1185,7 +1418,7 @@ export function useThreeOverlay(
       
       // Only update if the source is a locate-me click
       if (customEvent.detail.source === "locate-me-button") {
-        console.log("[useThreeOverlay] Handling locate-me button event");
+        logger.debug("[useThreeOverlay] Handling locate-me button event");
         
         // Reset cursor data to force a fresh position update
         if (cursorRef.current) {
@@ -1198,7 +1431,7 @@ export function useThreeOverlay(
           const location = customEvent.detail.location;
           if (location) {
             const { x, y, z } = latLngAltToVector3(
-              { lat: location.lat, lng: location.lng, altitude: 10 },
+              { lat: location.lat, lng: location.lng, altitude: 1 },
               anchorRef.current
             );
             
@@ -1206,12 +1439,12 @@ export function useThreeOverlay(
             cursorRef.current.position.set(x, y, z);
             cursorRef.current.visible = true;
             
-            console.log("[useThreeOverlay] Cursor positioned at:", location);
+            logger.debug("[useThreeOverlay] Cursor positioned at:", location);
           }
         }
         
-        // Ensure scene redraws
-        markNeedsRedraw();
+        // Flag that state has changed
+        markNeedsUpdate();
       }
     };
     
@@ -1222,12 +1455,12 @@ export function useThreeOverlay(
     return () => {
       window.removeEventListener("user-location-updated", handleLocationUpdate);
     };
-  }, [markNeedsRedraw]);
+  }, [markNeedsUpdate]);
   
-  // Mark scene as dirty when key data changes
+  // Flag scene for update when key data changes
   useEffect(() => {
-    markNeedsRedraw();
-  }, [userLocation, bookingStep, departureStationId, arrivalStationId, markNeedsRedraw]);
+    markNeedsUpdate();
+  }, [userLocationValue, bookingStepValue, departureStationIdValue, arrivalStationIdValue, markNeedsUpdate]);
 
   return { overlayRef };
 }

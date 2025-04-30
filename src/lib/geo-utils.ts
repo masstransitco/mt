@@ -80,6 +80,68 @@ function destination(
 }
 
 /**
+ * Samples a route to reduce the number of points to a reasonable amount
+ * while ensuring key points (start, end, significant turns) are preserved.
+ * 
+ * @param points Array of lat/lng points representing a route
+ * @returns Sampled array with fewer points for more efficient rendering/animation
+ */
+export function sampleRoute(points: Array<google.maps.LatLngLiteral>): Array<google.maps.LatLngLiteral> {
+  if (points.length <= 20) return points;
+  
+  return [
+    points[0], // Always include start
+    ...points.filter((_, i) => i % Math.ceil(points.length / 10) === 0), // Sample middle points
+    points[points.length - 1] // Always include end
+  ];
+}
+
+/**
+ * Calculates a camera position for viewing a route
+ * @param points Array of lat/lng points representing a route
+ * @returns Object with center point and suggested zoom level
+ */
+export function calculateRouteViewPosition(points: Array<google.maps.LatLngLiteral>): {
+  center: google.maps.LatLngLiteral;
+  zoom: number;
+} {
+  if (points.length < 1) {
+    return { center: { lat: 0, lng: 0 }, zoom: 12 };
+  }
+  
+  // For single point, just center on it
+  if (points.length === 1) {
+    return { center: points[0], zoom: 15 };
+  }
+  
+  // For multiple points, calculate bounds
+  const bounds = new google.maps.LatLngBounds();
+  points.forEach(pt => bounds.extend(pt));
+  
+  // Calculate approximate center manually
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  
+  const center = {
+    lat: (ne.lat() + sw.lat()) / 2,
+    lng: (ne.lng() + sw.lng()) / 2
+  };
+  
+  // Approximate zoom calculation based on distance
+  const latDistance = Math.abs(ne.lat() - sw.lat());
+  const lngDistance = Math.abs(ne.lng() - sw.lng());
+  const maxDistance = Math.max(latDistance, lngDistance * Math.cos(center.lat * Math.PI / 180));
+  
+  // Approximate zoom based on distance
+  let estimatedZoom = Math.log2(360 / maxDistance);
+  
+  // Adjust zoom for better viewing - typically 1 level out
+  const adjustedZoom = Math.max(Math.min(estimatedZoom - 1, 18), 10);
+  
+  return { center, zoom: adjustedZoom };
+}
+
+/**
  * Converts a point given in lat/lng or lat/lng/altitude-format to world-space coordinates.
  * @param point
  * @param reference

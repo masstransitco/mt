@@ -5,6 +5,7 @@ import {
   removeStation,
   addVirtualStation,
 } from "@/store/stationsSlice";
+import { logger } from "@/lib/logger";
 
 import {
   selectBookingStep,
@@ -23,12 +24,13 @@ import {
 
 import { clearDispatchRoute } from "@/store/dispatchSlice";
 import { setScannedCar, fetchCarByRegistration } from "@/store/carSlice";
-import { clearWalkingRoute } from "@/store/userSlice";
-import { setSheetMode, setSheetMinimized, setListSelectedStation } from "@/store/uiSlice";
+import { clearWalkingRoute, setListSelectedStation } from "@/store/userSlice";
+import { setSheetMode, setSheetMinimized } from "@/store/uiSlice";
 import { toast } from "react-hot-toast";
 import { createVirtualStationFromCar } from "./stationUtils";
 import type { Car } from "@/types/cars";
 import type { SheetMode } from "@/types/map";
+import cameraAnimationManager from "./cameraAnimationManager";
 
 export type SelectionMode = "departure" | "arrival";
 
@@ -70,10 +72,15 @@ class StationSelectionManager {
 
   /**
    * Select a station (either departure or arrival based on current step)
+   * 
+   * IMPORTANT: For camera animations to work correctly, cameraControls must be provided.
+   * The preferred approach is to use the global instance from useCameraAnimation.getGlobalCameraControls()
+   * 
    * @param stationId The station ID to select
    * @param viaScan Whether this selection is via QR scan (default: false)
+   * @param cameraControls Camera controls instance from useCameraAnimation hook
    */
-  public selectStation(stationId: number, viaScan = false): void {
+  public selectStation(stationId: number, viaScan = false, cameraControls?: any): void {
     // Import batch from react-redux to batch multiple updates together
     // This is important to prevent multiple re-renders
     const { batch } = require('react-redux');
@@ -89,17 +96,17 @@ class StationSelectionManager {
     const selectedStation = stations.find(s => s.id === stationId);
     const isSelectedStationVirtual = selectedStation?.properties?.isVirtualCarLocation === true;
     
-    console.log(`[stationSelectionManager] Selecting station ${stationId}, isVirtual: ${isSelectedStationVirtual}, step: ${step}`);
+    logger.info(`[stationSelectionManager] Selecting station ${stationId}, isVirtual: ${isSelectedStationVirtual}, step: ${step}`);
 
     // OPTIMIZATION: Batch all Redux updates to reduce re-renders
     batch(() => {
       // Always clear any active walking route when selecting a station
       store.dispatch(clearWalkingRoute());
-      console.log('[stationSelectionManager] Cleared walking route upon station selection');
+      logger.debug('[stationSelectionManager] Cleared walking route upon station selection');
 
       // If the selected station is a virtual car station, always mark it as the QR station
       if (isSelectedStationVirtual) {
-        console.log(`[stationSelectionManager] Setting QR station data for ${stationId}`);
+        logger.debug(`[stationSelectionManager] Setting QR station data for ${stationId}`);
         store.dispatch(setQrStationData({
           isQrScanStation: true,
           qrVirtualStationId: stationId
@@ -109,7 +116,7 @@ class StationSelectionManager {
       // If we have both a current QR station AND a new QR station being selected, 
       // remove the old one if they're different
       if (isQrScanStation && virtualStationId && isSelectedStationVirtual && stationId !== virtualStationId) {
-        console.log(`[stationSelectionManager] Replacing old QR station ${virtualStationId} with new one ${stationId}`);
+        logger.debug(`[stationSelectionManager] Replacing old QR station ${virtualStationId} with new one ${stationId}`);
         // Only clear departure if we're in step 1-2
         if (step <= 2) {
           store.dispatch(clearDepartureStation());
@@ -127,14 +134,14 @@ class StationSelectionManager {
       // In steps 3-4, we need to keep the departure station intact
       if (!isSelectedStationVirtual && isQrScanStation && virtualStationId) {
         if (step <= 2) {
-          console.log(`[stationSelectionManager] Step ${step}: Regular station selected, clearing QR station ${virtualStationId}`);
+          logger.debug(`[stationSelectionManager] Step ${step}: Regular station selected, clearing QR station ${virtualStationId}`);
           store.dispatch(clearDepartureStation());
           store.dispatch(removeStation(virtualStationId));
           store.dispatch(clearQrStationData());
           store.dispatch(setScannedCar(null));
           this.processedCarIdRef = null;
         } else {
-          console.log(`[stationSelectionManager] Step ${step}: Keeping QR departure station ${virtualStationId}`);
+          logger.debug(`[stationSelectionManager] Step ${step}: Keeping QR departure station ${virtualStationId}`);
           // In steps 3-4, we want to KEEP the QR station as departure
           // Just make sure state is consistent
           if (departureStationId === virtualStationId) {
@@ -161,13 +168,51 @@ class StationSelectionManager {
         store.dispatch(selectArrivalStation(stationId));
       }
 
-      // Update list selected station in Redux
-      store.dispatch(setListSelectedStation(stationId));
+      // Simply clear the list selected station when any station selection occurs
+      // This ensures the NEAREST marker doesn't remain visible when a station is selected
+      store.dispatch(setListSelectedStation(null));
       
       // Update UI state in Redux
       store.dispatch(setSheetMode("detail"));
       store.dispatch(setSheetMinimized(false));
     });
+    
+    // Get coordinates before animation to prevent Redux access during animation
+    const selectedStationCoords = selectedStation?.geometry.coordinates;
+    
+    if (!selectedStationCoords) {
+      logger.warn(`[stationSelectionManager] Cannot animate to station ${stationId} - coordinates not found`);
+      return;
+    }
+    
+    // Trigger camera animation based on the booking step
+    if (step <= 2) {
+      // For steps 1-2, we're selecting a departure station
+      // Using direct coordinates instead of station ID for better performance
+      cameraAnimationManager.animateToStationCoordinates(
+        selectedStationCoords,
+        stationId,
+        {
+          zoom: 16,
+          tilt: 45,
+          duration: 800
+        },
+        cameraControls
+      );
+    } else {
+      // For steps 3-4, we're selecting an arrival station
+      // Using direct coordinates instead of station ID for better performance
+      cameraAnimationManager.animateToStationCoordinates(
+        selectedStationCoords,
+        stationId,
+        {
+          zoom: 16,
+          tilt: 45,
+          duration: 800
+        },
+        cameraControls
+      );
+    }
     
     // Show toast notifications outside the batch to avoid delaying state updates
     if (step === 1) {
@@ -185,8 +230,10 @@ class StationSelectionManager {
 
   /**
    * Confirm station selection but don't advance booking step anymore
+   * 
+   * @param cameraControls Optional camera controls from useCameraAnimation hook
    */
-  public confirmStationSelection(): void {
+  public confirmStationSelection(cameraControls?: any): void {
     const { batch } = require('react-redux');
     
     const state = store.getState();
@@ -195,15 +242,15 @@ class StationSelectionManager {
     const virtualStationId = state.booking.qrVirtualStationId;
     const departureStationId = state.booking.departureStationId;
     
-    console.log(`[stationSelectionManager] Confirming selection at step ${step}`);
-    console.log(`[stationSelectionManager] isQrScanStation=${isQrScanStation}, virtualStationId=${virtualStationId}`);
+    logger.debug(`[stationSelectionManager] Confirming selection at step ${step}`);
+    logger.debug(`[stationSelectionManager] isQrScanStation=${isQrScanStation}, virtualStationId=${virtualStationId}`);
 
     batch(() => {
       // For step 2, just show date picker without advancing to step 3
       if (step === 2) {
         // Make sure QR station data is preserved
         if (isQrScanStation && virtualStationId && departureStationId === virtualStationId) {
-          console.log(`[stationSelectionManager] Preserving QR station data for ${virtualStationId}`);
+          logger.debug(`[stationSelectionManager] Preserving QR station data for ${virtualStationId}`);
           // Re-set the QR station data to ensure it's not lost
           store.dispatch(setQrStationData({
             isQrScanStation: true,
@@ -219,22 +266,61 @@ class StationSelectionManager {
         toast.success("Please select date and time");
       }
     });
+    
+    // After confirming, do a small camera animation to emphasize the selected station
+    if (departureStationId && step === 2) {
+      // Get all stations from state
+      const stations = selectStationsWithDistance(state);
+      
+      // Find the departure station
+      const departureStation = stations.find(s => s.id === departureStationId);
+      
+      if (departureStation) {
+        const [lng, lat] = departureStation.geometry.coordinates;
+        
+        // Use camera animation manager with direct coordinates
+        // This prevents Redux access during animation for better performance
+        cameraAnimationManager.animateToStationCoordinates(
+          departureStation.geometry.coordinates,
+          departureStationId,
+          {
+            zoom: 17, // Slightly zoomed in for emphasis
+            tilt: 45,
+            duration: 1000,
+            onComplete: () => {
+              logger.debug(`[stationSelectionManager] Confirmation highlight animation complete`);
+            }
+          },
+          cameraControls
+        );
+      }
+    }
   }
 
   /**
    * Handle a successful QR scan for a car
    * @param car The car scanned
+   * @param cameraControls Optional camera controls from useCameraAnimation hook
    */
-  public handleQrScanSuccess(car: Car): void {
+  public handleQrScanSuccess(car: Car, cameraControls?: any): void {
     if (!car) return;
     
     const { batch } = require('react-redux');
-    console.log("[stationSelectionManager] handleQrScanSuccess with car ID:", car.id);
+    logger.info("[stationSelectionManager] handleQrScanSuccess with car ID:", car.id);
 
     // Get current state to check for existing QR station
     const state = store.getState();
     const isQrScanStation = state.booking.isQrScanStation;
     const virtualStationId = state.booking.qrVirtualStationId;
+
+    // Create a new virtual station with a timestamp-based ID
+    const vStationId = Date.now();
+    const virtualStation = createVirtualStationFromCar(car, vStationId);
+    logger.debug(`[stationSelectionManager] Created new virtual station ${vStationId} for car ${car.id}`);
+
+    // Get coordinates for animation
+    const coordinates = virtualStation.geometry.coordinates;
+    const [lng, lat] = coordinates;
 
     batch(() => {
       // Clear any departure/arrival stations and routes
@@ -245,15 +331,10 @@ class StationSelectionManager {
   
       // Clean up previous QR station if it exists
       if (isQrScanStation && virtualStationId) {
-        console.log(`[stationSelectionManager] Removing previous QR station ${virtualStationId}`);
+        logger.debug(`[stationSelectionManager] Removing previous QR station ${virtualStationId}`);
         store.dispatch(removeStation(virtualStationId));
         store.dispatch(clearQrStationData());
       }
-  
-      // Create a new virtual station with a timestamp-based ID
-      const vStationId = Date.now();
-      const virtualStation = createVirtualStationFromCar(car, vStationId);
-      console.log(`[stationSelectionManager] Created new virtual station ${vStationId} for car ${car.id}`);
   
       // Add the virtual station and mark as QR station
       store.dispatch(addVirtualStation(virtualStation));
@@ -274,6 +355,18 @@ class StationSelectionManager {
       store.dispatch(setSheetMinimized(false));
     });
 
+    // Animate to the virtual station using direct coordinates
+    // This prevents possible Redux access during the animation
+    cameraAnimationManager.animateToLocation(
+      { lat, lng },
+      {
+        zoom: 17, // Higher zoom for QR scanned car
+        tilt: 45,
+        duration: 800
+      },
+      cameraControls
+    );
+
     // Track the car ID we processed
     this.processedCarIdRef = car.id;
     
@@ -282,85 +375,100 @@ class StationSelectionManager {
 
   /**
    * Reset the booking flow for a new QR scan
+   * 
+   * @param cameraControls Optional camera controls from useCameraAnimation hook
    */
-  public resetBookingFlowForQrScan(): void {
+  public resetBookingFlowForQrScan(cameraControls?: any): void {
     const state = store.getState();
     const virtualStationId = state.booking.qrVirtualStationId;
     
-    store.dispatch(resetBookingFlow());
-    store.dispatch(clearDispatchRoute());
-    store.dispatch(clearRoute());
-
-    if (virtualStationId !== null) {
-      store.dispatch(removeStation(virtualStationId));
-      store.dispatch(clearQrStationData());
-    }
-    store.dispatch(setScannedCar(null));
-    this.processedCarIdRef = null;
+    const { batch } = require('react-redux');
+    
+    batch(() => {
+      store.dispatch(resetBookingFlow());
+      store.dispatch(clearDispatchRoute());
+      store.dispatch(clearRoute());
+  
+      if (virtualStationId !== null) {
+        store.dispatch(removeStation(virtualStationId));
+        store.dispatch(clearQrStationData());
+      }
+      store.dispatch(setScannedCar(null));
+      this.processedCarIdRef = null;
+    });
+    
+    // Reset camera to default view using the camera animation manager
+    cameraAnimationManager.resetCamera({
+      zoom: 14,
+      duration: 800
+    }, cameraControls);
   }
 
   /**
    * Clear the departure station
+   * 
+   * @param cameraControls Optional camera controls from useCameraAnimation hook
    */
-  public clearDepartureStation(): void {
+  public clearDepartureStation(cameraControls?: any): void {
     const { batch } = require('react-redux');
     const state = store.getState();
     const isQrScanStation = state.booking.isQrScanStation;
     const virtualStationId = state.booking.qrVirtualStationId;
     const departureStationId = state.booking.departureStationId;
     
-    // Check animation state before clearing
-    const checkAnimationState = async (): Promise<boolean> => {
-      const animationStateManager = (await import("./animationStateManager")).default;
-      const animState = animationStateManager.getState();
-      return animState.isAnimating && animState.highestPriorityAnimation?.targetId === departureStationId;
-    };
-    
-    // Check if animation is in progress for this station
-    checkAnimationState().then(isAnimating => {
-      if (isAnimating) {
-        // Don't allow clearing during animation
-        toast.success("Please wait for animation to complete");
-        return;
+    // Proceed with clearing the station state
+    batch(() => {
+      store.dispatch(clearDepartureStation());
+      store.dispatch(advanceBookingStep(1));
+      store.dispatch(clearDispatchRoute());
+      
+      if (isQrScanStation && virtualStationId !== null) {
+        store.dispatch(removeStation(virtualStationId));
+        store.dispatch(clearQrStationData());
+        store.dispatch(setScannedCar(null));
+        this.processedCarIdRef = null;
       }
       
-      // Proceed with clearing if not animating
-      batch(() => {
-        store.dispatch(clearDepartureStation());
-        store.dispatch(advanceBookingStep(1));
-        store.dispatch(clearDispatchRoute());
-        
-        if (isQrScanStation && virtualStationId !== null) {
-          store.dispatch(removeStation(virtualStationId));
-          store.dispatch(clearQrStationData());
-          store.dispatch(setScannedCar(null));
-          this.processedCarIdRef = null;
-        }
-        
-        // Update UI state in Redux
-        store.dispatch(setSheetMode("guide"));
-        store.dispatch(setSheetMinimized(false));
-      });
+      // IMPORTANT: Clear the list selected station to make the NEAREST marker collapse
+      store.dispatch(setListSelectedStation(null));
       
-      toast.success("Departure station cleared. Back to picking departure.");
+      // Update UI state in Redux
+      store.dispatch(setSheetMode("guide"));
+      store.dispatch(setSheetMinimized(false));
     });
+    
+    // After clearing the station in Redux, trigger a camera reset animation
+    cameraAnimationManager.onDepartureStationCleared(cameraControls);
+    
+    toast.success("Departure station cleared. Back to picking departure.");
   }
 
   /**
    * Clear the arrival station
+   * 
+   * @param cameraControls Optional camera controls from useCameraAnimation hook
    */
-  public clearArrivalStation(): void {
+  public clearArrivalStation(cameraControls?: any): void {
     const { batch } = require('react-redux');
+    const state = store.getState();
+    const arrivalStationId = state.booking.arrivalStationId;
+    const departureStationId = state.booking.departureStationId;
     
     batch(() => {
       store.dispatch(clearArrivalStation());
       store.dispatch(advanceBookingStep(3));
       store.dispatch(clearRoute());
       
+      // IMPORTANT: Clear the list selected station to make the NEAREST marker collapse
+      store.dispatch(setListSelectedStation(null));
+      
       // Update UI state in Redux
       store.dispatch(setSheetMode("guide"));
       store.dispatch(setSheetMinimized(false));
     });
+    
+    // After clearing the station in Redux, use the camera animation manager to handle animation
+    cameraAnimationManager.onArrivalStationCleared(departureStationId, cameraControls);
     
     toast.success("Arrival station cleared. Back to picking arrival.");
   }
@@ -433,7 +541,7 @@ class StationSelectionManager {
     message: string;
     car?: Car;
   }> {
-    console.log("[stationSelectionManager] Processing QR code:", qrCodeValue);
+    logger.info("[stationSelectionManager] Processing QR code:", qrCodeValue);
     
     try {
       // Extract the car registration from the code
@@ -446,7 +554,7 @@ class StationSelectionManager {
       }
 
       const registration = match[1].toUpperCase();
-      console.log("[stationSelectionManager] Extracted car registration:", registration);
+      logger.debug("[stationSelectionManager] Extracted car registration:", registration);
 
       // Fetch the car from the backend
       const carResult = await store.dispatch(fetchCarByRegistration(registration)).unwrap();
@@ -466,7 +574,7 @@ class StationSelectionManager {
         car: carResult
       };
     } catch (error) {
-      console.error("[stationSelectionManager] Error processing QR code:", error);
+      logger.error("[stationSelectionManager] Error processing QR code:", error);
       return {
         success: false,
         message: "Failed to process the car QR code"

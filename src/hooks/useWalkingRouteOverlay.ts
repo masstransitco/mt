@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useMemo } from "react";
 import { useAppSelector } from "@/store/store";
 import { selectWalkingRoute } from "@/store/userSlice";
-import animationStateManager, { AnimationType, AnimationPriority } from "@/lib/animationStateManager";
-import { useAnimationState } from "@/hooks/useAnimationState";
 
 /**
  * Custom hook to manage walking route polyline on the map
- * Optimized to prevent unnecessary renders and style updates
+ * Simplified without animations for better performance and disposal
  */
 export function useWalkingRouteOverlay(
   googleMap: google.maps.Map | null,
@@ -18,232 +16,135 @@ export function useWalkingRouteOverlay(
     geodesic?: boolean;
   } = {}
 ) {
-  // Default options with sensible values for a walking route
-  const {
-    strokeColor = "#4285F4", // Google blue
-    strokeOpacity = 0.8,
-    strokeWeight = 4,
-    zIndex = 5,
-    geodesic = true,
-  } = options;
-
   // Get walking route from Redux
   const walkingRoute = useAppSelector(selectWalkingRoute);
   
-  // Cache the polyline string for comparison
-  const prevPolylineRef = useRef<string | null>(null);
-  
-  // Polyline reference
+  // Store reference to polyline object
   const walkingRouteRef = useRef<google.maps.Polyline | null>(null);
   
-  // Animation ID reference for tracking animations
-  const routeAnimationIdRef = useRef<string | null>(null);
+  // Store animation frame for cleanup
+  const animationFrameRef = useRef<number | null>(null);
   
-  // Define type for polyline options
-  interface PolylineOptions {
-    strokeColor: string;
-    strokeOpacity: number;
-    strokeWeight: number;
-    zIndex: number;
-    geodesic: boolean;
-  }
+  // Merge default options with user-provided options
+  const polylineOptions = useMemo(
+    () => ({
+      strokeColor: options.strokeColor || "#4CAF50",
+      strokeOpacity: options.strokeOpacity || 0.8,
+      strokeWeight: options.strokeWeight || 4,
+      zIndex: options.zIndex || 5,
+      geodesic: options.geodesic !== undefined ? options.geodesic : true,
+    }),
+    [
+      options.strokeColor,
+      options.strokeOpacity,
+      options.strokeWeight,
+      options.zIndex,
+      options.geodesic,
+    ]
+  );
 
-  // Previous options reference to avoid unnecessary style updates
-  const prevOptionsRef = useRef<PolylineOptions>({
-    strokeColor: "",
-    strokeOpacity: 0,
-    strokeWeight: 0,
-    zIndex: 0,
-    geodesic: false,
-  });
-  
-  // Memoize style options to prevent unnecessary updates
-  const polylineOptions = useMemo<PolylineOptions>(() => ({
-    strokeColor,
-    strokeOpacity,
-    strokeWeight,
-    zIndex,
-    geodesic,
-  }), [strokeColor, strokeOpacity, strokeWeight, zIndex, geodesic]);
-
-  /**
-   * Update the walking route polyline - optimized to minimize redraws
-   */
-  const updateWalkingRoutePolyline = useCallback(() => {
-    if (!googleMap || !window.google?.maps?.geometry?.encoding) return;
-
-    const hasRoute = walkingRoute && walkingRoute.polyline;
-    const currentPolyline = hasRoute ? walkingRoute.polyline : null;
-    
-    // Quick return if polyline hasn't changed and we already have a route reference
-    if (
-      currentPolyline === prevPolylineRef.current && 
-      walkingRouteRef.current?.getMap() === googleMap
-    ) {
-      // Only update options if they've changed
-      const hasStyleChanged = Object.keys(polylineOptions).some(
-        (key) => {
-          const typedKey = key as keyof PolylineOptions;
-          return prevOptionsRef.current[typedKey] !== polylineOptions[typedKey];
-        }
-      );
-      
-      if (hasStyleChanged && walkingRouteRef.current) {
-        walkingRouteRef.current.setOptions(polylineOptions);
-        prevOptionsRef.current = {...polylineOptions};
-      }
-      
-      return;
-    }
-    
-    // Update the stored polyline reference
-    prevPolylineRef.current = currentPolyline;
-
-    if (hasRoute && currentPolyline) {
-      try {
-        // Decode the polyline to get path
-        const path = window.google.maps.geometry.encoding.decodePath(currentPolyline);
-        
-        if (path.length === 0) return;
-        
-        if (!walkingRouteRef.current) {
-          // Cancel any existing animations
-          if (routeAnimationIdRef.current) {
-            animationStateManager.cancelAnimation(routeAnimationIdRef.current);
-            routeAnimationIdRef.current = null;
-          }
-          
-          // Create new polyline with initial invisible state
-          walkingRouteRef.current = new google.maps.Polyline({
-            path,
-            map: googleMap,
-            ...polylineOptions,
-            strokeOpacity: 0 // Start invisible
-          });
-          
-          // Store initial options for future comparison
-          prevOptionsRef.current = {...polylineOptions};
-          
-          // Animate the polyline appearance
-          routeAnimationIdRef.current = animationStateManager.startAnimation({
-            type: 'WALKING_ROUTE_ANIMATION',
-            targetId: 'walking_route',
-            duration: 600, // 600ms for a quick but noticeable fade-in
-            priority: AnimationPriority.MEDIUM,
-            isBlocking: false,
-            onProgress: (progress) => {
-              if (!walkingRouteRef.current) return;
-              
-              // Fade in by increasing opacity
-              const opacity = progress * polylineOptions.strokeOpacity;
-              walkingRouteRef.current.setOptions({
-                strokeOpacity: opacity
-              });
-            },
-            onComplete: () => {
-              if (!walkingRouteRef.current) return;
-              
-              // Ensure final values are set
-              walkingRouteRef.current.setOptions({
-                strokeOpacity: polylineOptions.strokeOpacity
-              });
-              
-              routeAnimationIdRef.current = null;
-            }
-          });
-        } else {
-          // Update existing polyline
-          walkingRouteRef.current.setPath(path);
-          
-          // Only update style options if they've changed
-          const hasStyleChanged = Object.keys(polylineOptions).some(
-            (key) => {
-              const typedKey = key as keyof PolylineOptions;
-              return prevOptionsRef.current[typedKey] !== polylineOptions[typedKey];
-            }
-          );
-          
-          if (hasStyleChanged) {
-            walkingRouteRef.current.setOptions(polylineOptions);
-            prevOptionsRef.current = {...polylineOptions};
-          }
-          
-          // Make sure it's visible on the map
-          if (walkingRouteRef.current.getMap() !== googleMap) {
-            walkingRouteRef.current.setMap(googleMap);
-          }
-        }
-      } catch (error) {
-        console.error("Error updating walking route:", error);
-      }
-    } else {
-      // Hide polyline if no route
-      if (walkingRouteRef.current && walkingRouteRef.current.getMap()) {
-        // Cancel any existing animations
-        if (routeAnimationIdRef.current) {
-          animationStateManager.cancelAnimation(routeAnimationIdRef.current);
-          routeAnimationIdRef.current = null;
-        }
-        
-        // Animate the polyline disappearance
-        routeAnimationIdRef.current = animationStateManager.startAnimation({
-          type: 'WALKING_ROUTE_ANIMATION',
-          targetId: 'walking_route_fadeout',
-          duration: 400, // 400ms for a quick fade-out
-          priority: AnimationPriority.LOW,
-          isBlocking: false,
-          onProgress: (progress) => {
-            if (!walkingRouteRef.current) return;
-            
-            // Fade out by decreasing opacity
-            const opacity = (1 - progress) * polylineOptions.strokeOpacity;
-            walkingRouteRef.current.setOptions({
-              strokeOpacity: opacity
-            });
-          },
-          onComplete: () => {
-            if (walkingRouteRef.current) {
-              walkingRouteRef.current.setMap(null);
-            }
-            routeAnimationIdRef.current = null;
-          }
-        });
-      }
-    }
-  }, [googleMap, walkingRoute, polylineOptions]);
-
-  // Single unified effect for all dependency changes
+  // Update polyline when walking route changes
   useEffect(() => {
     if (!googleMap) return;
-    
-    updateWalkingRoutePolyline();
-    
-    // Cleanup function
+
+    try {
+      if (walkingRoute) {
+        // Create path from encoded polyline
+        let path: google.maps.LatLngLiteral[] = [];
+        
+        try {
+          // Check if we have a polyline string directly (our structure)
+          if (walkingRoute.polyline) {
+            if (window.google?.maps?.geometry?.encoding) {
+              path = window.google.maps.geometry.encoding
+                .decodePath(walkingRoute.polyline)
+                .map((latLng: google.maps.LatLng) => latLng.toJSON());
+            }
+          } 
+          // Fallback check for Google API format
+          else if (walkingRoute.routes?.[0]?.overview_polyline?.points) {
+            const encoded = walkingRoute.routes[0].overview_polyline.points;
+            
+            if (window.google?.maps?.geometry?.encoding) {
+              path = window.google.maps.geometry.encoding
+                .decodePath(encoded)
+                .map((latLng: google.maps.LatLng) => latLng.toJSON());
+            }
+          }
+        } catch (error) {
+          console.error("Error decoding polyline:", error);
+        }
+        
+        // Debug
+        console.log("Walking route path length:", path.length);
+        
+        if (path.length > 0) {
+          // Create polyline if it doesn't exist
+          if (!walkingRouteRef.current) {
+            walkingRouteRef.current = new google.maps.Polyline({
+              ...polylineOptions,
+              path,
+              map: googleMap,
+            });
+            console.log("Created new walking route polyline");
+          } else {
+            // Update existing polyline
+            walkingRouteRef.current.setPath(path);
+            walkingRouteRef.current.setOptions(polylineOptions);
+            
+            // Make sure it's visible on the map
+            if (walkingRouteRef.current.getMap() !== googleMap) {
+              walkingRouteRef.current.setMap(googleMap);
+              console.log("Updated existing walking route polyline");
+            }
+          }
+        } else {
+          console.log("No valid path found in walking route");
+        }
+      } else {
+        // Hide polyline if no route
+        if (walkingRouteRef.current && walkingRouteRef.current.getMap()) {
+          walkingRouteRef.current.setMap(null);
+          console.log("Removed walking route polyline (no route)");
+        }
+      }
+    } catch (error) {
+      console.error("Error updating walking route:", error);
+    }
+  }, [googleMap, walkingRoute, polylineOptions]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
-      // Cancel any active animations
-      if (routeAnimationIdRef.current) {
-        animationStateManager.cancelAnimation(routeAnimationIdRef.current);
-        routeAnimationIdRef.current = null;
+      // Cancel any active animation
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
       
+      // Remove polyline
       if (walkingRouteRef.current) {
         walkingRouteRef.current.setMap(null);
         walkingRouteRef.current = null;
       }
-      prevPolylineRef.current = null;
-      prevOptionsRef.current = {
-        strokeColor: "",
-        strokeOpacity: 0,
-        strokeWeight: 0,
-        zIndex: 0,
-        geodesic: false
-      };
     };
-  }, [googleMap, walkingRoute, updateWalkingRoutePolyline]);
-
+  }, []);
+  
+  // Provide a way to manually dispose the polyline
+  const dispose = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    if (walkingRouteRef.current) {
+      walkingRouteRef.current.setMap(null);
+      walkingRouteRef.current = null;
+    }
+  }, []);
+  
   return {
     walkingRouteRef,
-    updateWalkingRoutePolyline,
-    isAnimating: () => !!routeAnimationIdRef.current
+    dispose
   };
 }

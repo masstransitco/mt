@@ -31,7 +31,9 @@ interface UserState {
   searchLocation: google.maps.LatLngLiteral | null; // new field
   viewState: "showCar" | "showMap";
   
-  // Store the currently selected station in the list view
+  // Store the currently selected station in the list view (NEAREST)
+  // IMPORTANT: This is the single source of truth for the station highlighted in green 
+  // in the station list and shown as the "NEAREST" expanded marker on the map
   listSelectedStationId: number | null;
   
   // Walking route to selected station

@@ -39,19 +39,20 @@ export const createMapOptions = (): google.maps.MapOptions => ({
   disableDefaultUI: true,
   zoomControl: false, // hide zoom controls
   gestureHandling: 'greedy',
-  rotateControl: false,
+  rotateControl: true, // Enable rotate control for camera animations
   // @ts-ignore
-  tiltControl: false,
+  tiltControl: true, // Enable tilt control for camera animations
   backgroundColor: '#212121',
   maxZoom: 20,
   minZoom: 3,
   clickableIcons: false,
-  mapId: 'b307b162b2a6a5b9',
+  mapId: 'f2f6c137cc748dc3',
   restriction: {
     latLngBounds: HK_BOUNDS,
     strictBounds: true,
   },
-  tilt: 0,
+  tilt: 0, // Initial tilt set to 0
+  heading: 0, // Initial heading set to 0
 });
 
 /**

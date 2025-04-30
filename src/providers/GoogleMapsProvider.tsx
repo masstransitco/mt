@@ -10,6 +10,8 @@ interface GoogleMapsContextValue {
   googleMapsReady: boolean;
   loadingProgress: number;
   retryLoading: () => void;
+  map: google.maps.Map | null;
+  setMap: (m: google.maps.Map | null) => void;
 }
 
 const GoogleMapsContext = createContext<GoogleMapsContextValue>({
@@ -18,6 +20,8 @@ const GoogleMapsContext = createContext<GoogleMapsContextValue>({
   googleMapsReady: false,
   loadingProgress: 0,
   retryLoading: () => {},
+  map: null,
+  setMap: () => {},
 });
 
 export const GoogleMapsProvider: React.FC<{
@@ -27,56 +31,26 @@ export const GoogleMapsProvider: React.FC<{
   const [googleMapsReady, setGoogleMapsReady] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingAttempt, setLoadingAttempt] = useState(0);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
   
   // Use the existing react-google-maps/api loader
+  // Changed from "alpha" to "weekly" for better stability
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: apiKey,
-    version: "alpha",
+    version: "weekly",
     libraries: LIBRARIES,
   });
   
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout | null = null;
-    let checkInterval: NodeJS.Timeout | null = null;
-    
     if (isLoaded) {
-      // Start progress immediately
-      setLoadingProgress(10);
-      
-      // Check for required services with incremental progress updates
-      checkInterval = setInterval(() => {
-        // Update progress for user feedback
-        setLoadingProgress(prev => Math.min(prev + 15, 90));
-        
-        // Check if all required services are available
-        const servicesReady = 
-          window.google?.maps?.DirectionsService &&
-          window.google?.maps?.Geocoder &&
-          window.google?.maps?.places?.AutocompleteService &&
-          window.google?.maps?.geometry?.spherical;
-          
-        if (servicesReady) {
-          if (checkInterval) clearInterval(checkInterval);
-          setLoadingProgress(100);
-          setGoogleMapsReady(true);
-        }
-      }, 300);
-      
-      // Set maximum loading time to prevent infinite loading
-      timeoutId = setTimeout(() => {
-        if (checkInterval) clearInterval(checkInterval);
-        if (!googleMapsReady) {
-          console.error("Google Maps services not fully loaded after timeout");
-        }
-      }, 8000);
-      
-      return () => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (checkInterval) clearInterval(checkInterval);
-      };
+      // Simple approach: just set googleMapsReady to true when the API is loaded
+      setLoadingProgress(100); 
+      setGoogleMapsReady(true);
+    } else {
+      setLoadingProgress(0);
     }
-  }, [isLoaded, loadingAttempt, googleMapsReady]);
+  }, [isLoaded, loadingAttempt]);
   
   // Function to retry loading if it fails
   const retryLoading = () => {
@@ -91,6 +65,8 @@ export const GoogleMapsProvider: React.FC<{
     googleMapsReady,
     loadingProgress,
     retryLoading,
+    map,
+    setMap,
   };
   
   return (

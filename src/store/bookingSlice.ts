@@ -97,11 +97,13 @@ export const bookingSlice = createSlice({
   name: "booking",
   initialState,
   reducers: {
-    setDepartureDate: (state, action: PayloadAction<Date>) => {
-      state.departureDateString = action.payload.toISOString();
+    setDepartureDate: (state, action: PayloadAction<string>) => {
+      // Action payload is already an ISO string
+      state.departureDateString = action.payload;
     },
-    setDepartureTime: (state, action: PayloadAction<Date>) => {
-      state.departureTimeString = action.payload.toISOString();
+    setDepartureTime: (state, action: PayloadAction<string>) => {
+      // Action payload is already an ISO string
+      state.departureTimeString = action.payload;
     },
     confirmDateTime: (state, action: PayloadAction<boolean>) => {
       state.isDateTimeConfirmed = action.payload;
@@ -144,10 +146,12 @@ export const bookingSlice = createSlice({
       }
     },
     selectDepartureStation: (state, action: PayloadAction<number>) => {
-      // Clear any existing date/time selection when changing departure station
-      state.departureDateString = null;
-      state.departureTimeString = null;
-      state.isDateTimeConfirmed = false;
+      // Only clear date/time selection if we don't have confirmed values
+      // This allows us to keep scheduled pickup times across steps
+      if (!state.isDateTimeConfirmed) {
+        state.departureDateString = null;
+        state.departureTimeString = null;
+      }
       
       state.departureStationId = action.payload;
       state.step = 2;

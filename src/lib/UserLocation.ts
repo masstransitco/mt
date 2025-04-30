@@ -1,209 +1,154 @@
 // UserLocation.ts - Centralized location manager
-import { setUserLocation, setSearchLocation } from "@/store/userSlice";
-import { toast } from "react-hot-toast";
-import { store } from "@/store/store";
+import { setUserLocation, setSearchLocation } from "@/store/userSlice"
+import { toast } from "react-hot-toast"
+import { store } from "@/store/store"
+import cameraAnimationManager from "@/lib/cameraAnimationManager"
 
 // Custom event for notifying components of location updates
-export const USER_LOCATION_UPDATED_EVENT = "user-location-updated";
+export const USER_LOCATION_UPDATED_EVENT = "user-location-updated"
 
 // Event payload for location updates
 export interface LocationUpdateEvent {
-  location: google.maps.LatLngLiteral;
-  source: "locate-me-button" | "system" | "fallback" | "button-click";
-  forceAnimation?: boolean;
-  timestamp?: number;
-}
-
-interface UserLocationOptions {
-  enableHighAccuracy?: boolean;
-  timeout?: number;
-  maximumAge?: number;
-  updateSearchLocation?: boolean;
-  forceAnimation?: boolean;  // Add parameter to force animation even if location hasn't changed
-  onLocationFound?: (loc: google.maps.LatLngLiteral) => void;
-  onLocationError?: (error: GeolocationPositionError) => void;
+  location: google.maps.LatLngLiteral
+  timestamp: number
+  source?: string
 }
 
 // Simple cache to avoid excessive location requests
 let locationCache: {
-  position: google.maps.LatLngLiteral | null;
-  timestamp: number;
+  position: google.maps.LatLngLiteral | null
+  timestamp: number
 } = {
   position: null,
   timestamp: 0
-};
+}
 
-// Max cache age (5 minutes)
-const MAX_CACHE_AGE = 5 * 60 * 1000; 
+// Max cache age (30 seconds for button clicks)
+const MAX_CACHE_AGE = 30 * 1000
 
 /**
- * Get user location and dispatch a custom event
+ * Main user location function - centralized single point of location handling
+ * Handles all the redux updates and events in one place
  */
-export async function getUserLocation(options: UserLocationOptions = {}): Promise<google.maps.LatLngLiteral | null> {
+export async function locateUser(options: {
+  enableHighAccuracy?: boolean
+  timeout?: number
+  maximumAge?: number
+  animateCamera?: boolean
+  source?: string
+} = {}): Promise<google.maps.LatLngLiteral | null> {
   const {
     enableHighAccuracy = true,
     timeout = 10000,
-    maximumAge = 30000,
-    updateSearchLocation = false,
-    onLocationFound,
-    onLocationError
-  } = options;
-
-  // Check for recent cached position
-  const now = Date.now();
-  if (locationCache.position && (now - locationCache.timestamp < MAX_CACHE_AGE)) {
-    const cachedPosition = locationCache.position;
-    
-    // Update Redux store
-    store.dispatch(setUserLocation(cachedPosition));
-    if (updateSearchLocation) {
-      store.dispatch(setSearchLocation(cachedPosition));
-    }
-    
-    // Determine the correct source to simulate behavior
-    // If we explicitly want to force animation (from locate-me button),
-    // use locate-me-button as source even for cached positions
-    const source = options.forceAnimation ? "locate-me-button" : "system";
-    
-    // Dispatch custom event with appropriate source
-    dispatchLocationEvent(cachedPosition, source, options.forceAnimation);
-    
-    // Call callback
-    onLocationFound?.(cachedPosition);
-    
-    return cachedPosition;
-  }
-
-  if (!navigator.geolocation) {
-    toast.error("Geolocation not supported by your browser.");
-    return null;
-  }
+    maximumAge = 5000, // Short cache for locate button
+    animateCamera = true, // Whether to animate the camera to the location
+    source
+  } = options
 
   try {
+    // Check for recent cached position
+    const now = Date.now()
+    if (locationCache.position && (now - locationCache.timestamp < MAX_CACHE_AGE)) {
+      const cachedPosition = locationCache.position
+      return await processLocation(cachedPosition, animateCamera, source)
+    }
+
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not supported by your browser")
+      return null
+    }
+
+    // Get current position from browser
     const position = await new Promise<GeolocationPosition>((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(
         resolve,
         reject,
         { enableHighAccuracy, timeout, maximumAge }
-      );
-    });
+      )
+    })
 
     // Create location object
     const location = {
       lat: position.coords.latitude,
       lng: position.coords.longitude
-    };
+    }
 
     // Update cache
     locationCache = {
       position: location,
       timestamp: now
-    };
-
-    // Update Redux state
-    store.dispatch(setUserLocation(location));
-    if (updateSearchLocation) {
-      store.dispatch(setSearchLocation(location));
     }
-    
-    // Dispatch custom event with locate-me source and animation flag
-    dispatchLocationEvent(location, "locate-me-button", options.forceAnimation);
 
-    // Call success callback
-    onLocationFound?.(location);
-
-    return location;
+    return await processLocation(location, animateCamera, source)
   } catch (error) {
-    // Handle geolocation errors
-    const geoError = error as GeolocationPositionError;
-    handleLocationError(geoError, updateSearchLocation, onLocationError);
-    return null;
+    handleLocationError(error)
+    return null
   }
 }
 
 /**
- * Dispatch a custom DOM event for location updates
+ * Central function to process a location update
+ * Handles all side effects of a location update
  */
-function dispatchLocationEvent(
-  location: google.maps.LatLngLiteral,
-  source: LocationUpdateEvent["source"],
-  forceAnimation?: boolean
-) {
-  // Check current booking step to determine if animation should be allowed
-  // This aligns with the fix in useCameraAnimation
-  const state = store.getState();
-  const bookingStep = state.booking?.step || 1;
-  const arrivalId = state.booking?.arrivalStationId || null;
+async function processLocation(
+  location: google.maps.LatLngLiteral, 
+  animateCamera: boolean = true,
+  source?: string
+): Promise<google.maps.LatLngLiteral> {
+  // 1. Update Redux state
+  store.dispatch(setUserLocation(location))
+  store.dispatch(setSearchLocation(location))
   
-  // Animation is only allowed in step 1 or step 3 without arrival station selected
-  // unless we explicitly force animation (from locate-me button)
-  const shouldAnimate = forceAnimation || bookingStep === 1 || (bookingStep === 3 && !arrivalId);
-  
-  console.log(`[UserLocation] Location event with step=${bookingStep}, arrivalId=${arrivalId}, shouldAnimate=${shouldAnimate}`);
-  
-  // Include timestamp to help components detect unique location updates
+  // 2. Dispatch DOM event for components listening for location changes
   const event = new CustomEvent<LocationUpdateEvent>(USER_LOCATION_UPDATED_EVENT, {
     detail: { 
-      location, 
-      source, 
-      // Only allow forceAnimation if we determined it should animate based on step
-      forceAnimation: shouldAnimate ? forceAnimation : false,
-      timestamp: Date.now() // Add timestamp for uniqueness tracking
+      location,
+      timestamp: Date.now(),
+      source
     }
-  });
-  
-  console.log(`[UserLocation] Dispatching location event: source=${source}, forceAnimation=${shouldAnimate && forceAnimation}`);
+  })
   
   // Use setTimeout to ensure event happens after state updates
   setTimeout(() => {
-    window.dispatchEvent(event);
-  }, 0);
+    window.dispatchEvent(event)
+  }, 0)
+  
+  // Note: We don't animate the camera here.
+  // Camera animations are triggered by the components that call locateUser (like LocateMeButton),
+  // ensuring animation requests go through CameraAnimationManager.
+  
+  // 4. Return the location for direct use
+  return location
 }
 
 /**
  * Handle location errors
  */
-function handleLocationError(
-  error: GeolocationPositionError,
-  updateSearchLocation = false,
-  errorCallback?: (error: GeolocationPositionError) => void
-) {
-  console.error("Geolocation error:", error);
+function handleLocationError(error: any) {
+  console.error("Geolocation error:", error)
   
-  // Call error callback if provided
-  if (errorCallback) {
-    errorCallback(error);
-    return;
-  }
+  const geoError = error as GeolocationPositionError
   
-  // Default error handling
-  switch (error.code) {
+  switch (geoError?.code) {
     case 1: // PERMISSION_DENIED
-      toast.error("Location access denied. Please enable location in your browser settings.");
-      break;
+      toast.error("Location access denied. Please enable location in your browser settings.")
+      break
     case 2: // POSITION_UNAVAILABLE
-      // In development, use fallback Hong Kong location
+      // Development fallback
       if (process.env.NODE_ENV === "development") {
-        const fallbackLoc = { lat: 22.2988, lng: 114.1722 };
-        
-        toast.success("Using default location for development");
-        
-        // Update Redux state with fallback
-        store.dispatch(setUserLocation(fallbackLoc));
-        if (updateSearchLocation) {
-          store.dispatch(setSearchLocation(fallbackLoc));
-        }
-        
-        // Dispatch with fallback source
-        dispatchLocationEvent(fallbackLoc, "fallback");
+        const fallbackLoc = { lat: 22.2988, lng: 114.1722 } // Hong Kong
+        toast.success("Using default location for development")
+        processLocation(fallbackLoc, true, "fallback")
       } else {
-        toast.error("Unable to determine your location. Please try again or enter an address.");
+        toast.error("Unable to determine your location. Please try again or enter an address.")
       }
-      break;
+      break
     case 3: // TIMEOUT
-      toast.error("Location request timed out. Please try again.");
-      break;
+      toast.error("Location request timed out. Please try again.")
+      break
     default:
-      toast.error("Unable to retrieve location.");
+      toast.error("Unable to retrieve location.")
   }
 }
+
+// Legacy function has been removed in favor of locateUser
