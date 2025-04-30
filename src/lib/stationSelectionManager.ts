@@ -28,8 +28,7 @@ import { clearWalkingRoute, setListSelectedStation } from "@/store/userSlice";
 import { setSheetMode, setSheetMinimized } from "@/store/uiSlice";
 import { toast } from "react-hot-toast";
 import { createVirtualStationFromCar } from "./stationUtils";
-import type { Car } from "@/types/cars";
-import type { SheetMode } from "@/types/map";
+import type { Car } from "../types/cars";
 import cameraAnimationManager from "./cameraAnimationManager";
 
 export type SelectionMode = "departure" | "arrival";
