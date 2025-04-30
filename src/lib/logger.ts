@@ -42,7 +42,7 @@ export const logger = {
 // Shorthand for common development-only logs
 export const devLog = process.env.NODE_ENV === 'production' 
   ? (...args: any[]) => {} 
-  : (...args: any[]) => logger.debug(...args);
+  : (message: string, ...args: any[]) => logger.debug(message, ...args);
 
 // Export LOG_LEVELS for external use
 export { LOG_LEVELS };
