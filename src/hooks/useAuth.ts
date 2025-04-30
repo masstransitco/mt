@@ -1,23 +1,28 @@
 import { useState, useEffect } from 'react';
 import { auth } from '@/lib/firebase';
-import { User, onIdTokenChanged } from 'firebase/auth';
+import { User as FirebaseUser, onIdTokenChanged } from 'firebase/auth';
+
+interface CustomUser extends FirebaseUser {
+  isAdmin?: boolean;
+  role?: string;
+}
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const unsubscribe = onIdTokenChanged(auth, async (user) => {
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       setLoading(true);
-      if (user) {
+      if (firebaseUser) {
         // Get the ID token with fresh claims
-        const token = await user.getIdTokenResult();
-        const userData = {
-          ...user,
-          role: token.claims.role || 'user',
+        const token = await firebaseUser.getIdTokenResult();
+        const customUser: CustomUser = {
+          ...firebaseUser,
+          role: token.claims.role as string || 'user',
           isAdmin: token.claims.role === 'admin',
         };
-        setUser(userData as any);
+        setUser(customUser);
       } else {
         setUser(null);
       }

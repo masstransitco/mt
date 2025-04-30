@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, setAdminRole } from '@/lib/firebase-admin';
+import { DecodedIdToken } from 'firebase-admin/auth';
 
 export async function POST(request: Request) {
   try {
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
     }
     
     const token = authHeader.split('Bearer ')[1];
-    const decodedToken = await adminAuth.verifyIdToken(token);
+    const decodedToken: DecodedIdToken = await adminAuth.verifyIdToken(token);
     
     // Check if the requester is a super admin
     if (decodedToken.role !== 'super_admin') {
@@ -18,13 +19,13 @@ export async function POST(request: Request) {
     }
     
     // Get request body
-    const { uid, role } = await request.json();
+    const { uid } = await request.json();
     
-    if (!uid || !role) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!uid) {
+      return NextResponse.json({ error: 'Missing required field: uid' }, { status: 400 });
     }
     
-    // Set the role
+    // Set the admin role
     const result = await setAdminRole(uid);
     
     if (result.success) {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 500 });
     }
   } catch (error) {
-    console.error('Error assigning role:', error);
+    console.error('Error assigning admin role:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

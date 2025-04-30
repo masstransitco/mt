@@ -1,4 +1,5 @@
 // File: src/lib/firebase-admin.ts
+import config from '@/config';
 import admin from "firebase-admin";
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -8,66 +9,49 @@ export function initAdmin() {
   const apps = getApps();
   
   if (apps.length === 0) {
-    // Check if we have a complete service account JSON
-    if (process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY) {
+    if (config.SERVICE_ACCOUNT_KEY) {
       try {
-        // Check if it's a JSON string or an email address
-        if (process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY.includes('{')) {
-          const serviceAccount = JSON.parse(process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY);
+        if (config.SERVICE_ACCOUNT_KEY.includes('{')) {
+          const serviceAccount = JSON.parse(config.SERVICE_ACCOUNT_KEY);
+          if (!serviceAccount.project_id) {
+            throw new Error("Service account is missing project_id");
+          }
           initializeApp({
             credential: cert(serviceAccount)
           });
         } else {
-          // If it's not a JSON string, use individual env vars
-          const privateKey = process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY;
-          
-          if (!privateKey) {
-            throw new Error("Firebase private key is missing");
-          }
-          
-          // Replace escaped newlines with actual newlines
-          const formattedKey = privateKey.replace(/\\n/g, "\n");
-          
-          initializeApp({
-            credential: cert({
-              projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-              clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
-              privateKey: formattedKey,
-            }),
-          });
+          throw new Error("Invalid service account key format");
         }
       } catch (error) {
-        console.error("Error initializing Firebase Admin:", error);
-        // In development, continue with mock implementation
-        if (process.env.NODE_ENV === 'development') {
-          console.warn("Using mock implementation due to initialization error");
-          return getAuth();
-        }
-        throw error;
+        console.error("Error parsing service account key:", error);
+        // Fall back to using individual environment variables
+        initializeAppWithEnvVars();
       }
     } else {
-      // Otherwise use individual environment variables
-      // Ensure the private key is properly formatted
-      const privateKey = process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY;
-      
-      if (!privateKey) {
-        throw new Error("Firebase private key is missing");
-      }
-      
-      // Replace escaped newlines with actual newlines
-      const formattedKey = privateKey.replace(/\\n/g, "\n");
-      
-      initializeApp({
-        credential: cert({
-          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-          clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
-          privateKey: formattedKey,
-        }),
-      });
+      initializeAppWithEnvVars();
     }
   }
   
   return getAuth();
+}
+
+function initializeAppWithEnvVars() {
+  const projectId = config.FIREBASE_PROJECT_ID;
+  const clientEmail = config.FIREBASE_CLIENT_EMAIL;
+  const privateKey = config.FIREBASE_PRIVATE_KEY;
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error("Missing required Firebase configuration environment variables");
+  }
+
+  initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey: privateKey.replace(/\\n/g, "\n"),
+    }),
+    storageBucket: config.FIREBASE_STORAGE_BUCKET,
+  });
 }
 
 // Mock implementation for development
@@ -145,22 +129,22 @@ if (process.env.NODE_ENV === 'development') {
   // Production initialization
   if (!admin.apps.length) {
     // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
-    if (process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY as string);
+    if (config.SERVICE_ACCOUNT_KEY) {
+      const serviceAccount = JSON.parse(config.SERVICE_ACCOUNT_KEY as string);
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, // <-- specify bucket
+        storageBucket: config.FIREBASE_STORAGE_BUCKET, // <-- specify bucket
       });
     } else {
       // Option B: Use separate env variables for projectId, privateKey, clientEmail
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-          clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.NEXT_PUBLIC_FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+          projectId: config.FIREBASE_PROJECT_ID,
+          clientEmail: config.FIREBASE_CLIENT_EMAIL,
+          privateKey: config.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
         }),
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET, // <-- specify bucket
+        storageBucket: config.FIREBASE_STORAGE_BUCKET, // <-- specify bucket
       });
     }
 
@@ -203,7 +187,7 @@ mockAdmin.firestore.Timestamp = FirestoreTimestamp;
 mockAdmin.firestore.FieldValue = FirestoreFieldValue;
 
 // Conditionally export the real or mock admin
-export default process.env.NODE_ENV === 'development' ? mockAdmin : admin;
+export default config.NODE_ENV === 'development' ? mockAdmin : admin;
 
 /**
  * Optional wrapper function if you want to do further checks, etc.
