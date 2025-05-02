@@ -17,10 +17,16 @@ interface StationIconProps {
 const StationIcon = React.memo(({ type, highlight, step }: StationIconProps) => {
   const { theme, isQrScanStation } = useStationSelector();
   
-  // Determine the color based on type and QR scan status
+  // Get departure and arrival IDs from context
+  const { departureId, arrivalId } = useStationSelector();
+  
+  // Check if departure and arrival are the same station
+  const isSameStation = departureId && arrivalId && departureId === arrivalId;
+  
+  // Determine the color based on type, QR scan status, and whether stations are the same
   const dotColor = type === "departure" 
     ? (isQrScanStation ? theme.colors.QR_SCAN : theme.colors.DEPARTURE) 
-    : theme.colors.ARRIVAL;
+    : (isSameStation ? theme.colors.PICKUP_DROPOFF : theme.colors.ARRIVAL);
 
   // Get sizes from context theme
   const { ICON: iconSize, DOT: dotSize } = theme.sizes;

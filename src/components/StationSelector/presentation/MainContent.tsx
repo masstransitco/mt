@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle } from "lucide-react";
+import { CarSwap } from "@/components/ui/icons/CarSwap";
 import { cn } from "@/lib/utils";
 import { useStationSelector } from "../context/StationSelectorContext";
 import StationInput from "./StationInput";
@@ -61,17 +61,17 @@ const MainContent = React.memo(() => {
             position: "relative",
           }}
         >
-          {/* If departure & arrival are the same, show error */}
+          {/* If departure & arrival are the same, show notification */}
           <AnimatePresence>
             {departureId && arrivalId && departureId === arrivalId && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-2 px-4 py-2 text-xs text-red-400 bg-red-900/20 border-b border-red-800/50"
+                className="flex items-center gap-2 px-4 py-2 text-xs text-white bg-white/10 border-b border-white/20"
               >
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Departure and arrival stations cannot be the same</span>
+                <CarSwap className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#00BFFF" }} />
+                <span>Pickup and dropoff the car at the same station</span>
               </motion.div>
             )}
           </AnimatePresence>

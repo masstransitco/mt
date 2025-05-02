@@ -2,9 +2,10 @@
 
 // Station colors
 export const STATION_COLORS = {
-  DEPARTURE: "#FFFFFF", // Changed from blue to white
-  ARRIVAL: "#3E6AE1",   // Changed from red to blue
-  QR_SCAN: "#10A37F"    // Green for QR scan remains unchanged
+  DEPARTURE: "#FFFFFF", // White for departure station
+  ARRIVAL: "#FF0000",   // Red for arrival station
+  QR_SCAN: "#10A37F",   // Green for QR scan
+  PICKUP_DROPOFF: "#00BFFF" // Light electric blue for when pickup and dropoff are the same
 };
 
 // Size variations based on context
