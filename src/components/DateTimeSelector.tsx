@@ -29,12 +29,14 @@ interface DateTimeSelectorProps {
   onDateTimeConfirmed?: () => void
   onCancel?: () => void
   autoAdvanceStep?: boolean
+  defaultToQuickPickup?: boolean
 }
 
 export default function DateTimeSelector({ 
   onDateTimeConfirmed,
   onCancel,
-  autoAdvanceStep = false
+  autoAdvanceStep = false,
+  defaultToQuickPickup = false
 }: DateTimeSelectorProps) {
   const dispatch = useAppDispatch()
   const currentStep = useAppSelector(selectBookingStep)
@@ -222,7 +224,14 @@ export default function DateTimeSelector({
   const [dateIndex, setDateIndex] = useState(0)
   const [showTimes, setShowTimes] = useState(!!reduxSelectedDate)
   const [showMinTimeInfo, setShowMinTimeInfo] = useState(false)
-  const [useDefaultPickupTime, setUseDefaultPickupTime] = useState(false)
+  
+  // Initialize default pickup time based on props and conditions
+  // Use defaultToQuickPickup if specified and no date/time is confirmed
+  const [useDefaultPickupTime, setUseDefaultPickupTime] = useState(
+    defaultToQuickPickup && 
+    currentStep > 1 && 
+    (!isConfirmed || !reduxSelectedDate || !reduxSelectedTime)
+  )
 
   // Generate available dates (next 7 days)
   useEffect(() => {
@@ -455,11 +464,9 @@ export default function DateTimeSelector({
   }
   
   // Toggle between default pickup time and scheduled time
-  // Only used in step 2+, in step 1 we always use scheduled time
   const toggleUseDefaultPickupTime = () => {
     if (currentStep === 1) {
       // In step 1, we don't allow toggling to default pickup manually
-      // This is now only handled via the location finding flow
       return
     }
     
@@ -514,7 +521,7 @@ export default function DateTimeSelector({
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               className={`px-3 py-1.5 rounded-full ${isConfirmed 
-                ? "bg-green-950/40 text-green-400 border border-green-800/30" 
+                ? "bg-zinc-900 text-blue-400 border border-blue-800/30" 
                 : "bg-zinc-900 text-zinc-300 border border-zinc-800"} text-sm font-sfpro`}
             >
               {format(selectedDate, "EEE, MMM d")} • {format(selectedTime, "h:mm a")}
@@ -559,92 +566,21 @@ export default function DateTimeSelector({
           </div>
         )}
         
-        {/* In step 1, we need to show the locate me button if user location is not available */}
-        {currentStep === 1 && !userLocation && (
+        {/* In step 1, we just show a simple message */}
+        {currentStep === 1 && (
           <div className="px-4 py-5 border-b border-zinc-800/70 bg-gradient-to-b from-zinc-950 to-black">
             <div className="flex flex-col items-center gap-4">
               <p className="text-sm text-zinc-300 text-center font-sfpro">
-                You can find the nearest station or choose a specific time for pickup.
+                Select a date and time for your pickup.
               </p>
-              
-              <motion.button
-                className={cn(
-                  "py-3.5 px-5 rounded-2xl text-sm font-sfpro font-medium transition-colors flex items-center justify-center gap-3 w-full",
-                  isLocating
-                    ? "bg-gradient-to-b from-zinc-800 to-zinc-900 text-green-400 border border-green-900/30"
-                    : "bg-gradient-to-b from-zinc-900 to-black text-white border border-zinc-800 hover:border-zinc-700 shadow-lg"
-                )}
-                onClick={() => {
-                  // Reset the wasReset flag before locating
-                  setWasReset(false)
-                  handleLocateMe()
-                }}
-                whileHover={{ scale: isLocating ? 1 : 1.02 }}
-                whileTap={{ scale: isLocating ? 1 : 0.97 }}
-                disabled={isLocating}
-              >
-                <Crosshair className={`h-5 w-5 ${isLocating ? 'text-green-400' : 'text-zinc-200'}`} />
-                <span>{isLocating ? "Locating..." : "Find nearest station"}</span>
-                
-                {/* Locating animation */}
-                {isLocating && (
-                  <motion.div
-                    className="absolute inset-0 rounded-2xl border border-green-500/30"
-                    initial={{ opacity: 0.5, scale: 1 }}
-                    animate={{
-                      opacity: 0,
-                      scale: 1.1,
-                    }}
-                    transition={{
-                      repeat: Infinity,
-                      duration: 1.5,
-                    }}
-                  />
-                )}
-              </motion.button>
             </div>
           </div>
         )}
         
-        {/* Show nearest station info if location found in step 1 */}
-        {currentStep === 1 && nearestStation && userLocation && (
-          <div className="px-4 py-5 border-b border-zinc-800/70 bg-gradient-to-b from-zinc-950 to-black">
-            <div className="bg-gradient-to-b from-[#0a1f14] to-[#0c1a10] rounded-2xl p-5 border border-green-900/20 shadow-lg">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="bg-black p-2.5 rounded-xl shadow-md border border-green-900/30">
-                  <MapPin className="h-5 w-5 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="text-base font-sfpro font-medium text-white">{nearestStation.properties.Place}</h3>
-                  <p className="text-xs font-sfpro text-green-200/70 mt-0.5">{nearestStation.properties.Address}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between mb-4 px-1">
-                <div className="flex items-center gap-2.5">
-                  <Clock className="h-4 w-4 text-green-400" />
-                  <span className="text-sm font-sfpro text-green-100">{walkingMinutes} min walk</span>
-                </div>
-                <div className="text-sm font-sfpro font-medium text-green-400 px-2.5 py-1 bg-green-900/20 rounded-full border border-green-800/20">
-                  {nearestStation.properties.availableSpots} spots available
-                </div>
-              </div>
-              
-              <div className="border-t border-green-900/30 pt-4 mt-2">
-                <button 
-                  onClick={handleReset}
-                  className="text-xs font-sfpro text-green-200/70 hover:text-green-200 transition-colors flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-lg border border-green-900/20"
-                >
-                  <ArrowLeft className="w-3 h-3" />
-                  <span>Reset</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* We've removed the nearest station display in step 1 */}
 
-        {/* Date and Time selectors - show when not using default pickup time or when in step 1 without a selected station */}
-        {(!useDefaultPickupTime || (currentStep === 1 && !nearestStation)) && (
+        {/* Date and Time selectors - show when not using default pickup time or when in step 1 */}
+        {(!useDefaultPickupTime || currentStep === 1) && (
           <>
             {/* Date Selector */}
             <div className="px-4 py-5 mt-1 border-b border-zinc-800/70 bg-gradient-to-r from-zinc-950 to-black">
@@ -703,14 +639,10 @@ export default function DateTimeSelector({
                       whileTap={{ scale: isBeforeMinDate ? 1 : 0.97 }}
                       disabled={isBeforeMinDate}
                     >
-                      <span className={cn("text-xs font-sfpro mb-0.5", 
-                        isToday && "text-green-400 font-medium"
-                      )}>
+                      <span className="text-xs font-sfpro mb-0.5">
                         {format(date, "EEE")}
                       </span>
-                      <span className={cn("text-xl font-sfpro font-medium", 
-                        isToday && "text-green-400"
-                      )}>
+                      <span className="text-xl font-sfpro font-medium">
                         {format(date, "d")}
                       </span>
                     </motion.button>
@@ -835,24 +767,10 @@ export default function DateTimeSelector({
         {/* Action Buttons */}
         <div className="p-5 bg-gradient-to-b from-black to-zinc-950 border-t border-zinc-800/50">
           {/* Confirm Button - different behavior based on step and state */}
-          {currentStep === 1 && nearestStation && userLocation ? (
-            // In step 1 with location found - use nearest station
-            <Button
-              className="w-full rounded-xl py-3.5 transition-all duration-300 bg-gradient-to-b from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-sfpro shadow-lg shadow-green-900/20 border border-green-500/20"
-              onClick={handleQuickPickupWithClosestStation}
-            >
-              <motion.div
-                className="flex items-center justify-center gap-2 font-medium"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <span>Confirm Pickup at {nearestStation.properties.Place}</span>
-              </motion.div>
-            </Button>
-          ) : currentStep === 1 && !nearestStation && selectedDate && selectedTime ? (
+          {currentStep === 1 && selectedDate && selectedTime ? (
             // In step 1 without a selected station but with date and time selected
             <Button
-              className="w-full rounded-xl py-3.5 transition-all duration-300 bg-gradient-to-b from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-sfpro shadow-lg shadow-green-900/20 border border-green-500/20"
+              className="w-full rounded-xl py-3.5 transition-all duration-300 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-sfpro shadow-lg shadow-blue-900/20 border border-blue-500/20"
               onClick={handleConfirm}
             >
               <motion.div
@@ -883,7 +801,7 @@ export default function DateTimeSelector({
               className={cn(
                 "w-full rounded-xl py-3.5 transition-all duration-300 font-sfpro shadow-lg",
                 selectedDate && selectedTime
-                  ? "bg-gradient-to-b from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white shadow-green-900/20 border border-green-500/20"
+                  ? "bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white shadow-blue-900/20 border border-blue-500/20"
                   : "bg-zinc-800 text-zinc-500 cursor-not-allowed shadow-none border border-zinc-700",
               )}
               disabled={!selectedDate || !selectedTime}

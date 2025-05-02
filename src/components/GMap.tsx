@@ -12,6 +12,7 @@ import { GoogleMap, LoadScriptNext } from "@react-google-maps/api";
 import { toast } from "react-hot-toast";
 import dynamic from "next/dynamic";
 import { shallowEqual } from "react-redux";
+import { logger } from "@/lib/logger";
 import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { throttle } from "lodash";
 import ChevronDown from "@/components/ui/icons/ChevronDown";
@@ -167,8 +168,10 @@ export default function GMap() {
   }), shallowEqual);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
-  const [isSignedIn, setIsSignedIn] = useState(false)
-  const [isDateTimePickerVisible, setIsDateTimePickerVisible] = useState(false)
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isDateTimePickerVisible, setIsDateTimePickerVisible] = useState(false);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   // Get UI state from Redux
   const sheetMode = useAppSelector(selectSheetMode);
@@ -191,6 +194,31 @@ export default function GMap() {
       setMapOptions(createMapOptions());
     }
   }, [googleMapsReady]);
+  
+  // -------------------------
+  // Track sheet dimensions with ResizeObserver
+  // -------------------------
+  useEffect(() => {
+    if (!sheetRef.current) return;
+    
+    // Create ResizeObserver to track sheet height changes
+    const resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        // Update sheet height state
+        const newHeight = entry.contentRect.height;
+        setSheetHeight(newHeight);
+        logger.debug(`[GMap] Sheet height changed: ${newHeight}px`);
+      }
+    });
+    
+    // Start observing the sheet element
+    resizeObserver.observe(sheetRef.current);
+    
+    // Clean up observer on unmount
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Note: Station sorting is now handled by Redux
 
@@ -242,6 +270,56 @@ export default function GMap() {
   // Use the init hook instead of direct useCameraAnimation to ensure
   // the CameraAnimationManager is properly initialized with our controls
   const cameraControls = useCameraControlInit();
+  
+  // -------------------------
+  // Update camera manager with sheet dimensions
+  // -------------------------
+  useEffect(() => {
+    if (!contextMap || !sheetHeight) return;
+    
+    // Get map element dimensions
+    const mapHeight = contextMap.getDiv().clientHeight;
+    
+    // Update camera animation manager with viewport metrics
+    cameraAnimationManager.updateViewportMetrics(sheetHeight, mapHeight, contextMap);
+    
+    logger.debug(`[GMap] Updated camera manager with metrics: sheet=${sheetHeight}px, map=${mapHeight}px`);
+  }, [contextMap, sheetHeight]);
+  
+  // -------------------------
+  // Handle sheet state changes - reposition camera
+  // -------------------------
+  useEffect(() => {
+    // When sheet minimized state changes and we have an active point of interest,
+    // reposition the camera to account for the new sheet height
+    if (contextMap && cameraControls) {
+      // Allow a short delay for sheet animation to complete
+      const repositionTimeout = setTimeout(() => {
+        // Determine which station to focus on based on current booking step
+        if (bookingStep < 3 && departureStationId) {
+          // In steps 1-2, focus on departure station
+          cameraAnimationManager.animateToSelectedStation(
+            departureStationId,
+            { duration: 500 } // Shorter duration for this adjustment
+          );
+        } else if (bookingStep >= 3 && arrivalStationId) {
+          // In steps 3-4, focus on arrival station
+          cameraAnimationManager.animateToSelectedStation(
+            arrivalStationId,
+            { duration: 500 } // Shorter duration for this adjustment
+          );
+        } else if (bookingStep >= 3 && departureStationId && !arrivalStationId) {
+          // If in step 3+ with only departure station, focus on it
+          cameraAnimationManager.animateToSelectedStation(
+            departureStationId,
+            { duration: 500 } // Shorter duration for this adjustment
+          );
+        }
+      }, 300); // Wait for sheet animation to complete
+      
+      return () => clearTimeout(repositionTimeout);
+    }
+  }, [sheetMinimized, departureStationId, arrivalStationId, bookingStep, contextMap, cameraControls]);
   
   // We no longer need the animateToLocation function as components use CameraAnimationManager directly
   
@@ -586,10 +664,14 @@ useEffect(() => {
               {/* 3D overlay from useThreeOverlay */}
             </GoogleMap>
             
-            {/* InfoBar - rendered on the top-right of the map in steps 2, 3, and 4 */}
-            {(bookingStep === 2 || bookingStep === 3 || bookingStep === 4) && (
-              <div className={`absolute right-4 z-[10000] max-w-xs infobar-container ${
-                bookingStep === 4 ? 'top-[114px]' : 'top-[54px]'
+            {/* InfoBar - rendered on the top-left of the map in steps 2 and 4 (hidden in step 3 as ScheduleLaterButton is in sheet) */}
+            {(bookingStep === 2 || bookingStep === 4) && (
+              <div className={`absolute left-4 z-[10000] max-w-xs infobar-container ${
+                bookingStep === 4 
+                  ? departureStationId && arrivalStationId && departureStationId === arrivalStationId
+                    ? 'top-[154px]' // Extra space for the notification about same stations
+                    : 'top-[114px]' 
+                  : 'top-[54px]'
               }`}>
                 <InfoBar 
                   distanceInKm={route?.distance ? (route.distance / 1000).toFixed(1) : null}
@@ -648,6 +730,7 @@ useEffect(() => {
 
           {/* Unified Sheet - always "open," content depends on sheetMode */}
           <Sheet
+            ref={sheetRef}
             isOpen={true}
             isMinimized={sheetMinimized}
             onMinimize={() => dispatch(setSheetMinimized(true))}
@@ -796,9 +879,32 @@ useEffect(() => {
                         <div className="w-[48%]">
                           <ReturnToSameStation 
                             position="sheet"
+                            disabled={!departureStationId}
                             onClick={() => {
                               console.log("[GMap] Return to same station clicked");
-                              // Placeholder for future functionality
+                              
+                              // Load stationSelectionManager if not already loaded
+                              if (!stationSelectionManagerRef.current) {
+                                import("@/lib/stationSelectionManager").then(module => {
+                                  stationSelectionManagerRef.current = module.default;
+                                  // Use the new method to select return to same station
+                                  const success = stationSelectionManagerRef.current.selectReturnToSameStation(cameraControls);
+                                  if (!success) {
+                                    toast.error("Unable to select return to same station");
+                                  } else {
+                                    toast.success("Return to same station selected");
+                                  }
+                                });
+                                return;
+                              }
+                              
+                              // Use the new method to select return to same station
+                              const success = stationSelectionManagerRef.current.selectReturnToSameStation(cameraControls);
+                              if (!success) {
+                                toast.error("Unable to select return to same station");
+                              } else {
+                                toast.success("Return to same station selected");
+                              }
                             }}
                           />
                         </div>
@@ -919,13 +1025,7 @@ useEffect(() => {
             currentVirtualStationId={virtualStationId}
           />
 
-          {/* Overlay for DateTimePicker */}
-          {isDateTimePickerVisible && (
-            <div 
-              className="fixed inset-0 bg-black/50 z-40" 
-              onClick={() => setIsDateTimePickerVisible(false)}
-            />
-          )}
+          {/* DateTimePicker is now handled directly in InfoBar using portals */}
 
           {/* Sign-In Modal */}
           <SignInModal

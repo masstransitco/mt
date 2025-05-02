@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
+import { Clock, Calendar } from "lucide-react";
+import { RouteIcon } from "@/components/ui/icons/RouteIcon";
 import { cn } from "@/lib/utils";
 import DateTimeSelector from "@/components/DateTimeSelector";
 import { SimplePickupTime } from "@/components/ui/PickupTime";
@@ -35,6 +38,9 @@ const InfoBar = React.memo(({
   const departureDate = useAppSelector(selectDepartureDate);
   const departureTime = useAppSelector(selectDepartureTime);
   const isDateTimeConfirmed = useAppSelector(selectIsDateTimeConfirmed);
+  
+  // Determine if we should default to quick pickup mode based on current state
+  const shouldDefaultToQuickPickup = currentStep >= 2 && !isDateTimeConfirmed;
   
   // Get the dispatch route from Redux to calculate default pickup time
   const dispatchRoute = useAppSelector(selectDispatchRoute);
@@ -81,10 +87,15 @@ const InfoBar = React.memo(({
     updatePickerVisibility(false);
   };
 
+  // Determine which icon to show for pickup time
+  const PickupIcon = useMemo(() => {
+    return isDateTimeConfirmed && departureDate && departureTime ? Calendar : Clock;
+  }, [isDateTimeConfirmed, departureDate, departureTime]);
+
   return (
     <div 
       className={cn(
-        "flex items-center justify-end flex-wrap gap-2 w-full", 
+        "flex items-center justify-start flex-wrap gap-2 w-full", 
         inSheet ? "mt-1 mx-4" : "mt-2", 
         className
       )}
@@ -97,15 +108,18 @@ const InfoBar = React.memo(({
             <div
               onClick={() => updatePickerVisibility(true)}
               className={cn(
-                "apple-accent-button cursor-pointer hover:opacity-90 active:opacity-70",
-                inSheet ? "py-1 px-2 text-sm" : "py-1 px-2.5 text-sm",
-                isDateTimeConfirmed && departureDate && departureTime 
-                  ? "bg-black/80 border border-green-600/30 text-white rounded-full"
-                  : "bg-black/80 border border-white/20 text-white rounded-full"
+                "cursor-pointer relative flex items-center justify-center gap-2",
+                "text-xs text-zinc-900 font-medium",
+                "px-3 py-1.5 h-[30px]",
+                "border border-white/50 rounded-xl",
+                "bg-white/90 backdrop-blur-md",
+                "hover:bg-white hover:border-white",
+                "transition-all duration-200 shadow-sm"
               )}
             >
+              <PickupIcon className="w-3.5 h-3.5 text-zinc-900" />
               {isDateTimeConfirmed && departureDate && departureTime ? (
-                <span>✓ Pickup on {format(departureDate, 'MMM d')} at {format(departureTime, 'h:mm a')}</span>
+                <span>Pickup on {format(departureDate, 'MMM d')} at {format(departureTime, 'h:mm a')}</span>
               ) : pickupMins ? (
                 <span>Pickup in {pickupMins} minutes</span>
               ) : (
@@ -119,27 +133,39 @@ const InfoBar = React.memo(({
         {distanceInKm && (
           <div
             className={cn(
-              "apple-accent-button",
-              inSheet ? "py-1 px-2 text-sm" : "py-1 px-2.5 text-sm",
-              "bg-black/80 border border-white/20 text-white rounded-full"
+              "flex items-center justify-center gap-2",
+              "text-xs text-white font-medium",
+              "px-3 py-1.5 h-[30px]",
+              "border border-white/10 rounded-xl",
+              "bg-black/90 backdrop-blur-md"
             )}
           >
-            {distanceInKm} km
+            <RouteIcon className="w-3.5 h-3.5" />
+            <span>{distanceInKm} km</span>
           </div>
         )}
       </div>
 
-      {/* DateTimeSelector rendered centered */}
-      {showDateTimePicker && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-          <div className="w-full max-w-md px-4">
-            <DateTimeSelector 
-              onDateTimeConfirmed={handleTimeConfirmed}
-              onCancel={handleDateTimeCancel}
-            />
-          </div>
-        </div>
-      )}
+      {/* Portal-based DateTimeSelector to ensure it's rendered at the top level of the DOM */}
+      {showDateTimePicker && typeof document !== "undefined" && 
+        createPortal(
+          // Use a higher z-index than any other element in the application
+          <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999 }}>
+            {/* Background overlay */}
+            <div className="fixed inset-0 bg-black/70" onClick={handleDateTimeCancel} />
+            
+            {/* DateTimeSelector container */}
+            <div className="w-full max-w-md px-4 relative">
+              <DateTimeSelector 
+                onDateTimeConfirmed={handleTimeConfirmed}
+                onCancel={handleDateTimeCancel}
+                defaultToQuickPickup={shouldDefaultToQuickPickup}
+              />
+            </div>
+          </div>,
+          document.body
+        )
+      }
     </div>
   );
 });
