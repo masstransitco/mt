@@ -17,7 +17,7 @@ export function useCameraControlInit() {
   useEffect(() => {
     if (cameraControls && map) {
       logger.debug("[useCameraControlInit] Initializing camera animation manager with controls and valid map");
-      cameraAnimationManager.initialize(cameraControls);
+      cameraAnimationManager.initialize(cameraControls, map);
     }
   }, [cameraControls, map]);
   

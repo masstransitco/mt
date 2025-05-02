@@ -519,6 +519,36 @@ class StationSelectionManager {
   }
   
   /**
+   * Select the departure station as the arrival station (return to same station)
+   * 
+   * @param cameraControls Optional camera controls from useCameraAnimation hook
+   * @returns {boolean} True if successful, false if no departure station is selected
+   */
+  public selectReturnToSameStation(cameraControls?: any): boolean {
+    const state = store.getState();
+    const departureStationId = state.booking.departureStationId;
+    
+    // If no departure station is selected, we cannot set it as arrival
+    if (!departureStationId) {
+      logger.warn("[stationSelectionManager] Cannot return to same station - no departure station selected");
+      return false;
+    }
+    
+    // Check if we're in the right booking step
+    const step = state.booking.step;
+    if (step < 3) {
+      logger.warn("[stationSelectionManager] Cannot select arrival station in step", step);
+      return false;
+    }
+    
+    // Use the existing selectStation method to set the departure station as arrival
+    this.selectStation(departureStationId, false, cameraControls);
+    
+    logger.info(`[stationSelectionManager] Selected departure station ${departureStationId} as arrival station`);
+    return true;
+  }
+  
+  /**
    * Process a QR code and create a virtual station from the scanned vehicle
    * 
    * QR Flow Overview:

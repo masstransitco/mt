@@ -23,6 +23,9 @@ import { logger } from "@/lib/logger";
 class CameraAnimationManager {
   private static instance: CameraAnimationManager;
   private cameraControls: any = null;
+  private sheetHeight: number = 0;
+  private mapHeight: number = 0;
+  private map: google.maps.Map | null = null;
   
   private constructor() {
     // We'll set up the controls when needed
@@ -36,11 +39,43 @@ class CameraAnimationManager {
   }
   
   // Method to initialize controls
-  public initialize(controls: any): void {
+  public initialize(controls: any, map?: google.maps.Map): void {
     if (!this.cameraControls) {
       this.cameraControls = controls;
+      if (map) this.map = map;
       logger.debug("[CameraAnimationManager] Initialized with controls");
     }
+  }
+
+  /**
+   * Update viewport metrics to adjust camera positioning
+   */
+  public updateViewportMetrics(sheetHeight: number, mapHeight: number, map?: google.maps.Map): void {
+    this.sheetHeight = sheetHeight;
+    this.mapHeight = mapHeight;
+    if (map) this.map = map;
+    logger.debug(`[CameraAnimationManager] Updated viewport metrics: sheet=${sheetHeight}px, map=${mapHeight}px`);
+  }
+
+  /**
+   * Calculate a simple viewport offset to shift camera based on sheet height
+   * This applies a simple "pixel shift" to the camera's center point
+   */
+  private getPanOffset(): number {
+    // Use a more substantial fixed offset value
+    const FIXED_OFFSET = 90; // Positive to pan camera downward, in pixels
+    
+    logger.debug(`[cameraAnimationManager] Using fixed offset: ${FIXED_OFFSET}px`);
+    return FIXED_OFFSET;
+  }
+  
+  /**
+   * Simple passthrough function for completion handlers
+   * (we no longer need post-animation offset since we're applying it directly)
+   */
+  private createCompletionWithPanOffset(originalOnComplete?: () => void): () => void {
+    // Simply return the original handler or an empty function
+    return originalOnComplete || (() => {});
   }
 
   /**
@@ -91,19 +126,48 @@ class CameraAnimationManager {
     if (!controls) return;
     
     const [lng, lat] = coordinates;
+    const position = { lat, lng };
     
-    logger.debug(`[cameraAnimationManager] Animating to station ${stationId} at [${lat}, ${lng}]`);
+    // Get the fixed offset value
+    const pixelOffset = this.getPanOffset();
     
-    // Note: We don't need to check isAnimating here
-    // The underlying useCameraAnimation hook will handle this
+    // Calculate a consistent offset based on target zoom level
+    let offsetPosition = { ...position };
     
-    // Use animateToStation for station views with appropriate defaults
+    if (pixelOffset !== 0) {
+      try {
+        // Get the target zoom level
+        const targetZoom = options?.zoom || 16;
+        
+        // Use a standard formula for meters per pixel at this zoom level
+        // At zoom level 0, there are approximately 156,543 meters per pixel at the equator
+        // Each zoom level divides this by 2
+        const metersPerPixel = 156543.03392 * Math.cos(position.lat * Math.PI / 180) / Math.pow(2, targetZoom);
+        
+        // Convert meters to lat degrees (approximate)
+        // 111,111 meters per degree of latitude (roughly)
+        const latPerPixel = metersPerPixel / 111111;
+        
+        // Apply the offset with a scaling factor to ensure consistency
+        // For downward shift (positive offset), we decrease latitude
+        const scaledOffset = pixelOffset * 0.9; // Apply most of the offset
+        offsetPosition.lat = position.lat - (scaledOffset * latPerPixel);
+        
+        logger.debug(`[cameraAnimationManager] Applied ${pixelOffset}px offset (scaled: ${scaledOffset}px) at zoom ${targetZoom} to station [${position.lat}] → [${offsetPosition.lat}]`);
+      } catch (e) {
+        logger.warn(`[cameraAnimationManager] Could not calculate lat/lng offset: ${e}`);
+        // If calculation fails, use the original position
+        offsetPosition = position;
+      }
+    }
+    
+    // Use the adjusted position directly for the animation
     controls.animateToStation({
-      position: { lat, lng },
+      position: offsetPosition,
       zoom: options?.zoom || 16,
       tilt: options?.tilt || 45,
       duration: options?.duration || 800,
-      onComplete: options?.onComplete
+      onComplete: options?.onComplete // Use the original onComplete handler directly
     });
   }
 
@@ -179,18 +243,46 @@ class CameraAnimationManager {
     const controls = this.getCameraControls(cameraControls);
     if (!controls || !location) return;
     
-    // Note: We don't need to check isAnimating here
-    // The underlying useCameraAnimation hook will handle this
+    // Get the fixed offset value
+    const pixelOffset = this.getPanOffset();
     
-    logger.debug(`[cameraAnimationManager] Animating to location [${location.lat}, ${location.lng}]`);
+    // Calculate a consistent offset based on target zoom level
+    let offsetLocation = { ...location };
     
-    // Use animateCameraTo for general location views
+    if (pixelOffset !== 0) {
+      try {
+        // Get the target zoom level
+        const targetZoom = options?.zoom || 16;
+        
+        // Use a standard formula for meters per pixel at this zoom level
+        // At zoom level 0, there are approximately 156,543 meters per pixel at the equator
+        // Each zoom level divides this by 2
+        const metersPerPixel = 156543.03392 * Math.cos(location.lat * Math.PI / 180) / Math.pow(2, targetZoom);
+        
+        // Convert meters to lat degrees (approximate)
+        // 111,111 meters per degree of latitude (roughly)
+        const latPerPixel = metersPerPixel / 111111;
+        
+        // Apply the offset with a scaling factor to ensure consistency
+        // For downward shift (positive offset), we decrease latitude
+        const scaledOffset = pixelOffset * 0.9; // Apply most of the offset
+        offsetLocation.lat = location.lat - (scaledOffset * latPerPixel);
+        
+        logger.debug(`[cameraAnimationManager] Applied ${pixelOffset}px offset (scaled: ${scaledOffset}px) at zoom ${targetZoom} to location [${location.lat}] → [${offsetLocation.lat}]`);
+      } catch (e) {
+        logger.warn(`[cameraAnimationManager] Could not calculate lat/lng offset: ${e}`);
+        // If calculation fails, use the original location
+        offsetLocation = location;
+      }
+    }
+    
+    // Use the adjusted location directly instead of applying pan offset later
     controls.animateCameraTo({
-      center: location,
-      zoom: options?.zoom || 16,
-      tilt: options?.tilt || 0, // Flat view for search results
+      center: offsetLocation,
+      zoom: options?.zoom || 15, // Default to zoom level 15 for a wider view
+      tilt: options?.tilt || 0,  // Flat view for search results
       duration: options?.duration || 800,
-      onComplete: options?.onComplete
+      onComplete: options?.onComplete // Use the original onComplete handler directly
     });
   }
 
@@ -218,18 +310,28 @@ class CameraAnimationManager {
     const [depLng, depLat] = departureStation.geometry.coordinates;
     const [arrLng, arrLat] = arrivalStation.geometry.coordinates;
     
-    // Note: We don't need to check isAnimating here
-    // The underlying useCameraAnimation hook will handle this
+    // Get the fixed offset value
+    const pixelOffset = this.getPanOffset();
     
-    logger.debug(`[cameraAnimationManager] Animating to show route between stations ${departureStationId} and ${arrivalStationId}`);
+    // For routes, we can't directly offset the center (since it's calculated from bounds)
+    // Instead, we'll use additional padding to adjust the viewport
+    let adjustedPadding = options?.padding || 100;
     
-    // Use animateToRoute for showing both points
+    // If we have a positive offset (moving view down), add a scaled version to the padding
+    if (pixelOffset > 0) {
+      // Use a more substantial padding adjustment
+      const scaledPadding = Math.round(pixelOffset * 0.9);
+      adjustedPadding = adjustedPadding + scaledPadding;
+      logger.debug(`[cameraAnimationManager] Adjusted route padding to ${adjustedPadding}px to account for ${pixelOffset}px offset (scaled: ${scaledPadding}px)`);
+    }
+    
+    // Use animateToRoute with adjusted padding
     controls.animateToRoute({
       start: { lat: depLat, lng: depLng },
       end: { lat: arrLat, lng: arrLng },
-      padding: options?.padding || 100,
+      padding: adjustedPadding,
       duration: options?.duration || 800,
-      onComplete: options?.onComplete
+      onComplete: options?.onComplete // Use the original onComplete handler directly
     });
   }
 
@@ -251,10 +353,12 @@ class CameraAnimationManager {
     const controls = this.getCameraControls(cameraControls);
     if (!controls || !location) return;
     
-    // Note: We don't need to check isAnimating here
-    // The underlying useCameraAnimation hook will handle this
+    // Get the pan offset based on sheet height and log it
+    const panOffset = this.getPanOffset();
+    logger.debug(`[cameraAnimationManager] Creating circular animation around [${location.lat}, ${location.lng}] with sheet offset: ${panOffset}px`);
     
-    logger.debug(`[cameraAnimationManager] Creating circular animation around [${location.lat}, ${location.lng}]`);
+    // Create a completion handler that applies the pan offset
+    const onCompleteWithPan = this.createCompletionWithPanOffset(options?.onComplete);
     
     // Use circleAroundPoint for orbital animations
     controls.circleAroundPoint({
@@ -264,7 +368,7 @@ class CameraAnimationManager {
       revolutions: options?.revolutions || 1,
       zoom: options?.zoom || 18,
       tilt: options?.tilt || 45,
-      onComplete: options?.onComplete
+      onComplete: onCompleteWithPan
     });
   }
 
@@ -355,8 +459,8 @@ class CameraAnimationManager {
    */
   public onLocationSearch(location: LatLngLiteral, cameraControls?: any): void {
     this.animateToLocation(location, {
-      zoom: 16,
-      tilt: 0, // Flat view for search results
+      zoom: 15,  // Lower zoom level to show more context around the search location
+      tilt: 0,   // Flat view for search results
       duration: 800
     }, cameraControls);
   }
@@ -366,8 +470,8 @@ class CameraAnimationManager {
    */
   public onLocateMePressed(location: LatLngLiteral, cameraControls?: any): void {
     this.animateToLocation(location, {
-      zoom: 16,
-      tilt: 0, // Flat view for user location
+      zoom: 15,  // Lower zoom level to show more area around user
+      tilt: 0,   // Flat view for user location
       duration: 800
     }, cameraControls);
   }

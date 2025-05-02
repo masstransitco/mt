@@ -31,7 +31,7 @@ interface MarkerStateConfig {
 }
 
 // Type for marker state to improve type safety
-type MarkerState = "normal" | "departure" | "arrival" | "listSelected" | "qr" | "virtual";
+type MarkerState = "normal" | "departure" | "arrival" | "listSelected" | "qr" | "virtual" | "pickupDropoff";
 
 // Using inline console.log instead of helper function for development logging
 
@@ -53,6 +53,7 @@ function getMarkerStateConfig(
   // Determine state using simplified precedence rules
   let state: MarkerState = "normal";
   if (isVirtual && station.id === departureStationId) state = "qr";
+  else if (station.id === departureStationId && station.id === arrivalStationId) state = "pickupDropoff";
   else if (station.id === departureStationId) state = "departure";
   else if (station.id === arrivalStationId) state = "arrival";
   else if (station.id === listSelectedStationId) state = "listSelected";
@@ -133,7 +134,8 @@ const MARKER_STATE_CLASSES = {
   departure: "marker-departure",
   arrival: "marker-arrival",
   listSelected: "marker-selected",
-  normal: "marker-normal"
+  normal: "marker-normal",
+  pickupDropoff: "marker-pickup-dropoff"
 };
 
 // DOM MANIPULATION UTILITIES
@@ -305,13 +307,15 @@ function updateStandardStationContent(
   
   if (titleEl) {
     // Determine station role
-    const stationStatus = station.id === departureStationId ? 'pickup' :
+    const stationStatus = (station.id === departureStationId && station.id === arrivalStationId) ? 'pickupdropoff' :
+                          station.id === departureStationId ? 'pickup' :
                           station.id === arrivalStationId ? 'dropoff' : 'nearest';
     titleEl.setAttribute('data-station-status', stationStatus);
     
     // Set the text content based on role
-    titleEl.textContent = station.id === departureStationId ? 'Pickup' : 
-                         station.id === arrivalStationId ? 'Dropoff' : 'NEAREST';
+    titleEl.textContent = (station.id === departureStationId && station.id === arrivalStationId) ? 'PICKUP & DROPOFF' :
+                          station.id === departureStationId ? 'Pickup' : 
+                          station.id === arrivalStationId ? 'Dropoff' : 'NEAREST';
   }
   
   if (valueEl) {

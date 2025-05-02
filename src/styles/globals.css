@@ -166,6 +166,14 @@
       z-index: var(--z-index-infobar) !important;
     }
     
+  /* QR Scanner needs to be interactive */
+   .qr-scanner-container,
+   .qr-scanner-container * {
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+      z-index: var(--z-index-modal) !important;
+    }
+    
   /* StationSelector inside sheet styling */
 .sheet-content-area .station-selector {
     margin: 0.25rem 0 1rem;   /* 4 px top, 16 px bottom */
@@ -469,3 +477,183 @@ div[role="region"][aria-label*="alpha channel"] {
  * Map Marker Styles moved to marker-styles.css 
  * For better organization and performance
  */
+
+/* QR Scanner Styling */
+/* Override default scanner corner styling */
+.custom-scanner::before,
+.custom-scanner::after,
+.custom-scanner *::before,
+.custom-scanner *::after {
+  display: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+.custom-scanner div[class*="scannerBorder"],
+.custom-scanner div[style*="border"] {
+  display: none !important;
+  border: none !important;
+  border-color: transparent !important;
+}
+
+/* Additional styling to hide any library-specific elements */
+.custom-scanner [class*="border"],
+.custom-scanner [class*="corner"],
+.custom-scanner [class*="frame"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  border: none !important;
+}
+
+/* End override scanner styling */
+.qr-scan-frame-container {
+  position: absolute;
+  inset: 0;
+  z-index: 999; /* Increased to ensure it's above the scanner overlay */
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-scan-frame-box {
+    position: relative;
+    width: 70%;
+    aspect-ratio: 1 / 1; /* keeps it square */
+}
+
+/* Corner frames with white glowing effect */
+.qr-corner {
+  position: absolute;
+  width: 40px; /* Increased from 30px */
+  height: 40px; /* Increased from 30px */
+  border-radius: 2px;
+  z-index: 1000; /* Increased to ensure it's above everything */
+}
+
+.qr-corner::before, .qr-corner::after {
+  content: '';
+  position: absolute;
+  background-color: white;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+/* Horizontal lines */
+.qr-corner::before {
+  height: 4px; /* Increased from 3px */
+  width: 100%;
+}
+
+/* Vertical lines */
+.qr-corner::after {
+  width: 4px; /* Increased from 3px */
+  height: 100%;
+}
+
+/* Position the corners */
+.qr-corner.top-left {
+  top: 15px;
+  left: 15px;
+}
+
+.qr-corner.top-right {
+  top: 15px;
+  right: 15px;
+}
+
+.qr-corner.bottom-left {
+  bottom: 15px;
+  left: 15px;
+}
+
+.qr-corner.bottom-right {
+  bottom: 15px;
+  right: 15px;
+}
+
+/* Corner positioning for the border lines */
+.qr-corner.top-left::before { top: 0; left: 0; }
+.qr-corner.top-left::after { top: 0; left: 0; }
+
+.qr-corner.top-right::before { top: 0; right: 0; }
+.qr-corner.top-right::after { top: 0; right: 0; }
+
+.qr-corner.bottom-left::before { bottom: 0; left: 0; }
+.qr-corner.bottom-left::after { bottom: 0; left: 0; }
+
+.qr-corner.bottom-right::before { bottom: 0; right: 0; }
+.qr-corner.bottom-right::after { bottom: 0; right: 0; }
+
+/* Scanning light animation */
+.qr-scan-light {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, 
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  z-index: 25;
+  box-shadow: 0 0 10px 2px rgba(255, 255, 255, 0.4);
+  animation: scanLight 2s ease-in-out infinite;
+}
+
+@keyframes scanLight {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+/* Breathing animation for the corner frames */
+
+.qr-corner {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* Add delay to create a wave effect in the corners */
+.qr-corner.top-left {
+  animation-delay: 0s;
+}
+.qr-corner.top-right {
+  animation-delay: 0.75s;
+}
+.qr-corner.bottom-right {
+  animation-delay: 1.5s;
+}
+.qr-corner.bottom-left {
+  animation-delay: 2.25s;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.7;
+    filter: blur(0.5px);
+    box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(0px);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  }
+}
+
+/* Ensure animations never pause when camera/video surfaces render */
+.qr-corner,
+.qr-scan-light {
+  animation-play-state: running !important;
+}

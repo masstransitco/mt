@@ -11,20 +11,23 @@
   --marker-bg: rgba(0, 0, 0, 0.98);
   --marker-text: #FFFFFF;
   --marker-border-normal: rgba(255, 255, 255, 0.9);
-  --marker-border-arrival: #3E6AE1;
+  --marker-border-arrival: #FF0000; /* Changed from blue to red */
   --marker-border-selected: #10A37F;
   --marker-border-virtual: rgba(16, 163, 127, 0.8);
+  --marker-border-pickup-dropoff: #00BFFF; /* Light electric blue for pickup & dropoff */
   
   /* Replace shadows with gradients */
   --marker-glow-normal: none;
   --marker-glow-departure: radial-gradient(circle at center, rgba(255, 255, 255, 0.4) 0%, transparent 70%);
-  --marker-glow-arrival: radial-gradient(circle at center, rgba(62, 106, 225, 0.4) 0%, transparent 70%);
+  --marker-glow-arrival: radial-gradient(circle at center, rgba(255, 0, 0, 0.4) 0%, transparent 70%);
   --marker-glow-selected: radial-gradient(circle at center, rgba(16, 163, 127, 0.4) 0%, transparent 70%);
+  --marker-glow-pickup-dropoff: radial-gradient(circle at center, rgba(0, 191, 255, 0.4) 0%, transparent 70%);
   
   --marker-expanded-shadow-normal: 0 4px 12px rgba(0,0,0,0.3);
   --marker-expanded-shadow-departure: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(255, 255, 255, 0.5);
-  --marker-expanded-shadow-arrival: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(62, 106, 225, 0.6);
+  --marker-expanded-shadow-arrival: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(255, 0, 0, 0.6);
   --marker-expanded-shadow-selected: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(16, 163, 127, 0.6);
+  --marker-expanded-shadow-pickup-dropoff: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(0, 191, 255, 0.6);
   
   --marker-transition-fast: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   --marker-transition-normal: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -303,6 +306,28 @@ body.zoom-out {
  * --- STATE-SPECIFIC MARKER STYLING ---
  * Visual styles for different marker states
  */
+
+/* PICKUP & DROPOFF MARKER (SAME STATION) */
+.marker-pickup-dropoff {
+  z-index: var(--z-index-selected-marker);
+}
+
+.marker-pickup-dropoff .marker-collapsed {
+  border-color: var(--marker-border-pickup-dropoff);
+  background: var(--marker-glow-pickup-dropoff), var(--marker-bg);
+  border-width: 2px;
+}
+
+.marker-pickup-dropoff .marker-expanded {
+  border-color: var(--marker-border-pickup-dropoff);
+  border-width: 1.5px;
+  box-shadow: var(--marker-expanded-shadow-pickup-dropoff);
+}
+
+.marker-pickup-dropoff .info-title {
+  color: var(--marker-border-pickup-dropoff);
+  font-weight: 700;
+}
 
 /* DEPARTURE MARKER */
 .marker-departure {
