@@ -12,13 +12,17 @@ interface ReturnToSameStationProps {
   position?: ReturnToSameStationPosition
   // Optional callback for component-specific behavior
   onClick?: () => void
+  // Whether the button is disabled
+  disabled?: boolean
 }
 
 export default function ReturnToSameStation({
   position = "inline",
   onClick,
+  disabled = false,
 }: ReturnToSameStationProps) {
   const handleClick = () => {
+    if (disabled) return;
     console.log("[ReturnToSameStation] Button clicked")
     onClick?.()
   }
@@ -33,16 +37,20 @@ export default function ReturnToSameStation({
   return (
     <motion.button
       onClick={handleClick}
-      whileTap={{ scale: 0.95 }}
+      whileTap={disabled ? {} : { scale: 0.95 }}
       className={cn(`
         relative flex items-center justify-center gap-2
-        text-xs text-white font-medium
-        border border-white/10 rounded-xl
-        bg-black/90 backdrop-blur-md
-        hover:bg-black hover:border-white/20
+        text-xs font-medium
+        border rounded-xl
+        backdrop-blur-md
         transition-all duration-200 shadow-lg z-10
-      `, buttonStyles[position])}
+      `, 
+      disabled 
+        ? "text-gray-500 border-gray-800/20 bg-black/70 cursor-not-allowed" 
+        : "text-white border-white/10 bg-black/90 hover:bg-black hover:border-white/20",
+      buttonStyles[position])}
       type="button"
+      disabled={disabled}
     >
       <CornerUpLeft className="w-3.5 h-3.5" />
       <span>Return to same</span>

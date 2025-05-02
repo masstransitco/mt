@@ -94,42 +94,81 @@ export default function QrScannerOverlay({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80"
+          className="fixed inset-0 z-[9999] flex items-start justify-center pt-[20vh] bg-black/90"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          style={{
+            pointerEvents: "auto",
+            touchAction: "auto"
+          }}
         >
-          <div className="w-full max-w-sm relative m-4">
+          <div className="w-full max-w-sm relative mx-4 qr-scanner-container">
             <button
               onClick={handleClose}
-              className="absolute top-2 right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+              className="absolute -top-12 right-0 z-10 flex items-center justify-center w-10 h-10 rounded-full bg-black/70 text-white hover:bg-black/90 transition-colors border border-white/10 backdrop-blur-md"
               aria-label="Close QR Scanner"
+              style={{ pointerEvents: "auto", touchAction: "auto" }}
             >
               ✕
             </button>
 
-            <div className="p-4 text-center text-white space-y-3 bg-black bg-opacity-50 rounded-lg">
-              <h2 className="text-xl font-bold">Scan Car QR Code</h2>
-              <p className="text-sm">
-                Point your camera at the QR code on the car to start driving
-              </p>
+            <div className="relative p-4 text-center text-white space-y-3 bg-black/80 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-black/50 to-black/90 z-0"></div>
+              
+              <div className="relative z-10">
+                <h2 className="text-xl font-semibold mb-2">Scan Car QR Code</h2>
+                <p className="text-sm text-white/70">
+                  Point your camera at the QR code on the car to start driving
+                </p>
+              </div>
 
-              <div className="mt-3 overflow-hidden rounded-lg">
+              <div className="relative mt-3 overflow-hidden rounded-lg z-10" style={{ aspectRatio: "4/3" }}>
                 {scanning && (
-                  <Scanner
-                    onScan={handleScan}
-                    onError={handleError}
-                    constraints={{
-                      facingMode: "environment",
-                    }}
-                  />
+                  <div className="absolute inset-0 z-10">
+                    <Scanner
+                      onScan={handleScan}
+                      onError={handleError}
+                      constraints={{
+                        facingMode: "environment",
+                      }}
+                      scanDelay={500}
+                      components={{ finder: false }}
+                      classNames={{ container: "custom-scanner" }}
+                      styles={{
+                        container: {
+                          position: "relative",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          width: "100%",
+                          height: "100%",
+                        },
+                        video: {
+                          objectFit: "cover",
+                          width: "100%",
+                          height: "100%",
+                        },
+                      }}
+                    />
+                  </div>
                 )}
 
                 {loading && (
                   <div className="p-8 flex items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
                   </div>
                 )}
+                {/* White framing + scan‑light overlay (always on top) */}
+                <div className="qr-scan-frame-container absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
+                  <div className="qr-scan-frame-box">
+                    <div className="qr-corner top-left"></div>
+                    <div className="qr-corner top-right"></div>
+                    <div className="qr-corner bottom-left"></div>
+                    <div className="qr-corner bottom-right"></div>
+
+                    <div className="qr-scan-light"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useCallback, useRef, useState, useEffect, type ReactNode } from "react"
+import { useCallback, useRef, useState, useEffect, type ReactNode, forwardRef } from "react"
 import { AnimatePresence, motion, useDragControls, type PanInfo, type Variants } from "framer-motion"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -91,17 +91,20 @@ const triggerHapticFeedback = () => {
 /**
  * A Sheet (bottom drawer) with open/close/minimize states managed via Framer Motion.
  */
-export default function Sheet({
-  isOpen,
-  isMinimized,
-  onMinimize,
-  onExpand,
-  onDismiss,
-  highPriority = false,
-  disableMinimize = false,
-  className,
-  children,
-}: SheetProps) {
+const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet(
+  {
+    isOpen,
+    isMinimized,
+    onMinimize,
+    onExpand,
+    onDismiss,
+    highPriority = false,
+    disableMinimize = false,
+    className,
+    children,
+  }: SheetProps,
+  ref
+) {
   // 1) Lock body scroll only if sheet is open & expanded.
   useBodyScrollLock(isOpen && !isMinimized)
 
@@ -259,6 +262,7 @@ export default function Sheet({
           dragMomentum={false}
         >
           <div
+            ref={ref}
             className={cn(
               "relative bg-black/90 backdrop-blur-md text-white rounded-t-xl shadow-xl border border-white/10 flex flex-col select-none",
               className,
@@ -322,4 +326,6 @@ export default function Sheet({
       )}
     </AnimatePresence>
   )
-}
+});
+
+export default Sheet;

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import { Calendar } from "lucide-react"
+import { Calendar, Clock } from "lucide-react"
 import { useAppSelector } from "@/store/store"
 import { selectDepartureDate, selectDepartureTime, selectIsDateTimeConfirmed, selectBookingStep } from "@/store/bookingSlice"
 import { selectDispatchRoute } from "@/store/dispatchSlice"
@@ -74,13 +74,28 @@ export default function ScheduleLaterButton({
     return "Schedule for later"
   }, [isDateTimeConfirmed, departureDate, departureTime, currentStep, pickupMins])
   
+  // Determine which icon to show
+  const ButtonIcon = useMemo(() => {
+    // Always use Calendar icon in step 1
+    if (currentStep === 1) {
+      return Calendar;
+    }
+    
+    // For step 2+, use Calendar if date/time is confirmed, otherwise Clock
+    if (isDateTimeConfirmed && departureDate && departureTime) {
+      return Calendar;
+    } else {
+      return Clock;
+    }
+  }, [currentStep, isDateTimeConfirmed, departureDate, departureTime]);
+
   return (
     <div className="flex flex-col">
       <div 
         onClick={handleButtonClick}
         className="cursor-pointer relative flex items-center justify-center gap-2 text-xs text-white font-medium px-3 py-1.5 h-[30px] w-full border border-white/10 rounded-xl bg-black/90 backdrop-blur-md hover:bg-black hover:border-white/20 transition-all duration-200"
       >
-        <Calendar className="w-3.5 h-3.5" />
+        <ButtonIcon className="w-3.5 h-3.5" />
         <span>{buttonText}</span>
       </div>
       
@@ -92,6 +107,7 @@ export default function ScheduleLaterButton({
               <DateTimeSelector 
                 onDateTimeConfirmed={handleTimeConfirmed}
                 onCancel={handleDateTimeCancel}
+                defaultToQuickPickup={currentStep >= 2 && !isDateTimeConfirmed}
               />
             </div>
           </div>

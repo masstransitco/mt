@@ -3,7 +3,11 @@
 import { memo, useMemo } from "react"
 import { motion } from "framer-motion"
 import { useAppSelector } from "@/store/store"
-import { selectRoute } from "@/store/bookingSlice"
+import { 
+  selectRoute, 
+  selectDepartureStationId, 
+  selectArrivalStationId 
+} from "@/store/bookingSlice"
 
 interface FareDisplayProps {
   baseFare?: number
@@ -20,6 +24,13 @@ const FareDisplay = memo(function FareDisplay({
 }: FareDisplayProps) {
   // Get route from Redux to calculate estimated duration
   const route = useAppSelector(selectRoute)
+  
+  // Get departure and arrival station IDs to check if they're the same
+  const departureStationId = useAppSelector(selectDepartureStationId)
+  const arrivalStationId = useAppSelector(selectArrivalStationId)
+  
+  // Check if departure and arrival stations are the same
+  const isSameStation = departureStationId && arrivalStationId && departureStationId === arrivalStationId
   
   // Calculate estimated fare based on route duration
   const { estimatedFare, estimatedDuration } = useMemo(() => {
@@ -50,7 +61,7 @@ const FareDisplay = memo(function FareDisplay({
         transition={{ duration: 0.4 }}
         className="text-gray-400 text-xs uppercase tracking-wider font-normal mb-2 text-center w-full"
       >
-        Estimated Fare
+        {isSameStation ? "Fare" : "Estimated Fare"}
       </motion.div>
 
       {/* Main fare display container */}
@@ -81,6 +92,13 @@ const FareDisplay = memo(function FareDisplay({
               </>
             )}
           </div>
+          
+          {/* Per-minute rate info when same station */}
+          {isSameStation && (
+            <div className="mt-2 text-xs text-blue-400 font-medium">
+              ${perMinuteRate.toFixed(2)} per minute rate applies
+            </div>
+          )}
           
           {/* Max daily fare note */}
           <div className="mt-2 text-xs text-gray-500">
