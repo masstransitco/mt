@@ -9,15 +9,16 @@ export const DynamicCar3DViewer = dynamic(
   () => import('./Car3DViewer'),
   { 
     ssr: false,
-    loading: () => <CarSceneFallback message="Loading 3D viewer..." />
+    loading: () => null // IMPORTANT: No loading UI here
   }
 );
 
+// Updated to include onReady prop for loading coordination
 export const DynamicCarCardScene = dynamic(
   () => import('./CarCardScene'),
   { 
     ssr: false,
-    loading: () => <CarSceneFallback message="Loading vehicle scene..." />
+    loading: () => null // IMPORTANT: No loading UI here
   }
 );
 

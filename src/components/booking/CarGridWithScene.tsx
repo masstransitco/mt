@@ -36,18 +36,23 @@ function preloadCommonCarModels() {
   }
 }
 
-// Loading skeleton
-const LoadingSkeleton = memo(() => (
+// Define interface for loading state props
+interface LoadingStateProps {
+  message?: string;
+}
+
+// Unified loading state component
+const UnifiedLoadingState = memo(({ message = "Gathering available cars..." }: LoadingStateProps) => (
   <div className="rounded-xl border border-white/10 bg-black/90 h-60 w-full overflow-hidden backdrop-blur-sm">
     <div className="h-full w-full flex items-center justify-center">
       <div className="flex flex-col items-center justify-center gap-2">
-        <div className="w-6 h-6 border-2 border-white/10 border-t-green-500 rounded-full animate-spin" />
-        <div className="text-xs text-gray-400">Loading vehicles...</div>
+        <div className="w-6 h-6 border-2 border-white/10 border-t-blue-500 rounded-full animate-spin" />
+        <div className="text-xs text-gray-400">{message}</div>
       </div>
     </div>
   </div>
 ))
-LoadingSkeleton.displayName = "LoadingSkeleton"
+UnifiedLoadingState.displayName = "UnifiedLoadingState"
 
 function CarGridWithScene({ 
   className = "", 
@@ -61,6 +66,9 @@ function CarGridWithScene({
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
   const [loadingError, setLoadingError] = useState<string | null>(null)
+  
+  // IMPORTANT: New state for scene loading coordination
+  const [sceneReady, setSceneReady] = useState(false)
   
   // Get available cars with optimized hook
   const availableCarsForDispatch = useAvailableCarsForDispatch({ autoRefresh: true })
@@ -99,11 +107,24 @@ function CarGridWithScene({
     }
     
     isMountedRef.current = true
+    
+    // Create fallback timer to force scene ready after a timeout
+    // This prevents infinite loading if the callback doesn't fire
+    const fallbackTimer = setTimeout(() => {
+      if (!sceneReady && isMountedRef.current) {
+        console.log("[CarGridWithScene] Fallback timer triggered - forcing scene ready state")
+        setSceneReady(true)
+        setLoading(false)
+        setInitialized(true)
+      }
+    }, 3000) // 3 second fallback
+    
     return () => {
       isMountedRef.current = false
       if (fetchDataTimeoutRef.current) clearTimeout(fetchDataTimeoutRef.current)
+      clearTimeout(fallbackTimer)
     }
-  }, [initialized, isBrowser])
+  }, [initialized, isBrowser, sceneReady])
   
   // Optimized fetch data with better parallelization
   const fetchData = useCallback(async () => {
@@ -180,21 +201,43 @@ function CarGridWithScene({
     }
   }, [availableCars, loading])
   
+  // IMPORTANT: Handler for scene ready state
+  const handleSceneReady = useCallback(() => {
+    console.log("[CarGridWithScene] Scene is ready")
+    // Force immediate state update to prevent loading spinner from showing too long
+    setLoading(false)
+    setInitialized(true)
+    setSceneReady(true)
+  }, [])
+
   // Early return if not visible
   if (!isVisible) return null
   
   // Show loading state or error
-  if (loading && !initialized) return <LoadingSkeleton />
+  // IMPORTANT: Modified to use the unified loading component and only show if data is still loading
+  // and scene isn't ready yet
+  if ((loading && !initialized) || (!sceneReady && availableCars.length > 0)) {
+    console.log("[CarGridWithScene] Showing loading spinner: loading=", loading, 
+                "initialized=", initialized, "sceneReady=", sceneReady, 
+                "availableCars.length=", availableCars.length)
+    return <UnifiedLoadingState />
+  }
   
   if (loadingError) {
     return (
-      <CarSceneFallback message={loadingError} height="15rem" />
+      <div className="rounded-xl border border-white/10 bg-black/90 h-60 w-full overflow-hidden backdrop-blur-sm">
+        <div className="h-full w-full flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center gap-2">
+            <div className="text-xs text-destructive">{loadingError}</div>
+          </div>
+        </div>
+      </div>
     )
   }
   
   // Safety check for React SSR
   if (!isBrowser) {
-    return <CarSceneFallback message="Initializing..." height="15rem" />;
+    return <UnifiedLoadingState message="Initializing..." />;
   }
   
   return (
@@ -215,11 +258,13 @@ function CarGridWithScene({
             transition={{ duration: 0.3 }}
             className="w-full h-64 overflow-visible flex justify-center" // Increased height for more visual impact
           >
+            {/* Pass the onReady handler to coordinate loading states */}
             <DynamicCarCardScene 
               cars={availableCars} 
               isVisible={inView} 
               className="overflow-visible w-full"
               height="h-full"
+              onReady={handleSceneReady}
             />
           </motion.div>
         </AnimatePresence>

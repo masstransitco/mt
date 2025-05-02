@@ -137,6 +137,7 @@ interface CarCardSceneProps {
   className?: string
   isVisible?: boolean
   height?: string
+  onReady?: () => void // Add onReady callback
 }
 
 // Server-side placeholder
@@ -449,17 +450,17 @@ function CarCardSceneClient({ cars, className = "", isVisible = true, height = '
         </div>
       )}
       
-      {/* Car stats indicators - overlaid at bottom of scene, moved closer to footer */}
-      <div className="absolute bottom-8 left-0 right-0 z-20 px-6 flex items-center justify-center gap-3">
-        <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-lg">
+      {/* Car stats indicators - overlaid at bottom of scene, properly spaced from footer */}
+      <div className="absolute bottom-12 left-0 right-0 z-30 px-6 flex items-center justify-center gap-3">
+        <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-xl">
           <BatteryIcon className={`w-4 h-4 ${batteryIconColor}`} />
           <span className="text-xs font-medium text-white">{batteryPercentage}%</span>
         </div>
-        <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-lg">
+        <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-xl">
           <Gauge className="w-4 h-4 text-blue-400" />
           <span className="text-xs font-medium text-white">{(batteryPercentage * 3.2).toFixed(0)} km</span>
         </div>
-        <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-lg">
+        <div className="flex items-center gap-1.5 bg-black/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/20 shadow-xl">
           <CarSeat className="w-4 h-4 text-gray-300" />
           <span className="text-xs font-medium text-white">1+4</span>
         </div>
@@ -478,18 +479,28 @@ function CarCardSceneClient({ cars, className = "", isVisible = true, height = '
           )}
         </div>
         
-        {selectedCar?.registration && (
-          <div className="text-xs font-bold bg-[#E82127] text-white rounded-md px-2.5 py-1 ml-auto mr-4">
-            {selectedCar.registration}
+        {selectedCar?.name && (
+          <div className="text-xs font-bold bg-[#FFFFFF] text-black px-3 py-1.5 ml-auto mr-4 shadow-sm flex items-center justify-center min-w-[60px] max-w-[100px] overflow-hidden" style={{ borderRadius: '2px' }}>
+            <span className="truncate">
+              {selectedCar.name.length >= 3 ? (
+                <>
+                  {selectedCar.name.slice(0, 2)}
+                  <span className="inline-block mx-0.5"></span>
+                  {selectedCar.name.slice(2)}
+                </>
+              ) : (
+                selectedCar.name
+              )}
+            </span>
           </div>
         )}
       </div>
 
       {/* Car info overlay with last driven info - condensed height */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 backdrop-blur-md bg-black/50 px-6 py-2 
+      <div className="absolute bottom-0 left-0 right-0 z-40 backdrop-blur-md bg-black/50 px-6 py-2 
                      border-t border-white/10 flex items-center justify-between rounded-b-xl">
         <div className="flex-1 flex items-center gap-1.5 pl-4 min-w-0">
-          <div className="relative">
+          <div className="relative z-50">
             <span 
               onClick={handleOdometerClick}
               className="cursor-pointer"
@@ -506,11 +517,22 @@ function CarCardSceneClient({ cars, className = "", isVisible = true, height = '
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 5 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute left-0 bottom-4 bg-black/80 text-white text-xs px-2.5 py-1.5 rounded-md shadow-lg border border-white/20 z-10 min-w-32 backdrop-blur-sm"
+                  className="absolute left-0 bottom-4 bg-black/90 text-white text-xs px-3 py-2 rounded-md shadow-xl border border-white/30 z-50 min-w-36 backdrop-blur-md"
                 >
-                  <div>Total distance: {selectedCar?.odometer || "N/A"} km</div>
-                  <div>Year: {selectedCar?.year || "2022"}</div>
-                  <div className="absolute -bottom-2 left-2 transform w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/80" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">Distance:</span> {selectedCar?.odometer || "N/A"} km
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">Year:</span> {selectedCar?.year || "2022"}
+                    </div>
+                    {selectedCar?.registration && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">Reg:</span> {selectedCar.registration}
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute -bottom-2 left-2 transform w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/90" />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -530,16 +552,24 @@ function CarCardSceneClient({ cars, className = "", isVisible = true, height = '
 export default function CarCardScene(props: CarCardSceneProps) {
   const isClient = useIsClient();
   
-  // Add global resource cleanup when unmounting
+  // Add global resource cleanup when unmounting and call onReady
   useEffect(() => {
+    // Call onReady callback immediately - this ensures the loading spinner disappears
+    if (isClient) {
+      console.log("[CarCardScene] Client-side render complete, calling onReady");
+      // Call immediately to prevent the spinner from staying indefinitely
+      props.onReady?.();
+    }
+    
     return () => {
       // Run cleanup on component unmount
       cleanupThreeResources();
     };
-  }, []);
+  }, [isClient, props.onReady]);
   
   if (!isClient) {
-    return <Placeholder className={props.className} height={props.height} />
+    // Don't show placeholder - parent will handle loading UI
+    return null;
   }
   
   return <CarCardSceneClient {...props} />
