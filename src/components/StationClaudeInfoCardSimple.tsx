@@ -327,7 +327,12 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
     // Also fetch weather data
     const getWeather = async () => {
       const data = await fetchHKWeather();
-      setWeatherData(data);
+      // Explicitly check the type to make TypeScript happy
+      if (data !== null) {
+        setWeatherData(data);
+      } else {
+        setWeatherData(null);
+      }
     };
     getWeather();
   }, [station, language]);
