@@ -3,8 +3,19 @@
 
 import type { StationFeature } from "@/store/stationsSlice";
 
-// Direct API key for development
-export const ANTHROPIC_API_KEY = "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";
+// API key should be stored in environment variables
+export const API_KEYS = {
+  // Try both environment variable names, preferring ANTHROPIC_API_KEY over CLAUDE_API_KEY
+  ANTHROPIC: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '', 
+};
+
+// Export for backward compatibility during transition
+export const ANTHROPIC_API_KEY = API_KEYS.ANTHROPIC;
+
+// Log a warning if no API key is found
+if (!ANTHROPIC_API_KEY) {
+  console.warn('[anthropic-config] No Anthropic API key found in environment variables. Please set ANTHROPIC_API_KEY or CLAUDE_API_KEY.');
+}
 
 // Models configuration
 export const ANTHROPIC_CONFIG = {
