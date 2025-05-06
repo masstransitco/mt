@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { API_KEYS, PROMPT_TEMPLATES, OPENAI_CONFIG, getCachedData, setCachedData } from '@/lib/openai-config';
-import { StationFeature } from '@/store/stationsSlice';
+import { API_KEYS, PROMPT_TEMPLATES, OPENAI_CONFIG, getCachedData, setCachedData } from '@/src/lib/openai-config';
+import { StationFeature } from '@/src/store/stationsSlice';
 
 // Directly use the provided API key
 const OPENAI_API_KEY = "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";
