@@ -11,8 +11,8 @@ export const API_KEYS = {
 // Formats a station's location information into a string
 const formatStationLocation = (station: StationFeature) => {
   const { properties, geometry } = station;
-  const name = properties?.name || 'Unknown Station';
-  const address = properties?.address || '';
+  const name = properties?.Place || 'Unknown Station';
+  const address = properties?.Address || '';
   const [longitude, latitude] = geometry.coordinates;
   
   return `${name} (${address}) at coordinates ${latitude}, ${longitude}`;
