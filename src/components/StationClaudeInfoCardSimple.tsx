@@ -170,6 +170,9 @@ interface WeatherData {
   windSpeed: number;
   icon: string;
   isMock?: boolean;
+  // Add missing properties needed in the UI
+  rainChance?: number;
+  aqi?: number;
 }
 
 // Weather API data from lib/weather.ts
@@ -387,7 +390,10 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
           description: getWeatherDescriptionFromCode(apiData.weathercode),
           humidity: 0, // Not available in API, set default
           windSpeed: apiData.windspeed,
-          icon: getWeatherIconFromCode(apiData.weathercode)
+          icon: getWeatherIconFromCode(apiData.weathercode),
+          // Add the additional properties from the API
+          rainChance: apiData.rainChance,
+          aqi: apiData.aqi
         };
         setWeatherData(localWeatherData);
       } else {
@@ -656,10 +662,13 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     <div className="mr-2">
                       {weatherData ? (
                         <div className="text-yellow-400 text-xl">
-                          <i className={`wi ${weatherData.weathercode === 0 ? 'wi-day-sunny' : 
-                            (weatherData.weathercode >= 1 && weatherData.weathercode <= 3 ? 'wi-day-cloudy' : 
-                            (weatherData.weathercode >= 80 && weatherData.weathercode <= 82 ? 'wi-day-rain' : 
-                            (weatherData.weathercode >= 95 && weatherData.weathercode <= 99 ? 'wi-day-thunderstorm' : 'wi-cloud')))}`} />
+                          <i className={`wi ${
+                            weatherData.condition === "Clear" ? 'wi-day-sunny' : 
+                            weatherData.condition === "Partly Cloudy" ? 'wi-day-cloudy' : 
+                            weatherData.condition === "Rain" ? 'wi-day-rain' : 
+                            weatherData.condition === "Thunderstorm" ? 'wi-day-thunderstorm' : 
+                            'wi-cloud'
+                          }`} />
                         </div>
                       ) : (
                         <WeatherIconComponent />
@@ -668,7 +677,7 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     
                     <div>
                       {weatherData ? (
-                        <span className="text-lg font-semibold text-white">{Math.round(weatherData.temperature)}°C</span>
+                        <span className="text-lg font-semibold text-white">{Math.round(weatherData.temp)}°C</span>
                       ) : (
                         <span className="text-lg font-semibold text-white">{Math.round(stationInfo?.weather?.temp || 0)}°C</span>
                       )}
@@ -680,11 +689,11 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     <>
                       <div className="flex items-center pointer-events-auto">
                         <Droplets size={14} className="mr-1 text-blue-400" />
-                        <span className="text-xs text-white">{weatherData.rainChance}%</span>
+                        <span className="text-xs text-white">{weatherData.rainChance || 0}%</span>
                       </div>
                       <div className="flex items-center pointer-events-auto">
                         <Wind size={14} className="mr-1 text-gray-300" />
-                        <span className="text-xs text-white">{weatherData.windspeed.toFixed(1)} km/h</span>
+                        <span className="text-xs text-white">{weatherData.windSpeed.toFixed(1)} km/h</span>
                       </div>
                       {typeof weatherData.aqi === 'number' && (
                         <div className="flex items-center pointer-events-auto">
@@ -694,6 +703,7 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                           <span className="text-xs text-white">{weatherData.aqi}</span>
                         </div>
                       )}
+                    
                     </>
                   ) : (
                     <>
