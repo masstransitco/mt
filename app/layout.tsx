@@ -1,6 +1,8 @@
 "use client";
 
 import "@/styles/globals.css";
+// Import Mapbox GL CSS globally to ensure it's available across all components
+import "mapbox-gl/dist/mapbox-gl.css";
 import { Inter } from "next/font/google";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -10,8 +12,14 @@ import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
 import { auth } from "@/lib/firebase";
+import { logger } from "@/lib/logger";
+import { initWarningSuppressions } from "@/lib/suppressExternalWarnings";
+
+// Initialize warning suppressions
+initWarningSuppressions();
 import Spinner from "@/components/ui/spinner";
 import PwaMetaTags from "@/components/PwaMetaTags";
+import { AnimationDebugger } from "@/components/AnimationDebugger";
 
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
@@ -74,24 +82,24 @@ function BookingStateRecovery() {
   useEffect(() => {
     if (!isSignedIn) return; // only apply if user is signed in
 
-    console.log(`[BookingStateRecovery] Step changed: ${bookingStep}`);
+    logger.debug(`[BookingStateRecovery] Step changed: ${bookingStep}`);
 
     // If the user is in step=6, treat it as done, then reset to step=1.
     if (bookingStep === 6) {
-      console.log(`[BookingStateRecovery] Detected step=6, resetting to step 1`);
+      logger.debug(`[BookingStateRecovery] Detected step=6, resetting to step 1`);
       dispatch(resetBookingFlow());
       localStorage.removeItem("persist:booking");
       localStorage.removeItem("persist:root");
       dispatch(saveBookingDetails())
         .then(() => {
           // after reset is saved, refresh data
-          console.log("Booking reset saved, refreshing data...");
+          logger.info("Booking reset saved, refreshing data...");
           return Promise.all([
             dispatch(fetchCars()),
             dispatch(fetchDispatchLocations()),
           ]);
         })
-        .catch((err) => console.error("Error during booking reset:", err));
+        .catch((err) => logger.error("Error during booking reset:", err));
 
       toast.success("Your previous trip is completed. Ready for a new trip!");
     }
@@ -113,7 +121,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // This effect runs once when the app first mounts
     localStorage.removeItem("persist:booking");
-    console.log("[LayoutInner] Removed ephemeral booking data from localStorage");
+    logger.debug("[LayoutInner] Removed ephemeral booking data from localStorage");
   }, []);
 
   useEffect(() => {
@@ -165,16 +173,33 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // This effect previously removed localStorage data on mount,
   // but that is now handled by bookingStep5Transform. We no longer do it here.
   useEffect(() => {
-    console.log(
+    logger.debug(
       "[LayoutInner] App mount - no forced ephemeral clearing here anymore."
     );
 
     // Initialize booking state for all users, regardless of auth status
     dispatch(resetBookingFlow());
-    console.log("[LayoutInner] Initialized booking state for all users");
+    logger.debug("[LayoutInner] Initialized booking state for all users");
 
     setLoading(false);
   }, [dispatch]);
+  
+  // Add keyboard shortcut for logging level toggle
+  useEffect(() => {
+    const { LOG_LEVELS } = require('@/lib/logger');
+    
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Toggle logging with Ctrl+Shift+D
+      if (e.ctrlKey && e.shiftKey && e.key === 'd') {
+        const logger = require('@/lib/logger').logger;
+        const newLevel = logger.getLevel() === LOG_LEVELS.DEBUG ? LOG_LEVELS.INFO : LOG_LEVELS.DEBUG;
+        logger.setLevel(newLevel);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
 
   // If user is signed in, load booking details from Firestore
   useEffect(() => {
@@ -196,6 +221,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <BookingStateRecovery />
       {/* Children rendered directly with no Header */}
       {children}
+      {process.env.NODE_ENV === 'development' && <AnimationDebugger />}
     </div>
   );
 }
