@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { StationFeature } from '@/store/stationsSlice';
 import { 
+  API_KEYS,
   ANTHROPIC_API_KEY, 
   ANTHROPIC_CONFIG, 
   PROMPT_TEMPLATES 
@@ -18,6 +19,8 @@ const anthropic = new Anthropic({
 
 console.log('Anthropic API configuration:', { 
   apiKeyExists: !!ANTHROPIC_API_KEY,
+  anthropicApiKeyFromEnv: !!process.env.ANTHROPIC_API_KEY,
+  claudeApiKeyFromEnv: !!process.env.CLAUDE_API_KEY,
   defaultModel: ANTHROPIC_CONFIG.MODELS.DEFAULT,
   fallbackModel: ANTHROPIC_CONFIG.MODELS.FALLBACK
 });
