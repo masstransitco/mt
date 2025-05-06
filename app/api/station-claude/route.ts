@@ -543,7 +543,7 @@ export async function POST(request: NextRequest) {
     const results: any = {};
 
     // Execute requests in parallel for better performance
-    const tasks = [];
+    const tasks: Promise<void>[] = [];
     
     if (requestedSections.includes('basic')) {
       // Determine if we should skip cache based on skipCache flag or refreshType
