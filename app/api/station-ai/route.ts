@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { API_KEYS, PROMPT_TEMPLATES, OPENAI_CONFIG, getCachedData, setCachedData } from '@/src/lib/openai-config';
-import { StationFeature } from '@/src/store/stationsSlice';
+// Remove OpenAI import since it causes errors
+// import OpenAI from 'openai';
+import { API_KEYS, PROMPT_TEMPLATES, OPENAI_CONFIG, getCachedData, setCachedData } from '@/lib/openai-config';
+import { StationFeature } from '@/store/stationsSlice';
 
 // Directly use the provided API key
 const OPENAI_API_KEY = "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";
 const OPENAI_AUTH_SECRET = "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";
 
-// Set to false to use real OpenAI API responses
-const USE_MOCK_DATA = false;
+// Set to true to use mock data since OpenAI import is causing errors
+const USE_MOCK_DATA = true;
 
-// Initialize OpenAI client with the direct API key
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
+// Comment out OpenAI initialization until we fix the import issues
+// const openai = new OpenAI({
+//   apiKey: OPENAI_API_KEY,
+// });
 
 // Log the API configuration for debugging
 console.log('OpenAI API configuration:', { 
