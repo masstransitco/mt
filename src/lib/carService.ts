@@ -67,3 +67,24 @@ export async function commandHazardLights(number: string) {
   });
   return await response.json();
 }
+
+export async function getV2Cars() {
+  const response = await fetch('/api/v2/cars');
+  return await response.json();
+}
+
+export async function getV2CarById(id: number) {
+  const response = await fetch(`/api/v2/cars/${id}`);
+  return await response.json();
+}
+
+export async function updateV2Car(id: number, carData: any) {
+  const response = await fetch(`/api/v2/cars/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(carData)
+  });
+  return await response.json();
+}

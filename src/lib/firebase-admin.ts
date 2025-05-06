@@ -261,3 +261,57 @@ export async function verifySessionCookie(sessionCookie: string) {
     return { valid: false, error };
   }
 }
+
+/**
+ * Initialize Firebase Admin safely with proper error handling
+ */
+export function safeInitializeAdmin() {
+  try {
+    if (getApps().length > 0) {
+      return { success: true };
+    }
+    
+    // First try using the SERVICE_ACCOUNT_KEY if available
+    if (process.env.SERVICE_ACCOUNT_KEY) {
+      try {
+        const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+        initializeApp({
+          credential: cert(serviceAccount),
+        });
+        console.log("Firebase Admin initialized with SERVICE_ACCOUNT_KEY");
+        return { success: true };
+      } catch (parseError) {
+        console.error("Error parsing SERVICE_ACCOUNT_KEY:", parseError);
+        // Continue to try the next method
+      }
+    }
+    
+    // Try with individual credentials
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY 
+      ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
+      : undefined;
+      
+    if (!privateKey) {
+      return { 
+        success: false, 
+        error: "Missing FIREBASE_PRIVATE_KEY environment variable" 
+      };
+    }
+    
+    initializeApp({
+      credential: cert({
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
+        privateKey: privateKey,
+      }),
+    });
+    console.log("Firebase Admin initialized with individual credentials");
+    return { success: true };
+  } catch (error) {
+    console.error("Error initializing Firebase Admin:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error initializing Firebase Admin" 
+    };
+  }
+}

@@ -12,6 +12,7 @@ import CarsAdmin from "@/components/admin/CarsAdmin";
 import DispatchAdmin from "@/components/admin/DispatchAdmin";
 import QrGenerator from "./qr-generator/page";
 import CarServicesAdmin from '@/components/admin/CarServicesAdmin';
+import StaffsAdmin from '@/components/admin/StaffsAdmin';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -119,6 +120,12 @@ export default function AdminPage() {
         >
           Car Services
         </button>
+        <button 
+          className={`px-4 py-2 ${activeTab === "staffs" ? "border-b-2 border-blue-500 font-medium" : "text-gray-400"}`}
+          onClick={() => setActiveTab("staffs")}
+        >
+          Manage Staffs
+        </button>
       </div>
       
       {/* Content based on active tab */}
@@ -138,6 +145,8 @@ export default function AdminPage() {
       {activeTab === "qr" && <QrGenerator />}
       
       {activeTab === "carservices" && <CarServicesAdmin />}
+      
+      {activeTab === "staffs" && <StaffsAdmin />}
     </div>
   );
 }
