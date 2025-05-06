@@ -429,6 +429,12 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
     setIsComplete(false);
 
     const interval = setInterval(() => {
+      // Safety check - make sure stationInfo and content still exist
+      if (!stationInfo || !stationInfo.content) {
+        clearInterval(interval);
+        return;
+      }
+      
       if (currentIndex < stationInfo.content.length) {
         const nextChunk = stationInfo.content.substring(0, currentIndex + chunkSize);
         setDisplayedContent(nextChunk);
