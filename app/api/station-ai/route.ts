@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-// Remove OpenAI import since it causes errors
-// import OpenAI from 'openai';
+// Temporarily comment out OpenAI import to fix build error
+/* import OpenAI from 'openai'; */
 import { API_KEYS, PROMPT_TEMPLATES, OPENAI_CONFIG, getCachedData, setCachedData } from '@/lib/openai-config';
 import { StationFeature } from '@/store/stationsSlice';
 
@@ -8,17 +8,17 @@ import { StationFeature } from '@/store/stationsSlice';
 const OPENAI_API_KEY = "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";
 const OPENAI_AUTH_SECRET = "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";
 
-// Set to true to use mock data since OpenAI import is causing errors
+// Force mock data to avoid OpenAI dependency issues
 const USE_MOCK_DATA = true;
 
-// Comment out OpenAI initialization until we fix the import issues
-// const openai = new OpenAI({
-//   apiKey: OPENAI_API_KEY,
-// });
+// Temporarily comment out OpenAI initialization to fix build error
+/* const openai = new OpenAI({
+  apiKey: OPENAI_API_KEY,
+}); */
 
 // Log the API configuration for debugging
 console.log('OpenAI API configuration:', { 
-  useMockData: USE_MOCK_DATA,
+  useMockData: USE_MOCK_DATA, // Always using mock data until OpenAI import is fixed
   apiKeyExists: !!OPENAI_API_KEY,
   model: OPENAI_CONFIG.MODELS.DEFAULT
 });
@@ -170,8 +170,8 @@ async function getStationInfo(station: StationFeature, language = 'en') {
     // Get weather data
     const weatherData = await getWeatherData(latitude, longitude);
     
-    // If using mock data, return generated mock content
-    if (USE_MOCK_DATA) {
+    // Force using mock data to fix build errors
+    // if (USE_MOCK_DATA) {
       console.log('Using mock data for station:', station.id);
       const mockContent = getMockStationContent(station, language, weatherData);
       
@@ -184,8 +184,9 @@ async function getStationInfo(station: StationFeature, language = 'en') {
       setCachedData(contentCacheKey, mockData, OPENAI_CONFIG.CACHE_TIMES.STATION_INFO);
       
       return mockData;
-    }
+    // }
 
+    /* Comment out the rest of the function to avoid OpenAI dependency
     // Format current date and time based on language
     const currentDate = new Date().toLocaleDateString(language === "zh-TW" ? "zh-HK" : "en-US", {
       weekday: "long",
@@ -201,7 +202,9 @@ async function getStationInfo(station: StationFeature, language = 'en') {
 
     // Create the prompt using the template
     const prompt = PROMPT_TEMPLATES.STATION_INFO(station, language, currentDate, currentTime, weatherData);
+    */
 
+    /* Commented out to avoid OpenAI dependency issues
     console.log('Calling OpenAI API for station:', station.id);
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
@@ -221,6 +224,7 @@ async function getStationInfo(station: StationFeature, language = 'en') {
     setCachedData(contentCacheKey, result, OPENAI_CONFIG.CACHE_TIMES.STATION_INFO);
 
     return result;
+    */
   } catch (error) {
     console.error("Error generating station info:", error);
     
@@ -463,14 +467,26 @@ export async function POST(request: NextRequest) {
     const tasks = [];
     
     if (requestedSections.includes('basic')) {
+      // Since we're forcing mock data, we'll just call getStationInfo directly
+      // This is now safe because getStationInfo will only return mock data
+      const data = await getStationInfo(station, language);
+      results.weather = data.weather;
+      results.content = data.content;
+      results.isMock = true; // Always mark as mock data
+      
+      /* Commented out to avoid OpenAI dependency issues
       tasks.push(getStationInfo(station, language).then(data => {
         results.weather = data.weather;
         results.content = data.content;
         if (data.isMock) results.isMock = true;
       }));
+      */
     }
     
     if (requestedSections.includes('environmental')) {
+      // Force mock data
+      results.environmental = getMockEnvironmentalInfo(station, language);
+      /* Commented out to avoid OpenAI dependency issues
       if (USE_MOCK_DATA) {
         results.environmental = getMockEnvironmentalInfo(station, language);
       } else {
@@ -478,9 +494,13 @@ export async function POST(request: NextRequest) {
           results.environmental = data.environmental;
         }));
       }
+      */
     }
     
     if (requestedSections.includes('transport')) {
+      // Force mock data
+      results.transport = getMockTransportInfo(station, language);
+      /* Commented out to avoid OpenAI dependency issues
       if (USE_MOCK_DATA) {
         results.transport = getMockTransportInfo(station, language);
       } else {
@@ -488,9 +508,17 @@ export async function POST(request: NextRequest) {
           results.transport = data.transport;
         }));
       }
+      */
     }
     
     if (requestedSections.includes('places')) {
+      // Force mock data
+      results.places = [
+        { name: "Central Park", description: "Large urban park with walking paths" },
+        { name: "Harbor View Restaurant", description: "Seafood restaurant with scenic views" },
+        { name: "Metro Mall", description: "Shopping center with local and international brands" }
+      ];
+      /* Commented out to avoid OpenAI dependency issues
       if (USE_MOCK_DATA) {
         results.places = [
           { name: "Central Park", description: "Large urban park with walking paths" },
@@ -502,9 +530,13 @@ export async function POST(request: NextRequest) {
           results.places = data.places;
         }));
       }
+      */
     }
     
     if (requestedSections.includes('safety')) {
+      // Force mock data
+      results.safety = getMockSafetyInfo(station, language);
+      /* Commented out to avoid OpenAI dependency issues
       if (USE_MOCK_DATA) {
         results.safety = getMockSafetyInfo(station, language);
       } else {
@@ -512,9 +544,13 @@ export async function POST(request: NextRequest) {
           results.safety = data.safety;
         }));
       }
+      */
     }
     
     if (requestedSections.includes('cultural')) {
+      // Force mock data
+      results.cultural = getMockCulturalInfo(station, language);
+      /* Commented out to avoid OpenAI dependency issues
       if (USE_MOCK_DATA) {
         results.cultural = getMockCulturalInfo(station, language);
       } else {
@@ -522,6 +558,7 @@ export async function POST(request: NextRequest) {
           results.cultural = data.cultural;
         }));
       }
+      */
     }
     
     // Wait for all tasks to complete
