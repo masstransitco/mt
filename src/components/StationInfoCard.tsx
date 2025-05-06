@@ -128,7 +128,7 @@ const StationInfoCard: React.FC<StationInfoCardProps> = ({
     return (
       <div className={`p-4 space-y-4 animate-fade-in ${className}`}>
         <div className="flex justify-between items-center mb-2">
-          <h2 className="text-xl font-medium">{station.properties?.name}</h2>
+          <h2 className="text-xl font-medium">{station.properties?.Place}</h2>
           {onClose && (
             <button 
               onClick={onClose}
@@ -160,7 +160,7 @@ const StationInfoCard: React.FC<StationInfoCardProps> = ({
     <div className={`p-4 animate-fade-in relative ${className}`}>
       {/* Header with station name and close button */}
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-medium">{station.properties?.name}</h2>
+        <h2 className="text-xl font-medium">{station.properties?.Place}</h2>
         
         <div className="flex gap-2">
           <button 
