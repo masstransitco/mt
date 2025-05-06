@@ -137,8 +137,8 @@ const StationAIInfoCard: React.FC<StationAIInfoCardProps> = ({
         {/* Title bar */}
         <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-gray-900">
           <div>
-            <h3 className="text-white font-medium">{station.properties?.name} - AI Info</h3>
-            <p className="text-xs text-gray-400">{station.properties?.address}</p>
+            <h3 className="text-white font-medium">{station.properties?.Place} - AI Info</h3>
+            <p className="text-xs text-gray-400">{station.properties?.Address}</p>
           </div>
           
           <button
