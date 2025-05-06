@@ -551,7 +551,10 @@ export async function POST(request: NextRequest) {
       tasks.push(getStationInfo(station, normalizedLanguage, shouldSkipCache, refreshType).then(data => {
         results.weather = data.weather;
         results.content = data.content;
-        if (data.isMock) results.isMock = true;
+        // Type guard to check if isMock property exists
+        if ('isMock' in data && data.isMock) {
+          results.isMock = true;
+        }
       }));
     }
     
