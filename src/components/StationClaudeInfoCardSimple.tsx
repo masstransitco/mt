@@ -1293,11 +1293,15 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     </h4>
                   </div>
                   <div className="pl-2 text-gray-200">
-                    {stationInfo.transport.match(/public transit:.*?(?=\d\.|$)/is) ? (
-                      <p className="leading-relaxed">{stationInfo.transport.match(/public transit:.*?(?=\d\.|$)/is)[0].replace(/public transit:/i, '').trim()}</p>
-                    ) : (
-                      <p className="text-gray-400">{language === 'en' ? 'No specific public transit information available.' : '沒有特定的公共交通信息。'}</p>
-                    )}
+                    {(() => {
+                      // Store the match result to avoid calling match() twice and for safer type handling
+                      const matchResult = stationInfo.transport.match(/public transit:.*?(?=\d\.|$)/is);
+                      if (matchResult && matchResult[0]) {
+                        return <p className="leading-relaxed">{matchResult[0].replace(/public transit:/i, '').trim()}</p>;
+                      } else {
+                        return <p className="text-gray-400">{language === 'en' ? 'No specific public transit information available.' : '沒有特定的公共交通信息。'}</p>;
+                      }
+                    })()}
                   </div>
                 </div>
 
@@ -1312,11 +1316,14 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     </h4>
                   </div>
                   <div className="pl-2 text-gray-200">
-                    {stationInfo.transport.match(/nearest metro:.*?(?=\d\.|$)/is) ? (
-                      <p className="leading-relaxed">{stationInfo.transport.match(/nearest metro:.*?(?=\d\.|$)/is)[0].replace(/nearest metro:/i, '').trim()}</p>
-                    ) : (
-                      <p className="text-gray-400">{language === 'en' ? 'No specific metro information available.' : '沒有特定的地鐵信息。'}</p>
-                    )}
+                    {(() => {
+                      const matchResult = stationInfo.transport.match(/nearest metro:.*?(?=\d\.|$)/is);
+                      if (matchResult && matchResult[0]) {
+                        return <p className="leading-relaxed">{matchResult[0].replace(/nearest metro:/i, '').trim()}</p>;
+                      } else {
+                        return <p className="text-gray-400">{language === 'en' ? 'No specific metro information available.' : '沒有特定的地鐵信息。'}</p>;
+                      }
+                    })()}
                   </div>
                 </div>
 
@@ -1331,11 +1338,14 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     </h4>
                   </div>
                   <div className="pl-2 text-gray-200">
-                    {stationInfo.transport.match(/traffic:.*?(?=\d\.|$)/is) ? (
-                      <p className="leading-relaxed">{stationInfo.transport.match(/traffic:.*?(?=\d\.|$)/is)[0].replace(/traffic:/i, '').trim()}</p>
-                    ) : (
-                      <p className="text-gray-400">{language === 'en' ? 'No specific traffic information available.' : '沒有特定的交通情況信息。'}</p>
-                    )}
+                    {(() => {
+                      const matchResult = stationInfo.transport.match(/traffic:.*?(?=\d\.|$)/is);
+                      if (matchResult && matchResult[0]) {
+                        return <p className="leading-relaxed">{matchResult[0].replace(/traffic:/i, '').trim()}</p>;
+                      } else {
+                        return <p className="text-gray-400">{language === 'en' ? 'No specific traffic information available.' : '沒有特定的交通情況信息。'}</p>;
+                      }
+                    })()}
                   </div>
                 </div>
 
@@ -1353,11 +1363,14 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     </h4>
                   </div>
                   <div className="pl-2 text-gray-200">
-                    {stationInfo.transport.match(/parking:.*?(?=\d\.|$|overall)/is) ? (
-                      <p className="leading-relaxed">{stationInfo.transport.match(/parking:.*?(?=\d\.|$|overall)/is)[0].replace(/parking:/i, '').trim()}</p>
-                    ) : (
-                      <p className="text-gray-400">{language === 'en' ? 'No specific parking information available.' : '沒有特定的泊車信息。'}</p>
-                    )}
+                    {(() => {
+                      const matchResult = stationInfo.transport.match(/parking:.*?(?=\d\.|$|overall)/is);
+                      if (matchResult && matchResult[0]) {
+                        return <p className="leading-relaxed">{matchResult[0].replace(/parking:/i, '').trim()}</p>;
+                      } else {
+                        return <p className="text-gray-400">{language === 'en' ? 'No specific parking information available.' : '沒有特定的泊車信息。'}</p>;
+                      }
+                    })()}
                   </div>
                 </div>
                 
@@ -1374,11 +1387,16 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
                     </h4>
                   </div>
                   <div className="pl-2 text-gray-200">
-                    {stationInfo.transport.match(/overall.*$/is) ? (
-                      <p className="leading-relaxed">{stationInfo.transport.match(/overall.*$/is)[0].replace(/overall[,:]?/i, '').trim()}</p>
-                    ) : (
-                      <p className="leading-relaxed">{stationInfo.transport.split('\n').slice(-1)[0].trim()}</p>
-                    )}
+                    {(() => {
+                      const matchResult = stationInfo.transport.match(/overall.*$/is);
+                      if (matchResult && matchResult[0]) {
+                        return <p className="leading-relaxed">{matchResult[0].replace(/overall[,:]?/i, '').trim()}</p>;
+                      } else {
+                        // Fallback to the last line of the transport text
+                        const lastLine = stationInfo.transport.split('\n').slice(-1)[0].trim();
+                        return <p className="leading-relaxed">{lastLine}</p>;
+                      }
+                    })()}
                   </div>
                 </div>
               </div>
