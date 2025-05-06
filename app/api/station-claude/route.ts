@@ -250,8 +250,8 @@ async function getStationInfo(station: StationFeature, language = 'en', skipCach
     return { 
       weather: weatherData,
       content: language === 'zh-TW' 
-        ? `交通：${station.properties?.name || '車站'}附近交通流暢，沒有報告主要擁堵。\n\n餐飲：1. 海灣咖啡廳 - 提供新鮮海鮮和優美海景。\n2. 綠葉素食 - 創新素食料理，使用當地有機食材。\n\n購物：1. 中心廣場 - 多層購物中心，有國際品牌和本地精品店。\n2. 街頭市場 - 充滿活力的本地市場，有獨特紀念品和服裝。`
-        : `TRAFFIC: The area around ${station.properties?.name || 'station'} has moderate traffic flow with no major congestion reported.\n\nDINING: 1. Harbor Café - Fresh seafood dishes with scenic harbor views.\n2. Green Leaf Vegetarian - Innovative plant-based cuisine using local organic ingredients.\n\nRETAIL: 1. Central Plaza - Multi-level shopping center with international brands and local boutiques.\n2. Street Market - Vibrant local market with unique souvenirs and clothing.`,
+        ? `交通：${station.properties?.Place || '車站'}附近交通流暢，沒有報告主要擁堵。\n\n餐飲：1. 海灣咖啡廳 - 提供新鮮海鮮和優美海景。\n2. 綠葉素食 - 創新素食料理，使用當地有機食材。\n\n購物：1. 中心廣場 - 多層購物中心，有國際品牌和本地精品店。\n2. 街頭市場 - 充滿活力的本地市場，有獨特紀念品和服裝。`
+        : `TRAFFIC: The area around ${station.properties?.Place || 'station'} has moderate traffic flow with no major congestion reported.\n\nDINING: 1. Harbor Café - Fresh seafood dishes with scenic harbor views.\n2. Green Leaf Vegetarian - Innovative plant-based cuisine using local organic ingredients.\n\nRETAIL: 1. Central Plaza - Multi-level shopping center with international brands and local boutiques.\n2. Street Market - Vibrant local market with unique souvenirs and clothing.`,
       isMock: true
     };
   }
