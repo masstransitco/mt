@@ -188,6 +188,57 @@ interface Place {
   description: string;
 }
 
+// Helper functions to convert weather codes to user-friendly formats
+function getWeatherConditionFromCode(code: number): string {
+  // WMO Weather interpretation codes (https://open-meteo.com/en/docs)
+  if (code <= 1) return "Clear";
+  if (code <= 3) return "Partly Cloudy";
+  if (code <= 9) return "Foggy";
+  if (code <= 19) return "Drizzle";
+  if (code <= 29) return "Rain";
+  if (code <= 39) return "Snow";
+  if (code <= 49) return "Fog";
+  if (code <= 59) return "Drizzle";
+  if (code <= 69) return "Rain";
+  if (code <= 79) return "Snow";
+  if (code <= 99) return "Thunderstorm";
+  return "Unknown";
+}
+
+function getWeatherDescriptionFromCode(code: number): string {
+  // More detailed descriptions
+  if (code === 0) return "clear sky";
+  if (code === 1) return "mainly clear";
+  if (code === 2) return "partly cloudy";
+  if (code === 3) return "overcast";
+  if (code <= 9) return "foggy conditions";
+  if (code <= 19) return "light drizzle";
+  if (code <= 29) return "moderate rain";
+  if (code <= 39) return "light snow";
+  if (code <= 49) return "dense fog";
+  if (code <= 59) return "freezing drizzle";
+  if (code <= 69) return "heavy rain";
+  if (code <= 79) return "heavy snowfall";
+  if (code <= 99) return "thunderstorm with precipitation";
+  return "unknown conditions";
+}
+
+function getWeatherIconFromCode(code: number): string {
+  // Simplified mapping to icon names
+  if (code <= 1) return "sun";
+  if (code <= 3) return "cloud-sun";
+  if (code <= 9) return "cloud-fog";
+  if (code <= 19) return "cloud-drizzle";
+  if (code <= 29) return "cloud-rain";
+  if (code <= 39) return "cloud-snow";
+  if (code <= 49) return "cloud-fog";
+  if (code <= 59) return "cloud-drizzle";
+  if (code <= 69) return "cloud-rain";
+  if (code <= 79) return "cloud-snow";
+  if (code <= 99) return "cloud-lightning";
+  return "cloud";
+}
+
 interface StationAiInfo {
   weather?: WeatherData;
   content?: string;
@@ -326,10 +377,19 @@ const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = 
     
     // Also fetch weather data
     const getWeather = async () => {
-      const data = await fetchHKWeather();
-      // Explicitly check the type to make TypeScript happy
-      if (data !== null) {
-        setWeatherData(data);
+      const apiData = await fetchHKWeather();
+      
+      if (apiData !== null) {
+        // Convert ApiWeatherData to local WeatherData format
+        const localWeatherData: WeatherData = {
+          temp: apiData.temperature,
+          condition: getWeatherConditionFromCode(apiData.weathercode),
+          description: getWeatherDescriptionFromCode(apiData.weathercode),
+          humidity: 0, // Not available in API, set default
+          windSpeed: apiData.windspeed,
+          icon: getWeatherIconFromCode(apiData.weathercode)
+        };
+        setWeatherData(localWeatherData);
       } else {
         setWeatherData(null);
       }
