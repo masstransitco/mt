@@ -161,8 +161,8 @@ const StationAIInfoCard: React.FC<StationAIInfoCardProps> = ({
         <div className="absolute inset-0 p-3 flex flex-col">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-white text-sm font-medium">{station.properties?.name}</h3>
-              <p className="text-gray-400 text-xs">{station.properties?.address}</p>
+              <h3 className="text-white text-sm font-medium">{station.properties?.Place}</h3>
+              <p className="text-gray-400 text-xs">{station.properties?.Address}</p>
             </div>
             {!hideDefaultExpandButton && (
               <button
@@ -220,8 +220,8 @@ const StationAIInfoCard: React.FC<StationAIInfoCardProps> = ({
     >
       <div className="p-3 bg-gradient-to-t from-black/70 to-transparent flex items-center justify-between">
         <div>
-          <div className="text-white text-sm font-medium">{station.properties?.name} - AI Info</div>
-          <div className="text-gray-200 text-xs mt-0.5">{station.properties?.address}</div>
+          <div className="text-white text-sm font-medium">{station.properties?.Place} - AI Info</div>
+          <div className="text-gray-200 text-xs mt-0.5">{station.properties?.Address}</div>
         </div>
 
         {!hideDefaultExpandButton && (
