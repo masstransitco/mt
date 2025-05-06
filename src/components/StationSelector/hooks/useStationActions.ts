@@ -70,6 +70,9 @@ export function useStationActions() {
   // Local UI state
   const [departureMapExpanded, setDepartureMapExpanded] = useState(false);
   const [arrivalMapExpanded, setArrivalMapExpanded] = useState(false);
+  const [departureAiInfoExpanded, setDepartureAiInfoExpanded] = useState(false);
+  const [arrivalAiInfoExpanded, setArrivalAiInfoExpanded] = useState(false);
+  
   
   // Simplified animation state
   const [isAnimating, setIsAnimating] = useState(false);
@@ -161,10 +164,14 @@ export function useStationActions() {
     // UI state
     departureMapExpanded,
     arrivalMapExpanded,
+    departureAiInfoExpanded,
+    arrivalAiInfoExpanded,
     
     // Actions
     setDepartureMapExpanded,
     setArrivalMapExpanded,
+    setDepartureAiInfoExpanded,
+    setArrivalAiInfoExpanded,
     handleClearDeparture,
     handleClearArrival,
     handleScan,

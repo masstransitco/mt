@@ -1,0 +1,854 @@
+"use client";
+
+/**
+ * StationClaudeInfoCardSimple
+ * 
+ * The content component for Claude AI station information. This component is used
+ * by StationClaudeAIInfoCardSimple to render the detailed station information
+ * when the card is expanded.
+ * 
+ * Features:
+ * - Multi-tab interface for different information categories
+ * - Weather display with icon selection
+ * - Support for multiple languages
+ * - Streaming text effect for content
+ * - Structured display of station information
+ * - Integration with weather API
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  Cloud, CloudRain, Sun, CloudLightning, CloudSnow, CloudFog,
+  Wind, Droplets, Thermometer, Car, UtensilsCrossed, ShoppingBag,
+  TreePine, Train, MapPin, Shield, BookOpen, X
+} from 'lucide-react';
+import { StationFeature } from '@/store/stationsSlice';
+import { getWeatherIcon } from '@/lib/stationAiUtils';
+import { fetchHKWeather } from '@/lib/weather';
+import MapboxWeatherMap from './MapboxWeatherMap';
+
+// Define props type
+interface StationClaudeInfoCardSimpleProps {
+  station: StationFeature;
+  onClose?: () => void;
+  className?: string;
+  language?: 'en' | 'zh-TW' | 'zh-CN' | 'ja' | 'ko' | 'tl' | 'id' | 'th' | 'fr' | 'de';
+}
+
+// Type definitions similar to the ones in stationAiUtils
+interface WeatherData {
+  temp: number;
+  condition: string;
+  description: string;
+  humidity: number;
+  windSpeed: number;
+  icon: string;
+  isMock?: boolean;
+}
+
+// Weather API data from lib/weather.ts
+interface ApiWeatherData {
+  temperature: number;
+  windspeed: number;
+  winddirection: number;
+  weathercode: number;
+  time: string;
+  rainChance: number;
+  aqi: number;
+}
+
+interface Place {
+  name: string;
+  description: string;
+}
+
+interface StationAiInfo {
+  weather?: WeatherData;
+  content?: string;
+  environmental?: string;
+  transport?: string;
+  places?: Place[];
+  safety?: string;
+  cultural?: string;
+}
+
+const StationClaudeInfoCardSimple: React.FC<StationClaudeInfoCardSimpleProps> = ({
+  station,
+  onClose,
+  className = '',
+  language: externalLanguage
+}) => {
+  // Local state - simplified
+  const [stationInfo, setStationInfo] = useState<StationAiInfo | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [displayedContent, setDisplayedContent] = useState<string>("");
+  const [isComplete, setIsComplete] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<string>('basic');
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [isProfileImageModalOpen, setIsProfileImageModalOpen] = useState<boolean>(false);
+  
+  // Use external language directly, no need for internal state
+  const language = externalLanguage || 'en';
+
+  // Simplified function to fetch data from the Claude API
+  const fetchStationInfo = async (tab: string) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // When tab changes, we need to fetch only that specific section
+      // This prevents the basic info from overriding or mixing with other tab data
+      const sections = tab === 'basic' 
+        ? ['basic']  // Just basic info for the main tab
+        : [tab];     // Only the specific tab content otherwise
+      
+      console.log(`Fetching data for tab: ${tab}, language: ${language}`);
+      
+      const payload = {
+        station,
+        language,
+        sections: sections.filter(Boolean),
+        skipCache: false
+      };
+      
+      const response = await fetch('/api/station-claude', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch station information');
+      }
+
+      const data = await response.json();
+      
+      // For non-basic tabs, preserve any existing data and merge with new tab data
+      if (tab !== 'basic' && stationInfo) {
+        // Merge the new data with existing data, preserving content from other tabs
+        setStationInfo({
+          ...stationInfo,
+          ...data,
+          // Keep the original basic content if we have it
+          content: stationInfo.content || data.content
+        });
+      } else {
+        // For basic tab or empty state, replace with new data
+        setStationInfo(data);
+      }
+    } catch (err) {
+      console.error('Error fetching station info:', err);
+      setError('Failed to load information');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Effect to handle language changes and clear state
+  useEffect(() => {
+    if (!station) return;
+    
+    // When language changes, we need to clear the state to avoid mixed languages
+    if (stationInfo) {
+      // Clear the state first to avoid mixing languages in content
+      setStationInfo(null);
+      setDisplayedContent("");
+      setIsComplete(false);
+      
+      // After a very brief delay to ensure state updates, fetch new data
+      setTimeout(() => {
+        // Fetch data for current tab
+        fetchStationInfo(activeTab);
+      }, 10);
+    } else {
+      // If no data yet, just fetch normally
+      fetchStationInfo(activeTab);
+    }
+    
+    // Also fetch weather data
+    const getWeather = async () => {
+      const data = await fetchHKWeather();
+      setWeatherData(data);
+    };
+    getWeather();
+  }, [station, language]);
+  
+  // Effect to handle tab changes only (separate from language changes)
+  useEffect(() => {
+    if (!station) return;
+    
+    // Only fetch data when tab changes (and not during initial load)
+    if (stationInfo) {
+      // We need to pass the current language along with tab changes
+      // This ensures the new tab content is in the correct language
+      fetchStationInfo(activeTab);
+    }
+  }, [activeTab, language]); // Adding language as a dependency to ensure consistent language across tab changes
+
+  // Simulate streaming effect when content changes
+  useEffect(() => {
+    if (!stationInfo?.content) {
+      setDisplayedContent("");
+      setIsComplete(false);
+      return;
+    }
+
+    let currentIndex = 0;
+    const chunkSize = 3; // Characters per chunk
+    const delay = 10; // Milliseconds between chunks
+
+    setDisplayedContent("");
+    setIsComplete(false);
+
+    const interval = setInterval(() => {
+      if (currentIndex < stationInfo.content.length) {
+        const nextChunk = stationInfo.content.substring(0, currentIndex + chunkSize);
+        setDisplayedContent(nextChunk);
+        currentIndex += chunkSize;
+      } else {
+        clearInterval(interval);
+        setIsComplete(true);
+      }
+    }, delay);
+
+    return () => clearInterval(interval);
+  }, [stationInfo?.content]);
+
+  // Comprehensive content extraction function for all supported languages
+  const extractContentSections = (content: string, lang = 'en') => {
+    if (!content || content.trim().length === 0) {
+      return { traffic: '', dining: '', retail: '' };
+    }
+    
+    // Define section headers for all supported languages
+    const headers = {
+      'en': { traffic: 'TRAFFIC', dining: 'DINING', retail: 'RETAIL' },
+      'zh-TW': { traffic: '交通', dining: '餐飲', retail: '購物' },
+      'zh-CN': { traffic: '交通', dining: '餐饮', retail: '购物' },
+      'ja': { traffic: '交通', dining: '食事', retail: '買い物' },
+      'ko': { traffic: '교통', dining: '식사', retail: '쇼핑' },
+      'tl': { traffic: 'TRAPIKO', dining: 'PAGKAIN', retail: 'PAMIMILI' },
+      'id': { traffic: 'LALU LINTAS', dining: 'KULINER', retail: 'PERBELANJAAN' },
+      'th': { traffic: 'การจราจร', dining: 'การรับประทานอาหาร', retail: 'การช้อปปิ้ง' },
+      'fr': { traffic: 'CIRCULATION', dining: 'RESTAURATION', retail: 'SHOPPING' },
+      'de': { traffic: 'VERKEHR', dining: 'GASTRONOMIE', retail: 'EINKAUFEN' }
+    };
+    
+    try {
+      // Get headers for current language or fall back to English
+      const langHeaders = headers[lang as keyof typeof headers] || headers['en'];
+      console.log(`Extracting content using language: ${lang}, headers:`, langHeaders);
+      
+      // Extract sections using more robust regex patterns that handle various delimiters
+      // Added support for different types of colons and formats used across languages
+      const trafficRegex = new RegExp(`(${langHeaders.traffic})[：:：][\\s]*(.+?)(?=(${langHeaders.dining})[：:：]|$)`, 's');
+      const diningRegex = new RegExp(`(${langHeaders.dining})[：:：][\\s]*(.+?)(?=(${langHeaders.retail})[：:：]|$)`, 's');
+      const retailRegex = new RegExp(`(${langHeaders.retail})[：:：][\\s]*(.+?)$`, 's');
+      
+      // Try to extract content using the regexes
+      let traffic = trafficRegex.exec(content)?.[2]?.trim() || "";
+      let dining = diningRegex.exec(content)?.[2]?.trim() || "";
+      let retail = retailRegex.exec(content)?.[2]?.trim() || "";
+      
+      console.log(`Extraction results - Traffic: ${traffic.length > 0}, Dining: ${dining.length > 0}, Retail: ${retail.length > 0}`);
+      
+      // Fallback: if no content was extracted, try splitting by paragraphs
+      if (!traffic && !dining && !retail) {
+        console.log("Extraction failed, falling back to paragraph splitting");
+        const paragraphs = content.split(/\n\n+/);
+        if (paragraphs.length >= 3) {
+          traffic = paragraphs[0];
+          dining = paragraphs[1];
+          retail = paragraphs[2];
+        } else {
+          // Last resort: use full content as traffic
+          traffic = content;
+        }
+      }
+      
+      return { traffic, dining, retail };
+    } catch (error) {
+      console.error('Error extracting content:', error);
+      return { traffic: content, dining: '', retail: '' };
+    }
+  };
+
+  const sections = stationInfo?.content ? extractContentSections(displayedContent, language) : {
+    traffic: '',
+    dining: '',
+    retail: ''
+  };
+
+  // Get the appropriate weather icon component
+  const WeatherIconComponent = () => {
+    if (!stationInfo?.weather?.icon) return <Cloud className="text-gray-300" size={32} />;
+    
+    const iconName = stationInfo.weather.icon;
+    
+    switch (getWeatherIcon(iconName)) {
+      case 'sun': return <Sun className="text-yellow-400" size={32} />;
+      case 'cloud-sun': return <Cloud className="text-gray-300" size={32} />;
+      case 'cloud': return <Cloud className="text-gray-300" size={32} />;
+      case 'clouds': return <Cloud className="text-gray-400" size={32} />;
+      case 'cloud-rain': return <CloudRain className="text-blue-300" size={32} />;
+      case 'cloud-sun-rain': return <CloudRain className="text-blue-300" size={32} />;
+      case 'cloud-lightning': return <CloudLightning className="text-yellow-300" size={32} />;
+      case 'snowflake': return <CloudSnow className="text-white" size={32} />;
+      case 'cloud-fog': return <CloudFog className="text-gray-300" size={32} />;
+      default: return <Cloud className="text-gray-300" size={32} />;
+    }
+  };
+
+  // Loading skeleton UI
+  if (isLoading && !stationInfo) {
+    return (
+      <div className={`p-4 space-y-4 animate-fade-in ${className}`}>
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <h2 className="text-xl font-medium">{station.properties?.Place || 'Loading...'}</h2>
+            <div className="h-3 w-36 bg-gray-800/50 rounded animate-pulse mt-1"></div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-8 bg-gray-800/50 rounded animate-pulse"></div>
+            <div className="h-6 w-16 bg-blue-700/20 rounded animate-pulse"></div>
+            {onClose && (
+              <button 
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-300 transition-colors p-1 rounded-full hover:bg-white/10"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-gray-900/50 rounded-xl p-4 mb-4">
+          <div className="h-10 w-full bg-gray-800/50 rounded animate-pulse mb-2"></div>
+          <div className="flex gap-4">
+            <div className="h-8 w-8 rounded-full bg-gray-800/50 animate-pulse"></div>
+            <div className="h-8 w-24 bg-gray-800/50 rounded animate-pulse"></div>
+          </div>
+        </div>
+
+        <div className="h-4 w-full bg-gray-800/50 rounded animate-pulse"></div>
+        <div className="h-4 w-[90%] bg-gray-800/50 rounded animate-pulse"></div>
+        <div className="h-4 w-[95%] bg-gray-800/50 rounded animate-pulse"></div>
+        <div className="h-4 w-[85%] bg-gray-800/50 rounded animate-pulse"></div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+    <div className={`p-4 animate-fade-in relative ${className}`}>
+      {/* Header with station image, name, address, and language toggle */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-3">
+          {/* Station profile image */}
+          {station.properties?.ObjectId && (
+            <div 
+              className="w-12 h-12 rounded-lg overflow-hidden bg-black flex-shrink-0 border border-gray-700 flex items-center justify-center cursor-pointer hover:border-blue-500 transition-colors duration-200"
+              onClick={() => setIsProfileImageModalOpen(true)}
+              title="Click to view larger image"
+            >
+              <img 
+                src={`/stations/${station.properties.ObjectId}.png`} 
+                alt={station.properties?.Place || 'Station'}
+                className="max-w-full max-h-full object-contain"
+                style={{ 
+                  width: 'auto', 
+                  height: 'auto', 
+                  maxWidth: '90%', 
+                  maxHeight: '90%' 
+                }}
+                onError={(e) => {
+                  console.log(`Failed to load image for station ${station.properties.ObjectId}, using fallback`);
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/stations/default.png';
+                  target.onerror = null; // Prevent infinite loop if default image also fails
+                }}
+              />
+            </div>
+          )}
+          
+          {/* Station name and address */}
+          <div>
+            <h2 className="text-xl font-medium">{station.properties?.Place || 'Station'}</h2>
+            {station.properties?.Address && (
+              <p className="text-sm text-gray-400 mt-0.5">{station.properties.Address}</p>
+            )}
+          </div>
+        </div>
+        
+        {/* Controls */}
+        <div className="flex items-center gap-2">
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-300 transition-colors p-1 rounded-full hover:bg-white/10"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Weather Map Section */}
+      {(weatherData || stationInfo?.weather) && station.geometry.coordinates && (
+        <div className="mb-6 animate-slide-up relative overflow-hidden">
+          {/* Map Card with Weather Info */}
+          <div className="rounded-xl overflow-hidden shadow-lg border border-gray-700 h-[240px] relative">
+            {/* Mapbox Map Container */}
+            <MapboxWeatherMap 
+              longitude={station.geometry.coordinates[0]} 
+              latitude={station.geometry.coordinates[1]}
+              className="w-full h-full"
+            />
+            
+            {/* Compact Weather Info Card */}
+            <div 
+              className="absolute top-3 left-3 z-10 pointer-events-none"
+              style={{
+                maxWidth: '350px',
+                width: '35%'
+              }}
+            >
+              <div className="flex items-center gap-3 animate-fade-in p-2" style={{ animationDelay: "0.2s" }}>
+                  {/* Weather icon and temperature with background */}
+                  <div className="flex items-center bg-black/70 rounded-lg p-2 backdrop-blur-md pointer-events-auto">
+                    <div className="mr-2">
+                      {weatherData ? (
+                        <div className="text-yellow-400 text-xl">
+                          <i className={`wi ${weatherData.weathercode === 0 ? 'wi-day-sunny' : 
+                            (weatherData.weathercode >= 1 && weatherData.weathercode <= 3 ? 'wi-day-cloudy' : 
+                            (weatherData.weathercode >= 80 && weatherData.weathercode <= 82 ? 'wi-day-rain' : 
+                            (weatherData.weathercode >= 95 && weatherData.weathercode <= 99 ? 'wi-day-thunderstorm' : 'wi-cloud')))}`} />
+                        </div>
+                      ) : (
+                        <WeatherIconComponent />
+                      )}
+                    </div>
+                    
+                    <div>
+                      {weatherData ? (
+                        <span className="text-lg font-semibold text-white">{Math.round(weatherData.temperature)}°C</span>
+                      ) : (
+                        <span className="text-lg font-semibold text-white">{Math.round(stationInfo?.weather?.temp || 0)}°C</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Weather metrics in horizontal layout without background */}
+                  {weatherData ? (
+                    <>
+                      <div className="flex items-center pointer-events-auto">
+                        <Droplets size={14} className="mr-1 text-blue-400" />
+                        <span className="text-xs text-white">{weatherData.rainChance}%</span>
+                      </div>
+                      <div className="flex items-center pointer-events-auto">
+                        <Wind size={14} className="mr-1 text-gray-300" />
+                        <span className="text-xs text-white">{weatherData.windspeed.toFixed(1)} km/h</span>
+                      </div>
+                      {typeof weatherData.aqi === 'number' && (
+                        <div className="flex items-center pointer-events-auto">
+                          <span className="bg-zinc-800 px-1 py-0.5 rounded text-xs text-zinc-200 mr-1">
+                            AQI
+                          </span>
+                          <span className="text-xs text-white">{weatherData.aqi}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center pointer-events-auto">
+                        <Droplets size={14} className="mr-1 text-blue-400" />
+                        <span className="text-xs text-white">{stationInfo?.weather?.humidity || 0}%</span>
+                      </div>
+                      <div className="flex items-center pointer-events-auto">
+                        <Wind size={14} className="mr-1 text-gray-300" />
+                        <span className="text-xs text-white">{stationInfo?.weather?.windSpeed?.toFixed(1) || 0} m/s</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            
+            {/* Data source indicator at the bottom with time */}
+            <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+              {stationInfo?.weather?.isMock && !weatherData && (
+                <div className="text-[10px] text-amber-400 bg-black/60 px-1.5 py-0.5 rounded inline-block animate-slide-up backdrop-blur-sm" style={{ animationDelay: "0.5s" }}>
+                  {language === 'en' ? 'Est. weather' : '估計天氣'}
+                  <span className="ml-1 opacity-75">
+                    {new Date().toLocaleTimeString(language === "zh-TW" ? "zh-HK" : "en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+              
+              {weatherData && (
+                <div className="text-[10px] text-blue-400 bg-black/60 px-1.5 py-0.5 rounded inline-block animate-slide-up backdrop-blur-sm" style={{ animationDelay: "0.5s" }}>
+                  {language === 'en' ? 'Live weather' : '即時天氣'}
+                  <span className="ml-1 opacity-75">
+                    {new Date().toLocaleTimeString(language === "zh-TW" ? "zh-HK" : "en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation tabs */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <button 
+          onClick={() => setActiveTab('basic')}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            activeTab === 'basic' 
+              ? 'bg-blue-600/20 text-blue-400' 
+              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+          }`}
+        >
+          {language === 'en' ? 'Basic' : '基本'}
+        </button>
+        <button 
+          onClick={() => setActiveTab('environmental')}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            activeTab === 'environmental' 
+              ? 'bg-green-600/20 text-green-400' 
+              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+          }`}
+        >
+          {language === 'en' ? 'Environmental' : '環境'}
+        </button>
+        <button 
+          onClick={() => setActiveTab('transport')}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            activeTab === 'transport' 
+              ? 'bg-orange-600/20 text-orange-400' 
+              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+          }`}
+        >
+          {language === 'en' ? 'Transport' : '交通'}
+        </button>
+        <button 
+          onClick={() => setActiveTab('places')}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            activeTab === 'places' 
+              ? 'bg-purple-600/20 text-purple-400' 
+              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+          }`}
+        >
+          {language === 'en' ? 'Places' : '地點'}
+        </button>
+        <button 
+          onClick={() => setActiveTab('safety')}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            activeTab === 'safety' 
+              ? 'bg-red-600/20 text-red-400' 
+              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+          }`}
+        >
+          {language === 'en' ? 'Safety' : '安全'}
+        </button>
+        <button 
+          onClick={() => setActiveTab('cultural')}
+          className={`px-3 py-1 text-sm rounded-md transition-colors ${
+            activeTab === 'cultural' 
+              ? 'bg-yellow-600/20 text-yellow-400' 
+              : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+          }`}
+        >
+          {language === 'en' ? 'Cultural' : '文化'}
+        </button>
+      </div>
+
+      {/* Content based on active tab */}
+      <div className="space-y-4">
+        {activeTab === 'basic' && (
+          <>
+            {/* Traffic Section */}
+            {sections.traffic && (
+              <div className="mb-5 animate-slide-up bg-gray-900/40 rounded-lg p-3" style={{ animationDelay: "0.5s" }}>
+                <div className="flex items-center mb-2">
+                  <Car size={18} className="mr-2 text-orange-400" />
+                  <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                    {language === 'en' ? 'Traffic' : '交通'}
+                  </h3>
+                </div>
+                <p className="text-gray-200 pl-6 leading-relaxed">{sections.traffic}</p>
+              </div>
+            )}
+
+            {/* Dining Section */}
+            {sections.dining && (
+              <div className="mb-5 animate-slide-up bg-gray-900/40 rounded-lg p-3" style={{ animationDelay: "0.6s" }}>
+                <div className="flex items-center mb-2">
+                  <UtensilsCrossed size={18} className="mr-2 text-green-400" />
+                  <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                    {language === 'en' ? 'Dining' : '餐飲'}
+                  </h3>
+                </div>
+                {/* Format dining content with bullet points if it contains them */}
+                {sections.dining.includes('-') ? (
+                  <div className="text-gray-200 pl-6 leading-relaxed">
+                    {sections.dining.split('\n').map((line, index) => (
+                      <div key={index} className={line.trim().startsWith('-') ? "pl-2 mb-2" : "mb-2"}>
+                        {line.trim().startsWith('-') ? (
+                          <div className="flex">
+                            <span className="text-green-400 mr-2">•</span>
+                            <span>{line.substring(line.indexOf('-') + 1).trim()}</span>
+                          </div>
+                        ) : (
+                          <span>{line}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-200 pl-6 leading-relaxed whitespace-pre-line">{sections.dining}</p>
+                )}
+              </div>
+            )}
+
+            {/* Retail Section */}
+            {sections.retail && (
+              <div className="mb-5 animate-slide-up bg-gray-900/40 rounded-lg p-3" style={{ animationDelay: "0.7s" }}>
+                <div className="flex items-center mb-2">
+                  <ShoppingBag size={18} className="mr-2 text-purple-400" />
+                  <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                    {language === 'en' ? 'Retail' : '購物'}
+                  </h3>
+                </div>
+                {/* Format retail content with bullet points if it contains them */}
+                {sections.retail.includes('-') ? (
+                  <div className="text-gray-200 pl-6 leading-relaxed">
+                    {sections.retail.split('\n').map((line, index) => (
+                      <div key={index} className={line.trim().startsWith('-') ? "pl-2 mb-2" : "mb-2"}>
+                        {line.trim().startsWith('-') ? (
+                          <div className="flex">
+                            <span className="text-purple-400 mr-2">•</span>
+                            <span>{line.substring(line.indexOf('-') + 1).trim()}</span>
+                          </div>
+                        ) : (
+                          <span>{line}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-200 pl-6 leading-relaxed whitespace-pre-line">{sections.retail}</p>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'environmental' && (
+          <div className="animate-slide-up bg-gray-900/40 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <TreePine size={18} className="mr-2 text-green-400" />
+              <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                {language === 'en' ? 'Environmental' : '環境'}
+              </h3>
+            </div>
+            {stationInfo?.environmental ? (
+              <p className="text-gray-200 pl-6 leading-relaxed whitespace-pre-line">{stationInfo.environmental}</p>
+            ) : (
+              <div className="text-gray-400 italic pl-6 flex items-center">
+                {isLoading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 rounded-full border-2 border-green-400/30 border-t-green-400 animate-spin"></div>
+                    <span>{language === 'en' ? 'Loading environmental information...' : '正在加載環境信息...'}</span>
+                  </>
+                ) : (
+                  <span>{language === 'en' ? 'No environmental information available.' : '沒有可用的環境信息。'}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'transport' && (
+          <div className="animate-slide-up bg-gray-900/40 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <Train size={18} className="mr-2 text-orange-400" />
+              <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                {language === 'en' ? 'Transport' : '交通'}
+              </h3>
+            </div>
+            {stationInfo?.transport ? (
+              <p className="text-gray-200 pl-6 leading-relaxed whitespace-pre-line">{stationInfo.transport}</p>
+            ) : (
+              <div className="text-gray-400 italic pl-6 flex items-center">
+                {isLoading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 rounded-full border-2 border-orange-400/30 border-t-orange-400 animate-spin"></div>
+                    <span>{language === 'en' ? 'Loading transport information...' : '正在加載交通信息...'}</span>
+                  </>
+                ) : (
+                  <span>{language === 'en' ? 'No transport information available.' : '沒有可用的交通信息。'}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'places' && (
+          <div className="animate-slide-up bg-gray-900/40 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <MapPin size={18} className="mr-2 text-purple-400" />
+              <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                {language === 'en' ? 'Nearby Places' : '附近地點'}
+              </h3>
+            </div>
+            {stationInfo?.places && stationInfo.places.length > 0 ? (
+              <ul className="space-y-3 pl-6">
+                {stationInfo.places.map((place, index) => (
+                  <li key={index} className="bg-gray-800/40 rounded p-2 mb-2">
+                    <h4 className="text-gray-200 font-medium">{place.name}</h4>
+                    {place.description && (
+                      <p className="text-gray-400 text-sm mt-1 pl-2 border-l-2 border-purple-400/30">{place.description}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-gray-400 italic pl-6 flex items-center">
+                {isLoading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 rounded-full border-2 border-purple-400/30 border-t-purple-400 animate-spin"></div>
+                    <span>{language === 'en' ? 'Loading nearby places...' : '正在加載附近地點...'}</span>
+                  </>
+                ) : (
+                  <span>{language === 'en' ? 'No place information available.' : '沒有可用的地點信息。'}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'safety' && (
+          <div className="animate-slide-up bg-gray-900/40 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <Shield size={18} className="mr-2 text-red-400" />
+              <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                {language === 'en' ? 'Safety' : '安全'}
+              </h3>
+            </div>
+            {stationInfo?.safety ? (
+              <p className="text-gray-200 pl-6 leading-relaxed whitespace-pre-line">{stationInfo.safety}</p>
+            ) : (
+              <div className="text-gray-400 italic pl-6 flex items-center">
+                {isLoading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin"></div>
+                    <span>{language === 'en' ? 'Loading safety information...' : '正在加載安全信息...'}</span>
+                  </>
+                ) : (
+                  <span>{language === 'en' ? 'No safety information available.' : '沒有可用的安全信息。'}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'cultural' && (
+          <div className="animate-slide-up bg-gray-900/40 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <BookOpen size={18} className="mr-2 text-yellow-400" />
+              <h3 className="text-sm font-medium text-gray-300 uppercase tracking-wider">
+                {language === 'en' ? 'Cultural' : '文化'}
+              </h3>
+            </div>
+            {stationInfo?.cultural ? (
+              <p className="text-gray-200 pl-6 leading-relaxed whitespace-pre-line">{stationInfo.cultural}</p>
+            ) : (
+              <div className="text-gray-400 italic pl-6 flex items-center">
+                {isLoading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 rounded-full border-2 border-yellow-400/30 border-t-yellow-400 animate-spin"></div>
+                    <span>{language === 'en' ? 'Loading cultural information...' : '正在加載文化信息...'}</span>
+                  </>
+                ) : (
+                  <span>{language === 'en' ? 'No cultural information available.' : '沒有可用的文化信息。'}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Loading indicator */}
+      {isLoading && (
+        <div className="flex items-center justify-center bg-blue-600/10 rounded-lg p-2 text-blue-400 mt-4">
+          <div className="mr-2 h-4 w-4 rounded-full border-2 border-blue-400/30 border-t-blue-400 animate-spin"></div>
+          <span>{language === 'en' ? 'Generating AI information' : '正在生成AI信息'}</span>
+          <span className="ml-1 animate-pulse">.</span>
+          <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>.</span>
+          <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>.</span>
+        </div>
+      )}
+
+      {/* Error message */}
+      {error && (
+        <div className="text-red-400 mt-4 p-2 bg-red-400/10 rounded-md">
+          {language === 'en' ? 'Failed to load information.' : '載入信息失敗。'}
+        </div>
+      )}
+    </div>
+    
+    {/* Profile Image Modal */}
+    {isProfileImageModalOpen && station.properties?.ObjectId && (
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        onClick={() => setIsProfileImageModalOpen(false)}
+      >
+        <div 
+          className="relative bg-black border border-gray-700 rounded-lg p-2 max-w-2xl max-h-[90vh] w-[90vw] h-auto flex flex-col"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-white font-medium">{station.properties?.Place || 'Station'}</h3>
+            <button
+              onClick={() => setIsProfileImageModalOpen(false)}
+              className="text-gray-400 hover:text-gray-300 transition-colors p-1 rounded-full hover:bg-white/10"
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-hidden rounded-lg flex items-center justify-center bg-black p-2">
+            <img 
+              src={`/stations/${station.properties.ObjectId}.png`} 
+              alt={station.properties?.Place || 'Station'}
+              className="max-w-full max-h-full object-contain"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = '/stations/default.png';
+                target.onerror = null;
+              }}
+            />
+          </div>
+          
+          <p className="text-sm text-gray-400 mt-2 text-center">
+            {station.properties?.Address || ''}
+          </p>
+        </div>
+      </div>
+    )}
+    </>
+  );
+};
+
+export default StationClaudeInfoCardSimple;

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useStationSelector } from "../context/StationSelectorContext";
 import StationIcon from "./StationIcon";
 import AddressSearch from "./AddressSearch";
+import SparkleIcon from "@/components/ui/icons/SparkleIcon";
 import type { StationFeature } from "@/store/stationsSlice";
 
 interface StationInputProps {
@@ -45,6 +46,9 @@ const StationInput = React.memo(({
   
   // Only show QR scan button for departure in early steps
   const showQrScan = type === "departure" && step <= 2 && !!onScan;
+
+  // AI information button is shown alongside expand button
+  const showAiInfo = station !== null;
   
   return (
     <motion.div
@@ -99,6 +103,7 @@ const StationInput = React.memo(({
           {/* Only show expand/clear buttons if we have a station */}
           {station && (
             <>
+              {/* 3D View Button */}
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={onExpand}
@@ -107,9 +112,29 @@ const StationInput = React.memo(({
                   inSheet ? theme.sizes.BUTTON_PADDING : theme.sizes.BUTTON_PADDING,
                 )}
                 type="button"
-                aria-label={`Expand map for ${type}`}
+                aria-label={`Expand 3D map for ${type}`}
               >
                 <Maximize2 className={inSheet ? "w-3 h-3" : "w-3 h-3"} />
+              </motion.button>
+              
+              {/* AI Info Button */}
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  if (type === "departure" && theme.setDepartureAiInfoExpanded) {
+                    theme.setDepartureAiInfoExpanded(true);
+                  } else if (type === "arrival" && theme.setArrivalAiInfoExpanded) {
+                    theme.setArrivalAiInfoExpanded(true);
+                  }
+                }}
+                className={cn(
+                  "apple-button flex-shrink-0 bg-[#10A37F]/20 hover:bg-[#10A37F]/30 rounded-full",
+                  inSheet ? theme.sizes.BUTTON_PADDING : theme.sizes.BUTTON_PADDING,
+                )}
+                type="button"
+                aria-label={`Show AI info for ${type}`}
+              >
+                <SparkleIcon className={inSheet ? "w-3 h-3" : "w-3 h-3"} />
               </motion.button>
 
               <motion.button

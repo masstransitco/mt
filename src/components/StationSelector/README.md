@@ -8,6 +8,18 @@ This is the refactored version of the StationSelector component using a containe
 
 ✅ **COMPLETED**: The migration is now complete. GMap.tsx has been updated to use this implementation, and the old StationSelector.tsx has been moved to the deprecated directory with a placeholder for backward compatibility.
 
+## Claude AI Integration
+
+The StationSelector uses `StationClaudeAIInfoCardSimple` to provide AI-powered information about stations. This component is dynamically imported in the main container (`index.tsx`) to avoid unnecessary loading during server-side rendering.
+
+**Current Implementation:**
+- Only `StationClaudeAIInfoCardSimple` is actively used in the StationSelector
+- The component is imported as `StationClaudeAIInfoCard` in `index.tsx` for clarity
+- It provides station information including weather, traffic, dining, and more
+- Supports multiple languages and has expandable view
+
+**Note:** All previously unused Claude components (alternate implementations) have been removed from the codebase to avoid confusion and maintain a clean architecture.
+
 ## Architecture
 
 ### Container/Presentational Pattern
@@ -34,7 +46,6 @@ The implementation follows the container/presentational pattern:
 ├── constants.ts            # Theme constants and configuration
 ├── presentation/           # Pure UI components
 │   ├── AddressSearch.tsx   # Search input with predictions
-│   ├── InfoBar.tsx         # Distance/time indicators
 │   ├── MainContent.tsx     # Main layout component
 │   ├── PredictionsDropdown.tsx # Search results dropdown
 │   ├── StationIcon.tsx     # Unified station icon (departure/arrival)

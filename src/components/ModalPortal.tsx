@@ -23,8 +23,13 @@ export default function ModalPortal({ children }: { children: ReactNode }) {
     const modalRoot = document.body;
     const el = elRef.current!;
     modalRoot.appendChild(el);
+    
+    // Cleanup function
     return () => {
-      modalRoot.removeChild(el);
+      // Check if the element is still a child of modalRoot before removing
+      if (el.parentNode === modalRoot) {
+        modalRoot.removeChild(el);
+      }
     };
   }, []);
 

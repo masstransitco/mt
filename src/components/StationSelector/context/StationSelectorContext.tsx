@@ -35,6 +35,12 @@ interface StationSelectorContextType {
   onScan?: () => void;
   setDepartureMapExpanded: (expanded: boolean) => void;
   setArrivalMapExpanded: (expanded: boolean) => void;
+  
+  // AI Info Card state
+  departureAiInfoExpanded: boolean;
+  arrivalAiInfoExpanded: boolean;
+  setDepartureAiInfoExpanded: (expanded: boolean) => void;
+  setArrivalAiInfoExpanded: (expanded: boolean) => void;
   // No longer including animateToLocation as we use CameraAnimationManager directly
   
   // Theme (derived from inSheet)
@@ -42,6 +48,9 @@ interface StationSelectorContextType {
     colors: typeof STATION_COLORS;
     sizes: typeof CONTEXT_SIZES.SHEET | typeof CONTEXT_SIZES.MAP;
     containerStyle: { backgroundColor: string };
+    // Add AI Info setters to the theme
+    setDepartureAiInfoExpanded?: (expanded: boolean) => void;
+    setArrivalAiInfoExpanded?: (expanded: boolean) => void;
   };
 }
 
@@ -67,11 +76,17 @@ const defaultContext: StationSelectorContextType = {
   onScan: () => {},
   setDepartureMapExpanded: () => {},
   setArrivalMapExpanded: () => {},
+  departureAiInfoExpanded: false,
+  arrivalAiInfoExpanded: false,
+  setDepartureAiInfoExpanded: () => {},
+  setArrivalAiInfoExpanded: () => {},
   // animateToLocation removed
   theme: {
     colors: STATION_COLORS,
     sizes: CONTEXT_SIZES.MAP,
-    containerStyle: { backgroundColor: "rgba(0, 0, 0, 0.9)" }
+    containerStyle: { backgroundColor: "rgba(0, 0, 0, 0.9)" },
+    setDepartureAiInfoExpanded: () => {},
+    setArrivalAiInfoExpanded: () => {}
   }
 };
 
@@ -93,7 +108,9 @@ export function StationSelectorProvider({ children, value }: StationSelectorProv
     theme: {
       colors: STATION_COLORS,
       sizes: value.inSheet ? CONTEXT_SIZES.SHEET : CONTEXT_SIZES.MAP,
-      containerStyle: { backgroundColor: "rgba(0, 0, 0, 0.9)" }
+      containerStyle: { backgroundColor: "rgba(0, 0, 0, 0.9)" },
+      setDepartureAiInfoExpanded: value.setDepartureAiInfoExpanded,
+      setArrivalAiInfoExpanded: value.setArrivalAiInfoExpanded
     }
   };
 

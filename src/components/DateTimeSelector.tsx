@@ -348,7 +348,7 @@ export default function DateTimeSelector({
     console.log('Generated times:', {
       date: format(selectedDate, 'MMM d'),
       minTime: format(minPickupTime, 'MMM d, h:mm a'),
-      startTime: format(times[0], 'h:mm a'),
+      startTime: times.length > 0 ? format(times[0], 'h:mm a') : 'No times available',
       numTimes: times.length
     })
 

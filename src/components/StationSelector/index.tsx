@@ -17,6 +17,29 @@ const Google3DMapCard = dynamic(() => import("@/components/3DMapCard"), {
   ),
 });
 
+// Lazy-load StationAIInfoCard
+const StationAIInfoCard = dynamic(() => import("@/components/StationAIInfoCard"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-52 w-full bg-card rounded-xl flex items-center justify-center">
+      <div className="animate-spin w-6 h-6 border-2 border-[#10a37f] border-t-transparent rounded-full" />
+    </div>
+  ),
+});
+
+// Lazy-load StationClaudeAIInfoCard - Claude-powered version
+// NOTE: This imports StationClaudeAIInfoCardSimple but renames it for clarity
+// StationClaudeAIInfoCardSimple is the standalone version (without Redux)
+// It's the only Claude component used in the application, other versions have been removed
+const StationClaudeAIInfoCard = dynamic(() => import("@/components/StationClaudeAIInfoCardSimple"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-52 w-full bg-card rounded-xl flex items-center justify-center">
+      <div className="animate-spin w-6 h-6 border-2 border-[#10a37f] border-t-transparent rounded-full" />
+    </div>
+  ),
+});
+
 interface StationSelectorProps {
   onAddressSearch: (location: google.maps.LatLngLiteral) => void;
   onClearDeparture?: () => void;
@@ -60,8 +83,12 @@ function StationSelector({
     animatingStationId,
     departureMapExpanded,
     arrivalMapExpanded,
+    departureAiInfoExpanded,
+    arrivalAiInfoExpanded,
     setDepartureMapExpanded,
     setArrivalMapExpanded,
+    setDepartureAiInfoExpanded,
+    setArrivalAiInfoExpanded,
     handleClearDeparture,
     handleClearArrival,
     handleScan,
@@ -105,6 +132,12 @@ function StationSelector({
     setDepartureMapExpanded,
     setArrivalMapExpanded,
     
+    // AI Info Card state
+    departureAiInfoExpanded,
+    arrivalAiInfoExpanded,
+    setDepartureAiInfoExpanded,
+    setArrivalAiInfoExpanded,
+    
     // No longer passing animateToLocation as CameraAnimationManager is used directly
   };
 
@@ -126,6 +159,16 @@ function StationSelector({
         />
       )}
 
+      {/* DEPARTURE AI Info Card expanded view - Using Claude */}
+      {departureAiInfoExpanded && departureStation && (
+        <StationClaudeAIInfoCard
+          station={departureStation}
+          expanded={departureAiInfoExpanded}
+          onToggleExpanded={setDepartureAiInfoExpanded}
+          hideDefaultExpandButton
+        />
+      )}
+
       {/* ARRIVAL MapCard expanded view */}
       {arrivalMapExpanded && arrivalStation && (
         <Google3DMapCard
@@ -134,6 +177,16 @@ function StationSelector({
           address={arrivalStation.properties.Address}
           expanded={arrivalMapExpanded}
           onToggleExpanded={setArrivalMapExpanded}
+          hideDefaultExpandButton
+        />
+      )}
+
+      {/* ARRIVAL AI Info Card expanded view - Using Claude */}
+      {arrivalAiInfoExpanded && arrivalStation && (
+        <StationClaudeAIInfoCard
+          station={arrivalStation}
+          expanded={arrivalAiInfoExpanded}
+          onToggleExpanded={setArrivalAiInfoExpanded}
           hideDefaultExpandButton
         />
       )}
