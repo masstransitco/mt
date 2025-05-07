@@ -13,6 +13,8 @@ import {
 import { selectDispatchRoute } from "@/store/dispatchSlice"
 import { selectListSelectedStationId } from "@/store/userSlice"
 import "@/styles/marker-styles.css"
+import stationSelectionManager from "@/lib/stationSelectionManager"
+import cameraAnimationManager from "@/lib/cameraAnimationManager"
 
 
 // Improved types for marker-related data
@@ -713,15 +715,8 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null | undefined, 
   
   // Handler for station clicks with camera animations using CameraAnimationManager
   const handleStationClick = useCallback((stationId: number) => {
-    // Use CameraAnimationManager instead of directly importing useCameraAnimation
-    import("@/lib/cameraAnimationManager").then((managerModule) => {
-      const cameraAnimationManager = managerModule.default;
-      // Let the stationSelectionManager handle the animation through CameraAnimationManager
-      import("@/lib/stationSelectionManager").then((stationManagerModule) => {
-        const stationSelectionManager = stationManagerModule.default;
-        stationSelectionManager.selectStation(stationId, false);
-      });
-    });
+    // Use the pre-imported managers directly
+    stationSelectionManager.selectStation(stationId, false);
   }, [])
 
   // Create a marker element with appropriate styling for a station
