@@ -17,6 +17,7 @@ import { useGoogleMaps } from "@/providers/GoogleMapsProvider";
 import { throttle } from "lodash";
 import ChevronDown from "@/components/ui/icons/ChevronDown";
 import ChevronUp from "@/components/ui/icons/ChevronUp";
+import stationSelectionManager from "@/lib/stationSelectionManager";
 
 import {
   selectSheetMode,
@@ -396,32 +397,18 @@ export default function GMap() {
   // -------------------------
   // Station Selection Manager
   // -------------------------
-  // Load the station selection manager asynchronously if not already loaded
-  const stationSelectionManagerRef = useRef<any>(null);
-  useEffect(() => {
-    import("@/lib/stationSelectionManager").then(module => {
-      stationSelectionManagerRef.current = module.default;
-    });
-  }, []);
+  // We now import stationSelectionManager directly at the top of the file
+  // No need for a ref or dynamic import
 
   // -------------------------
   // One function for station selection (using stationSelectionManager)
   // -------------------------
   const pickStationAsDeparture = useCallback(
     (stationId: number, viaScan = false) => {
-      // Load stationSelectionManager if not already loaded
-      if (!stationSelectionManagerRef.current) {
-        import("@/lib/stationSelectionManager").then(module => {
-          stationSelectionManagerRef.current = module.default;
-          stationSelectionManagerRef.current.selectStation(stationId, viaScan, cameraControls);
-        });
-        return;
-      }
-      
-      // Use the manager for station selection, passing camera controls
-      stationSelectionManagerRef.current.selectStation(stationId, viaScan, cameraControls);
+      // Use the imported stationSelectionManager directly
+      stationSelectionManager.selectStation(stationId, viaScan, cameraControls);
     },
-    [cameraControls] // Add cameraControls as a dependency
+    [cameraControls] // Keep cameraControls as a dependency
   );
 
   const handleStationSelectedFromList = useCallback(
@@ -534,17 +521,8 @@ useEffect(() => {
   // -------------------------
   
   const resetBookingFlowForQrScan = useCallback(() => {
-    // Load stationSelectionManager if not already loaded
-    if (!stationSelectionManagerRef.current) {
-      import("@/lib/stationSelectionManager").then(module => {
-        stationSelectionManagerRef.current = module.default;
-        stationSelectionManagerRef.current.resetBookingFlowForQrScan(cameraControls);
-      });
-      return;
-    }
-    
-    // Use the manager to reset booking flow for QR scan
-    stationSelectionManagerRef.current.resetBookingFlowForQrScan(cameraControls);
+    // Use the imported stationSelectionManager directly
+    stationSelectionManager.resetBookingFlowForQrScan(cameraControls);
   }, [cameraControls]);
 
   const handleOpenQrScanner = useCallback(() => {
@@ -558,37 +536,18 @@ useEffect(() => {
     (car: Car) => {
       if (!car) return;
       
-      // Load stationSelectionManager if not already loaded
-      if (!stationSelectionManagerRef.current) {
-        import("@/lib/stationSelectionManager").then(module => {
-          stationSelectionManagerRef.current = module.default;
-          stationSelectionManagerRef.current.handleQrScanSuccess(car, cameraControls);
-        });
-        return;
-      }
-      
-      // Use the manager for QR scan handling, passing camera controls
-      stationSelectionManagerRef.current.handleQrScanSuccess(car, cameraControls);
+      // Use the imported stationSelectionManager directly
+      stationSelectionManager.handleQrScanSuccess(car, cameraControls);
     },
-    [cameraControls] // Add cameraControls as a dependency
+    [cameraControls] // Keep cameraControls as a dependency
   );
 
   // -------------------------
   // Confirm logic for detail (using stationSelectionManager)
   // -------------------------
   const handleStationConfirm = useCallback(() => {
-    // Load stationSelectionManager if not already loaded
-    if (!stationSelectionManagerRef.current) {
-      import("@/lib/stationSelectionManager").then(module => {
-        stationSelectionManagerRef.current = module.default;
-        stationSelectionManagerRef.current.confirmStationSelection(cameraControls);
-      });
-      return;
-    }
-    
-    // Use the manager to confirm station selection
-    // Pass camera controls to allow animations
-    stationSelectionManagerRef.current.confirmStationSelection(cameraControls);
+    // Use the imported stationSelectionManager directly
+    stationSelectionManager.confirmStationSelection(cameraControls);
   }, [cameraControls]);
 
   // Which station are we showing in detail?
@@ -698,28 +657,12 @@ useEffect(() => {
                 }
               }}
                             onClearDeparture={() => {
-                // Load stationSelectionManager if not already loaded
-                if (!stationSelectionManagerRef.current) {
-                  import("@/lib/stationSelectionManager").then(module => {
-                    stationSelectionManagerRef.current = module.default;
-                    stationSelectionManagerRef.current.clearDepartureStation(cameraControls);
-                  });
-                  return;
-                }
-                
-                stationSelectionManagerRef.current.clearDepartureStation(cameraControls);
+                // Use imported stationSelectionManager directly
+                stationSelectionManager.clearDepartureStation(cameraControls);
               }}
               onClearArrival={() => {
-                // Load stationSelectionManager if not already loaded
-                if (!stationSelectionManagerRef.current) {
-                  import("@/lib/stationSelectionManager").then(module => {
-                    stationSelectionManagerRef.current = module.default;
-                    stationSelectionManagerRef.current.clearArrivalStation(cameraControls);
-                  });
-                  return;
-                }
-                
-                stationSelectionManagerRef.current.clearArrivalStation(cameraControls);
+                // Use imported stationSelectionManager directly
+                stationSelectionManager.clearArrivalStation(cameraControls);
               }}
               onScan={handleOpenQrScanner}
               isQrScanStation={isQrScanStation}
@@ -765,24 +708,12 @@ useEffect(() => {
                           dispatch(setSheetMinimized(false));
                         }}
                         onClearDeparture={() => {
-                          if (!stationSelectionManagerRef.current) {
-                            import("@/lib/stationSelectionManager").then(module => {
-                              stationSelectionManagerRef.current = module.default;
-                              stationSelectionManagerRef.current.clearDepartureStation(cameraControls);
-                            });
-                            return;
-                          }
-                          stationSelectionManagerRef.current.clearDepartureStation(cameraControls);
+                          // Use imported stationSelectionManager directly
+                          stationSelectionManager.clearDepartureStation(cameraControls);
                         }}
                         onClearArrival={() => {
-                          if (!stationSelectionManagerRef.current) {
-                            import("@/lib/stationSelectionManager").then(module => {
-                              stationSelectionManagerRef.current = module.default;
-                              stationSelectionManagerRef.current.clearArrivalStation(cameraControls);
-                            });
-                            return;
-                          }
-                          stationSelectionManagerRef.current.clearArrivalStation(cameraControls);
+                          // Use imported stationSelectionManager directly
+                          stationSelectionManager.clearArrivalStation(cameraControls);
                         }}
                         onScan={handleOpenQrScanner}
                         isQrScanStation={isQrScanStation}
@@ -839,24 +770,12 @@ useEffect(() => {
                           dispatch(setSheetMinimized(false));
                         }}
                         onClearDeparture={() => {
-                          if (!stationSelectionManagerRef.current) {
-                            import("@/lib/stationSelectionManager").then(module => {
-                              stationSelectionManagerRef.current = module.default;
-                              stationSelectionManagerRef.current.clearDepartureStation();
-                            });
-                            return;
-                          }
-                          stationSelectionManagerRef.current.clearDepartureStation();
+                          // Use imported stationSelectionManager directly
+                          stationSelectionManager.clearDepartureStation();
                         }}
                         onClearArrival={() => {
-                          if (!stationSelectionManagerRef.current) {
-                            import("@/lib/stationSelectionManager").then(module => {
-                              stationSelectionManagerRef.current = module.default;
-                              stationSelectionManagerRef.current.clearArrivalStation();
-                            });
-                            return;
-                          }
-                          stationSelectionManagerRef.current.clearArrivalStation();
+                          // Use imported stationSelectionManager directly
+                          stationSelectionManager.clearArrivalStation();
                         }}
                         onScan={handleOpenQrScanner}
                         isQrScanStation={isQrScanStation}
@@ -883,23 +802,8 @@ useEffect(() => {
                             onClick={() => {
                               console.log("[GMap] Return to same station clicked");
                               
-                              // Load stationSelectionManager if not already loaded
-                              if (!stationSelectionManagerRef.current) {
-                                import("@/lib/stationSelectionManager").then(module => {
-                                  stationSelectionManagerRef.current = module.default;
-                                  // Use the new method to select return to same station
-                                  const success = stationSelectionManagerRef.current.selectReturnToSameStation(cameraControls);
-                                  if (!success) {
-                                    toast.error("Unable to select return to same station");
-                                  } else {
-                                    toast.success("Return to same station selected");
-                                  }
-                                });
-                                return;
-                              }
-                              
-                              // Use the new method to select return to same station
-                              const success = stationSelectionManagerRef.current.selectReturnToSameStation(cameraControls);
+                              // Use the imported stationSelectionManager directly
+                              const success = stationSelectionManager.selectReturnToSameStation(cameraControls);
                               if (!success) {
                                 toast.error("Unable to select return to same station");
                               } else {
@@ -941,24 +845,12 @@ useEffect(() => {
                         dispatch(setSheetMinimized(false));
                       }}
                       onClearDeparture={() => {
-                        if (!stationSelectionManagerRef.current) {
-                          import("@/lib/stationSelectionManager").then(module => {
-                            stationSelectionManagerRef.current = module.default;
-                            stationSelectionManagerRef.current.clearDepartureStation(cameraControls);
-                          });
-                          return;
-                        }
-                        stationSelectionManagerRef.current.clearDepartureStation(cameraControls);
+                        // Use imported stationSelectionManager directly
+                        stationSelectionManager.clearDepartureStation(cameraControls);
                       }}
                       onClearArrival={() => {
-                        if (!stationSelectionManagerRef.current) {
-                          import("@/lib/stationSelectionManager").then(module => {
-                            stationSelectionManagerRef.current = module.default;
-                            stationSelectionManagerRef.current.clearArrivalStation(cameraControls);
-                          });
-                          return;
-                        }
-                        stationSelectionManagerRef.current.clearArrivalStation(cameraControls);
+                        // Use imported stationSelectionManager directly
+                        stationSelectionManager.clearArrivalStation(cameraControls);
                       }}
                       onScan={handleOpenQrScanner}
                       isQrScanStation={isQrScanStation}
