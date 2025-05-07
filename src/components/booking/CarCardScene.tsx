@@ -553,12 +553,43 @@ export default function CarCardScene(props: CarCardSceneProps) {
   const isClient = useIsClient();
   
   // Add global resource cleanup when unmounting and call onReady
+  // Use ref to track if component is mounted to prevent callback after unmount
+  const isMountedRef = useRef(true);
+  
+  // Set up mounted ref
   useEffect(() => {
-    // Call onReady callback immediately - this ensures the loading spinner disappears
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  // Handle onReady callback
+  useEffect(() => {
+    // Always delay the onReady callback to avoid race conditions, 
+    // especially during QR scanning which can cause rapid unmounting
     if (isClient) {
-      console.log("[CarCardScene] Client-side render complete, calling onReady");
-      // Call immediately to prevent the spinner from staying indefinitely
-      props.onReady?.();
+      console.log("[CarCardScene] Client-side render complete, scheduling onReady callback");
+      
+      // Increased delay to ensure component hierarchy is fully stable
+      const readyTimer = setTimeout(() => {
+        console.log("[CarCardScene] Calling delayed onReady callback");
+        // Only call callback if still mounted
+        if (isMountedRef.current && props.onReady) {
+          try {
+            props.onReady();
+          } catch (err) {
+            console.error("[CarCardScene] Error in onReady callback:", err);
+          }
+        }
+      }, 100); // Increased delay for more stability
+      
+      // Cleanup timeout if component unmounts before callback
+      return () => {
+        clearTimeout(readyTimer);
+        // Run cleanup on component unmount
+        cleanupThreeResources();
+      };
     }
     
     return () => {

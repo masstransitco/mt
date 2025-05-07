@@ -141,6 +141,9 @@ function CarGridWithScene({
     console.log("[CarGridWithScene] Fetching cars and dispatch data...")
     
     try {
+      // Check mounted state before starting async operations
+      if (!isMountedRef.current) return;
+      
       // Fetch cars, dispatch locations, and availability in parallel
       const promises = [
         dispatch(fetchCars()),
@@ -150,6 +153,9 @@ function CarGridWithScene({
       // Wait for all promises to resolve in parallel
       await Promise.all(promises)
       
+      // Check mounted state again after first batch of async operations
+      if (!isMountedRef.current) return;
+      
       // Now fetch availability
       try {
         await dispatch(fetchAvailabilityFromFirestore())
@@ -158,6 +164,7 @@ function CarGridWithScene({
         // Continue even if this fails - we'll still have the cars
       }
       
+      // Final mounted check before state updates
       if (isMountedRef.current) {
         setLoading(false)
         setInitialized(true)
@@ -194,7 +201,7 @@ function CarGridWithScene({
   
   // Force stop loading if we have cars
   useEffect(() => {
-    if (availableCars.length > 0 && loading) {
+    if (availableCars.length > 0 && loading && isMountedRef.current) {
       console.log("[CarGridWithScene] Cars available, stopping loading state")
       setLoading(false)
       setInitialized(true)
@@ -204,10 +211,13 @@ function CarGridWithScene({
   // IMPORTANT: Handler for scene ready state
   const handleSceneReady = useCallback(() => {
     console.log("[CarGridWithScene] Scene is ready")
-    // Force immediate state update to prevent loading spinner from showing too long
-    setLoading(false)
-    setInitialized(true)
-    setSceneReady(true)
+    // Only update state if component is still mounted
+    if (isMountedRef.current) {
+      // Force immediate state update to prevent loading spinner from showing too long
+      setLoading(false)
+      setInitialized(true)
+      setSceneReady(true)
+    }
   }, [])
 
   // Early return if not visible
