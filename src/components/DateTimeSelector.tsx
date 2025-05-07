@@ -530,7 +530,7 @@ export default function DateTimeSelector({
         </div>
         
         {/* Pickup Time Option Selector - only show in steps 2+ */}
-        {currentStep > 1 && (
+        <div className={currentStep > 1 ? "block" : "hidden"}>
           <div className="px-4 py-4 border-b border-zinc-800/70 bg-gradient-to-r from-zinc-950 to-black">
             <div className="grid grid-cols-2 gap-3">
               <motion.button
@@ -564,10 +564,10 @@ export default function DateTimeSelector({
               </motion.button>
             </div>
           </div>
-        )}
+        </div>
         
         {/* In step 1, we just show a simple message */}
-        {currentStep === 1 && (
+        <div className={currentStep === 1 ? "block" : "hidden"}>
           <div className="px-4 py-5 border-b border-zinc-800/70 bg-gradient-to-b from-zinc-950 to-black">
             <div className="flex flex-col items-center gap-4">
               <p className="text-sm text-zinc-300 text-center font-sfpro">
@@ -575,7 +575,7 @@ export default function DateTimeSelector({
               </p>
             </div>
           </div>
-        )}
+        </div>
         
         {/* We've removed the nearest station display in step 1 */}
 
@@ -650,92 +650,91 @@ export default function DateTimeSelector({
               </div>
             </div>
 
-            {/* Time Selector */}
-            <AnimatePresence>
-              {showTimes && (
-                <motion.div
-                  className="px-4 py-5 max-h-72 overflow-y-auto scrollbar-hide bg-gradient-to-b from-zinc-950 to-black"
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <div className="flex items-center justify-between mb-5">
-                    <h3 className="text-sm font-sfpro font-medium text-zinc-300 flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-zinc-400" />
-                      SELECT TIME
-                    </h3>
-                    <div className="relative">
-                      <button 
-                        onClick={toggleMinTimeInfo}
-                        className="text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-900 p-1.5 rounded-full border border-zinc-800"
-                      >
-                        <Info className="h-4 w-4" />
-                      </button>
-                      
-                      {/* Time restriction info tooltip */}
-                      {showMinTimeInfo && (
-                        <div className="absolute right-0 top-8 w-72 p-3 bg-black border border-zinc-800 rounded-xl shadow-xl z-10 text-xs">
-                          <div className="flex gap-2 items-start">
-                            <Info className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <p className="font-sfpro text-zinc-300 leading-relaxed">
-                                The earliest available pickup time is based on the time needed to prepare your car.
-                              </p>
-                              <p className="mt-2 font-sfpro text-green-400 font-medium">
-                                Earliest time: {format(minPickupTime, 'MMM d, h:mm a')}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+            {/* Time Selector - Always render with conditional visibility */}
+            <div
+              className={`px-4 py-5 overflow-y-auto scrollbar-hide bg-gradient-to-b from-zinc-950 to-black transition-all duration-300 ${
+                showTimes 
+                  ? "max-h-72 opacity-100" 
+                  : "max-h-0 opacity-0 overflow-hidden"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-sm font-sfpro font-medium text-zinc-300 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-zinc-400" />
+                  SELECT TIME
+                </h3>
+                <div className="relative">
+                  <button 
+                    onClick={toggleMinTimeInfo}
+                    className="text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-900 p-1.5 rounded-full border border-zinc-800"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                  
+                  {/* Time restriction info tooltip - always render but conditionally show */}
+                  <div 
+                    className={`absolute right-0 top-8 w-72 p-3 bg-black border border-zinc-800 rounded-xl shadow-xl z-10 text-xs transition-opacity duration-200 ${
+                      showMinTimeInfo ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                  >
+                    <div className="flex gap-2 items-start">
+                      <Info className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-sfpro text-zinc-300 leading-relaxed">
+                          The earliest available pickup time is based on the time needed to prepare your car.
+                        </p>
+                        <p className="mt-2 font-sfpro text-green-400 font-medium">
+                          Earliest time: {format(minPickupTime, 'MMM d, h:mm a')}
+                        </p>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-4 gap-2.5">
-                    {availableTimes.map((time, i) => {
-                      // Create a combined date-time to check against minimum pickup time
-                      const dateTime = new Date(
-                        selectedDate!.getFullYear(),
-                        selectedDate!.getMonth(),
-                        selectedDate!.getDate(),
-                        time.getHours(),
-                        time.getMinutes(),
-                      );
-                      
-                      // Calculate if this time is unavailable (before min pickup time)
-                      const isUnavailable = dateTime < minPickupTime;
-                      
-                      return (
-                        <motion.button
-                          key={i}
-                          className={cn(
-                            "py-2.5 px-1 rounded-xl text-sm font-sfpro font-medium transition-colors whitespace-nowrap w-full h-11 flex items-center justify-center shadow-md border",
-                            selectedTime && time.getTime() === selectedTime.getTime()
-                              ? "bg-gradient-to-b from-zinc-800 to-zinc-900 text-white border-zinc-700"
-                              : isUnavailable
-                                ? "bg-zinc-900/50 text-zinc-600 border-zinc-900 cursor-not-allowed"
-                                : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white hover:border-zinc-700",
-                          )}
-                          onClick={() => !isUnavailable && handleTimeSelect(time)}
-                          whileHover={{ scale: isUnavailable ? 1 : 1.03 }}
-                          whileTap={{ scale: isUnavailable ? 1 : 0.97 }}
-                          disabled={isUnavailable}
-                        >
-                          {format(time, "h:mm a")}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Add notice about minimum time availability */}
-                  <div className="mt-5 bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 flex items-start gap-2">
-                    <Info className="h-4 w-4 text-zinc-500 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs font-sfpro text-zinc-500 leading-relaxed">
-                      Times are available starting from the next hour after the calculated "Pickup in X minutes" time.
-                    </p>
-                  </div>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2.5">
+                {availableTimes.map((time, i) => {
+                  // Create a combined date-time to check against minimum pickup time
+                  const dateTime = selectedDate ? new Date(
+                    selectedDate.getFullYear(),
+                    selectedDate.getMonth(),
+                    selectedDate.getDate(),
+                    time.getHours(),
+                    time.getMinutes(),
+                  ) : new Date();
+                  
+                  // Calculate if this time is unavailable (before min pickup time)
+                  const isUnavailable = dateTime < minPickupTime;
+                  
+                  return (
+                    <motion.button
+                      key={i}
+                      className={cn(
+                        "py-2.5 px-1 rounded-xl text-sm font-sfpro font-medium transition-colors whitespace-nowrap w-full h-11 flex items-center justify-center shadow-md border",
+                        selectedTime && time.getTime() === selectedTime.getTime()
+                          ? "bg-gradient-to-b from-zinc-800 to-zinc-900 text-white border-zinc-700"
+                          : isUnavailable
+                            ? "bg-zinc-900/50 text-zinc-600 border-zinc-900 cursor-not-allowed"
+                            : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white hover:border-zinc-700",
+                      )}
+                      onClick={() => !isUnavailable && handleTimeSelect(time)}
+                      whileHover={{ scale: isUnavailable ? 1 : 1.03 }}
+                      whileTap={{ scale: isUnavailable ? 1 : 0.97 }}
+                      disabled={isUnavailable}
+                    >
+                      {format(time, "h:mm a")}
+                    </motion.button>
+                  );
+                })}
+              </div>
+              
+              {/* Add notice about minimum time availability */}
+              <div className="mt-5 bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 flex items-start gap-2">
+                <Info className="h-4 w-4 text-zinc-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs font-sfpro text-zinc-500 leading-relaxed">
+                  Times are available starting from the next hour after the calculated "Pickup in X minutes" time.
+                </p>
+              </div>
             </div>
         </div>
         
@@ -759,7 +758,7 @@ export default function DateTimeSelector({
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Action Buttons */}
         <div className="p-5 bg-gradient-to-b from-black to-zinc-950 border-t border-zinc-800/50">
