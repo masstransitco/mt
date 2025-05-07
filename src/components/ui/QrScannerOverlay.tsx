@@ -60,13 +60,19 @@ export default function QrScannerOverlay({
         
         toast.success(result.message);
         
-        // Close first
+        // Close the scanner first
         onClose();
         
-        // Then notify parent component of successful scan (after closing)
+        // Use setTimeout instead of requestAnimationFrame to ensure component state has
+        // fully settled before processing the callback - this prevents hook count inconsistencies
         if (onScanSuccess && scannedCar) {
-          // No setTimeout to avoid hook timing issues
-          onScanSuccess(scannedCar);
+          // Slight delay to ensure the component tree has stabilized
+          setTimeout(() => {
+            // Additional safety check in case the callback was nullified during unmount
+            if (onScanSuccess) {
+              onScanSuccess(scannedCar);
+            }
+          }, 50);
         }
       } catch (error) {
         console.error("Error processing QR code:", error);
@@ -127,40 +133,38 @@ export default function QrScannerOverlay({
               </div>
 
               <div className="relative mt-3 overflow-hidden rounded-lg z-10" style={{ aspectRatio: "4/3" }}>
-                {scanning && (
-                  <div className="absolute inset-0 z-10">
-                    <Scanner
-                      onScan={handleScan}
-                      onError={handleError}
-                      constraints={{
-                        facingMode: "environment",
-                      }}
-                      scanDelay={500}
-                      components={{ finder: false }}
-                      classNames={{ container: "custom-scanner" }}
-                      styles={{
-                        container: {
-                          position: "relative",
-                          borderRadius: "8px",
-                          overflow: "hidden",
-                          width: "100%",
-                          height: "100%",
-                        },
-                        video: {
-                          objectFit: "cover",
-                          width: "100%",
-                          height: "100%",
-                        },
-                      }}
-                    />
-                  </div>
-                )}
+                {/* Always render Scanner but conditionally show it */}
+                <div className={`absolute inset-0 z-10 ${scanning ? 'block' : 'hidden'}`}>
+                  <Scanner
+                    onScan={handleScan}
+                    onError={handleError}
+                    constraints={{
+                      facingMode: "environment",
+                    }}
+                    scanDelay={500}
+                    components={{ finder: false }}
+                    classNames={{ container: "custom-scanner" }}
+                    styles={{
+                      container: {
+                        position: "relative",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        width: "100%",
+                        height: "100%",
+                      },
+                      video: {
+                        objectFit: "cover",
+                        width: "100%",
+                        height: "100%",
+                      },
+                    }}
+                  />
+                </div>
 
-                {loading && (
-                  <div className="p-8 flex items-center justify-center">
-                    <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
-                  </div>
-                )}
+                {/* Always render loading spinner but conditionally show it */}
+                <div className={`p-8 flex items-center justify-center ${loading ? 'block' : 'hidden'}`}>
+                  <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(255,255,255,0.5)]" />
+                </div>
                 {/* White framing + scan‑light overlay (always on top) */}
                 <div className="qr-scan-frame-container absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
                   <div className="qr-scan-frame-box">
