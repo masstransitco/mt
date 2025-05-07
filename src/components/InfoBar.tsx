@@ -70,6 +70,13 @@ const InfoBar = React.memo(({
 
   // State for picker visibility
   const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+  
+  // Always create a ref to document.body for portal rendering
+  // This ensures consistent hook pattern even when portal is not shown
+  const portalTargetRef = useMemo(() => {
+    if (typeof document === "undefined") return null;
+    return document.body;
+  }, []);
 
   // Notify parent when DateTimePicker visibility changes
   const updatePickerVisibility = (isVisible: boolean) => {
@@ -146,11 +153,14 @@ const InfoBar = React.memo(({
         )}
       </div>
 
-      {/* Portal-based DateTimeSelector to ensure it's rendered at the top level of the DOM */}
-      {showDateTimePicker && typeof document !== "undefined" && 
+      {/* Portal-based DateTimeSelector - ALWAYS render the portal to maintain consistent hook count */}
+      {portalTargetRef && 
         createPortal(
           // Use a higher z-index than any other element in the application
-          <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999 }}>
+          <div 
+            className={`fixed inset-0 flex items-center justify-center transition-opacity duration-300 ${showDateTimePicker ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} 
+            style={{ zIndex: 9999 }}
+          >
             {/* Background overlay */}
             <div className="fixed inset-0 bg-black/70" onClick={handleDateTimeCancel} />
             
@@ -163,7 +173,7 @@ const InfoBar = React.memo(({
               />
             </div>
           </div>,
-          document.body
+          portalTargetRef
         )
       }
     </div>

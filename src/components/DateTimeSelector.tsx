@@ -579,9 +579,8 @@ export default function DateTimeSelector({
         
         {/* We've removed the nearest station display in step 1 */}
 
-        {/* Date and Time selectors - show when not using default pickup time or when in step 1 */}
-        {(!useDefaultPickupTime || currentStep === 1) && (
-          <>
+        {/* Date and Time selectors - ALWAYS render but conditionally display */}
+        <div className={(!useDefaultPickupTime || currentStep === 1) ? 'block' : 'hidden'}>
             {/* Date Selector */}
             <div className="px-4 py-5 mt-1 border-b border-zinc-800/70 bg-gradient-to-r from-zinc-950 to-black">
               <div className="flex items-center justify-between mb-5">
@@ -736,14 +735,12 @@ export default function DateTimeSelector({
                       Times are available starting from the next hour after the calculated "Pickup in X minutes" time.
                     </p>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>
-        )}
+                </div>
+            </div>
+        </div>
         
-        {/* Default Pickup Time Details - only show in step 2+ when using default pickup time */}
-        {currentStep > 1 && useDefaultPickupTime && (
+        {/* Default Pickup Time Details - always render but conditionally display */}
+        <div className={currentStep > 1 && useDefaultPickupTime ? 'block' : 'hidden'}>
           <div className="px-4 py-5 border-b border-zinc-800/70 bg-gradient-to-b from-zinc-950 to-black">
             <div className="bg-gradient-to-b from-[#0a1a21] to-[#0b1a1e] p-5 rounded-2xl border border-blue-900/20 shadow-lg">
               <div className="flex items-center justify-center mb-4">
@@ -766,9 +763,10 @@ export default function DateTimeSelector({
 
         {/* Action Buttons */}
         <div className="p-5 bg-gradient-to-b from-black to-zinc-950 border-t border-zinc-800/50">
-          {/* Confirm Button - different behavior based on step and state */}
-          {currentStep === 1 && selectedDate && selectedTime ? (
-            // In step 1 without a selected station but with date and time selected
+          {/* Confirm Button - Always render all buttons but conditionally display them */}
+          
+          {/* Option 1: Step 1 with date and time selected */}
+          <div className={currentStep === 1 && selectedDate && selectedTime ? 'block' : 'hidden'}>
             <Button
               className="w-full rounded-xl py-3.5 transition-all duration-300 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-sfpro shadow-lg shadow-blue-900/20 border border-blue-500/20"
               onClick={handleConfirm}
@@ -781,8 +779,10 @@ export default function DateTimeSelector({
                 <span>Confirm Scheduled Pickup</span>
               </motion.div>
             </Button>
-          ) : currentStep > 1 && useDefaultPickupTime ? (
-            // In step 2+ with default pickup time
+          </div>
+          
+          {/* Option 2: Step 2+ with default pickup time */}
+          <div className={currentStep > 1 && useDefaultPickupTime ? 'block' : 'hidden'}>
             <Button
               className="w-full rounded-xl py-3.5 transition-all duration-300 bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-sfpro shadow-lg shadow-blue-900/20 border border-blue-500/20"
               onClick={handleConfirmDefaultPickupTime}
@@ -795,8 +795,10 @@ export default function DateTimeSelector({
                 <span>Confirm Quick Pickup</span>
               </motion.div>
             </Button>
-          ) : (
-            // For scheduled pickup (both step 1 and 2+)
+          </div>
+          
+          {/* Option 3: Standard scheduled pickup flow */}
+          <div className={!(currentStep === 1 && selectedDate && selectedTime) && !(currentStep > 1 && useDefaultPickupTime) ? 'block' : 'hidden'}>
             <Button
               className={cn(
                 "w-full rounded-xl py-3.5 transition-all duration-300 font-sfpro shadow-lg",
@@ -821,10 +823,10 @@ export default function DateTimeSelector({
                 )}
               </motion.div>
             </Button>
-          )}
+          </div>
           
-          {/* Cancel Button */}
-          {onCancel && (
+          {/* Cancel Button - always render, conditionally hide */}
+          <div className={onCancel ? 'block' : 'hidden'}>
             <Button
               variant="outline"
               className="w-full rounded-xl py-3.5 mt-3 text-zinc-300 bg-zinc-900/80 font-sfpro border border-zinc-700/70 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all duration-300"
@@ -838,7 +840,7 @@ export default function DateTimeSelector({
                 Back
               </motion.div>
             </Button>
-          )}
+          </div>
         </div>
       </motion.div>
     </div>
