@@ -266,46 +266,44 @@ function StationDetail({
               "w-full",
               bookingStep === 2 ? "pt-0" : "" // No padding top for step 2
             )}>
-              {(() => {
-                // Determine the rendering path once at the start of render
-                const renderQrScannedPath = isVirtualCarLocation && scannedCar;
-                
-                // Return the appropriate component with a key to ensure complete remounting
-                return renderQrScannedPath ? (
-                  <div key="qr-scanned-path" className="bg-[#1a1a1a] rounded-xl shadow-md overflow-hidden w-full mb-4 mx-4">
-                    <div className="w-full flex flex-col items-center">
-                      <div className="text-sm text-[#10A37F] font-medium my-2">QR Scanned Vehicle</div>
-                      
-                      {/* Import and use the CarCard component */}
-                      <div className="w-full h-full">
-                        <LazyCarCard
-                          car={scannedCar}
-                          selected={true}
-                          onClick={() => {}}
-                          isVisible={true}
-                          isQrScanStation={true}
-                        />
-                      </div>
+              {/* IMPORTANT: Create stable render paths with conditional rendering */}
+              {/* For QR scanned car path - use a guaranteed stable rendering path with key */}
+              {isVirtualCarLocation && scannedCar ? (
+                <div key="qr-scanned-path" className="bg-[#1a1a1a] rounded-xl shadow-md overflow-hidden w-full mb-4 mx-4">
+                  <div className="w-full flex flex-col items-center">
+                    <div className="text-sm text-[#10A37F] font-medium my-2">QR Scanned Vehicle</div>
+                    
+                    {/* Import and use the CarCard component */}
+                    <div className="w-full h-full">
+                      {/* Ensure hooks are called in the same order by using a value prop 
+                          instead of conditionally rendering the component */}
+                      <LazyCarCard
+                        car={scannedCar}
+                        selected={true}
+                        onClick={() => {}}
+                        isVisible={true}
+                        isQrScanStation={true}
+                      />
                     </div>
                   </div>
-                ) : (
-                  /* Regular car grid for normal stations - full width with rounded corners */
-                  <div 
-                    key="regular-path"
-                    className={cn(
-                      "overflow-visible bg-[#111111] w-full",
-                      bookingStep === 2 ? "mb-0 rounded-none" : "mb-4 mx-auto px-0 rounded-xl" // Remove margins and make it full-bleed in step 2
-                    )}
-                  >
-                    <CarGridWithScene 
-                      className="w-full h-full" 
-                      isVisible 
-                      scannedCar={scannedCar} 
-                      isQrScanStation={isVirtualCarLocation} 
-                    />
-                  </div>
-                );
-              })()}
+                </div>
+              ) : (
+                /* Regular car grid for normal stations */
+                <div 
+                  key="regular-path"
+                  className={cn(
+                    "overflow-visible bg-[#111111] w-full",
+                    bookingStep === 2 ? "mb-0 rounded-none" : "mb-4 mx-auto px-0 rounded-xl"
+                  )}
+                >
+                  <CarGridWithScene 
+                    className="w-full h-full" 
+                    isVisible={true}
+                    scannedCar={scannedCar} 
+                    isQrScanStation={isVirtualCarLocation} 
+                  />
+                </div>
+              )}
               
               {/* Confirm button always appears in step 2 for reliability */}
               {bookingStep === 2 && (
