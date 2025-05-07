@@ -6,6 +6,7 @@ import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
 import type { Car } from "@/types/cars";
 import { toast } from "react-hot-toast";
 import { useAppDispatch } from "@/store/store";
+import stationSelectionManager from "@/lib/stationSelectionManager";
 
 interface QrScannerOverlayProps {
   isOpen: boolean;
@@ -45,8 +46,7 @@ export default function QrScannerOverlay({
         const scannedValue = detectedCodes[0].rawValue;
         console.log("QR Code Scanned:", scannedValue);
 
-        // Use the centralized stationSelectionManager to process the QR code
-        const stationSelectionManager = (await import("@/lib/stationSelectionManager")).default;
+        // Use the pre-imported stationSelectionManager
         const result = await stationSelectionManager.processQrCode(scannedValue);
         
         if (!result.success) {
@@ -55,16 +55,19 @@ export default function QrScannerOverlay({
           return;
         }
         
-        // Notify parent component of successful scan
-        if (onScanSuccess && result.car) {
-          setTimeout(() => {
-            onScanSuccess(result.car!);
-          }, 500);
-        }
-
+        // Store the car for callback after closing
+        const scannedCar = result.car;
+        
         toast.success(result.message);
-        // Close the scanner on successful scan
+        
+        // Close first
         onClose();
+        
+        // Then notify parent component of successful scan (after closing)
+        if (onScanSuccess && scannedCar) {
+          // No setTimeout to avoid hook timing issues
+          onScanSuccess(scannedCar);
+        }
       } catch (error) {
         console.error("Error processing QR code:", error);
         toast.error("Failed to process the car QR code");
