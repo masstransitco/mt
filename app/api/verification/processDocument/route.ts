@@ -180,10 +180,10 @@ export async function POST(request: Request) {
     // 7) (Optional) Save JSON to Google Cloud Storage
     try {
       const storage = new Storage({
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        credentials: JSON.parse(process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY as string),
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        credentials: JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string),
       });
-      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+      const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
       if (!bucketName) {
         throw new Error("FIREBASE_STORAGE_BUCKET env variable not set");
       }

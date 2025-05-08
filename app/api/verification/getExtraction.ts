@@ -13,12 +13,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     // Initialize Google Cloud Storage using your service account credentials
     const storage = new Storage({
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      credentials: JSON.parse(process.env.NEXT_PUBLIC_SERVICE_ACCOUNT_KEY as string),
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      credentials: JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string),
     });
   
     // Ensure your bucket name is set in your environment variables
-    const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+    const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
     if (!bucketName) {
       res.status(500).json({ error: "FIREBASE_STORAGE_BUCKET env variable not set" });
       return;
