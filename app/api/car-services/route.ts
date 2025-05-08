@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import config from '@/config';
 import axios from 'axios';
 import moment from 'moment';
 

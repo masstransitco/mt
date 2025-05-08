@@ -1,43 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getApps } from "firebase-admin/app";
 import { auth } from "@/lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import config from "@/config";
+import { safeInitializeAdmin } from "@/lib/firebase-admin";
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
-  try {
-    // First try using the SERVICE_ACCOUNT_KEY if available
-    if (process.env.SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
-      initializeApp({
-        credential: cert(serviceAccount),
-      });
-      console.log("Firebase Admin initialized with SERVICE_ACCOUNT_KEY");
-    } else {
-      // Fall back to individual credentials
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY 
-        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') 
-        : undefined;
-        
-      if (!privateKey) {
-        throw new Error("Missing FIREBASE_PRIVATE_KEY environment variable");
-      }
-      
-      initializeApp({
-        credential: cert({
-          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-          clientEmail: process.env.NEXT_PUBLIC_FIREBASE_CLIENT_EMAIL,
-          privateKey: privateKey,
-        }),
-      });
-      console.log("Firebase Admin initialized with individual credentials");
-    }
-  } catch (error) {
-    console.error("Error initializing Firebase Admin:", error);
-    throw error; // Re-throw to show the error in the API response
+  const initResult = safeInitializeAdmin();
+  if (!initResult.success) {
+    console.error("Failed to initialize Firebase Admin:", initResult.error);
+    // Continue execution - we'll handle API requests with appropriate error responses
   }
 }
 

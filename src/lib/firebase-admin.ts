@@ -9,10 +9,10 @@ export function initAdmin() {
   const apps = getApps();
   
   if (apps.length === 0) {
-    if (config.SERVICE_ACCOUNT_KEY) {
+    if (process.env.SERVICE_ACCOUNT_KEY) {
       try {
-        if (config.SERVICE_ACCOUNT_KEY.includes('{')) {
-          const serviceAccount = JSON.parse(config.SERVICE_ACCOUNT_KEY);
+        if (process.env.SERVICE_ACCOUNT_KEY.includes('{')) {
+          const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
           if (!serviceAccount.project_id) {
             throw new Error("Service account is missing project_id");
           }
@@ -36,9 +36,9 @@ export function initAdmin() {
 }
 
 function initializeAppWithEnvVars() {
-  const projectId = config.FIREBASE_PROJECT_ID;
-  const clientEmail = config.FIREBASE_CLIENT_EMAIL;
-  const privateKey = config.FIREBASE_PRIVATE_KEY;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
   if (!projectId || !clientEmail || !privateKey) {
     throw new Error("Missing required Firebase configuration environment variables");
@@ -50,7 +50,7 @@ function initializeAppWithEnvVars() {
       clientEmail,
       privateKey: privateKey.replace(/\\n/g, "\n"),
     }),
-    storageBucket: config.FIREBASE_STORAGE_BUCKET,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
   });
 }
 
@@ -129,22 +129,22 @@ if (process.env.NODE_ENV === 'development') {
   // Production initialization
   if (!admin.apps.length) {
     // Option A: Single JSON string in process.env.SERVICE_ACCOUNT_KEY
-    if (config.SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(config.SERVICE_ACCOUNT_KEY as string);
+    if (process.env.SERVICE_ACCOUNT_KEY) {
+      const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY as string);
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        storageBucket: config.FIREBASE_STORAGE_BUCKET, // <-- specify bucket
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // <-- specify bucket
       });
     } else {
       // Option B: Use separate env variables for projectId, privateKey, clientEmail
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: config.FIREBASE_PROJECT_ID,
-          clientEmail: config.FIREBASE_CLIENT_EMAIL,
-          privateKey: config.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
         }),
-        storageBucket: config.FIREBASE_STORAGE_BUCKET, // <-- specify bucket
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // <-- specify bucket
       });
     }
 
@@ -187,7 +187,7 @@ mockAdmin.firestore.Timestamp = FirestoreTimestamp;
 mockAdmin.firestore.FieldValue = FirestoreFieldValue;
 
 // Conditionally export the real or mock admin
-export default config.NODE_ENV === 'development' ? mockAdmin : admin;
+export default process.env.NODE_ENV === 'development' ? mockAdmin : admin;
 
 /**
  * Optional wrapper function if you want to do further checks, etc.
