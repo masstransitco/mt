@@ -88,3 +88,48 @@ export async function updateV2Car(id: number, carData: any) {
   });
   return await response.json();
 }
+
+// Get all buffer settings
+export async function getBufferSettings() {
+  try {
+    const response = await fetch('/api/v2/buffer-settings', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch buffer settings');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('Error fetching buffer settings:', error);
+    return { error: error.message };
+  }
+}
+
+// Update buffer settings
+export async function updateBufferSettings(settings: Array<{key: string, value: string}>) {
+  try {
+    const response = await fetch('/api/v2/buffer-settings', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ settings }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update buffer settings');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('Error updating buffer settings:', error);
+    return { error: error.message };
+  }
+}

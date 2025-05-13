@@ -13,6 +13,7 @@ import DispatchAdmin from "@/components/admin/DispatchAdmin";
 import QrGenerator from "./qr-generator/page";
 import CarServicesAdmin from '@/components/admin/CarServicesAdmin';
 import StaffsAdmin from '@/components/admin/StaffsAdmin';
+import BufferSettingsAdmin from '@/components/admin/BufferSettingsAdmin';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -126,6 +127,12 @@ export default function AdminPage() {
         >
           Manage Staffs
         </button>
+        <button 
+          className={`px-4 py-2 ${activeTab === "buffer" ? "border-b-2 border-blue-500 font-medium" : "text-gray-400"}`}
+          onClick={() => setActiveTab("buffer")}
+        >
+          Buffer Settings
+        </button>
       </div>
       
       {/* Content based on active tab */}
@@ -147,6 +154,8 @@ export default function AdminPage() {
       {activeTab === "carservices" && <CarServicesAdmin />}
       
       {activeTab === "staffs" && <StaffsAdmin />}
+      
+      {activeTab === "buffer" && <BufferSettingsAdmin />}
     </div>
   );
 }
