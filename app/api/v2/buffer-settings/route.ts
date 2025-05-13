@@ -41,8 +41,15 @@ export async function PUT(request: NextRequest) {
       )
     }
     
+    // Define the type for the results array
+    type ResultItem = {
+      key: string | null;
+      error?: string;
+      data?: any;
+    }
+    
     // Process each setting update
-    const results = []
+    const results: ResultItem[] = []
     for (const setting of settings) {
       const { key, value } = setting
       
