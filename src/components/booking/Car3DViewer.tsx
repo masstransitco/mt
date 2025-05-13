@@ -206,7 +206,16 @@ function Car3DViewer(props: Car3DViewerProps) {
   // Check if we're in a browser environment
   const isClient = useIsClient();
   
-  // For server-side rendering, show a placeholder
+  // Always call useEffect, regardless of rendering path
+  useEffect(() => {
+    return () => {
+      // The cleanup runs when component is unmounted from the page
+      // This prevents memory leaks between page navigations
+      cleanupThreeResources();
+    };
+  }, []);
+  
+  // On client, render the full component
   if (!isClient) {
     return (
       <div 
@@ -223,15 +232,6 @@ function Car3DViewer(props: Car3DViewerProps) {
       </div>
     );
   }
-  
-  // Clean up THREE.js resources when component unmounts
-  useEffect(() => {
-    return () => {
-      // The cleanup runs when component is unmounted from the page
-      // This prevents memory leaks between page navigations
-      cleanupThreeResources();
-    };
-  }, []);
   
   // On client, render the full component
   return <Car3DViewerClient {...props} />;
