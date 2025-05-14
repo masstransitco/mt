@@ -321,7 +321,7 @@ export default function StaffsAdmin() {
                       <option value="">Select a user</option>
                       {nonAdminUsers.map((user) => (
                         <option key={user.id} value={user.id}>
-                          {user.email || user.phoneNumber || user.uid}
+                          {user.email || user.phoneNumber || user.id}
                         </option>
                       ))}
                     </select>
