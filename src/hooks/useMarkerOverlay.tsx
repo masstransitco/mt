@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useCallback, useMemo } from "react"
-import { useAppSelector } from "@/store/store"
+import { store, useAppDispatch, useAppSelector } from "@/store/store"
 import { selectStationsWithDistance, type StationFeature } from "@/store/stationsSlice"
 import { selectStations3D } from "@/store/stations3DSlice"
 import {
@@ -15,7 +15,9 @@ import { selectListSelectedStationId } from "@/store/userSlice"
 import "@/styles/marker-styles.css"
 import stationSelectionManager from "@/lib/stationSelectionManager"
 import cameraAnimationManager from "@/lib/cameraAnimationManager"
-
+import { setScannedCar, fetchCarByRegistration } from "@/store/carSlice";
+import { toast } from "react-hot-toast"
+import { removeStation } from "@/store/stationsSlice";
 
 // Improved types for marker-related data
 interface MarkerData {
@@ -688,6 +690,8 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null | undefined, 
   const arrivalStationId = useAppSelector(selectArrivalStationId)
   const listSelectedStationId = useAppSelector(selectListSelectedStationId)
 
+  const dispatch = useAppDispatch()
+
   // The route from dispatch hub -> departure station
   const dispatchRoute = useAppSelector(selectDispatchRoute)
   // The route from departure -> arrival
@@ -715,9 +719,39 @@ export function useMarkerOverlay(googleMap: google.maps.Map | null | undefined, 
   
   // Handler for station clicks with camera animations using CameraAnimationManager
   const handleStationClick = useCallback((stationId: number) => {
-    // Use the pre-imported managers directly
-    stationSelectionManager.selectStation(stationId, false);
-  }, [])
+    const station = stationsRef.current[stationId]?.stationData;
+  
+    if (station?.properties?.isVirtualCarLocation) {
+      const registration = station.properties.registration || station.properties.plateNumber;
+  
+      if (!registration) {
+        toast.error('No registration found for this car');
+        return;
+      }
+  
+      // Remove the existing virtual station before recreating
+      store.dispatch(removeStation(station.id));
+
+      // Fetch actual car data and use the same workflow as QR scan
+      store.dispatch(fetchCarByRegistration(registration))
+        .unwrap()
+        .then(carResult => {
+          // Use the same logic as QR scan to ensure all state and UI is correct
+          if (!carResult) {
+            toast.error('Car not found');
+            return;
+          }
+          stationSelectionManager.handleQrScanSuccess(carResult);
+        })
+        .catch(error => {
+          console.error('Error fetching car data:', error);
+          toast.error('Failed to load car details');
+        });
+    } else {
+      // Use the pre-imported managers directly
+      stationSelectionManager.selectStation(stationId, false);
+    }
+  }, [departureStationId, dispatch]);
 
   // Create a marker element with appropriate styling for a station
   const createMarkerElement = useCallback((station: StationFeature): HTMLElement => {
