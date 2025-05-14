@@ -38,7 +38,7 @@ export const GoogleMapsProvider: React.FC<{
   const { isLoaded, loadError } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: apiKey,
-    version: "weekly",
+    version: "alpha",
     libraries: LIBRARIES,
   });
   
