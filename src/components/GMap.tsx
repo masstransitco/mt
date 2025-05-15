@@ -705,18 +705,18 @@ useEffect(() => {
                 ? "max-h-[85vh]" // Taller for step 5 with verification UI
                 : "max-h-[85vh]"}`} // Default height for other steps
           >
-            {/* For Step 5, we replace the sheet content with TripSheet */}
-            {bookingStep === 5 ? (
+            {/* Step 5 content */}
+            {bookingStep === 5 && (
               <div className="p-4">
                 <h2 className="text-lg font-medium mb-4">Trip in Progress</h2>
                 
                 {/* VerificationState will be conditionally rendered inside TripSheet */}
                 <TripSheet />
               </div>
-            ) : (
-              /* Normal sheet content for steps 1-4 */
-              /* Sheet body content depends on sheetMode */
-              sheetMode === "guide" && 
+            )}
+
+            {/* Normal sheet content for steps 1-4 */}
+            {bookingStep !== 5 && sheetMode === "guide" && (
               <React.Fragment>
                 {/* In step 1, render StationSelector instead of PickupGuide */}
                 {bookingStep === 1 && (
@@ -897,7 +897,6 @@ useEffect(() => {
                 )}
               </React.Fragment>
             )}
-            )}
 
             {bookingStep !== 5 && sheetMode === "list" && (
               <div className="space-y-2">
@@ -982,8 +981,8 @@ useEffect(() => {
             amount={paymentResult.amount}
             referenceId={paymentResult.referenceId}
             cardLast4={paymentResult.cardLast4}
-            departureStation={stations.find(s => s.id === departureStationId)?.properties.name || ''}
-            arrivalStation={stations.find(s => s.id === arrivalStationId)?.properties.name || ''}
+            departureStation={stations.find(s => s.id === departureStationId)?.properties.Place || ''}
+            arrivalStation={stations.find(s => s.id === arrivalStationId)?.properties.Place || ''}
             onContinue={() => {
               setPaymentResultModalOpen(false);
               dispatch(advanceBookingStep(5));
@@ -994,9 +993,6 @@ useEffect(() => {
               // Will trigger payment process again through StationDetail
             }}
           />
-
-          {/* Trip Sheet for Step 5 */}
-          {bookingStep === 5 && <TripSheet />}
         </React.Fragment>
       )}
     </div>
