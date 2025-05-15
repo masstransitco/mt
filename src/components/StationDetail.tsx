@@ -172,16 +172,19 @@ export interface StationDetailProps {
 /**
  * Primary StationDetail component
  */
-function StationDetail({
-  activeStation,
-  showCarGrid = false,
-  onConfirm,
-  isVirtualCarLocation = false,
-  scannedCar,
-  confirmLabel = "Confirm",
-  isSignedIn = false,
-  onOpenSignInModal,
-}: StationDetailProps) {
+function StationDetail(props: StationDetailProps) {
+  // Destructure props for easier access
+  const {
+    activeStation,
+    showCarGrid = false,
+    onConfirm,
+    isVirtualCarLocation = false,
+    scannedCar,
+    confirmLabel = "Confirm",
+    isSignedIn = false,
+    onOpenSignInModal,
+    onPaymentResult,
+  } = props;
   const bookingStep = useAppSelector(selectBookingStep)
   const isDateTimeConfirmed = useAppSelector(selectIsDateTimeConfirmed)
   const route = useAppSelector(selectRoute)
@@ -195,6 +198,8 @@ function StationDetail({
   const [paymentAmount, setPaymentAmount] = useState(0)
   const [paymentReference, setPaymentReference] = useState('')
   const [cardLast4, setCardLast4] = useState('')
+  
+  // This will be defined later, just remove this for now
 
   if (!activeStation) return null
 
@@ -275,17 +280,20 @@ function StationDetail({
     }, 500);
   }, [processPayment]);
   
-  // Effect to notify parent when payment modal should be shown
+  // Effect to notify parent when payment modal should be shown - after callbacks are defined
   useEffect(() => {
-    if (paymentModalOpen && onPaymentResult) {
-      onPaymentResult({
-        isSuccess: paymentSuccess,
-        amount: paymentAmount,
-        referenceId: paymentReference,
-        cardLast4: cardLast4,
-        onContinue: handlePaymentContinue,
-        onRetry: handlePaymentRetry
-      });
+    if (paymentModalOpen && typeof onPaymentResult === 'function') {
+      // Use setTimeout to ensure this runs after the current render cycle
+      setTimeout(() => {
+        onPaymentResult({
+          isSuccess: paymentSuccess,
+          amount: paymentAmount,
+          referenceId: paymentReference,
+          cardLast4: cardLast4,
+          onContinue: handlePaymentContinue,
+          onRetry: handlePaymentRetry
+        });
+      }, 0);
     }
   }, [
     paymentModalOpen, 
@@ -476,10 +484,7 @@ function StationDetail({
         <div className="fixed inset-0 bg-transparent" style={{ zIndex: 40 }} />
       )}
 
-      {/* Hidden div that appears when a payment modal should be shown */}
-      {paymentModalOpen && (
-        <div style={{ display: 'none' }} data-testid="payment-modal-trigger" />
-      )}
+      {/* Payment modal is now handled via useEffect */}
     </motion.div>
   )
 }
