@@ -174,6 +174,14 @@
       z-index: var(--z-index-modal) !important;
     }
     
+  /* Payment Modal needs to be interactive */
+   .payment-modal-container,
+   .payment-modal-container * {
+      touch-action: manipulation !important;
+      pointer-events: auto !important;
+      z-index: 10000 !important;
+    }
+    
   /* StationSelector inside sheet styling */
 .sheet-content-area .station-selector {
     margin: 0.25rem 0 1rem;   /* 4 px top, 16 px bottom */
