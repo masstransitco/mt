@@ -87,9 +87,14 @@ function BookingStateRecovery() {
     // If the user is in step=6, treat it as done, then reset to step=1.
     if (bookingStep === 6) {
       logger.debug(`[BookingStateRecovery] Detected step=6, resetting to step 1`);
+      
+      // Reset to step 1 in Redux
       dispatch(resetBookingFlow());
+      
+      // Clear both booking and root persisted state to ensure fresh state
       localStorage.removeItem("persist:booking");
-      localStorage.removeItem("persist:root");
+      
+      // Save reset to Firestore
       dispatch(saveBookingDetails())
         .then(() => {
           // after reset is saved, refresh data
@@ -103,7 +108,8 @@ function BookingStateRecovery() {
 
       toast.success("Your previous trip is completed. Ready for a new trip!");
     }
-    // For step=5 or steps 1-4, we do nothing; transform already handles ignoring steps <5 on reload.
+    // For step=5, persist state (handled by the transform)
+    // For steps 1-4, don't persist (also handled by the transform)
   }, [bookingStep, isSignedIn, dispatch]);
 
   return null;
@@ -120,8 +126,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // This effect runs once when the app first mounts
-    localStorage.removeItem("persist:booking");
-    logger.debug("[LayoutInner] Removed ephemeral booking data from localStorage");
+    // Do NOT remove "persist:booking" here as it prevents step 5 from being remembered
+    logger.debug("[LayoutInner] App initialized - preserving step 5 persistence");
   }, []);
 
   useEffect(() => {
