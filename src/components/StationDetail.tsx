@@ -453,15 +453,28 @@ function StationDetail({
         <div className="fixed inset-0 bg-transparent" style={{ zIndex: 40 }} />
       )}
 
-      {/* Call the parent's onPaymentResult function to directly open the modal */}
-      {paymentModalOpen && onPaymentResult && onPaymentResult({
-        isSuccess: paymentSuccess,
-        amount: paymentAmount,
-        referenceId: paymentReference,
-        cardLast4: cardLast4,
-        onContinue: handlePaymentContinue,
-        onRetry: handlePaymentRetry
-      })}
+      {/* Use an additional effect for handling payment modal communication with parent */}
+      {React.useEffect(() => {
+        if (paymentModalOpen && onPaymentResult) {
+          onPaymentResult({
+            isSuccess: paymentSuccess,
+            amount: paymentAmount,
+            referenceId: paymentReference,
+            cardLast4: cardLast4,
+            onContinue: handlePaymentContinue,
+            onRetry: handlePaymentRetry
+          });
+        }
+      }, [
+        paymentModalOpen, 
+        onPaymentResult, 
+        paymentSuccess, 
+        paymentAmount, 
+        paymentReference, 
+        cardLast4, 
+        handlePaymentContinue, 
+        handlePaymentRetry
+      ])}
     </motion.div>
   )
 }
