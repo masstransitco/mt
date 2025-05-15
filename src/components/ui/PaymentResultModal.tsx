@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Check, X, ArrowRight, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { jsPDF } from "jspdf"
+import { createPortal } from "react-dom"
 
 interface PaymentResultModalProps {
   isOpen: boolean
@@ -29,6 +30,14 @@ export default function PaymentResultModal({
   departureStation = "Pickup Location",
   arrivalStation = "Dropoff Location",
 }: PaymentResultModalProps) {
+  // Only render on client-side
+  const [isMounted, setIsMounted] = useState(false)
+  
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+  
+  if (!isMounted) return null
   const [showIcon, setShowIcon] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [showParticles, setShowParticles] = useState(false)
@@ -115,18 +124,29 @@ export default function PaymentResultModal({
   }
 
   if (!isOpen) return null
-
-  return (
+  
+  // Content of the modal to be rendered in the portal
+  const modalContent = (
     <>
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+        className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-sm payment-modal-container"
+        style={{
+          touchAction: "manipulation",
+          pointerEvents: "auto"
+        }}
       />
     
-      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
+      <div 
+        className="fixed inset-0 z-[10001] flex items-center justify-center overflow-y-auto payment-modal-container"
+        style={{
+          touchAction: "manipulation",
+          pointerEvents: "auto"
+        }}
+      >
         <div className="relative flex w-full max-w-md flex-col items-center justify-center rounded-2xl bg-[#1c1c1e] p-8 shadow-xl mx-5">
           {/* Success/Error circle with icon */}
           <div className="relative mb-8 flex h-24 w-24 items-center justify-center">
@@ -299,4 +319,8 @@ export default function PaymentResultModal({
       </div>
     </>
   )
+  
+  // Use createPortal to render the modal content at the document body level
+  // This ensures it's outside of any stacking context and has the highest possible z-index
+  return createPortal(modalContent, document.body)
 }
