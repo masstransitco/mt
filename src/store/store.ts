@@ -77,6 +77,7 @@ const bookingPersistTransform: Transform<BookingState, BookingState> = {
         
         stateCopy.isQrScanStation = !!stateCopy.isQrScanStation;
         
+        // Always return the full state for step 5
         return stateCopy;
       }
       
@@ -147,11 +148,14 @@ const bookingPersistConfig = {
   whitelist: [
     "step",
     "stepName",
-    "departureDate", 
+    "departureDateString",
+    "departureTimeString", 
+    "isDateTimeConfirmed",
     "ticketPlan",
     "departureStationId",
     "arrivalStationId",
     "route",
+    "routeStatus",
     "isQrScanStation",
     "qrVirtualStationId" // Include QR fields in persistence
   ],
