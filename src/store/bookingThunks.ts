@@ -52,11 +52,15 @@ export const saveBookingDetails = createAsyncThunk<
       // The current booking data in Redux
       const { 
         step,
-        departureDate,
+        departureDateString,
+        departureTimeString,
+        isDateTimeConfirmed,
         ticketPlan,
         departureStationId,
         arrivalStationId,
         route,
+        isQrScanStation,
+        qrVirtualStationId,
       } = state.booking;
 
       // Get the CURRENT step from Redux (it might have changed since this thunk was dispatched)
@@ -88,14 +92,11 @@ export const saveBookingDetails = createAsyncThunk<
         return { success: true, message: `Skipped saving (not in step=5 or step=1, current step is ${currentStep})` };
       }
 
-      // Convert the Date object to string (if present)
-      const departureDateString = departureDate ? departureDate.toISOString() : null;
-
       const userDocRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userDocRef);
 
       // When resetting (step 1), clear the booking data entirely
-      if (step === 1) {
+      if (currentStep === 1) {
         console.log(`[saveBookingDetails] Explicit reset (step=1), clearing booking data in Firestore`);
         
         if (userSnap.exists()) {
@@ -111,10 +112,14 @@ export const saveBookingDetails = createAsyncThunk<
       
       const bookingData = {
         step: currentStep, // Use the current step from state, not the original step
-        departureDate: departureDateString,
+        departureDateString,
+        departureTimeString,
+        isDateTimeConfirmed,
         ticketPlan,
         departureStationId,
         arrivalStationId,
+        isQrScanStation,
+        qrVirtualStationId,
         // If you want to store route data as well, you can include it:
         route: route
           ? {
@@ -164,14 +169,9 @@ export const loadBookingDetails = createAsyncThunk<
   "booking/loadBookingDetails",
   async (_, { getState, dispatch }) => {
     try {
-      // First, ensure a clean Redux state
+      // First, ensure a clean Redux state - BUT don't clear localStorage yet!
+      // We'll only clear if we don't find valid step 5 data in Firestore
       dispatch(resetBookingFlow());
-      
-      // Then, clear localStorage for safety
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('persist:booking');
-        console.log("[loadBookingDetails] Cleared localStorage booking data for clean start");
-      }
       
       const state = getState() as RootState;
       const user = state.user.authUser;
@@ -191,6 +191,12 @@ export const loadBookingDetails = createAsyncThunk<
       if (!userSnap.exists()) {
         console.log("[loadBookingDetails] No user document found, ensuring clean state");
         
+        // Clear localStorage since there's no Firestore data
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('persist:booking');
+          console.log("[loadBookingDetails] Cleared localStorage booking data - no user doc found");
+        }
+        
         // Ensure we reset to step 1 when no data exists
         dispatch(resetBookingFlow());
         
@@ -203,6 +209,12 @@ export const loadBookingDetails = createAsyncThunk<
       if (!booking) {
         console.log("[loadBookingDetails] No booking data found in user document, ensuring clean state");
         
+        // Clear localStorage since there's no booking data in Firestore
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('persist:booking');
+          console.log("[loadBookingDetails] Cleared localStorage booking data - no booking data in Firestore");
+        }
+        
         // Ensure we reset to step 1 when no booking data exists
         dispatch(resetBookingFlow());
         
@@ -214,6 +226,8 @@ export const loadBookingDetails = createAsyncThunk<
       // ONLY restore state if the saved booking was at step 5
       if (booking.step === 5) {
         console.log("[loadBookingDetails] Restoring step 5 booking...");
+        
+        // For step 5, don't clear localStorage! Let Redux-persist merge with Firestore data
         
         // Only rehydrate if we found booking data for step 5
         if (booking.departureDateString) {
@@ -245,6 +259,12 @@ export const loadBookingDetails = createAsyncThunk<
         // For all other steps, explicitly reset everything
         console.log(`[loadBookingDetails] Found booking in step ${booking.step}, explicitly resetting to step 1`);
         
+        // Clear localStorage for non-step 5 data
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('persist:booking');
+          console.log(`[loadBookingDetails] Cleared localStorage booking data - found step ${booking.step}, not step 5`);
+        }
+        
         dispatch(resetBookingFlow());
         
         // Clear any Firestore booking data for non-step 5
@@ -260,6 +280,12 @@ export const loadBookingDetails = createAsyncThunk<
       }
     } catch (err) {
       console.error("[loadBookingDetails] Error loading booking details:", err);
+      
+      // Clear localStorage on error
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('persist:booking');
+        console.log("[loadBookingDetails] Cleared localStorage booking data due to error");
+      }
       
       // On error, also reset to step 1 for safety
       dispatch(resetBookingFlow());
