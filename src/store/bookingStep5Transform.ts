@@ -1,3 +1,12 @@
+/**
+ * NOTE: THIS FILE IS NOT CURRENTLY BEING USED
+ * 
+ * The actual transform is defined inline in store.ts.
+ * This file is kept as a reference/backup implementation.
+ * If you make changes to the persistence logic, be sure to update
+ * the inline transform in store.ts, not this file.
+ */
+
 import { createTransform } from "redux-persist";
 import { BookingState } from "./bookingSlice";
 
