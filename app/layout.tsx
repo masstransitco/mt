@@ -24,7 +24,7 @@ import { AnimationDebugger } from "@/components/AnimationDebugger";
 // Redux
 import { ReduxProvider } from "@/providers/ReduxProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
-import { useAppDispatch, useAppSelector } from "@/store/store";
+import { useAppDispatch, useAppSelector, store } from "@/store/store";
 import {
   signOutUser,
   setDefaultPaymentMethodId,
@@ -176,16 +176,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     };
   }, [dispatch]);
 
-  // This effect previously removed localStorage data on mount,
-  // but that is now handled by bookingStep5Transform. We no longer do it here.
+  // This effect previously reset booking state on mount, but now we only reset
+  // if the user is not in step 5 (active booking)
   useEffect(() => {
-    logger.debug(
-      "[LayoutInner] App mount - no forced ephemeral clearing here anymore."
-    );
+    logger.debug("[LayoutInner] App mount - checking if reset is needed");
 
-    // Initialize booking state for all users, regardless of auth status
-    dispatch(resetBookingFlow());
-    logger.debug("[LayoutInner] Initialized booking state for all users");
+    // Get current booking step from store 
+    const state = store.getState();
+    const currentStep = state.booking?.step;
+    
+    // Only reset if NOT on step 5 (active booking)
+    if (currentStep !== 5) {
+      dispatch(resetBookingFlow());
+      logger.debug("[LayoutInner] Initialized booking state (not in step 5)");
+    } else {
+      logger.debug("[LayoutInner] Preserving step 5 booking state on app mount");
+    }
 
     setLoading(false);
   }, [dispatch]);
