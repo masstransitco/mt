@@ -245,14 +245,12 @@ function StationDetail({
         {/* If step 4 => FareDisplay or PaymentSummary; else if step 2 => CarGrid, etc. */}
         {bookingStep === 4 ? (
           <>
-            {/* Always show FareDisplay in step 4 for non-signed in users */}
-            {!isSignedIn && (
-              <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md mb-4">
-                <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} maxDailyFare={800} />
-              </div>
-            )}
+            {/* Always show FareDisplay in step 4 */}
+            <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md mb-4">
+              <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} maxDailyFare={800} />
+            </div>
             
-            {/* Always show PaymentSummary for signed in users */}
+            {/* Show PaymentSummary for signed in users */}
             {isSignedIn && (
               <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
                 <PaymentSummary onOpenWalletModal={() => {}} />

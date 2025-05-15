@@ -56,7 +56,8 @@ import {
   setUserLocation, 
   setSearchLocation,
   selectSearchLocation,
-  selectWalkingRoute
+  selectWalkingRoute,
+  selectIsSignedIn
 } from "@/store/userSlice";
 
 import {
@@ -109,7 +110,8 @@ import { useWalkingRouteOverlay } from "@/hooks/useWalkingRouteOverlay";
 import cameraAnimationManager from "@/lib/cameraAnimationManager";
 import { createVirtualStationFromCar } from "@/lib/stationUtils";
 import CarPlate from "@/components/ui/CarPlate";
-import FareDisplay from "@/components/ui/FareDisplay";
+import FareDisplay from "@/components/ui/FareDisplay"
+import { PaymentSummary } from "@/components/ui/PaymentComponents";
 
 
 // SheetMode type is now imported from types/map
@@ -147,7 +149,8 @@ export default function GMap() {
     isQrScanStation,
     virtualStationId,
     dispatchRoute,
-    route
+    route,
+    isSignedIn
   } = useAppSelector(state => ({
     stations: selectStationsWithDistance(state),
     stationsLoading: selectStationsLoading(state),
@@ -165,11 +168,12 @@ export default function GMap() {
     isQrScanStation: selectIsQrScanStation(state),
     virtualStationId: selectQrVirtualStationId(state),
     dispatchRoute: selectDispatchRoute(state),
-    route: selectRoute(state)
+    route: selectRoute(state),
+    isSignedIn: selectIsSignedIn(state)
   }), shallowEqual);
   const [sortedStations, setSortedStations] = useState<StationFeature[]>([]);
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  // isSignedIn now comes from redux state
   const [isDateTimePickerVisible, setIsDateTimePickerVisible] = useState(false);
   const [sheetHeight, setSheetHeight] = useState(0);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -830,9 +834,14 @@ useEffect(() => {
                 
                 {bookingStep === 4 && (
                   <React.Fragment>
-                    {/* Always show FareDisplay in step 4, regardless of other conditions */}
-                    <div className="mb-4">
+                    {/* Always show FareDisplay in step 4, and PaymentSummary if user is signed in */}
+                    <div className="space-y-3 mb-4">
                       <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} />
+                      {isSignedIn && (
+                        <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
+                          <PaymentSummary onOpenWalletModal={() => {}} />
+                        </div>
+                      )}
                     </div>
                     <hr className="border-gray-200 my-3" />
                     <div className="px-4">
@@ -871,10 +880,15 @@ useEffect(() => {
                   <p className="text-sm text-gray-400">Select a station for pickup</p>
                 </div>
                 
-                {/* Always show FareDisplay in step 4, regardless of sheet mode */}
+                {/* Always show FareDisplay in step 4, and PaymentSummary if user is signed in */}
                 {bookingStep === 4 && (
-                  <div className="px-4 mb-4">
+                  <div className="px-4 mb-4 space-y-3">
                     <FareDisplay baseFare={50} currency="HKD" perMinuteRate={1} />
+                    {isSignedIn && (
+                      <div className="bg-[#1a1a1a] rounded-xl p-3 shadow-md">
+                        <PaymentSummary onOpenWalletModal={() => {}} />
+                      </div>
+                    )}
                   </div>
                 )}
                 
