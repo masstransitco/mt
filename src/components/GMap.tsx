@@ -60,6 +60,8 @@ import {
   selectIsSignedIn
 } from "@/store/userSlice";
 
+import { saveBookingDetails } from "@/store/bookingThunks";
+
 import {
   selectBookingStep,
   advanceBookingStep,
@@ -99,6 +101,9 @@ import LocateMeButton from "@/components/ui/LocateMeButton"
 import ReturnToSameStation from "@/components/ui/ReturnToSameStation"
 import ScheduleLaterButton from "@/components/ui/ScheduleLaterButton";
 import InfoBar from "@/components/InfoBar";
+import PaymentResultModal from "@/components/ui/PaymentResultModal";
+import TripSheet from "@/components/TripSheet";
+import TripProgress from "@/components/TripProgress";
 // Debug component removed
 
 import { LIBRARIES, MAP_CONTAINER_STYLE, DEFAULT_CENTER, DEFAULT_ZOOM, MARKER_POST_MIN_ZOOM, createMapOptions } from "@/constants/map";
@@ -175,6 +180,15 @@ export default function GMap() {
   const [mapOptions, setMapOptions] = useState<google.maps.MapOptions | null>(null);
   // isSignedIn now comes from redux state
   const [isDateTimePickerVisible, setIsDateTimePickerVisible] = useState(false);
+  
+  // Payment result modal state
+  const [paymentResultModalOpen, setPaymentResultModalOpen] = useState(false);
+  const [paymentResult, setPaymentResult] = useState({
+    isSuccess: false,
+    amount: 0,
+    referenceId: '',
+    cardLast4: '',
+  });
   const [sheetHeight, setSheetHeight] = useState(0);
   const sheetRef = useRef<HTMLDivElement>(null);
 
@@ -687,10 +701,22 @@ useEffect(() => {
             // Allow the sheet to be sized based on content for all steps
             className={`bg-black/90 backdrop-blur-md ${bookingStep === 3 
               ? "max-h-[60vh]" // Keep reasonable max height but remove min height for step 3
-              : "max-h-[85vh]"}`} // Default height for other steps
+              : bookingStep === 5
+                ? "max-h-[85vh]" // Taller for step 5 with verification UI
+                : "max-h-[85vh]"}`} // Default height for other steps
           >
-            {/* Sheet body content depends on sheetMode */}
-            {sheetMode === "guide" && (
+            {/* For Step 5, we replace the sheet content with TripSheet */}
+            {bookingStep === 5 ? (
+              <div className="p-4">
+                <h2 className="text-lg font-medium mb-4">Trip in Progress</h2>
+                
+                {/* VerificationState will be conditionally rendered inside TripSheet */}
+                <TripSheet />
+              </div>
+            ) : (
+              /* Normal sheet content for steps 1-4 */
+              /* Sheet body content depends on sheetMode */
+              sheetMode === "guide" && 
               <React.Fragment>
                 {/* In step 1, render StationSelector instead of PickupGuide */}
                 {bookingStep === 1 && (
@@ -871,8 +897,9 @@ useEffect(() => {
                 )}
               </React.Fragment>
             )}
+            )}
 
-            {sheetMode === "list" && (
+            {bookingStep !== 5 && sheetMode === "list" && (
               <div className="space-y-2">
                 {/* Title and subtitle */}
                 <div className="text-left px-4 py-2">
@@ -902,7 +929,7 @@ useEffect(() => {
               </div>
             )}
 
-            {sheetMode === "detail" && stationToShow && (
+            {bookingStep !== 5 && sheetMode === "detail" && stationToShow && (
               <StationDetail
                 activeStation={stationToShow}
                 showCarGrid={bookingStep === 2}
@@ -912,11 +939,20 @@ useEffect(() => {
                 confirmLabel="Confirm"
                 isSignedIn={isSignedIn}
                 onOpenSignInModal={() => dispatch(setSignInModalOpen(true))}
+                onPaymentResult={(data) => {
+                  setPaymentResult({
+                    isSuccess: data.isSuccess,
+                    amount: data.amount,
+                    referenceId: data.referenceId,
+                    cardLast4: data.cardLast4
+                  });
+                  setPaymentResultModalOpen(true);
+                }}
               />
             )}
 
             {/* If stationToShow is null but mode is detail, you could show a fallback */}
-            {sheetMode === "detail" && !stationToShow && (
+            {bookingStep !== 5 && sheetMode === "detail" && !stationToShow && (
               <div className="text-sm text-gray-400">
                 No station selected yet.
               </div>
@@ -938,6 +974,29 @@ useEffect(() => {
             isOpen={signInModalOpen}
             onClose={() => dispatch(setSignInModalOpen(false))}
           />
+
+          {/* Payment Result Modal */}
+          <PaymentResultModal
+            isOpen={paymentResultModalOpen}
+            isSuccess={paymentResult.isSuccess}
+            amount={paymentResult.amount}
+            referenceId={paymentResult.referenceId}
+            cardLast4={paymentResult.cardLast4}
+            departureStation={stations.find(s => s.id === departureStationId)?.properties.name || ''}
+            arrivalStation={stations.find(s => s.id === arrivalStationId)?.properties.name || ''}
+            onContinue={() => {
+              setPaymentResultModalOpen(false);
+              dispatch(advanceBookingStep(5));
+              dispatch(saveBookingDetails());
+            }}
+            onRetry={() => {
+              setPaymentResultModalOpen(false);
+              // Will trigger payment process again through StationDetail
+            }}
+          />
+
+          {/* Trip Sheet for Step 5 */}
+          {bookingStep === 5 && <TripSheet />}
         </React.Fragment>
       )}
     </div>

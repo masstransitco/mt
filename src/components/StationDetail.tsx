@@ -1,18 +1,21 @@
 "use client"
 
-import { memo, useState, useCallback } from "react"
+import { memo, useState, useCallback, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { motion, AnimatePresence } from "framer-motion"
 import { Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAppSelector, useAppDispatch } from "@/store/store"
-import { selectBookingStep, selectIsDateTimeConfirmed, advanceBookingStep } from "@/store/bookingSlice"
+import { selectBookingStep, selectIsDateTimeConfirmed, advanceBookingStep, selectRoute } from "@/store/bookingSlice"
+import { selectAuthUser, selectHasDefaultPaymentMethod } from "@/store/userSlice"
 import type { StationFeature } from "@/store/stationsSlice"
 import type { Car } from "@/types/cars"
 import { PaymentSummary } from "@/components/ui/PaymentComponents"
 import FareDisplay from "@/components/ui/FareDisplay"
 import DateTimeSelector from "@/components/DateTimeSelector"
 import React from "react"
+import { chargeUserForTrip } from "@/lib/stripe"
+import { saveBookingDetails } from "@/store/bookingThunks"
 
 // Lazy-load components
 const CarPlate = dynamic(() => import("@/components/ui/CarPlate"), {
@@ -156,6 +159,14 @@ export interface StationDetailProps {
    */
   isSignedIn?: boolean
   onOpenSignInModal?: () => void
+  onPaymentResult?: (data: {
+    isSuccess: boolean;
+    amount: number;
+    referenceId: string;
+    cardLast4: string;
+    onContinue: () => void;
+    onRetry?: () => void;
+  }) => void;
 }
 
 /**
@@ -173,28 +184,120 @@ function StationDetail({
 }: StationDetailProps) {
   const bookingStep = useAppSelector(selectBookingStep)
   const isDateTimeConfirmed = useAppSelector(selectIsDateTimeConfirmed)
+  const route = useAppSelector(selectRoute)
+  const authUser = useAppSelector(selectAuthUser)
+  const hasDefaultPaymentMethod = useAppSelector(selectHasDefaultPaymentMethod)
   const dispatch = useAppDispatch()
   const [showDateTimePicker, setShowDateTimePicker] = useState(false)
+  const [processingPayment, setProcessingPayment] = useState(false)
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentSuccess, setPaymentSuccess] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState(0)
+  const [paymentReference, setPaymentReference] = useState('')
+  const [cardLast4, setCardLast4] = useState('')
 
   if (!activeStation) return null
 
+  // Calculate fare based on route distance or set default
+  const calculateFare = useCallback(() => {
+    // Base fare is 50 HKD
+    const baseFare = 5000; // in cents
+    if (route?.distance) {
+      // Add distance-based fare: 1 HKD per km
+      const distanceInKm = route.distance / 1000;
+      const distanceFare = Math.round(distanceInKm * 100); // in cents
+      return baseFare + distanceFare;
+    }
+    return baseFare; // Default base fare if no route
+  }, [route]);
+
+  // Process payment
+  const processPayment = useCallback(async () => {
+    if (!authUser || !isSignedIn) {
+      onOpenSignInModal?.();
+      return false;
+    }
+
+    if (!hasDefaultPaymentMethod) {
+      // Show a message to add a payment method
+      return false;
+    }
+
+    setProcessingPayment(true);
+    const amountInCents = calculateFare();
+    
+    try {
+      const result = await chargeUserForTrip(authUser.uid, amountInCents);
+      
+      if (result.success) {
+        // Set payment modal data
+        setPaymentAmount(amountInCents);
+        setPaymentReference(result.paymentId || 'REF-' + Date.now().toString(36));
+        setCardLast4(result.cardLast4 || '****');
+        setPaymentSuccess(true);
+        setPaymentModalOpen(true);
+        return true;
+      } else {
+        // Payment failed
+        setPaymentAmount(amountInCents);
+        setPaymentSuccess(false);
+        setPaymentModalOpen(true);
+        return false;
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      setPaymentAmount(amountInCents);
+      setPaymentSuccess(false);
+      setPaymentModalOpen(true);
+      return false;
+    } finally {
+      setProcessingPayment(false);
+    }
+  }, [authUser, isSignedIn, onOpenSignInModal, hasDefaultPaymentMethod, calculateFare]);
+
+  // Handle successful payment completion
+  const handlePaymentContinue = useCallback(() => {
+    setPaymentModalOpen(false);
+    // Advance to booking step 5
+    dispatch(advanceBookingStep(5));
+    // Save booking details to persist step 5
+    dispatch(saveBookingDetails());
+    // Call parent's onConfirm if needed
+    onConfirm?.();
+  }, [dispatch, onConfirm]);
+
+  // Handle payment retry
+  const handlePaymentRetry = useCallback(() => {
+    setPaymentModalOpen(false);
+    // Allow a slight delay before retrying
+    setTimeout(() => {
+      processPayment();
+    }, 500);
+  }, [processPayment]);
+
   // Click handler for step 4 confirm
   const handleConfirmClick = useCallback(() => {
-    if (bookingStep === 4 && !isSignedIn) {
-      onOpenSignInModal?.()
-      return
+    if (bookingStep === 4) {
+      if (!isSignedIn) {
+        onOpenSignInModal?.();
+        return;
+      }
+      
+      // Process payment for step 4
+      processPayment();
+      return;
     }
     
     if (bookingStep === 2) {
       // In step 2, directly advance to step 3 
       // instead of opening DateTimeSelector
-      dispatch(advanceBookingStep(3))
-      onConfirm?.()
-      return
+      dispatch(advanceBookingStep(3));
+      onConfirm?.();
+      return;
     }
     
-    onConfirm?.()
-  }, [bookingStep, isSignedIn, onOpenSignInModal, onConfirm, dispatch])
+    onConfirm?.();
+  }, [bookingStep, isSignedIn, onOpenSignInModal, onConfirm, dispatch, processPayment])
 
   // Handle DateTimeSelector when user cancels
   const handleDateTimeCancel = () => {
@@ -348,6 +451,19 @@ function StationDetail({
       {/* Hide the rest of the content when DateTimePicker is visible */}
       {showDateTimePicker && (
         <div className="fixed inset-0 bg-transparent" style={{ zIndex: 40 }} />
+      )}
+
+      {/* Export PaymentResultModal properties so it can be rendered by parent */}
+      {paymentModalOpen && (
+        <div className="dialog-rendered-by-parent" style={{ display: 'none' }} 
+          data-payment-modal="true"
+          data-success={paymentSuccess.toString()}
+          data-amount={paymentAmount}
+          data-reference={paymentReference}
+          data-card-last4={cardLast4}
+          data-continue-callback="handlePaymentContinue"
+          data-retry-callback="handlePaymentRetry"
+        />
       )}
     </motion.div>
   )
