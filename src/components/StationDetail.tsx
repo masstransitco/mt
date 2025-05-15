@@ -453,18 +453,15 @@ function StationDetail({
         <div className="fixed inset-0 bg-transparent" style={{ zIndex: 40 }} />
       )}
 
-      {/* Export PaymentResultModal properties so it can be rendered by parent */}
-      {paymentModalOpen && (
-        <div className="dialog-rendered-by-parent" style={{ display: 'none' }} 
-          data-payment-modal="true"
-          data-success={paymentSuccess.toString()}
-          data-amount={paymentAmount}
-          data-reference={paymentReference}
-          data-card-last4={cardLast4}
-          data-continue-callback="handlePaymentContinue"
-          data-retry-callback="handlePaymentRetry"
-        />
-      )}
+      {/* Call the parent's onPaymentResult function to directly open the modal */}
+      {paymentModalOpen && onPaymentResult && onPaymentResult({
+        isSuccess: paymentSuccess,
+        amount: paymentAmount,
+        referenceId: paymentReference,
+        cardLast4: cardLast4,
+        onContinue: handlePaymentContinue,
+        onRetry: handlePaymentRetry
+      })}
     </motion.div>
   )
 }

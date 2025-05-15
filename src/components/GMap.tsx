@@ -188,6 +188,8 @@ export default function GMap() {
     amount: 0,
     referenceId: '',
     cardLast4: '',
+    onContinue: undefined as (() => void) | undefined,
+    onRetry: undefined as (() => void) | undefined,
   });
   const [sheetHeight, setSheetHeight] = useState(0);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -943,7 +945,9 @@ useEffect(() => {
                     isSuccess: data.isSuccess,
                     amount: data.amount,
                     referenceId: data.referenceId,
-                    cardLast4: data.cardLast4
+                    cardLast4: data.cardLast4,
+                    onContinue: data.onContinue,
+                    onRetry: data.onRetry
                   });
                   setPaymentResultModalOpen(true);
                 }}
@@ -984,13 +988,25 @@ useEffect(() => {
             departureStation={stations.find(s => s.id === departureStationId)?.properties.Place || ''}
             arrivalStation={stations.find(s => s.id === arrivalStationId)?.properties.Place || ''}
             onContinue={() => {
+              // Close the modal first
               setPaymentResultModalOpen(false);
-              dispatch(advanceBookingStep(5));
-              dispatch(saveBookingDetails());
+              
+              // Call the stored callback function if it exists
+              if (paymentResult.onContinue) {
+                paymentResult.onContinue();
+              } else {
+                // Fallback to the default behavior
+                dispatch(advanceBookingStep(5));
+                dispatch(saveBookingDetails());
+              }
             }}
             onRetry={() => {
               setPaymentResultModalOpen(false);
-              // Will trigger payment process again through StationDetail
+              // Call the stored retry callback if it exists
+              if (paymentResult.onRetry) {
+                paymentResult.onRetry();
+              }
+              // No fallback needed for retry
             }}
           />
         </React.Fragment>
