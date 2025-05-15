@@ -274,6 +274,29 @@ function StationDetail({
       processPayment();
     }, 500);
   }, [processPayment]);
+  
+  // Effect to notify parent when payment modal should be shown
+  useEffect(() => {
+    if (paymentModalOpen && onPaymentResult) {
+      onPaymentResult({
+        isSuccess: paymentSuccess,
+        amount: paymentAmount,
+        referenceId: paymentReference,
+        cardLast4: cardLast4,
+        onContinue: handlePaymentContinue,
+        onRetry: handlePaymentRetry
+      });
+    }
+  }, [
+    paymentModalOpen, 
+    onPaymentResult, 
+    paymentSuccess, 
+    paymentAmount, 
+    paymentReference, 
+    cardLast4, 
+    handlePaymentContinue, 
+    handlePaymentRetry
+  ]);
 
   // Click handler for step 4 confirm
   const handleConfirmClick = useCallback(() => {
@@ -453,28 +476,10 @@ function StationDetail({
         <div className="fixed inset-0 bg-transparent" style={{ zIndex: 40 }} />
       )}
 
-      {/* Use an additional effect for handling payment modal communication with parent */}
-      {React.useEffect(() => {
-        if (paymentModalOpen && onPaymentResult) {
-          onPaymentResult({
-            isSuccess: paymentSuccess,
-            amount: paymentAmount,
-            referenceId: paymentReference,
-            cardLast4: cardLast4,
-            onContinue: handlePaymentContinue,
-            onRetry: handlePaymentRetry
-          });
-        }
-      }, [
-        paymentModalOpen, 
-        onPaymentResult, 
-        paymentSuccess, 
-        paymentAmount, 
-        paymentReference, 
-        cardLast4, 
-        handlePaymentContinue, 
-        handlePaymentRetry
-      ])}
+      {/* Hidden div that appears when a payment modal should be shown */}
+      {paymentModalOpen && (
+        <div style={{ display: 'none' }} data-testid="payment-modal-trigger" />
+      )}
     </motion.div>
   )
 }
