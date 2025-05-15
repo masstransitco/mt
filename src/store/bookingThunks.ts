@@ -59,14 +59,17 @@ export const saveBookingDetails = createAsyncThunk<
         route,
       } = state.booking;
 
+      // Get the CURRENT step from Redux (it might have changed since this thunk was dispatched)
+      const currentStep = state.booking.step;
+
       // IMPORTANT: Only persist data if user is in step 5 (active booking) 
       // or if they're explicitly at step 1 (which means resetting)
-      if (step !== 5 && step !== 1) {
-        console.log(`[saveBookingDetails] Step=${step}, not persisting booking state (only steps 1 or 5 are saved)`);
+      if (currentStep !== 5 && currentStep !== 1) {
+        console.log(`[saveBookingDetails] CurrentStep=${currentStep}, not persisting booking state (only steps 1 or 5 are saved)`);
         
         // For steps 2-4, clear any Firestore data to ensure consistent behavior
-        if (step >= 2 && step <= 4) {
-          console.log(`[saveBookingDetails] Clearing any Firestore data for step ${step}`);
+        if (currentStep >= 2 && currentStep <= 4) {
+          console.log(`[saveBookingDetails] Clearing any Firestore data for step ${currentStep}`);
           const userDocRef = doc(db, "users", user.uid);
           const userSnap = await getDoc(userDocRef);
           
@@ -78,11 +81,11 @@ export const saveBookingDetails = createAsyncThunk<
           
           return { 
             success: true, 
-            message: `Cleared Firestore data for step ${step} (steps 2-4 should not persist)` 
+            message: `Cleared Firestore data for step ${currentStep} (steps 2-4 should not persist)` 
           };
         }
         
-        return { success: true, message: "Skipped saving (not in step=5 or step=1)" };
+        return { success: true, message: `Skipped saving (not in step=5 or step=1, current step is ${currentStep})` };
       }
 
       // Convert the Date object to string (if present)
@@ -104,10 +107,10 @@ export const saveBookingDetails = createAsyncThunk<
       }
 
       // Otherwise, build the object you want to store for step 5
-      console.log(`[saveBookingDetails] Persisting step 5 data to Firestore`);
+      console.log(`[saveBookingDetails] Persisting step ${currentStep} data to Firestore`);
       
       const bookingData = {
-        step,
+        step: currentStep, // Use the current step from state, not the original step
         departureDate: departureDateString,
         ticketPlan,
         departureStationId,
