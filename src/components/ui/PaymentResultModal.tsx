@@ -32,15 +32,13 @@ export default function PaymentResultModal({
 }: PaymentResultModalProps) {
   // Only render on client-side
   const [isMounted, setIsMounted] = useState(false)
+  const [showIcon, setShowIcon] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
+  const [showParticles, setShowParticles] = useState(false)
   
   useEffect(() => {
     setIsMounted(true)
   }, [])
-  
-  if (!isMounted) return null
-  const [showIcon, setShowIcon] = useState(false)
-  const [showDetails, setShowDetails] = useState(false)
-  const [showParticles, setShowParticles] = useState(false)
 
   // Format the amount as currency
   const formattedAmount = `HK$${(amount / 100).toFixed(2)}`
@@ -123,6 +121,7 @@ export default function PaymentResultModal({
     doc.save("trip-receipt.pdf")
   }
 
+  // Don't render anything if the modal isn't open
   if (!isOpen) return null
   
   // Content of the modal to be rendered in the portal
