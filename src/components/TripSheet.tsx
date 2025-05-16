@@ -5,14 +5,14 @@ import { useAppDispatch, useAppSelector } from "@/store/store";
 import { advanceBookingStep, resetBookingFlow } from "@/store/bookingSlice";
 import { auth } from "@/lib/firebase";
 import { fetchVerificationData } from "@/store/verificationSlice";
-import { chargeUserForTrip } from "@/lib/stripe";
 import { saveBookingDetails } from "@/store/bookingThunks"; // Import saveBookingDetails
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { toast } from "react-hot-toast"; // For success notifications
 
-// Press-and-hold unlock
-import UnlockButton from "@/components/UnlockButton";
+// Press-and-hold button
+import PressHoldButton from "@/components/PressHoldButton";
+import UnlockButton from "@/components/UnlockButton"; // Keep original for now
 // The new verification UI
 import VerificationState from "@/components/VerificationState";
 // LicenseModal (or any doc-update modal the user wants to open)
@@ -80,7 +80,7 @@ export default function TripSheet() {
     }, 1000);
   };
 
-  // End trip => charge final usage and RESET booking flow to step 1
+  // End trip => RESET booking flow to step 1 without additional charges
   const handleEndTrip = async () => {
     if (intervalRef.current !== null) {
       clearInterval(intervalRef.current);
@@ -88,21 +88,7 @@ export default function TripSheet() {
     }
     setTripActive(false);
 
-    // Convert elapsedSeconds to minutes, rounding up
-    const minutesUsed = Math.ceil(elapsedSeconds / 60);
-    const additionalFare = minutesUsed * 100; // $1/min in cents
-
-    if (!auth.currentUser) {
-      console.error("Cannot charge user; no currentUser");
-      return;
-    }
-
     try {
-      const result = await chargeUserForTrip(auth.currentUser.uid, additionalFare);
-      if (!result?.success) {
-        throw new Error(result?.error || "Failed final trip charge.");
-      }
-      
       // RESET the entire booking flow (back to step 1)
       dispatch(resetBookingFlow());
       
@@ -110,7 +96,7 @@ export default function TripSheet() {
       // This ensures the step 1 state persists and is loaded on refresh
       await dispatch(saveBookingDetails());
       
-      toast.success(`Trip completed! You were charged $${(additionalFare/100).toFixed(2)}`);
+      toast.success("Trip completed successfully!");
       
     } catch (err) {
       console.error("Error ending trip:", err);
@@ -163,7 +149,7 @@ export default function TripSheet() {
             <div>
               {tripActive ? (
                 <p className="text-center text-lg font-medium">
-                  Elapsed: {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
+                  Trip time: {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
                 </p>
               ) : (
                 <p className="text-center mb-4">Vehicle is locked. Press &amp; hold to unlock.</p>
@@ -171,8 +157,13 @@ export default function TripSheet() {
             </div>
 
             {!tripActive ? (
-              <div className="w-full aspect-[4/1] flex items-center justify-center">
-                <UnlockButton onUnlocked={handleUnlock} className="w-full h-full" />
+              <div className="flex items-center justify-center">
+                <PressHoldButton
+                  onComplete={handleUnlock}
+                  lockState={true}
+                  holdTime={3000}
+                  className="w-full"
+                />
               </div>
             ) : (
               <Button onClick={handleEndTrip} className="w-full py-6 text-lg">
