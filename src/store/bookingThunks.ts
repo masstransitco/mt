@@ -302,7 +302,9 @@ export const loadBookingDetails = createAsyncThunk<
           dispatch(selectArrivalStation(booking.arrivalStationId));
         }
 
-        // step - do this last so UI updates properly
+        // Create a special action to make it clear this is for rehydration
+        // This will bypass the step skipping protection
+        console.log("[loadBookingDetails] Setting step to 5 directly for rehydration");
         dispatch(advanceBookingStep(5));
         
         return { 

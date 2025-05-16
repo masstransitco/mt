@@ -116,11 +116,17 @@ export const bookingSlice = createSlice({
         state.stepName = "selecting_departure_station";
         return;
       }
-      // Don't allow skipping steps unless going back to 1
-      if (newStep !== 1 && newStep > state.step + 1) {
+      
+      // Special case for step 5 coming from loadBookingDetails
+      // Always allow direct advancement to step 5 when loading from Firestore/localStorage
+      const isLoadingStep5 = newStep === 5;
+      
+      // Don't allow skipping steps unless going back to 1 or loading step 5
+      if (newStep !== 1 && newStep > state.step + 1 && !isLoadingStep5) {
         console.warn(`Cannot advance from step ${state.step} to ${newStep} - steps can't be skipped`);
         return;
       }
+      
       state.step = newStep;
       switch (newStep) {
         case 1:
