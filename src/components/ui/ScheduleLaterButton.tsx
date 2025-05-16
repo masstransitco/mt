@@ -68,6 +68,14 @@ export default function ScheduleLaterButton({
           console.error('Invalid date/time values:', { departureDate, departureTime });
           return "Schedule for later";
         }
+        
+        // Additional defensive check to ensure we're working with valid date objects
+        if (Object.prototype.toString.call(departureDate) !== '[object Date]' || 
+            Object.prototype.toString.call(departureTime) !== '[object Date]') {
+          console.error('Values are not Date objects:', { departureDate, departureTime });
+          return "Schedule for later";
+        }
+        
         return `Pickup on ${format(departureDate, 'MMM d')} at ${format(departureTime, 'h:mm a')}`
       } catch (error) {
         console.error('Error formatting date/time:', error);
