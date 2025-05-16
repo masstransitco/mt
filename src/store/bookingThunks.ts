@@ -1,11 +1,10 @@
-// src/store/bookingThunks.ts
-
 "use client";
 
 import { createAsyncThunk } from "@reduxjs/toolkit";
-import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc, collection, addDoc } from "firebase/firestore";
 import { RootState } from "./store";
 import { db } from "@/lib/firebase"; // your client-side Firestore import
+import { FirestoreBooking, BookingHistoryRecord } from "@/types/firestore";
 import {
   setDepartureDate,
   setDepartureTime,
@@ -16,6 +15,11 @@ import {
   setTicketPlan,
   resetBookingFlow,
   BookingState,
+  selectCar,
+  setBookingId,
+  setPaymentStatus,
+  setPaymentReference,
+  setEstimatedCost,
 } from "./bookingSlice";
 
 /**
@@ -63,6 +67,12 @@ export const saveBookingDetails = createAsyncThunk<
         route,
         isQrScanStation,
         qrVirtualStationId,
+        selectedCarId,
+        selectedCar,
+        bookingId,
+        estimatedCost,
+        paymentStatus,
+        paymentReference,
       } = state.booking;
 
       // Get the CURRENT step from Redux (it might have changed since this thunk was dispatched)
@@ -122,6 +132,23 @@ export const saveBookingDetails = createAsyncThunk<
         arrivalStationId,
         isQrScanStation,
         qrVirtualStationId,
+        // Car and booking reference data
+        selectedCarId,
+        selectedCar: selectedCar ? {
+          id: selectedCar.id,
+          name: selectedCar.name,
+          type: selectedCar.type,
+          price: selectedCar.price,
+          image: selectedCar.image,
+          modelUrl: selectedCar.modelUrl,
+          available: selectedCar.available,
+          features: selectedCar.features,
+        } : null,
+        bookingId,
+        // Payment-related fields
+        estimatedCost,
+        paymentStatus,
+        paymentReference,
         // If you want to store route data as well, you can include it:
         route: route
           ? {
@@ -301,6 +328,47 @@ export const loadBookingDetails = createAsyncThunk<
         if (booking.arrivalStationId) {
           dispatch(selectArrivalStation(booking.arrivalStationId));
         }
+        
+        // Handle car data
+        if (booking.selectedCar && typeof booking.selectedCar === 'object') {
+          try {
+            // Check if the car has the required fields
+            if (booking.selectedCar.id && 
+                booking.selectedCar.name && 
+                typeof booking.selectedCar.price === 'number') {
+              dispatch(selectCar(booking.selectedCar));
+            } else {
+              console.error("[loadBookingDetails] Invalid selectedCar object:", booking.selectedCar);
+            }
+          } catch (err) {
+            console.error("[loadBookingDetails] Error parsing selectedCar:", err);
+          }
+        } else if (booking.selectedCarId && typeof booking.selectedCarId === 'number') {
+          // In this case, we'd ideally fetch the car details by ID, but for now we can just set the ID
+          console.log("[loadBookingDetails] Only selectedCarId found, car details would need to be fetched");
+          // We could dispatch a thunk here to fetch car details if needed
+        }
+        
+        // Handle booking reference
+        if (booking.bookingId && typeof booking.bookingId === 'string') {
+          dispatch(setBookingId(booking.bookingId));
+        }
+        
+        // Handle payment data
+        if (booking.estimatedCost && typeof booking.estimatedCost === 'number') {
+          dispatch(setEstimatedCost(booking.estimatedCost));
+        }
+        
+        if (booking.paymentStatus && 
+            (booking.paymentStatus === 'pending' || 
+             booking.paymentStatus === 'completed' || 
+             booking.paymentStatus === 'failed')) {
+          dispatch(setPaymentStatus(booking.paymentStatus));
+        }
+        
+        if (booking.paymentReference && typeof booking.paymentReference === 'string') {
+          dispatch(setPaymentReference(booking.paymentReference));
+        }
 
         // Create a special action to make it clear this is for rehydration
         // This will bypass the step skipping protection
@@ -375,6 +443,262 @@ export const loadBookingDetails = createAsyncThunk<
       return {
         success: false,
         message: "Failed to load booking details (thunk caught error).",
+      };
+    }
+  }
+);
+
+/**
+ * finalizeBooking:
+ * Creates a formal booking record in the 'bookings' collection and links it to the user.
+ * This is normally called after a successful payment, or when reaching step 5.
+ */
+export const finalizeBooking = createAsyncThunk<
+  BookingThunkResult & { bookingId?: string },
+  void
+>(
+  "booking/finalizeBooking",
+  async (_, { getState, dispatch }) => {
+    try {
+      const state = getState() as RootState;
+      const user = state.user.authUser;
+      if (!user) {
+        console.warn("[finalizeBooking] User not signed in; cannot finalize booking.");
+        return {
+          success: false,
+          message: "User not signed in; cannot finalize booking.",
+        };
+      }
+
+      // Extract booking data from state
+      const {
+        departureStationId,
+        arrivalStationId,
+        departureDateString,
+        departureTimeString,
+        isDateTimeConfirmed,
+        selectedCarId,
+        selectedCar,
+        route,
+        isQrScanStation,
+        qrVirtualStationId,
+        ticketPlan,
+        estimatedCost,
+        paymentStatus,
+        paymentReference,
+        bookingId: existingBookingId,
+      } = state.booking;
+
+      // Basic validation
+      if (!departureStationId || !arrivalStationId || !departureDateString || !departureTimeString) {
+        return {
+          success: false,
+          message: "Missing required booking information.",
+        };
+      }
+
+      if (!selectedCarId || !selectedCar) {
+        return {
+          success: false,
+          message: "No car selected for booking.",
+        };
+      }
+
+      // If we already have a booking ID, fetch it to see if it exists
+      if (existingBookingId) {
+        const existingBookingRef = doc(db, "bookings", existingBookingId);
+        const existingBookingSnap = await getDoc(existingBookingRef);
+
+        // If the booking exists, just return success
+        if (existingBookingSnap.exists()) {
+          console.log(`[finalizeBooking] Booking already exists with ID: ${existingBookingId}`);
+          return {
+            success: true,
+            message: "Booking already finalized.",
+            bookingId: existingBookingId,
+          };
+        }
+      }
+
+      // Create API call parameters
+      const bookingData = {
+        userId: user.uid,
+        carId: selectedCarId,
+        carName: selectedCar.name,
+        carType: selectedCar.type,
+        carImage: selectedCar.image,
+        carModelUrl: selectedCar.modelUrl,
+        departureStationId,
+        arrivalStationId,
+        departureDateString,
+        departureTimeString,
+        isDateTimeConfirmed,
+        isQrScanStation,
+        qrVirtualStationId,
+        ticketPlan,
+        amount: estimatedCost || 0,
+        distance: route?.distance,
+        duration: route?.duration,
+        polyline: route?.polyline,
+      };
+
+      // Call the bookings API endpoint
+      // Get the user's Firebase ID token
+      // Note: user is likely from Firebase Auth and may not have getIdToken directly
+      // We need to get the token from Firebase Auth
+      let token = '';
+      try {
+        // Import Firebase auth if needed
+        const { getAuth } = await import('firebase/auth');
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          token = await currentUser.getIdToken();
+        } else {
+          console.warn('[finalizeBooking] No current Firebase user found');
+        }
+      } catch (err) {
+        console.error('[finalizeBooking] Error getting auth token:', err);
+      }
+      
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add authorization header if we have a token
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        console.error("[finalizeBooking] API Error:", result);
+        return {
+          success: false,
+          message: result.error || "Failed to create booking",
+        };
+      }
+
+      // Store the new bookingId in Redux
+      dispatch(setBookingId(result.bookingId));
+
+      // Update booking state in Firestore as well
+      await dispatch(saveBookingDetails());
+
+      return {
+        success: true,
+        bookingId: result.bookingId,
+        message: "Booking successfully finalized",
+      };
+    } catch (err) {
+      console.error("[finalizeBooking] Error:", err);
+      return {
+        success: false,
+        message: "Failed to finalize booking (thunk caught error).",
+      };
+    }
+  }
+);
+
+/**
+ * completeBooking:
+ * Marks a booking as completed, moves it to the user's booking history,
+ * and resets the current booking state to step 1.
+ */
+export const completeBooking = createAsyncThunk<
+  BookingThunkResult,
+  void
+>(
+  "booking/completeBooking",
+  async (_, { getState, dispatch }) => {
+    try {
+      const state = getState() as RootState;
+      const user = state.user.authUser;
+      const { bookingId } = state.booking;
+
+      if (!user) {
+        console.warn("[completeBooking] User not signed in; cannot complete booking.");
+        return {
+          success: false,
+          message: "User not signed in; cannot complete booking.",
+        };
+      }
+
+      if (!bookingId) {
+        console.warn("[completeBooking] No booking ID found; cannot complete booking.");
+        return {
+          success: false,
+          message: "No booking ID found; cannot complete booking.",
+        };
+      }
+
+      // 1. Update the booking record to 'completed'
+      const bookingRef = doc(db, "bookings", bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+
+      if (!bookingSnap.exists()) {
+        console.error(`[completeBooking] Booking ${bookingId} not found`);
+        return {
+          success: false,
+          message: "Booking not found",
+        };
+      }
+
+      const bookingData = bookingSnap.data() as FirestoreBooking;
+      const now = new Date().toISOString();
+
+      // Update the booking status
+      await updateDoc(bookingRef, {
+        status: "completed",
+        completedAt: now,
+        updatedAt: now,
+      });
+
+      // 2. Add to user's booking history
+      const historyRef = collection(db, `users/${user.uid}/bookingHistory`);
+      const historyRecord: BookingHistoryRecord = {
+        bookingId,
+        userId: user.uid,
+        status: "completed",
+        carId: bookingData.carId,
+        carName: bookingData.carName,
+        carType: bookingData.carType,
+        departureStationId: bookingData.departureStationId,
+        departureStationName: bookingData.departureStationName,
+        arrivalStationId: bookingData.arrivalStationId,
+        arrivalStationName: bookingData.arrivalStationName,
+        departureDateString: bookingData.departureDateString,
+        departureTimeString: bookingData.departureTimeString,
+        amount: bookingData.amount,
+        currency: bookingData.currency,
+        ticketPlan: bookingData.ticketPlan,
+        createdAt: bookingData.createdAt,
+        completedAt: now,
+      };
+
+      await addDoc(historyRef, historyRecord);
+
+      // 3. Clear the active booking in the user document
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        booking: null,
+        updatedAt: now,
+      });
+
+      // 4. Reset the Redux booking state
+      dispatch(resetBookingFlow());
+
+      return {
+        success: true,
+        message: "Booking completed successfully",
+      };
+    } catch (err) {
+      console.error("[completeBooking] Error:", err);
+      return {
+        success: false,
+        message: "Failed to complete booking (thunk caught error).",
       };
     }
   }

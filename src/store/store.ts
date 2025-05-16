@@ -40,6 +40,16 @@ const defaultBooking: BookingState = {
   arrivalStationId: null,
   isQrScanStation: false,
   qrVirtualStationId: null,
+  
+  // Car and booking data
+  selectedCarId: null,
+  selectedCar: null,
+  bookingId: null,
+  
+  // Payment data
+  estimatedCost: null,
+  paymentStatus: null,
+  paymentReference: null,
 };
 
 /**
@@ -76,6 +86,43 @@ const bookingPersistTransform: Transform<BookingState, BookingState> = {
         }
         
         stateCopy.isQrScanStation = !!stateCopy.isQrScanStation;
+        
+        // Car data safety checks
+        if (typeof stateCopy.selectedCarId !== 'number') {
+          stateCopy.selectedCarId = null;
+        }
+        
+        if (!stateCopy.selectedCar || typeof stateCopy.selectedCar !== 'object') {
+          stateCopy.selectedCar = null;
+        } else {
+          // Validate car object structure
+          if (typeof stateCopy.selectedCar.id !== 'number' || 
+              typeof stateCopy.selectedCar.name !== 'string' ||
+              typeof stateCopy.selectedCar.price !== 'number') {
+            stateCopy.selectedCar = null;
+            stateCopy.selectedCarId = null;
+          }
+        }
+        
+        // Booking ID safety check
+        if (typeof stateCopy.bookingId !== 'string') {
+          stateCopy.bookingId = null;
+        }
+        
+        // Payment data safety checks
+        if (typeof stateCopy.estimatedCost !== 'number') {
+          stateCopy.estimatedCost = null;
+        }
+        
+        if (stateCopy.paymentStatus !== 'pending' && 
+            stateCopy.paymentStatus !== 'completed' && 
+            stateCopy.paymentStatus !== 'failed') {
+          stateCopy.paymentStatus = null;
+        }
+        
+        if (typeof stateCopy.paymentReference !== 'string') {
+          stateCopy.paymentReference = null;
+        }
         
         // Always return the full state for step 5
         return stateCopy;
@@ -117,6 +164,43 @@ const bookingPersistTransform: Transform<BookingState, BookingState> = {
         
         stateCopy.isQrScanStation = !!stateCopy.isQrScanStation;
         
+        // Car data safety checks
+        if (typeof stateCopy.selectedCarId !== 'number') {
+          stateCopy.selectedCarId = null;
+        }
+        
+        if (!stateCopy.selectedCar || typeof stateCopy.selectedCar !== 'object') {
+          stateCopy.selectedCar = null;
+        } else {
+          // Validate car object structure
+          if (typeof stateCopy.selectedCar.id !== 'number' || 
+              typeof stateCopy.selectedCar.name !== 'string' ||
+              typeof stateCopy.selectedCar.price !== 'number') {
+            stateCopy.selectedCar = null;
+            stateCopy.selectedCarId = null;
+          }
+        }
+        
+        // Booking ID safety check
+        if (typeof stateCopy.bookingId !== 'string') {
+          stateCopy.bookingId = null;
+        }
+        
+        // Payment data safety checks
+        if (typeof stateCopy.estimatedCost !== 'number') {
+          stateCopy.estimatedCost = null;
+        }
+        
+        if (stateCopy.paymentStatus !== 'pending' && 
+            stateCopy.paymentStatus !== 'completed' && 
+            stateCopy.paymentStatus !== 'failed') {
+          stateCopy.paymentStatus = null;
+        }
+        
+        if (typeof stateCopy.paymentReference !== 'string') {
+          stateCopy.paymentReference = null;
+        }
+        
         return stateCopy;
       }
       
@@ -157,7 +241,13 @@ const bookingPersistConfig = {
     "route",
     "routeStatus",
     "isQrScanStation",
-    "qrVirtualStationId" // Include QR fields in persistence
+    "qrVirtualStationId", // Include QR fields in persistence
+    "selectedCarId",
+    "selectedCar",
+    "bookingId",
+    "estimatedCost",
+    "paymentStatus",
+    "paymentReference"
   ],
   transforms: [bookingPersistTransform]
 };

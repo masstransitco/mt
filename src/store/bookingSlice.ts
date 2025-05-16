@@ -4,6 +4,7 @@ import { createSlice, createAsyncThunk, PayloadAction, createSelector } from "@r
 import type { RootState } from "./store";
 import { StationFeature } from "./stationsSlice";
 import { ensureGoogleMapsLoaded, getDirections } from "@/lib/googleMaps";
+import { Car } from "@/types/booking";
 
 /** The user's chosen ticket plan. */
 type TicketPlan = "single" | "paygo" | null;
@@ -33,6 +34,16 @@ export interface BookingState {
   /** NEW fields to unify QR-based station usage. */
   isQrScanStation: boolean;
   qrVirtualStationId: number | null;
+  
+  /** Car and booking reference data */
+  selectedCarId: number | null;
+  selectedCar: Car | null;  // From types/booking.ts Car interface
+  bookingId: string | null; // Reference to the formal booking record
+  
+  /** Payment-related fields */
+  estimatedCost: number | null;
+  paymentStatus: 'pending' | 'completed' | 'failed' | null;
+  paymentReference: string | null;
 }
 
 /**
@@ -91,6 +102,16 @@ const initialState: BookingState = {
   arrivalStationId: null,
   isQrScanStation: false,
   qrVirtualStationId: null,
+  
+  // Car and booking data
+  selectedCarId: null,
+  selectedCar: null,
+  bookingId: null,
+  
+  // Payment data
+  estimatedCost: null,
+  paymentStatus: null,
+  paymentReference: null,
 };
 
 export const bookingSlice = createSlice({
@@ -215,6 +236,14 @@ export const bookingSlice = createSlice({
       // Also reset new QR fields
       state.isQrScanStation = false;
       state.qrVirtualStationId = null;
+      // Reset car and booking data
+      state.selectedCarId = null;
+      state.selectedCar = null;
+      state.bookingId = null;
+      // Reset payment data
+      state.estimatedCost = null;
+      state.paymentStatus = null;
+      state.paymentReference = null;
     },
     setTicketPlan: (state, action: PayloadAction<TicketPlan>) => {
       state.ticketPlan = action.payload;
@@ -246,6 +275,58 @@ export const bookingSlice = createSlice({
     clearQrStationData: (state) => {
       state.isQrScanStation = false;
       state.qrVirtualStationId = null;
+    },
+    
+    /**
+     * Select a car for booking
+     */
+    selectCar: (state, action: PayloadAction<Car>) => {
+      state.selectedCarId = action.payload.id;
+      state.selectedCar = action.payload;
+      // Optionally compute estimated cost based on car price and route distance
+      if (state.route && state.route.distance) {
+        // Simple cost calculation based on distance and car price
+        // This would likely be more complex in a real application
+        const distanceInKm = state.route.distance / 1000;
+        state.estimatedCost = Math.round(action.payload.price * distanceInKm);
+      }
+    },
+    
+    /**
+     * Clear selected car
+     */
+    clearSelectedCar: (state) => {
+      state.selectedCarId = null;
+      state.selectedCar = null;
+      state.estimatedCost = null;
+    },
+    
+    /**
+     * Set booking ID reference
+     */
+    setBookingId: (state, action: PayloadAction<string>) => {
+      state.bookingId = action.payload;
+    },
+    
+    /**
+     * Set payment status
+     */
+    setPaymentStatus: (state, action: PayloadAction<'pending' | 'completed' | 'failed'>) => {
+      state.paymentStatus = action.payload;
+    },
+    
+    /**
+     * Set estimated cost
+     */
+    setEstimatedCost: (state, action: PayloadAction<number>) => {
+      state.estimatedCost = action.payload;
+    },
+    
+    /**
+     * Set payment reference
+     */
+    setPaymentReference: (state, action: PayloadAction<string>) => {
+      state.paymentReference = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -281,6 +362,12 @@ export const {
   clearRoute,
   setQrStationData,
   clearQrStationData,
+  selectCar,
+  clearSelectedCar,
+  setBookingId,
+  setPaymentStatus,
+  setEstimatedCost,
+  setPaymentReference,
 } = bookingSlice.actions;
 
 export default bookingSlice.reducer;
@@ -415,6 +502,74 @@ export const selectQrVirtualStationId = (state: RootState): number | null => {
     if (!state?.booking) return null;
     return typeof state.booking.qrVirtualStationId === 'number' 
       ? state.booking.qrVirtualStationId 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+/** Car and booking fields with improved type safety */
+export const selectSelectedCarId = (state: RootState): number | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.selectedCarId === 'number' 
+      ? state.booking.selectedCarId 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectSelectedCar = (state: RootState): Car | null => {
+  try {
+    if (!state?.booking) return null;
+    return state.booking.selectedCar;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectBookingId = (state: RootState): string | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.bookingId === 'string' 
+      ? state.booking.bookingId 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+/** Payment fields with improved type safety */
+export const selectEstimatedCost = (state: RootState): number | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.estimatedCost === 'number' 
+      ? state.booking.estimatedCost 
+      : null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectPaymentStatus = (state: RootState): 'pending' | 'completed' | 'failed' | null => {
+  try {
+    if (!state?.booking) return null;
+    const status = state.booking.paymentStatus;
+    if (status === 'pending' || status === 'completed' || status === 'failed') {
+      return status;
+    }
+    return null;
+  } catch (e) {
+    return null; // Fallback
+  }
+};
+
+export const selectPaymentReference = (state: RootState): string | null => {
+  try {
+    if (!state?.booking) return null;
+    return typeof state.booking.paymentReference === 'string' 
+      ? state.booking.paymentReference 
       : null;
   } catch (e) {
     return null; // Fallback
