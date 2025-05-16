@@ -7,7 +7,7 @@ import { selectDepartureDate, selectDepartureTime, selectIsDateTimeConfirmed, se
 import { selectDispatchRoute } from "@/store/dispatchSlice"
 import DateTimeSelector from "@/components/DateTimeSelector"
 import ModalPortal from "@/components/ModalPortal"
-import { format } from "date-fns"
+import { format, isValid } from "date-fns"
 
 /**
  * ScheduleLaterButton is a focused button specifically for scheduling a later pickup time
@@ -63,9 +63,8 @@ export default function ScheduleLaterButton({
     // If user has explicitly confirmed a date and time, show that
     if (isDateTimeConfirmed && departureDate && departureTime) {
       try {
-        // Verify that departureDate and departureTime are valid dates
-        if (!(departureDate instanceof Date) || isNaN(departureDate.getTime()) ||
-            !(departureTime instanceof Date) || isNaN(departureTime.getTime())) {
+        // Verify that departureDate and departureTime are valid dates using date-fns isValid
+        if (!isValid(departureDate) || !isValid(departureTime)) {
           console.error('Invalid date/time values:', { departureDate, departureTime });
           return "Schedule for later";
         }
