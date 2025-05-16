@@ -88,7 +88,7 @@ export const fetchRoute = createAsyncThunk<
 );
 
 /** Initial booking state. */
-const initialState: BookingState = {
+export const initialState: BookingState = {
   step: 1,
   stepName: "selecting_departure_station",
   departureDateString: null,

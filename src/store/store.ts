@@ -25,6 +25,9 @@ import uiReducer from "./uiSlice";
 import stationAiReducer from "./stationAiSlice";
 import stationClaudeReducer from "./stationClaudeSlice";
 
+// Import the booking transform
+import { bookingStep5Transform } from "./bookingStep5Transform";
+
 // Default booking state for resets
 const defaultBooking: BookingState = {
   step: 1,
@@ -224,7 +227,7 @@ const userPersistConfig = {
 };
 
 /**
- * Simplified booking persist config with a single transform
+ * Simplified booking persist config with transforms
  */
 const bookingPersistConfig = {
   key: "booking",
@@ -249,7 +252,10 @@ const bookingPersistConfig = {
     "paymentStatus",
     "paymentReference"
   ],
-  transforms: [bookingPersistTransform]
+  transforms: [
+    bookingPersistTransform, // Original transform for data safety
+    bookingStep5Transform    // New transform for user-state handling
+  ]
 };
 
 /**
