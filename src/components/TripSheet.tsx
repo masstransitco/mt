@@ -157,12 +157,12 @@ export default function TripSheet() {
             </div>
 
             {!tripActive ? (
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center w-full max-w-64 h-64 mx-auto overflow-hidden touch-none pointer-events-auto">
                 <PressHoldButton
                   onComplete={handleUnlock}
                   lockState={true}
                   holdTime={3000}
-                  className="w-full"
+                  className="w-full h-full"
                 />
               </div>
             ) : (

@@ -141,31 +141,85 @@ export default function PressHoldButton({
 
   return (
     <div
-      className={`relative select-none ${className}`}
+      className={`relative select-none isolate ${className}`}
       onMouseDown={handlePressStart}
       onMouseUp={handlePressEnd}
       onMouseLeave={handlePressEnd}
       onTouchStart={handlePressStart}
       onTouchEnd={handlePressEnd}
+      onTouchCancel={handlePressEnd}
+      style={{ touchAction: 'none' }}
     >
       {/* Outer glow effect */}
       <div
         className={`absolute inset-0 rounded-full bg-blue-500 opacity-0 blur-xl transition-opacity duration-300 ${progress > 0 ? `opacity-${Math.min(Math.floor(progress * 10), 10)}` : ""}`}
       ></div>
 
-      {/* Button background with glass effect */}
-      <div
-        className={`
-          w-64 h-64 rounded-full 
-          flex items-center justify-center 
-          bg-gradient-to-br from-gray-800 to-gray-900
-          backdrop-blur-sm
-          shadow-[0_0_10px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)]
-          transition-all duration-300 ease-out
-          ${isPressed && !isActionComplete ? "scale-97 shadow-[0_0_5px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.03)]" : "scale-100"}
-        `}
-      >
-        <div className="flex flex-col items-center justify-center text-white relative z-10">
+      {/* Position the components relative to each other */}
+      <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+        {/* Button background with glass effect */}
+        <div
+          className={`
+            absolute inset-0 rounded-full
+            flex items-center justify-center 
+            bg-gradient-to-br from-gray-800 to-gray-900
+            backdrop-blur-sm
+            shadow-[0_0_10px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.08)]
+            transition-all duration-300 ease-out
+            ${isPressed && !isActionComplete ? "scale-97 shadow-[0_0_5px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.03)]" : "scale-100"}
+          `}
+        ></div>
+        
+        {/* Inner shadow overlay for depth */}
+        <div className="absolute inset-0 rounded-full shadow-[inset_0_4px_15px_rgba(0,0,0,0.4)] pointer-events-none"></div>
+
+        {/* SVG for the animated ring */}
+        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 120 120">
+          {/* Track for the progress ring */}
+          <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+
+          {/* Animated progress ring with gradient and glow */}
+          <circle
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke={isBlinking ? "url(#blinkGradient)" : lockState ? "url(#blueGradient)" : "url(#redGradient)"}
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            className={`transition-all duration-100 ease-linear ${isBlinking ? "blink-animation" : ""}`}
+            filter="url(#glow)"
+          />
+
+          {/* Gradient definitions */}
+          <defs>
+            <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#60A5FA" /> {/* lighter blue */}
+              <stop offset="100%" stopColor="#2563EB" /> {/* darker blue */}
+            </linearGradient>
+
+            <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#F87171" /> {/* lighter red */}
+              <stop offset="100%" stopColor="#DC2626" /> {/* darker red */}
+            </linearGradient>
+
+            <linearGradient id="blinkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={lockState ? "#93C5FD" : "#FCA5A5"} /> {/* much lighter color */}
+              <stop offset="100%" stopColor={lockState ? "#3B82F6" : "#EF4444"} /> {/* medium color */}
+            </linearGradient>
+
+            {/* Glow filter */}
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation={isBlinking ? "4" : "2"} result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+        </svg>
+
+        {/* Content centered inside the ring */}
+        <div className="relative z-10 flex flex-col items-center justify-center text-white">
           <div
             className={`
             transition-all duration-500 ease-out
@@ -184,72 +238,24 @@ export default function PressHoldButton({
             {buttonContent.text}
           </span>
         </div>
+
+        {/* Particle effects when action completes */}
+        {isActionComplete && (
+          <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
+            {[...Array(8)].map((_, i) => (
+              <div
+                key={i}
+                className={`absolute w-1.5 h-1.5 ${lockState ? "bg-blue-300" : "bg-red-300"} rounded-full opacity-0`}
+                style={{
+                  left: `${50 + 45 * Math.cos(i * (Math.PI / 4))}%`,
+                  top: `${50 + 45 * Math.sin(i * (Math.PI / 4))}%`,
+                  animation: `particle-fade-out 0.8s ease-out ${i * 0.06}s forwards`,
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {/* Inner shadow overlay for depth */}
-      <div className="absolute inset-0 rounded-full shadow-[inset_0_4px_15px_rgba(0,0,0,0.4)] pointer-events-none"></div>
-
-      {/* SVG for the animated ring */}
-      <svg className="absolute top-0 left-0 w-full h-full -rotate-90" viewBox="0 0 120 120">
-        {/* Track for the progress ring */}
-        <circle cx="60" cy="60" r={radius} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
-
-        {/* Animated progress ring with gradient and glow */}
-        <circle
-          cx="60"
-          cy="60"
-          r={radius}
-          fill="none"
-          stroke={isBlinking ? "url(#blinkGradient)" : lockState ? "url(#blueGradient)" : "url(#redGradient)"}
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          className={`transition-all duration-100 ease-linear ${isBlinking ? "blink-animation" : ""}`}
-          filter="url(#glow)"
-        />
-
-        {/* Gradient definitions */}
-        <defs>
-          <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#60A5FA" /> {/* lighter blue */}
-            <stop offset="100%" stopColor="#2563EB" /> {/* darker blue */}
-          </linearGradient>
-
-          <linearGradient id="redGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#F87171" /> {/* lighter red */}
-            <stop offset="100%" stopColor="#DC2626" /> {/* darker red */}
-          </linearGradient>
-
-          <linearGradient id="blinkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={lockState ? "#93C5FD" : "#FCA5A5"} /> {/* much lighter color */}
-            <stop offset="100%" stopColor={lockState ? "#3B82F6" : "#EF4444"} /> {/* medium color */}
-          </linearGradient>
-
-          {/* Glow filter */}
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation={isBlinking ? "4" : "2"} result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
-      </svg>
-
-      {/* Particle effects when action completes */}
-      {isActionComplete && (
-        <div className="absolute inset-0 overflow-hidden rounded-full pointer-events-none">
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className={`absolute w-1.5 h-1.5 ${lockState ? "bg-blue-300" : "bg-red-300"} rounded-full opacity-0`}
-              style={{
-                left: `${50 + 45 * Math.cos(i * (Math.PI / 4))}%`,
-                top: `${50 + 45 * Math.sin(i * (Math.PI / 4))}%`,
-                animation: `particle-fade-out 0.8s ease-out ${i * 0.06}s forwards`,
-              }}
-            />
-          ))}
-        </div>
-      )}
     </div>
   )
 }

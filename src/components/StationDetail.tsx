@@ -281,8 +281,15 @@ function StationDetail(props: StationDetailProps) {
   }, [processPayment]);
   
   // Effect to notify parent when payment modal should be shown - after callbacks are defined
+  // Use a ref to track whether we've already sent the payment result to avoid double modals
+  const paymentResultSent = useRef(false);
+  
   useEffect(() => {
-    if (paymentModalOpen && typeof onPaymentResult === 'function') {
+    // Only send the payment result once when the modal is opened
+    if (paymentModalOpen && typeof onPaymentResult === 'function' && !paymentResultSent.current) {
+      // Mark that we've sent the payment result
+      paymentResultSent.current = true;
+      
       // Use setTimeout to ensure this runs after the current render cycle
       setTimeout(() => {
         onPaymentResult({
@@ -294,6 +301,11 @@ function StationDetail(props: StationDetailProps) {
           onRetry: handlePaymentRetry
         });
       }, 0);
+    }
+    
+    // Reset the flag when the modal is closed
+    if (!paymentModalOpen) {
+      paymentResultSent.current = false;
     }
   }, [
     paymentModalOpen, 
