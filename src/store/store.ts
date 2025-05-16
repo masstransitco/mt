@@ -81,9 +81,9 @@ const bookingPersistTransform: Transform<BookingState, BookingState> = {
         return stateCopy;
       }
       
-      // For all other steps, don't persist to localStorage
+      // For all other steps, persist defaultBooking instead of undefined
       console.log(`[bookingPersistTransform] Not persisting step ${stateCopy.step || 'unknown'}`);
-      return undefined; // Skip persisting non-step 5 data
+      return defaultBooking; // Return default state instead of undefined
     } catch (error) {
       console.error("[bookingPersistTransform] Error processing state:", error);
       return defaultBooking;
