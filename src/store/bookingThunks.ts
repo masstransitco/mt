@@ -191,7 +191,8 @@ export const loadBookingDetails = createAsyncThunk<
         console.log("[loadBookingDetails] No user document found");
         
         // Get the current step from Redux state
-        const currentBookingStep = getState().booking.step;
+        const state = getState() as RootState;
+        const currentBookingStep = state.booking.step;
         
         // Only reset if we're NOT already in step 5
         if (currentBookingStep !== 5) {
@@ -211,7 +212,8 @@ export const loadBookingDetails = createAsyncThunk<
         console.log("[loadBookingDetails] No booking data found in user document");
         
         // Get the current step from Redux state
-        const currentBookingStep = getState().booking.step;
+        const state = getState() as RootState;
+        const currentBookingStep = state.booking.step;
         
         // Only reset if we're NOT already in step 5
         if (currentBookingStep !== 5) {
@@ -227,7 +229,8 @@ export const loadBookingDetails = createAsyncThunk<
       console.log("[loadBookingDetails] Found booking data:", booking);
 
       // Get the current step from Redux state
-      const currentBookingStep = getState().booking.step;
+      const state = getState() as RootState;
+      const currentBookingStep = state.booking.step;
       
       // ONLY restore state if the saved booking was at step 5
       if (booking.step === 5) {
@@ -317,7 +320,8 @@ export const loadBookingDetails = createAsyncThunk<
       console.error("[loadBookingDetails] Error loading booking details:", err);
       
       // Get the current step from Redux state
-      const currentBookingStep = getState().booking.step;
+      const state = getState() as RootState;
+      const currentBookingStep = state.booking.step;
       
       // If we're already at step 5, preserve that state despite the error
       if (currentBookingStep === 5) {
