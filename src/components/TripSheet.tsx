@@ -125,13 +125,13 @@ export default function TripSheet() {
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "tween", duration: 0.3 }}
-        className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 text-white p-4 shadow-2xl
-                  border-t border-gray-700 rounded-t-lg"
-        style={{ minHeight: "220px" }}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-black text-white p-4 shadow-2xl
+                  border-t border-gray-800/50 rounded-t-lg backdrop-blur-lg"
+        style={{ minHeight: "220px", background: "rgba(0, 0, 0, 0.95)" }}
       >
         {/* Title without close button since it's no longer dismissable */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Trip in Progress</h2>
+        <div className="flex items-center justify-between mb-4 border-b border-gray-800/50 pb-4">
+          <h2 className="text-xl font-medium text-white/90">Trip in Progress</h2>
           {/* Removed the close button */}
         </div>
 
@@ -148,11 +148,14 @@ export default function TripSheet() {
           <div className="space-y-4">
             <div>
               {tripActive ? (
-                <p className="text-center text-lg font-medium">
-                  Trip time: {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
-                </p>
+                <div className="text-center">
+                  <p className="text-gray-400 text-sm mb-1">Trip Duration</p>
+                  <p className="text-2xl font-medium text-white/90">
+                    {Math.floor(elapsedSeconds / 60)}m {elapsedSeconds % 60}s
+                  </p>
+                </div>
               ) : (
-                <p className="text-center mb-4">Vehicle is locked. Press &amp; hold to unlock.</p>
+                <p className="text-center mb-4 text-gray-300/90">Vehicle is locked. Press &amp; hold to unlock.</p>
               )}
             </div>
 
@@ -166,7 +169,10 @@ export default function TripSheet() {
                 />
               </div>
             ) : (
-              <Button onClick={handleEndTrip} className="w-full py-6 text-lg">
+              <Button 
+                onClick={handleEndTrip} 
+                className="w-full py-6 text-lg font-medium bg-gradient-to-b from-red-900/80 to-red-950/90 hover:from-red-800/80 hover:to-red-900/90 border border-red-800/30 shadow-lg"
+              >
                 End Trip
               </Button>
             )}
