@@ -167,6 +167,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           // no user => sign out in Redux
           dispatch(signOutUser());
           dispatch(setDefaultPaymentMethodId(null));
+          // Clear any persisted booking data when user signs out
+          dispatch(resetBookingFlow());
         }
       }
     );
@@ -185,12 +187,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       // Only run this logic after redux-persist has bootstrapped
       if (persistor.getState().bootstrapped) {
         const state = store.getState();
-        const currentStep = state.booking?.step;
+        const { user, booking } = state;
+        const currentStep = booking?.step;
         
-        // Only reset if NOT on step 5 (active booking)
-        if (currentStep !== 5) {
+        // Only preserve step 5 if user is signed in
+        if (!user.isSignedIn || currentStep !== 5) {
           dispatch(resetBookingFlow());
-          logger.debug("[LayoutInner] Initialized booking state (not in step 5)");
+          logger.debug("[LayoutInner] Initialized booking state (not in step 5 or not signed in)");
         } else {
           logger.debug("[LayoutInner] Preserving step 5 booking state on app mount");
         }
