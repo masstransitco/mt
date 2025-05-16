@@ -8,6 +8,8 @@ import { RootState } from "./store";
 import { db } from "@/lib/firebase"; // your client-side Firestore import
 import {
   setDepartureDate,
+  setDepartureTime,
+  confirmDateTime,
   advanceBookingStep,
   selectDepartureStation,
   selectArrivalStation,
@@ -251,9 +253,41 @@ export const loadBookingDetails = createAsyncThunk<
         // For step 5, don't clear localStorage! Let Redux-persist merge with Firestore data
         
         // Only rehydrate if we found booking data for step 5
+        // Handle departure date
         if (booking.departureDateString) {
-          // Use the string directly, no need to convert to Date and back
-          dispatch(setDepartureDate(booking.departureDateString));
+          try {
+            // Validate the date string before dispatching
+            const testDate = new Date(booking.departureDateString);
+            if (!isNaN(testDate.getTime())) {
+              // Only dispatch if it's a valid date string
+              dispatch(setDepartureDate(booking.departureDateString));
+            } else {
+              console.error("[loadBookingDetails] Invalid departureDateString:", booking.departureDateString);
+            }
+          } catch (err) {
+            console.error("[loadBookingDetails] Error parsing departureDateString:", err);
+          }
+        }
+
+        // Handle departure time
+        if (booking.departureTimeString) {
+          try {
+            // Validate the time string before dispatching
+            const testTime = new Date(booking.departureTimeString);
+            if (!isNaN(testTime.getTime())) {
+              // Only dispatch if it's a valid time string
+              dispatch(setDepartureTime(booking.departureTimeString));
+            } else {
+              console.error("[loadBookingDetails] Invalid departureTimeString:", booking.departureTimeString);
+            }
+          } catch (err) {
+            console.error("[loadBookingDetails] Error parsing departureTimeString:", err);
+          }
+        }
+
+        // Handle confirmed status
+        if (typeof booking.isDateTimeConfirmed === 'boolean') {
+          dispatch(confirmDateTime(booking.isDateTimeConfirmed));
         }
 
         if (booking.ticketPlan) {
