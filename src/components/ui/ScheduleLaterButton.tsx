@@ -62,7 +62,18 @@ export default function ScheduleLaterButton({
   const buttonText = useMemo(() => {
     // If user has explicitly confirmed a date and time, show that
     if (isDateTimeConfirmed && departureDate && departureTime) {
-      return `Pickup on ${format(departureDate, 'MMM d')} at ${format(departureTime, 'h:mm a')}`
+      try {
+        // Verify that departureDate and departureTime are valid dates
+        if (!(departureDate instanceof Date) || isNaN(departureDate.getTime()) ||
+            !(departureTime instanceof Date) || isNaN(departureTime.getTime())) {
+          console.error('Invalid date/time values:', { departureDate, departureTime });
+          return "Schedule for later";
+        }
+        return `Pickup on ${format(departureDate, 'MMM d')} at ${format(departureTime, 'h:mm a')}`
+      } catch (error) {
+        console.error('Error formatting date/time:', error);
+        return "Schedule for later";
+      }
     }
     
     // For step 3, if we have pickup time estimate, show it
