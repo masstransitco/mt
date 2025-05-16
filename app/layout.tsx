@@ -22,9 +22,9 @@ import PwaMetaTags from "@/components/PwaMetaTags";
 import { AnimationDebugger } from "@/components/AnimationDebugger";
 
 // Redux
-import { ReduxProvider } from "@/providers/ReduxProvider";
+import ReduxProvider from "@/providers/ReduxProvider";
 import { GoogleMapsProvider } from "@/providers/GoogleMapsProvider";
-import { useAppDispatch, useAppSelector, store } from "@/store/store";
+import { useAppDispatch, useAppSelector, store, persistor } from "@/store/store";
 import {
   signOutUser,
   setDefaultPaymentMethodId,
@@ -70,7 +70,7 @@ function DisablePinchZoom() {
  * - Step 5: persist
  * - Step 6: reset to step 1
  *
- * Because bookingStep5Transform handles ignoring steps <5 on rehydration,
+ * Because bookingPersistTransform (in store.ts) handles ignoring steps <5 on rehydration,
  * we don't need extra localStorage clearing logic here. We'll only do
  * small fixes for step=6.
  */
@@ -176,24 +176,32 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     };
   }, [dispatch]);
 
-  // This effect previously reset booking state on mount, but now we only reset
-  // if the user is not in step 5 (active booking)
+  // This effect used to reset booking state on mount which caused rehydration issues.
+  // Now we wait for redux-persist to finish bootstrapping before checking
   useEffect(() => {
-    logger.debug("[LayoutInner] App mount - checking if reset is needed");
-
-    // Get current booking step from store 
-    const state = store.getState();
-    const currentStep = state.booking?.step;
+    logger.debug("[LayoutInner] App mount - ensuring rehydration completes first");
     
-    // Only reset if NOT on step 5 (active booking)
-    if (currentStep !== 5) {
-      dispatch(resetBookingFlow());
-      logger.debug("[LayoutInner] Initialized booking state (not in step 5)");
-    } else {
-      logger.debug("[LayoutInner] Preserving step 5 booking state on app mount");
-    }
-
-    setLoading(false);
+    const unsub = persistor.subscribe(() => {
+      // Only run this logic after redux-persist has bootstrapped
+      if (persistor.getState().bootstrapped) {
+        const state = store.getState();
+        const currentStep = state.booking?.step;
+        
+        // Only reset if NOT on step 5 (active booking)
+        if (currentStep !== 5) {
+          dispatch(resetBookingFlow());
+          logger.debug("[LayoutInner] Initialized booking state (not in step 5)");
+        } else {
+          logger.debug("[LayoutInner] Preserving step 5 booking state on app mount");
+        }
+        
+        setLoading(false);
+        unsub(); // Unsubscribe after running once
+      }
+    });
+    
+    // Clean up subscription if component unmounts before bootstrap
+    return () => unsub();
   }, [dispatch]);
   
   // Add keyboard shortcut for logging level toggle
