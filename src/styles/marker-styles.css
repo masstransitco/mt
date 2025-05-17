@@ -3,61 +3,82 @@
  * For map markers using Google Maps Advanced Marker API
  */
 
-/* 
- * Base variables - define all marker styling variables here 
- * for easier theme management
+/*
+ * DESIGN TOKENS
+ * Core design system variables organized by category
  */
 :root {
-  --marker-bg: rgba(0, 0, 0, 0.98);
-  --marker-text: #FFFFFF;
-  --marker-border-normal: rgba(255, 255, 255, 0.9);
-  --marker-border-arrival: #FF0000; /* Changed from blue to red */
-  --marker-border-selected: #10A37F;
-  --marker-border-virtual: rgba(16, 163, 127, 0.8);
-  --marker-border-pickup-dropoff: #00BFFF; /* Light electric blue for pickup & dropoff */
+  /* PALETTE - Base colors */
+  --clr-bg-dark-98: rgba(0, 0, 0, 0.98);
+  --clr-bg-dark-85: rgba(0, 0, 0, 0.85);
+  --clr-fg-light: #FFFFFF;
+  --clr-accent-green: #10A37F;
+  --clr-accent-red: #FF0033;
+  --clr-accent-cyan: #00BFFF;
   
-  /* Replace shadows with gradients */
-  --marker-glow-normal: none;
-  --marker-glow-departure: radial-gradient(circle at center, rgba(255, 255, 255, 0.4) 0%, transparent 70%);
-  --marker-glow-arrival: radial-gradient(circle at center, rgba(255, 0, 0, 0.4) 0%, transparent 70%);
-  --marker-glow-selected: radial-gradient(circle at center, rgba(16, 163, 127, 0.4) 0%, transparent 70%);
-  --marker-glow-pickup-dropoff: radial-gradient(circle at center, rgba(0, 191, 255, 0.4) 0%, transparent 70%);
+  /* Semantic color roles - Map state colors to tokens */
+  --clr-marker-normal: var(--clr-fg-light);
+  --clr-marker-selected: var(--clr-accent-green);
+  --clr-marker-arrival: var(--clr-accent-red);
+  --clr-marker-pickup: var(--clr-accent-cyan);
+  --clr-marker-virtual: rgba(16, 163, 127, 0.8);
+  --clr-marker-text: var(--clr-fg-light);
+  --clr-marker-bg: var(--clr-bg-dark-85);
+  --clr-marker-border: rgba(255, 255, 255, 0.15);
   
-  --marker-expanded-shadow-normal: 0 4px 12px rgba(0,0,0,0.3);
-  --marker-expanded-shadow-departure: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(255, 255, 255, 0.5);
-  --marker-expanded-shadow-arrival: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(255, 0, 0, 0.6);
-  --marker-expanded-shadow-selected: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(16, 163, 127, 0.6);
-  --marker-expanded-shadow-pickup-dropoff: 0 8px 20px rgba(0,0,0,0.3), 0 0 20px rgba(0, 191, 255, 0.6);
+  /* Z-INDEX - Stacking contexts */
+  --z-index-marker: 10;
+  --z-index-selected-marker: 20;
+  --z-index-route-marker: 15;
   
-  --marker-transition-fast: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  --marker-transition-normal: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  /* ELEVATION - Shadows and depth */
+  --elev-1: 0 2px 6px rgba(0, 0, 0, 0.2);
+  --elev-2: 0 6px 14px rgba(0, 0, 0, 0.3);
+  --elev-3: 0 8px 20px rgba(0, 0, 0, 0.3), 0 0 10px rgba(0, 0, 0, 0.1);
   
-  --marker-post-gradient: linear-gradient(to bottom, rgba(255,255,255,0.7), rgba(255,255,255,0.1));
-  --route-post-gradient: linear-gradient(to bottom, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+  /* State-specific glow effects */
+  --glow-normal: none;
+  --glow-departure: radial-gradient(circle at center, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  --glow-arrival: radial-gradient(circle at center, rgba(255, 0, 0, 0.3) 0%, transparent 70%);
+  --glow-selected: radial-gradient(circle at center, rgba(16, 163, 127, 0.3) 0%, transparent 70%);
+  --glow-pickup: radial-gradient(circle at center, rgba(0, 191, 255, 0.3) 0%, transparent 70%);
   
-  /* Responsive marker sizing */
-  --marker-size: 22px;
-  --card-w: 160px;
+  /* MOTION - Timing and easing */
+  --ease-out-fluid: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 0.25s var(--ease-out-fluid);
+  --t-med: 0.35s var(--ease-out-fluid);
+  
+  /* GRADIENTS - Decorative effects */
+  --grad-marker-post: linear-gradient(to bottom, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.1));
+  --grad-route-post: linear-gradient(to bottom, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.1));
 }
 
-/* Responsive sizing rules */
-@media (max-width: 640px) {
+/* Responsive sizing using layer to avoid cascade conflicts */
+@layer size {
   :root {
-    --marker-size: 18px;
-    --card-w: 140px;
+    --sz-marker: 22px;
+    --sz-card: 160px;
   }
-}
-
-/* Zoom level class to be toggled by JS when map zoom < 12 */
-body.zoom-out {
-  --marker-size: 16px;
+  
+  @media (max-width: 640px) {
+    :root {
+      --sz-marker: 18px;
+      --sz-card: 140px;
+    }
+  }
+  
+  /* Zoom level modifiers */
+  body.zoom-out {
+    --sz-marker: 16px;
+  }
 }
 
 /* Dark/light mode theme variants */
 [data-theme="light"] {
-  --marker-bg: rgba(255, 255, 255, 0.9);
-  --marker-text: #000;
-  --marker-border-normal: rgba(0, 0, 0, 0.8);
+  --clr-bg-dark-98: rgba(255, 255, 255, 0.9);
+  --clr-bg-dark-85: rgba(255, 255, 255, 0.85);
+  --clr-fg-light: #000000;
+  --clr-marker-normal: rgba(0, 0, 0, 0.8);
 }
 
 /* 
@@ -78,13 +99,10 @@ body.zoom-out {
   transform-origin: center bottom;
   will-change: transform, opacity;
   z-index: var(--z-index-marker);
-  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'SF Pro Display', -apple-system, 'Segoe UI', Roboto, BlinkMacSystemFont, sans-serif;
   width: max-content;
   min-width: 110px;
   height: max-content;
-}
-
-.marker-container.visible {
 }
 
 .marker-container-standard {
@@ -100,7 +118,7 @@ body.zoom-out {
  * Define all marker states with a consistent transition 
  */
 .marker-container:is(.marker-normal, .marker-selected, .marker-departure, .marker-arrival, .marker-qr, .marker-virtual, .marker-expanded-state) {
-  transition: opacity var(--marker-transition-normal);
+  transition: opacity var(--t-med);
 }
 
 /* 
@@ -111,7 +129,7 @@ body.zoom-out {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: opacity var(--marker-transition-normal);
+  transition: opacity var(--t-med);
   opacity: 0;
 }
 
@@ -141,11 +159,11 @@ body.zoom-out {
  */
 .marker-post {
   width: 1px;
-  background: var(--marker-post-gradient);
-  margin-top: 1px;
+  background: var(--grad-marker-post);
+  margin-block-start: 1px;
   pointer-events: none;
   will-change: height, opacity;
-  transition: height var(--marker-transition-fast), opacity var(--marker-transition-fast);
+  transition: height var(--t-fast), opacity var(--t-fast);
 }
 
 .marker-post--visible {
@@ -163,23 +181,26 @@ body.zoom-out {
 
 /* 
  * --- COLLAPSED MARKER STYLING ---
- * The small circle marker when not expanded
+ * The small circle marker when not expanded - base styles
  */
 .marker-collapsed {
-  width: var(--marker-size);
-  height: var(--marker-size);
+  /* Base geometry & behavior */
+  inline-size: var(--sz-marker);
+  block-size: var(--sz-marker);
   border-radius: 50%;
-  background: var(--marker-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   cursor: pointer;
   pointer-events: auto;
-  will-change: background-color;
-  transition: all var(--marker-transition-fast);
-  border: 2px solid var(--marker-border-normal);
-  backdrop-filter: blur(8px);
+  will-change: transform, background-color;
   position: relative;
+  
+  /* Default styling */
+  background: var(--clr-marker-bg);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--elev-1);
+  border: 2px solid var(--clr-marker-normal);
+  transition: all var(--t-fast);
 }
 
 /* Inner ring for all markers */
@@ -188,7 +209,24 @@ body.zoom-out {
   position: absolute;
   inset: 4px;
   border-radius: 50%;
-  background: var(--marker-text);
+  background: var(--clr-marker-text);
+  transition: transform var(--t-fast), opacity var(--t-fast);
+  transform: scale(0.6);
+  opacity: 0.9;
+}
+
+/* Inner ring animation on focus/hover */
+@keyframes ring-pop {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  70% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.marker-collapsed:hover::after,
+.marker-important .marker-collapsed::after {
+  transform: scale(1);
+  opacity: 1;
+  animation: ring-pop 120ms var(--ease-out-fluid);
 }
 
 /* Pulsing halo for actionable markers */
@@ -201,9 +239,11 @@ body.zoom-out {
 .marker-actionable::before {
   content: "";
   position: absolute;
-  inset: -6px;
+  inset: 0;
   border-radius: 50%;
-  background: var(--marker-border-selected);
+  background: var(--clr-marker-selected);
+  transform: scale(1.5);
+  opacity: 0;
   animation: halo-pulse 1.6s ease-out infinite;
 }
 
@@ -212,26 +252,68 @@ body.zoom-out {
  * The expanded box showing more information
  */
 .marker-expanded {
-  width: var(--card-w);
-  background: var(--marker-bg);
+  position: relative;                  /* for ripple */
+  inline-size: var(--sz-card);
+  background: hsla(0 0% 0% / 0.90);
   backdrop-filter: blur(12px);
-  color: var(--marker-text);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--clr-marker-text);
+  border: 1px solid rgb(255 255 255 / 0.15);
   border-radius: 8px;
-  box-shadow: var(--marker-expanded-shadow-normal);
-  padding: 10px 16px;
+  box-shadow: var(--elev-1);
+  padding-block: 12px 14px;
+  padding-inline: 18px 20px;
   cursor: pointer;
   pointer-events: auto;
-  will-change: border-color, box-shadow;
-  transition: all var(--marker-transition-fast);
-  display: flex;
-  flex-direction: column;
-  align-items: center;   /* horizontally centre flex-column children */
-  text-align: center;    /* makes all inline text centred by default */
+  will-change: transform, border-color, box-shadow;
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
+  
+  /* Grid layout instead of flex-column */
+  display: grid;
+  grid-template:
+    "accent title  close" auto
+    "accent body   body"  1fr
+    / 4px 1fr auto;
+  gap: 6px 12px;
+  text-align: start;    /* left-align for better readability */
+}
+
+/* Hover lift effect */
+.marker-expanded:hover { 
+  transform: translateY(-2px); 
+  box-shadow: var(--elev-2);
+}
+
+/* Disable hover animation for reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .marker-expanded:hover { 
+    transform: none; 
+  }
+}
+
+/* Keyboard focus styles */
+.marker-expanded:focus-visible {
+  outline: 2px solid var(--clr-accent-cyan);
+  outline-offset: 2px;
+}
+
+/* Accent strip */
+.marker-expanded::before {
+  content: "";
+  grid-area: accent;
+  border-radius: 4px 0 0 4px;
+  background: var(--clr-marker-normal);
+}
+
+/* Responsive text sizing in smaller containers */
+@container (inline-size < 150px) {
+  .marker-expanded {
+    font-size: 0.875rem;
+  }
 }
 
 .marker-content-compact {
-  padding: 8px 6px;
+  padding-block: 8px;
+  padding-inline: 6px;
 }
 
 .marker-expanded-selected {
@@ -239,94 +321,18 @@ body.zoom-out {
 }
 
 /* 
- * --- INFO SECTION STYLING ---
- * Content inside the expanded markers
- */
-.info-section {
-  margin-bottom: 4px;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Make sure each info block stretches full-width so the centring is uniform */
-.marker-expanded .info-section,
-.marker-expanded .info-title,
-.marker-expanded .info-value {
-  width: 100%;
-}
-
-.info-title {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  margin-bottom: 3px;
-  color: var(--marker-text);
-  text-transform: uppercase;
-}
-
-.info-title-style {
-  margin-bottom: 2px;
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.info-value {
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: 0.2px;
-  color: var(--marker-text);
-  margin-bottom: 2px;
-  line-height: 1.2;
-}
-
-.info-value-base {
-  overflow: hidden;
-  display: block;
-  word-wrap: break-word;
-  max-height: 3.6em;
-  line-height: 1.2em;
-  margin-bottom: 0;
-  padding: 0;
-}
-
-.info-value-normal {
-  font-size: 11px;
-}
-
-.info-value-selected {
-  font-size: 13px;
-}
-
-.expanded-info-compact {
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-/* 
  * --- STATE-SPECIFIC MARKER STYLING ---
  * Visual styles for different marker states
  */
 
-/* PICKUP & DROPOFF MARKER (SAME STATION) */
-.marker-pickup-dropoff {
+/* Common elevation for important markers */
+.marker-important {
   z-index: var(--z-index-selected-marker);
 }
 
-.marker-pickup-dropoff .marker-collapsed {
-  border-color: var(--marker-border-pickup-dropoff);
-  background: var(--marker-glow-pickup-dropoff), var(--marker-bg);
-  border-width: 2px;
-}
-
-.marker-pickup-dropoff .marker-expanded {
-  border-color: var(--marker-border-pickup-dropoff);
-  border-width: 1.5px;
-  box-shadow: var(--marker-expanded-shadow-pickup-dropoff);
-}
-
-.marker-pickup-dropoff .info-title {
-  color: var(--marker-border-pickup-dropoff);
-  font-weight: 700;
+/* PICKUP & DROPOFF MARKER (SAME STATION) */
+.marker-pickup-dropoff {
+  z-index: var(--z-index-selected-marker);
 }
 
 /* DEPARTURE MARKER */
@@ -334,45 +340,9 @@ body.zoom-out {
   z-index: var(--z-index-selected-marker);
 }
 
-.marker-departure .marker-collapsed {
-  border-color: var(--marker-border-normal);
-  background: var(--marker-glow-departure), var(--marker-bg);
-  border-width: 2px;
-}
-
-.marker-departure .marker-expanded {
-  border-color: var(--marker-border-normal);
-  border-width: 1.5px;
-  box-shadow: var(--marker-expanded-shadow-departure);
-}
-
-.marker-departure .info-title,
-.info-title--departure {
-  color: rgba(255, 255, 255, 0.95);
-  font-weight: 700;
-}
-
 /* ARRIVAL MARKER */
 .marker-arrival {
   z-index: var(--z-index-selected-marker);
-}
-
-.marker-arrival .marker-collapsed {
-  border-color: var(--marker-border-arrival);
-  background: var(--marker-glow-arrival), var(--marker-bg);
-  border-width: 2px;
-}
-
-.marker-arrival .marker-expanded {
-  border-color: var(--marker-border-arrival);
-  border-width: 1.5px;
-  box-shadow: var(--marker-expanded-shadow-arrival);
-}
-
-.marker-arrival .info-title,
-.info-title--arrival {
-  color: rgba(255, 255, 255, 0.95);
-  font-weight: 700;
 }
 
 /* SELECTED MARKER */
@@ -380,38 +350,40 @@ body.zoom-out {
   z-index: var(--z-index-selected-marker);
 }
 
-.marker-selected .marker-collapsed {
-  border-color: var(--marker-border-selected);
-  background: var(--marker-glow-selected), var(--marker-bg);
-  border-width: 2px;
-}
-
-.marker-selected .marker-expanded {
-  border-color: var(--marker-border-selected);
-  border-width: 1.5px;
-  box-shadow: var(--marker-expanded-shadow-selected);
-}
-
 /* QR SCAN MARKER */
 .marker-qr {
   z-index: var(--z-index-selected-marker);
 }
 
+/* Common styling for collapsed markers with specific state overrides */
+.marker-pickup-dropoff .marker-collapsed {
+  border-color: var(--clr-marker-pickup);
+  background: var(--glow-pickup), var(--clr-marker-bg);
+  box-shadow: var(--elev-2);
+}
+
+.marker-departure .marker-collapsed {
+  border-color: var(--clr-marker-normal);
+  background: var(--glow-departure), var(--clr-marker-bg);
+  box-shadow: var(--elev-2);
+}
+
+.marker-arrival .marker-collapsed {
+  border-color: var(--clr-marker-arrival);
+  background: var(--glow-arrival), var(--clr-marker-bg);
+  box-shadow: var(--elev-2);
+}
+
+.marker-selected .marker-collapsed {
+  border-color: var(--clr-marker-selected);
+  background: var(--glow-selected), var(--clr-marker-bg);
+  box-shadow: var(--elev-2);
+}
+
 .marker-qr .marker-collapsed {
-  border-color: var(--marker-border-selected);
-  background: var(--marker-glow-selected), var(--marker-bg);
-  border-width: 2px;
-}
-
-.marker-qr .marker-expanded {
-  border-color: var(--marker-border-selected);
-  border-width: 1.5px;
-  box-shadow: var(--marker-expanded-shadow-selected);
-}
-
-.marker-qr .info-title,
-.info-title--qr {
-  color: var(--marker-border-selected);
+  border-color: var(--clr-marker-selected);
+  background: var(--glow-selected), var(--clr-marker-bg);
+  box-shadow: var(--elev-2);
 }
 
 /* VIRTUAL MARKER */
@@ -424,15 +396,156 @@ body.zoom-out {
   animation: halo-pulse 1.6s ease-out infinite;
 }
 
-.marker-virtual .marker-expanded {
-  border-color: var(--marker-border-virtual);
-  border-width: 1.5px;
-  box-shadow: var(--marker-expanded-shadow-selected);
+/* State-specific accent strip coloring for expanded markers */
+.marker-pickup-dropoff .marker-expanded::before {
+  background: var(--clr-marker-pickup);
+}
+
+.marker-departure .marker-expanded::before {
+  background: var(--clr-marker-normal);
+}
+
+.marker-arrival .marker-expanded::before {
+  background: var(--clr-marker-arrival);
+}
+
+.marker-selected .marker-expanded::before {
+  background: var(--clr-marker-selected);
+}
+
+.marker-qr .marker-expanded::before {
+  background: var(--clr-marker-selected);
+}
+
+.marker-virtual .marker-expanded::before {
+  background: var(--clr-marker-virtual);
+}
+
+/* Active state styling - enhanced shadow for selected markers */
+.marker-important .marker-expanded {
+  box-shadow: var(--elev-2);
+}
+
+/* Common title styling with state-specific overrides */
+.marker-pickup-dropoff .info-title {
+  color: var(--clr-marker-pickup);
+  font-weight: 700;
+}
+
+.marker-departure .info-title,
+.info-title--departure {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 700;
+}
+
+.marker-arrival .info-title,
+.info-title--arrival {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 700;
+}
+
+.marker-selected .info-title {
+  color: var(--clr-marker-selected);
+  font-weight: 700;
+}
+
+.marker-qr .info-title,
+.info-title--qr {
+  color: var(--clr-marker-selected);
 }
 
 .marker-virtual .info-title,
 .info-title--virtual {
-  color: var(--marker-border-selected);
+  color: var(--clr-marker-selected);
+}
+
+/* 
+ * --- INFO SECTION STYLING ---
+ * Content inside the expanded markers
+ */
+
+/* Title component - now with its own grid area */
+.exp-marker__title {
+  grid-area: title;
+  font-size: clamp(0.9rem, 1vw, 1rem);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-block-end: 2px;
+  color: var(--clr-marker-text);
+  text-transform: uppercase;
+}
+
+/* Optional close button */
+.exp-marker__close {
+  grid-area: close;
+  font-size: 1rem;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+/* Details section - with divider */
+.exp-marker__details {
+  grid-area: body;
+  font-size: 0.812rem;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block-start: 4px;
+  border-block-start: 1px solid rgb(255 255 255 / 0.08);
+}
+
+/* Legacy class support, assign to grid areas */
+.info-section {
+  grid-area: body;
+  margin-block-end: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-block-start: 4px;
+  border-block-start: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.info-title {
+  grid-area: title;
+  font-size: clamp(0.9rem, 1vw, 1rem);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-block-end: 2px;
+  color: var(--clr-marker-text);
+  text-transform: uppercase;
+}
+
+.info-value {
+  font-size: 0.812rem;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  color: var(--clr-marker-text);
+  margin-block-end: 2px;
+  line-height: 1.3;
+}
+
+.info-value-base {
+  overflow: hidden;
+  display: block;
+  word-wrap: break-word;
+  max-height: 3.6em;
+  line-height: 1.3;
+  margin-block-end: 0;
+  padding: 0;
+}
+
+.info-value-normal {
+  font-size: 0.812rem;
+}
+
+.info-value-selected {
+  font-size: 0.875rem;
+}
+
+.expanded-info-compact {
+  margin-block-end: 0;
+  padding-block-end: 0;
 }
 
 /* 
@@ -442,7 +555,7 @@ body.zoom-out {
 .route-marker-container {
   position: relative;
   will-change: opacity;
-  transition: opacity var(--marker-transition-normal);
+  transition: opacity var(--t-med);
   z-index: var(--z-index-route-marker);
 }
 
@@ -452,7 +565,7 @@ body.zoom-out {
 
 .route-marker-container--hidden {
   opacity: 0;
-  transition: opacity var(--marker-transition-normal);
+  transition: opacity var(--t-med);
 }
 
 .route-marker-wrapper {
@@ -463,31 +576,32 @@ body.zoom-out {
 }
 
 .route-box {
-  width: 120px;
-  background: var(--marker-bg);
+  inline-size: 120px;
+  background: var(--clr-marker-bg);
   backdrop-filter: blur(12px);
-  color: var(--marker-text);
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  color: var(--clr-marker-text);
+  border: 1.5px solid var(--clr-marker-border);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  padding: 9px 12px;
+  box-shadow: var(--elev-2);
+  padding-block: 9px;
+  padding-inline: 12px;
   text-align: center;
   pointer-events: auto;
   font-size: 13px;
   font-weight: 500;
-  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'SF Pro Display', -apple-system, 'Segoe UI', Roboto, BlinkMacSystemFont, sans-serif;
   cursor: default;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform var(--t-fast);
   letter-spacing: 0.2px;
 }
 
 .route-post {
   width: 1px;
-  background: var(--route-post-gradient);
-  margin-top: 2px;
+  background: var(--grad-route-post);
+  margin-block-start: 2px;
   pointer-events: none;
   will-change: height, opacity;
-  transition: height var(--marker-transition-normal), opacity var(--marker-transition-normal);
+  transition: height var(--t-med), opacity var(--t-med);
 }
 
 /* 
@@ -498,17 +612,18 @@ body.zoom-out {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.6px;
-  color: var(--marker-border-selected);
+  color: var(--clr-marker-selected);
   text-align: center;
-  padding: 6px 10px;
+  padding-block: 6px;
+  padding-inline: 10px;
   background: rgba(16, 163, 127, 0.15);
   border-radius: 8px;
-  margin: 4px 0;
+  margin-block: 4px;
 }
 
 /* CAR PLATE STYLING */
 .car-plate-container {
-  margin: 8px 0 4px 0;
+  margin-block: 8px 4px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -523,7 +638,7 @@ body.zoom-out {
   display: flex;
   justify-content: center;
   width: 100%;
-  margin: 6px 0;
+  margin-block: 6px;
 }
 
 .car-plate {
@@ -531,13 +646,14 @@ body.zoom-out {
   color: #000000;
   border-radius: 8px;
   border: 1.5px solid #000000;
-  padding: 6px 10px;
+  padding-block: 6px;
+  padding-inline: 10px;
   text-align: center;
   font-weight: bold;
   box-shadow: 0 4px 6px rgba(0,0,0,0.25);
   width: 100%;
   max-width: 160px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all var(--t-fast);
 }
 
 .car-plate:hover {
@@ -548,7 +664,7 @@ body.zoom-out {
 .car-plate .plate-title {
   font-size: 9px;
   color: #666666;
-  margin-bottom: 2px;
+  margin-block-end: 2px;
   font-weight: 500;
 }
 
@@ -559,12 +675,13 @@ body.zoom-out {
 }
 
 .virtual-car-plate {
-  margin-top: 8px;
+  margin-block-start: 8px;
   background-color: #FFFFFF;
   color: #000000;
   border-radius: 8px;
   border: 2px solid #000000;
-  padding: 4px 8px;
+  padding-block: 4px;
+  padding-inline: 8px;
   text-align: center;
   font-weight: bold;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -573,7 +690,7 @@ body.zoom-out {
 .plate-title-style {
   font-size: 10px;
   color: #666666;
-  margin-bottom: 2px;
+  margin-block-end: 2px;
 }
 
 .plate-number-style {
@@ -595,7 +712,7 @@ body.zoom-out {
   display: none;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
+  margin-block-end: 4px;
 }
 
 .marker-animation-progress--active {
@@ -609,7 +726,7 @@ body.zoom-out {
 .marker-animation-spinner {
   width: 14px;
   height: 14px;
-  border: 1.5px solid var(--marker-border-arrival);
+  border: 1.5px solid var(--clr-marker-arrival);
   border-top-color: transparent;
   border-radius: 50%;
   animation: camera-spin 1s linear infinite;
@@ -617,7 +734,7 @@ body.zoom-out {
 
 .marker-animation-text {
   font-size: 10px;
-  color: var(--marker-text);
+  color: var(--clr-marker-text);
   letter-spacing: 0.5px;
   font-weight: 500;
 }
@@ -628,8 +745,17 @@ body.zoom-out {
  */
 @media (max-width: 640px) {
   .route-box {
-    width: 110px;
+    inline-size: 110px;
     font-size: 12px;
-    padding: 7px 10px;
+    padding-block: 7px;
+    padding-inline: 10px;
+  }
+}
+
+/* Accessibility - Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
   }
 }
